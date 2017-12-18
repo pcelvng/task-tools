@@ -2,16 +2,16 @@ package file
 
 import "context"
 
-func NewCopier(r StatsReadCloser, w StatsWriteCloser) *Copier {
-	return &Copier{
+func NewCopyFile(r StatsReader, w StatsWriter) *CopyFile {
+	return &CopyFile{
 		r: r,
 		w: w,
 	}
 }
 
-type Copier struct {
-	r StatsReadCloser
-	w StatsWriteCloser
+type CopyFile struct {
+	r StatsReader
+	w StatsWriter
 }
 
 // Copy will copy the contents of the reader to the writer.
@@ -19,7 +19,7 @@ type Copier struct {
 // Listen on Context.Done() to know when the copy is complete.
 //
 // More than one call to Copy will result in a panic.
-func (c *Copier) Copy() context.Context {
+func (c *CopyFile) Copy() context.Context {
 	return context.Background()
 }
 
@@ -30,7 +30,7 @@ func (c *Copier) Copy() context.Context {
 //
 // Cancel is safe to call more than once but subsequent calls don't
 // do anything. If it's called again. The same context instance is returned.
-func (c *Copier) Cancel() context.Context {
+func (c *CopyFile) Cancel() context.Context {
 	return context.Background()
 }
 
@@ -39,6 +39,6 @@ func (c *Copier) Cancel() context.Context {
 // The user should check Err after the Copy or Cancel done signals
 // are sent. Err can be called multiple times and get the same
 // err.
-func (c *Copier) Err() error {
+func (c *CopyFile) Err() error {
 	return nil
 }
