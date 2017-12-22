@@ -42,3 +42,16 @@ func (c *CopyFile) Cancel() context.Context {
 func (c *CopyFile) Err() error {
 	return nil
 }
+
+func NewFileConfig() *FileConfig {
+	return &FileConfig{}
+}
+
+type FileConfig struct {
+	// should always be a local file system reference
+	TmpDir string
+
+	// AWS Auth
+	AWSAccesToken  string
+	AWSTokenSecret string
+}
