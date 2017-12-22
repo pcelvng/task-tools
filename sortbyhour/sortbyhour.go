@@ -28,7 +28,7 @@ type Worker struct {
 }
 
 // NewWorker creates a new sortbyhour worker and implements the
-func NewWorker(info string, _ context.Context) task.Worker {
+func NewWorker(info string) task.Worker {
 	data, _ := parseInfo(info)
 	return &Worker{
 		In:         data["in"],
@@ -42,8 +42,7 @@ func NewWorker(info string, _ context.Context) task.Worker {
 	//todo parse jsonTimeTag and TimeIndex
 }
 
-// shouldn't DoTask be passed the context?
-func (w *Worker) DoTask() (task.Result, string) {
+func (w *Worker) DoTask(context.Context) (task.Result, string) {
 	f, err := os.Open(w.In)
 	if err != nil {
 		return task.ErrResult, fmt.Sprintf("Probably with path %s. %v", w.In, err.Error())

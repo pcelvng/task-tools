@@ -1,15 +1,26 @@
 package local
 
-func NewReader() *Reader {
-	return &Reader{}
+
+func NewLocal() *Local {
+	return &Local{}
 }
 
-type Reader struct {
+type ReaderConfig struct {
+	Path string
+	TmpDir string
+}
+
+type Local struct {
 
 }
 
-func (r *Reader) Read(p []byte) (n int, err error) { return 0, nil}
+func (r *Local) ReadLine() ([]byte, error) { return nil, nil}
 
-func (r *Reader) LineCount() int { return 0 }
+func (r *Local) LineCount() int64 { return 0 }
 
-func (r *Reader) Close() error { return nil }
+func (r *Local) Path() string { return "" }
+
+func (r *Local) TmpPath() string { return "" }
+
+func (r *Local) Close() error { return nil }
+

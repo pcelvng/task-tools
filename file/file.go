@@ -2,8 +2,8 @@ package file
 
 import (
 	"io"
-	"hash"
 	"context"
+	"github.com/pcelvng/task-tools/file/stat"
 )
 
 // StatsReader is a special kind of reader that
@@ -26,26 +26,8 @@ type StatsReader interface {
 	// Should be safe to call concurrently.
 	ReadLine() ([]byte, error)
 
-	// LineCount returns the current number of lines read from
-	// the file. Should be safe to call at any time.
-	//
-	// Calling LineCount after a call to Close should return the total lines read
-	// until Closing.
-	LineCount() int
-
-	// Path should return the source file absolute path
-	// including file schema prefixes (ie 's3://' for s3 files).
-	//
-	// The value should be the same regardless of calling
-	// Close before Finish or before ReadLine.
-	Path() string
-
-	// TmpPath should return the current tmp file path as
-	// an absolute path.
-	//
-	// If the reader is not using a  tmp file then a
-	// call to TmpPath should return an empty string.
-	TmpPath() string
+	// Stats returns an instance of Stat.
+	Stats() *stat.Stat
 }
 
 // StatsWriter is a special kind of writer that
@@ -100,34 +82,8 @@ type StatsWriter interface {
 	// - removing the tmp file
 	Finish() error
 
-	// LineCount returns the current number of lines written to
-	// the file. Should be safe to call at any time.
-	// Calling LineCount after a call to Discard should return 0.
-	LineCount() int64
-
-	// ByteCount returns the total file size in bytes. ByteCount
-	// should return 0 until after Finish is called.
-	ByteCount() int64
-
-	// Checksum should return the file checksum hash.
-	// Can be called at any time but until the last line
-	// is written will not represent the final checksum.
-	Checksum() hash.Hash64
-
-	// Path should return the expected final absolute file path.
-	// The value should be the same regardless of calling
-	// Close before Finish or having written any lines.
-	//
-	// The path should include any necessary file prefixes for
-	// non-local files.
-	Path() string
-
-	// TmpPath should return the current tmp file path as
-	// an absolute path.
-	//
-	// If the writer is not writing to a tmp file then a
-	// call to TmpPath should return an empty string.
-	TmpPath() string
+	// Stats returns an instance of Stat.
+	Stats() *stat.Stat
 }
 
 type Copier interface {
