@@ -4,6 +4,8 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
+	"hash"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -29,11 +31,13 @@ func NewWriter(pth, tmpDir string, append bool) (*Writer, error) {
 
 	// make writer
 	return &Writer{
-		f:      f,
-		tmpF:   tmpF,
-		pth:    pth,
-		tmpPth: tmpPth,
-		append: append,
+		f:       f,
+		tmpF:    tmpF,
+		pth:     pth,
+		tmpPth:  tmpPth,
+		append:  append,
+		fStat:   stat.NewStat(),
+		tmpStat: stat.NewStat(),
 	}, nil
 }
 
@@ -96,13 +100,112 @@ type Writer struct {
 	f      *os.File
 	tmpF   *os.File
 	pth    string // absolute path
-	tmpPth string // aboluste temp file path
+	tmpPth string // absolute temp file path
 	append bool
+
+	lineCnt int64
+	hsh     hash.Hash64
+	tmpStat *stat.Stat // tmp file stats
+	fStat   *stat.Stat // final file stats
 }
 
 func (w *Writer) WriteLine([]byte) (int64, error) { return 0, nil }
 
-func (w *Writer) Finish() error { return nil }
+func (w *Writer) Finish() error {
+
+	// manage tmp file
+	if w.tmpF != nil {
+		err := w.tmpF.Sync()
+		if err != nil {
+			// there was a problem, rm the tmpFile
+			w.rmTmp()
+			return err
+		}
+
+		fInfo, err := w.tmpF.Stat()
+		if err != nil {
+			// there was a problem, rm the tmpFile
+			w.rmTmp()
+			return err
+		}
+
+		w.tmpStat.ByteCnt = fInfo.Size()
+		err = w.tmpF.Close()
+		if err != nil {
+			// there was a problem, rm the tmpFile
+			w.rmTmp()
+			return err
+		}
+
+		written, err := w.mvTmp()
+		if err != nil {
+			// there was a problem, rm the tmpFile
+			w.rmTmp()
+			return err
+		}
+		w.fStat.ByteCnt = written
+	} else {
+		err := w.f.Sync()
+		if err != nil {
+			return err
+		}
+
+		err = w.f.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// mvTmp will attempt to copy the tmp file (if exists)
+// to the final local destination and remove the tmp file.
+//
+// mvTmp will do nothing and return nil if the tmp file is
+// not being used.
+//
+// If the tmp and final files are located in the same partition
+// then a hard link will be created to the new location and the tmp
+// location will be removed.
+//
+// If they are in different partitions then the tmp file is copied
+// to the final location and when the copy is complete the tmp
+// file is removed.
+//
+// If the destination file already exists then it will be over-written.
+func (w *Writer) mvTmp() (int64, error) {
+	// try hard link
+	err := os.Link(w.tmpPth, w.pth)
+	if err == nil {
+		w.rmTmp()
+		fInfo, _ := os.Stat(w.pth)
+		return fInfo.Size(), nil
+	}
+
+	// try mv
+	err = os.Rename(w.tmpPth, w.pth)
+	if err == nil {
+		fInfo, _ := os.Stat(w.pth)
+		return fInfo.Size(), nil
+	}
+
+	// try cp
+	written, err := io.Copy(w.f, w.tmpF)
+	if err != nil {
+		return written, err
+	}
+	err = w.rmTmp()
+	if err != nil {
+		return written, err
+	}
+
+	return written, nil
+}
+
+func (w *Writer) rmTmp() error {
+	return os.Remove(w.tmpPth)
+}
 
 func (w *Writer) Stats() *stat.Stat {
 	stats := stat.NewStat()
