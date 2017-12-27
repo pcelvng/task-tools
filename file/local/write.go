@@ -1,7 +1,6 @@
 package local
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"crypto/md5"
@@ -11,10 +10,37 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"syscall"
+
+	"path"
 
 	"github.com/pcelvng/task-tools/file/stat"
 )
+
+type Options struct {
+	// Append will append to the file instead of truncating.
+	Append bool
+
+	// Delay will delay final writing until Close is called.
+	// Will write to memory unless a TmpDir and/or TmpPrefix
+	// is specified. In which case it will write to a temp
+	// file until close is called.
+	Delay bool
+
+	// UseTmpFile specifies to use a tmp file for the delayed writing.
+	// Can optionally also specify the tmp directory and tmp name
+	// prefix.
+	UseTmpFile bool
+
+	// TmpDir optionally specifies the temp directory. If not specified then
+	// the os default temp dir is used.
+	TmpDir string
+
+	// TmpPrefix optionally specifies the temp file prefix.
+	// The full tmp file name is randomly generated and guaranteed
+	// not to conflict with existing files. A prefix can help one find
+	// the tmp file.
+	TmpPrefix string
+}
 
 // NewWriter will create a new local writer.
 // - 'pth' is the full path (with filename) that will be
@@ -35,73 +61,93 @@ import (
 // For lazy writing, the writer supports writing to memory or a temp file.
 // The writer will use the temp file option if tmpDir and/or tmpPrefix is
 // provided. The writer will remove a temp file with a call to Close.
-func NewWriter(pth string, append, lazy bool, tmpDir, tmpPrefix string) (*Writer, error) {
+func NewWriter(pth string, opt *Options) (*Writer, error) {
+	if opt == nil {
+		opt = new(Options)
+	}
+
+	var bBuf *closeBuf          // bytes memory buffer
+	var fBuf *os.File           // tmp file buffer
+	var hshr *closeHasher       // hasher will close method
+	var rBuf io.ReadCloser      // houses the underlying buffer, if used
+	var w, wHshr io.WriteCloser // write closers, one for writing actual bytes, one for checksum
+
 	// open file
-	pth, fPth, err := openF(pth, append)
+	pth, f, err := openF(pth, opt.Append)
 	if err != nil {
 		return nil, err
 	}
 
-	// compression
-	var fComp *gzip.Writer
-	if ext := filepath.Ext(pth); ext == ".gz" {
-		fComp, err = gzip.NewWriterLevel(fPth, gzip.BestSpeed)
-		if err != nil {
-			return nil, err
-		}
+	// get starting file size
+	fInfo, err := f.Stat()
+	if err != nil {
+		return nil, err
 	}
+	fStartSize := fInfo.Size() // if > 0 then appending and file existed before
 
-	// mem buffer (default)
-	var buf *bytes.Buffer
-	fMem := bufio.NewWriter(buf)
-
-	// tmp file buffer
-	var fTmp *os.File
-	if tmpDir != "" || tmpPrefix != "" {
-		if tmpPrefix == "" {
-			tmpPrefix = "local"
+	// choose underlying readwritecloser
+	isDelayed := opt.Delay
+	tmpName := ""
+	if isDelayed {
+		if opt.UseTmpFile {
+			// attempt to mk temp dir if not exists
+			err := os.MkdirAll(opt.TmpDir, 0700)
+			if err != nil {
+				return nil, err
+			}
+			fBuf, err = ioutil.TempFile(opt.TmpDir, opt.TmpPrefix)
+			if err != nil {
+				return nil, err
+			}
+			rBuf = fBuf
+			w = fBuf
+			tmpName = fBuf.Name()
+		} else {
+			rBuf = bBuf
+			w = fBuf
 		}
-		fTmp, err = ioutil.TempFile(tmpDir, tmpPrefix)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// md5 writer
-	fMd5 := md5.New()
-
-	// multi writer - for a single write operation
-	var fWrit io.Writer
-	if lazy {
-		fWrit = io.MultiWriter(fMem, fMd5)
-	} else if fComp != nil {
-		fWrit = io.MultiWriter(fComp, fMd5)
 	} else {
-		fWrit = io.MultiWriter(fPth, fMd5)
+		w = f
+	}
+
+	// md5 hasher
+	hshr = &closeHasher{md5.New()}
+	wHshr = hshr
+
+	// compression
+	if ext := filepath.Ext(pth); ext == ".gz" {
+		// file writer
+		w, err = gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			return nil, err
+		}
+
+		// hash writer
+		// this way the same compressed bytes are sent to the hasher
+		wHshr, err = gzip.NewWriterLevel(hshr, gzip.BestSpeed)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// if appending to a file that already existed then turn off line-by-line hashing.
+	if fStartSize > 0 {
+		wHshr = &NopWriteCloser{}
 	}
 
 	// stats
 	sts := stat.New()
 	sts.Path = pth
 
-	fInfo, err := fPth.Stat()
-	if err != nil {
-		return nil, err
-	}
-	fStartSize := fInfo.Size()
-
 	// make writer
 	return &Writer{
-		fPth:  fPth,
-		fComp: fComp,
-		fMem:  fMem,
-		fTmp:  fTmp,
-		fMd5:  fMd5,
-		fWrit: fWrit,
-		bBuf:  buf,
-
-		append:     append,
-		lazy:       lazy,
+		f:          f,
+		rBuf:       rBuf,
+		w:          w,
+		wHshr:      wHshr,
+		hshr:       hshr,
+		isDelayed:  isDelayed,
+		tmpName:    tmpName,
 		sts:        sts,
 		fStartSize: fStartSize,
 	}, nil
@@ -124,8 +170,14 @@ func openF(pth string, append bool) (string, *os.File, error) {
 		return "", nil, errors.New("local file path empty")
 	}
 
+	// make dir if not exists
+	err := os.MkdirAll(path.Dir(pth), 0700)
+	if err != nil {
+		return pth, nil, err
+	}
+
 	// make pth absolute
-	pth, err := filepath.Abs(pth)
+	pth, err = filepath.Abs(pth)
 	if err != nil {
 		return "", nil, err
 	}
@@ -148,20 +200,16 @@ func openF(pth string, append bool) (string, *os.File, error) {
 }
 
 type Writer struct {
-	// writers
-	fPth  *os.File       // final file
-	fComp io.WriteCloser // compression writer
-	fMem  *bufio.Writer  // memory buffer for lazy writing
-	fTmp  *os.File       // temp file - if one exists
-	fMd5  hash.Hash      // calculate md5 hash during the file write
-	fWrit io.Writer      // multi-writer; writer used to make Write calls.
-	bBuf  *bytes.Buffer  // underlying memory buffer.
+	f         *os.File       // file
+	rBuf      io.ReadCloser  // tmp file read buffer
+	w         io.WriteCloser // writer - calling Write will write to this writer
+	wHshr     io.WriteCloser // writer for writing to the hasher - separate so that gzip can write to it.
+	hshr      hash.Hash      // hasher
+	isDelayed bool           // indicates if writing to final file is delayed until Close is called
+	tmpName   string         // full path name of tmp file (if used)
 
-	append     bool // indicate that file should be written to as append
-	lazy       bool // indicate to write to memory first and then flush to file in one operation.
 	sts        stat.Stat
-	fStartSize int64 // starting size of the final destination file.
-	fEndSize   int64 // final file size (will be smaller than bytes written if using compression.
+	fStartSize int64 // starting size of the final destination file. If > 0 then the file is being appended to.
 }
 
 func (w *Writer) WriteLine(ln []byte) (int64, error) {
@@ -177,7 +225,14 @@ func (w *Writer) WriteLine(ln []byte) (int64, error) {
 }
 
 func (w *Writer) Write(p []byte) (int, error) {
-	n, err := w.fWrit.Write(p)
+	n, err := w.w.Write(p)
+	if err != nil {
+		return n, err
+	}
+	_, err = w.wHshr.Write(p)
+	if err != nil {
+		return n, err
+	}
 	written := int64(n)
 
 	// increment byte count
@@ -194,154 +249,47 @@ func (w *Writer) Stats() stat.Stat {
 // - close and remove tmp file (if exists)
 // - close truncate or remove final file
 func (w *Writer) Abort() error {
-	// close compression
-	var compErr error
-	if w.fComp != nil {
-		compErr = w.fComp.Close()
-		// can get EINVAL type error if Close is called twice.
-		if compErr == syscall.EINVAL {
-			compErr = nil
-		}
-	}
-
-	// tmp file
-	var tmpErr, tmpRmErr error
-	if w.fTmp != nil {
-		// close tmp
-		tmpName := w.fTmp.Name()
-		tmpErr = w.fTmp.Close()
-		// can get EINVAL type error if Close is called twice.
-		if tmpErr == syscall.EINVAL {
-			tmpErr = nil
-		}
-
-		// remove tmp
-		tmpRmErr = os.Remove(tmpName)
-	}
-
-	// reset mem buffer
-	w.fMem.Flush()
-	w.bBuf.Reset()
-
-	// close final file
-	fName := w.fPth.Name()
-	fErr := w.fPth.Close()
-	// can get EINVAL type error if Close is called twice.
-	if fErr == syscall.EINVAL {
-		fErr = nil
-	}
-
-	// truncate or rm destination
-	var fRmErr, statErr error
-	if w.append {
-		// compare original byte size with current byte size
-		// to determine if truncating is necessary.
-		var fInfo os.FileInfo
-		fInfo, statErr = os.Stat(fName)
-		if fInfo.Size() > w.fStartSize {
-			fRmErr = os.Truncate(fName, w.fStartSize)
-		}
-	} else {
-		fRmErr = os.Remove(fName)
-	}
-
-	// return the first err found
-	if statErr != nil {
-		return statErr
-	}
-	if fRmErr != nil {
-		return fRmErr
-	}
-	if fErr != nil {
-		return fErr
-	}
-	if tmpRmErr != nil {
-		return tmpRmErr
-	}
-	if tmpErr != nil {
-		return tmpErr
-	}
 
 	return nil
 }
 
 func (w *Writer) Close() error {
-	// sync and flush before the copy/mv/append
+	// calculate entire checksum for final file at end
+	// if file is appended.
 
-	// copy from buffer to final
-	// - append copy if append == true
-	// - copy from mem buf to final
-	// - copy from tmp file to final
-	// - calculate checksum for entire file for appended
-	// - calculate checksum correctly when using compression
+	return nil
+}
 
-	// close compression
-	var compErr error
-	if w.fComp != nil {
-		compErr = w.fComp.Close()
-		// can get EINVAL type error if Close is called twice.
-		if compErr == syscall.EINVAL {
-			compErr = nil
-		}
-	}
+// closeBuf provides Close method
+// to make bytes.Buffer a ReadWriteCloser
+type closeBuf struct {
+	*bytes.Buffer
+}
 
-	// tmp file
-	var tmpErr, tmpRmErr error
-	if w.fTmp != nil {
-		// close tmp
-		tmpName := w.fTmp.Name()
-		tmpErr = w.fTmp.Close()
-		// can get EINVAL type error if Close is called twice.
-		if tmpErr == syscall.EINVAL {
-			tmpErr = nil
-		}
+func (b closeBuf) Close() error {
+	// if the buffer has been read until EOF
+	// then this is not necessary since Reset
+	// is called internally when it reaches
+	// EOF. However, if the the writer is aborted
+	// then close will cleanup the buffer.
+	b.Reset()
+	return nil
+}
 
-		// remove tmp
-		tmpRmErr = os.Remove(tmpName)
-	}
+type closeHasher struct {
+	hash.Hash
+}
 
-	// reset mem buffer
-	w.fMem.Flush()
-	w.bBuf.Reset()
+func (h *closeHasher) Close() error {
+	return nil
+}
 
-	// close final file
-	fName := w.fPth.Name()
-	fErr := w.fPth.Close()
-	// can get EINVAL type error if Close is called twice.
-	if fErr == syscall.EINVAL {
-		fErr = nil
-	}
+type NopWriteCloser struct{}
 
-	// truncate or rm destination
-	var fRmErr, statErr error
-	if w.append {
-		// compare original byte size with current byte size
-		// to determine if truncating is necessary.
-		var fInfo os.FileInfo
-		fInfo, statErr = os.Stat(fName)
-		if fInfo.Size() > w.fStartSize {
-			fRmErr = os.Truncate(fName, w.fStartSize)
-		}
-	} else {
-		fRmErr = os.Remove(fName)
-	}
+func (wc *NopWriteCloser) Write(p []byte) (int, error) {
+	return len(p), nil
+}
 
-	// return the first err found
-	if statErr != nil {
-		return statErr
-	}
-	if fRmErr != nil {
-		return fRmErr
-	}
-	if fErr != nil {
-		return fErr
-	}
-	if tmpRmErr != nil {
-		return tmpRmErr
-	}
-	if tmpErr != nil {
-		return tmpErr
-	}
-
+func (wc *NopWriteCloser) Close() error {
 	return nil
 }
