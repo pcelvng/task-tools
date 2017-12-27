@@ -1,6 +1,11 @@
 package file
 
-import "context"
+import (
+	"context"
+	"time"
+	"crypto/sha1"
+	"encoding/base64"
+)
 
 func NewCopyFile(r StatsReader, w StatsWriter) *CopyFile {
 	return &CopyFile{
@@ -54,4 +59,12 @@ type FileConfig struct {
 	// AWS Auth
 	AWSAccesToken  string
 	AWSTokenSecret string
+}
+
+func genTmpName() string {
+	seed := []byte(time.Now().Format(time.RFC3339Nano))
+
+	hasher := sha1.New()
+	hasher.Write(seed)
+	return base64.URLEncoding.EncodeToString(hasher.Sum(nil))
 }
