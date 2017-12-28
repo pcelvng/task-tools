@@ -28,58 +28,64 @@ type Stat struct {
 	// Path returns the full absolute path of the file.
 	Path string
 
-	lnMu  sync.Mutex
-	bMu   sync.Mutex
-	chSMu sync.Mutex
+	mu sync.Mutex
 }
 
 // AddLine will atomically and safely increment
 // LineCnt by one.
 func (s *Stat) AddLine() {
-	s.lnMu.Lock()
-	defer s.lnMu.Unlock()
-
 	atomic.AddInt64(&s.LineCnt, 1)
 }
 
 // AddBytes will atomically and safely increment
 // ByteCnt by 'cnt'.
 func (s *Stat) AddBytes(cnt int64) {
-	s.lnMu.Lock()
-	defer s.lnMu.Unlock()
-
-	atomic.AddInt64(&s.ByteCnt, 1)
+	atomic.AddInt64(&s.ByteCnt, cnt)
 }
 
 // SetCheckSum will correctly calculate and set the
 // base64 encoded checksum.
 func (s *Stat) SetCheckSum(hsh hash.Hash) {
-	s.chSMu.Lock()
-	defer s.chSMu.Unlock()
-
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.CheckSum = hex.EncodeToString(hsh.Sum(nil))
 }
 
 func (s *Stat) SetSizeFromPath(pth string) {
-	fInfo, err := os.Stat(pth)
-	if err != nil {
-		return
+	fInfo, _ := os.Stat(pth)
+	if fInfo != nil {
+		curSize := atomic.LoadInt64(&s.Size)
+		fSize := fInfo.Size()
+		atomic.CompareAndSwapInt64(&s.Size, curSize, fSize)
 	}
-	s.Size = fInfo.Size()
 }
 
 func (s *Stat) SetSize(size int64) {
-	s.Size = size
+	curSize := atomic.LoadInt64(&s.Size)
+	atomic.CompareAndSwapInt64(&s.Size, curSize, size)
 }
 
-// Clone will safely clone the Stat object.
-func (s *Stat) Clone() Stat {
-	s.lnMu.Lock()
-	s.bMu.Lock()
-	s.chSMu.Lock()
-	defer s.lnMu.Unlock()
-	defer s.bMu.Unlock()
-	defer s.chSMu.Unlock()
+func (s *Stat) SetPath(pth string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	return *s
+	s.Path = pth
+}
+
+// Clone will create a copy of stat that won't trigger
+// race conditions. Use Clone if you are updating and
+// reading from stats at the same time. Read from the
+// clone.
+func (s *Stat) Clone() Stat {
+	clone := New()
+
+	s.mu.Lock()
+	clone.CheckSum = s.CheckSum
+	clone.Path = s.Path
+	s.mu.Unlock()
+
+	clone.LineCnt = atomic.LoadInt64(&s.LineCnt)
+	clone.ByteCnt = atomic.LoadInt64(&s.ByteCnt)
+	clone.Size = atomic.LoadInt64(&s.Size)
+	return clone
 }
