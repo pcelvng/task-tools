@@ -9,23 +9,14 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
-
 	"path"
+	"path/filepath"
+	"sync"
 
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
 type Options struct {
-	// Append will append to the file instead of truncating.
-	Append bool
-
-	// Delay will delay final writing until Close is called.
-	// Will write to memory unless a TmpDir and/or TmpPrefix
-	// is specified. In which case it will write to a temp
-	// file until close is called.
-	Delay bool
-
 	// UseTmpFile specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name
 	// prefix.
@@ -68,51 +59,40 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 
 	var bBuf *closeBuf          // bytes memory buffer
 	var fBuf *os.File           // tmp file buffer
-	var hshr *closeHasher       // hasher will close method
-	var rBuf io.ReadCloser      // houses the underlying buffer, if used
-	var w, wHshr io.WriteCloser // write closers, one for writing actual bytes, one for checksum
+	var hshr hash.Hash          // hasher
+	var buf io.ReadWriteCloser  // houses the underlying buffer, if used
+	var w, wHshr io.WriteCloser // write closer - for writing (and closing if using gzip)
 
-	// open file
-	pth, f, err := openF(pth, opt.Append)
+	// check perms - writing happens at the end
+	pth, err := checkFile(pth)
 	if err != nil {
 		return nil, err
 	}
 
-	// get starting file size
-	fInfo, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	fStartSize := fInfo.Size() // if > 0 then appending and file existed before
-
-	// choose underlying readwritecloser
-	isDelayed := opt.Delay
-	tmpName := ""
-	if isDelayed {
-		if opt.UseTmpFile {
-			// attempt to mk temp dir if not exists
-			err := os.MkdirAll(opt.TmpDir, 0700)
-			if err != nil {
-				return nil, err
-			}
-			fBuf, err = ioutil.TempFile(opt.TmpDir, opt.TmpPrefix)
-			if err != nil {
-				return nil, err
-			}
-			rBuf = fBuf
-			w = fBuf
-			tmpName = fBuf.Name()
-		} else {
-			rBuf = bBuf
-			w = fBuf
+	// choose buffer
+	tmpPth := ""
+	if opt.UseTmpFile {
+		err := os.MkdirAll(opt.TmpDir, 0700)
+		if err != nil {
+			return nil, err
 		}
+
+		fBuf, err = ioutil.TempFile(opt.TmpDir, opt.TmpPrefix)
+		if err != nil {
+			return nil, err
+		}
+		buf = fBuf
+		tmpPth = fBuf.Name() // store name for removal at the end
 	} else {
-		w = f
+		buf = bBuf
 	}
 
 	// md5 hasher
-	hshr = &closeHasher{md5.New()}
-	wHshr = hshr
+	hshr = md5.New()
+
+	// writers
+	w = buf
+	wHshr = &nopClose{hshr}
 
 	// compression
 	if ext := filepath.Ext(pth); ext == ".gz" {
@@ -123,16 +103,11 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 		}
 
 		// hash writer
-		// this way the same compressed bytes are sent to the hasher
+		// same compressed bytes are sent to the hasher
 		wHshr, err = gzip.NewWriterLevel(hshr, gzip.BestSpeed)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	// if appending to a file that already existed then turn off line-by-line hashing.
-	if fStartSize > 0 {
-		wHshr = &NopWriteCloser{}
 	}
 
 	// stats
@@ -141,75 +116,27 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 
 	// make writer
 	return &Writer{
-		f:          f,
-		rBuf:       rBuf,
-		w:          w,
-		wHshr:      wHshr,
-		hshr:       hshr,
-		isDelayed:  isDelayed,
-		tmpName:    tmpName,
-		sts:        sts,
-		fStartSize: fStartSize,
+		pth:    pth,
+		buf:    buf,
+		w:      w,
+		hshr:   hshr,
+		wHshr:  wHshr,
+		tmpPth: tmpPth,
+		sts:    sts,
 	}, nil
 }
 
-// openF will open the pth file.
-//
-// openF will examine the pth extension. If '.gz'
-// is the final extension then the file writer
-// will be wrapped with a gzip writer.
-//
-// the return pth path value will be a normalized absolute
-// path.
-//
-// NOTE: if append != true then even if the file
-// is being lazily written then the file will be truncated
-// the moment it is opened.
-func openF(pth string, append bool) (string, *os.File, error) {
-	if pth == "" {
-		return "", nil, errors.New("local file path empty")
-	}
-
-	// make dir if not exists
-	err := os.MkdirAll(path.Dir(pth), 0700)
-	if err != nil {
-		return pth, nil, err
-	}
-
-	// make pth absolute
-	pth, err = filepath.Abs(pth)
-	if err != nil {
-		return "", nil, err
-	}
-
-	// calculate file flags
-	fFlag := os.O_CREATE | os.O_WRONLY
-	if append {
-		fFlag = fFlag | os.O_APPEND
-	} else {
-		fFlag = fFlag | os.O_TRUNC
-	}
-
-	// open
-	fPth, err := os.OpenFile(pth, fFlag, 0644)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return pth, fPth, nil
-}
-
 type Writer struct {
-	f         *os.File       // file
-	rBuf      io.ReadCloser  // tmp file read buffer
-	w         io.WriteCloser // writer - calling Write will write to this writer
-	wHshr     io.WriteCloser // writer for writing to the hasher - separate so that gzip can write to it.
-	hshr      hash.Hash      // hasher
-	isDelayed bool           // indicates if writing to final file is delayed until Close is called
-	tmpName   string         // full path name of tmp file (if used)
-
-	sts        stat.Stat
-	fStartSize int64 // starting size of the final destination file. If > 0 then the file is being appended to.
+	pth     string             // absolute file path
+	buf     io.ReadWriteCloser // buffer
+	w       io.WriteCloser     // write closer for active writes
+	wHshr   io.WriteCloser     // write closer for active hashing (close is needed to flush compression)
+	hshr    hash.Hash          // hasher
+	tmpPth  string             // tmp path (if used)
+	sts     stat.Stat
+	aborted bool
+	closed  bool
+	mu      sync.Mutex
 }
 
 func (w *Writer) WriteLine(ln []byte) (int64, error) {
@@ -245,19 +172,177 @@ func (w *Writer) Stats() stat.Stat {
 	return w.sts.Clone()
 }
 
-// Abort will close files and remove written bytes.
-// - close and remove tmp file (if exists)
-// - close truncate or remove final file
+// Abort will:
+// - clear and close buffer
+//
+// Calling Close after Abort will do nothing.
+// Writing after calling Abort has undefined behavior.
 func (w *Writer) Abort() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// check if closed
+	if w.closed {
+		return nil
+	}
+	w.aborted = true
+
+	// close writers
+	w.w.Close()
+	w.wHshr.Close()
+
+	// close and clear buffer
+	w.buf.Close()
+	if w.tmpPth != "" {
+		err := os.Remove(w.tmpPth)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
+// Close will:
+// - calculate final checksum
+// - copy (mv) buffer to pth file
+// - clear and close buffer
+// - report any errors
+//
+// Calling Abort after Close will do nothing.
+// Writing after calling Close has undefined behavior.
 func (w *Writer) Close() error {
-	// calculate entire checksum for final file at end
-	// if file is appended.
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// check if aborted
+	if w.aborted {
+		return nil
+	}
+	w.closed = true
+
+	// close writers
+	w.w.Close()
+	w.wHshr.Close()
+
+	// copy
+
+	// rm tmp
+	if w.tmpPth != "" {
+		err := os.Remove(w.tmpPth)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
+}
+
+// copy will copy the contents of buf
+// to the path indicated at pth.
+//
+// Returns num of bytes copied and error.
+func (w *Writer) copy() (int64, error) {
+	// mv if using tmp file buffer
+	if w.tmpPth != "" {
+		// rename will move via hard link if
+		// on the same file system (same partition).
+		// otherwise it will do a system copy.
+		errMv := os.Rename(w.tmpPth, w.pth)
+		fInfo, err := os.Stat(w.pth)
+
+		if errMv != nil {
+			return fInfo.Size(), errMv
+		}
+		return fInfo.Size(), err
+	}
+
+	// copy from mem buffer
+	_, f, err := openF(w.pth, false)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	return io.Copy(f, w.buf)
+}
+
+// openF will open the pth file (in append mode if append = true)
+func openF(pth string, append bool) (string, *os.File, error) {
+	if pth == "" {
+		return "", nil, errors.New("local file path empty")
+	}
+
+	// make dir if not exists
+	err := os.MkdirAll(path.Dir(pth), 0700)
+	if err != nil {
+		return pth, nil, err
+	}
+
+	// make pth absolute
+	pth, err = filepath.Abs(pth)
+	if err != nil {
+		return pth, nil, err
+	}
+
+	// calculate file flags
+	fFlag := os.O_CREATE | os.O_WRONLY
+	if append {
+		fFlag = fFlag | os.O_APPEND
+	} else {
+		fFlag = fFlag | os.O_TRUNC
+	}
+
+	// open
+	fPth, err := os.OpenFile(pth, fFlag, 0644)
+	if err != nil {
+		return pth, nil, err
+	}
+
+	return pth, fPth, nil
+}
+
+// checkFile will check:
+// - is not dir
+// - can be opened
+// - can be closed
+//
+// Will remove file if it didn't exist before.
+//
+// Returns the cleaned absolute path and any errors.
+func checkFile(pth string) (string, error) {
+	// check if exists, if dir
+	var exists bool
+	fInfo, err := os.Stat(pth)
+	if err == nil {
+		if fInfo.IsDir() {
+			return pth, errors.New("file path is directory")
+		}
+
+		if fInfo.Size() > 0 {
+			exists = true
+		}
+	}
+
+	// open
+	// append mode to not destroy existing contents
+	pth, f, err := openF(pth, true)
+	if err != nil {
+		return pth, err
+	}
+
+	// close
+	errC := f.Close()
+
+	// remove
+	if !exists {
+		err = os.Remove(pth)
+		if err != nil {
+			return pth, err
+		}
+	}
+
+	return pth, errC
 }
 
 // closeBuf provides Close method
@@ -276,20 +361,10 @@ func (b closeBuf) Close() error {
 	return nil
 }
 
-type closeHasher struct {
-	hash.Hash
+type nopClose struct {
+	io.Writer
 }
 
-func (h *closeHasher) Close() error {
-	return nil
-}
-
-type NopWriteCloser struct{}
-
-func (wc *NopWriteCloser) Write(p []byte) (int, error) {
-	return len(p), nil
-}
-
-func (wc *NopWriteCloser) Close() error {
+func (wc *nopClose) Close() error {
 	return nil
 }
