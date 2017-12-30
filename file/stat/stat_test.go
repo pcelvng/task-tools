@@ -113,19 +113,42 @@ func ExampleChecksum() {
 
 func ExamplePath() {
 	sts := New()
-	sts.Path = "./test/path.txt"
+	sts.SetPath("./test/path.txt")
 
 	fmt.Println(sts.LineCnt)
 	fmt.Println(sts.ByteCnt)
 	fmt.Println(sts.Size)
 	fmt.Println(sts.CheckSum)
-	fmt.Println(sts.Path) // empty string
+	fmt.Println(sts.Path)
 	// Output:
 	// 0
 	// 0
 	// 0
 	//
 	// ./test/path.txt
+}
+
+func ExampleStat_Clone() {
+	sts := New()
+	sts.LineCnt = 1
+	sts.ByteCnt = 2
+	sts.Size = 3
+	sts.CheckSum = "4"
+	sts.Path = "5"
+
+	cln := sts.Clone()
+	fmt.Println(cln.LineCnt)
+	fmt.Println(cln.ByteCnt)
+	fmt.Println(cln.Size)
+	fmt.Println(cln.CheckSum)
+	fmt.Println(cln.Path)
+
+	// Output:
+	// 1
+	// 2
+	// 3
+	// 4
+	// 5
 }
 
 func BenchmarkAddLine(b *testing.B) {

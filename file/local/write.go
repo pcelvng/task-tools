@@ -57,11 +57,9 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 		opt = new(Options)
 	}
 
-	var bBuf *closeBuf          // bytes memory buffer
-	var fBuf *os.File           // tmp file buffer
 	var hshr hash.Hash          // hasher
-	var buf io.ReadWriteCloser  // houses the underlying buffer, if used
-	var w, wHshr io.WriteCloser // write closer - for writing (and closing if using gzip)
+	var buf io.ReadWriteCloser  // buffer
+	var w, wHshr io.WriteCloser // w=writer, wHshr=write hasher
 
 	// check perms - writing happens at the end
 	pth, err := checkFile(pth)
@@ -72,18 +70,12 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 	// choose buffer
 	tmpPth := ""
 	if opt.UseTmpFile {
-		err := os.MkdirAll(opt.TmpDir, 0700)
-		if err != nil {
-			return nil, err
-		}
-
-		fBuf, err = ioutil.TempFile(opt.TmpDir, opt.TmpPrefix)
-		if err != nil {
-			return nil, err
-		}
+		var fBuf *os.File // tmp file buffer
+		tmpPth, fBuf, err = openTmp(opt.TmpDir, opt.TmpPrefix)
 		buf = fBuf
-		tmpPth = fBuf.Name() // store name for removal at the end
 	} else {
+		var bBuf *closeBuf // bytes memory buffer
+		bBuf = &closeBuf{}
 		buf = bBuf
 	}
 
@@ -97,17 +89,11 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 	// compression
 	if ext := filepath.Ext(pth); ext == ".gz" {
 		// file writer
-		w, err = gzip.NewWriterLevel(w, gzip.BestSpeed)
-		if err != nil {
-			return nil, err
-		}
+		w, _ = gzip.NewWriterLevel(w, gzip.BestSpeed)
 
 		// hash writer
-		// same compressed bytes are sent to the hasher
-		wHshr, err = gzip.NewWriterLevel(hshr, gzip.BestSpeed)
-		if err != nil {
-			return nil, err
-		}
+		// so same compressed bytes are sent to the hasher
+		wHshr, _ = gzip.NewWriterLevel(hshr, gzip.BestSpeed)
 	}
 
 	// stats
@@ -116,7 +102,6 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 
 	// make writer
 	return &Writer{
-		pth:    pth,
 		buf:    buf,
 		w:      w,
 		hshr:   hshr,
@@ -127,7 +112,6 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 }
 
 type Writer struct {
-	pth     string             // absolute file path
 	buf     io.ReadWriteCloser // buffer
 	w       io.WriteCloser     // write closer for active writes
 	wHshr   io.WriteCloser     // write closer for active hashing (close is needed to flush compression)
@@ -191,7 +175,10 @@ func (w *Writer) Abort() error {
 	w.w.Close()
 	w.wHshr.Close()
 
-	// close and clear buffer
+	// close and clear underlying write buffer
+	// may or may not be the same Close method as w
+	// if using gzip. We want to make sure to close both
+	// to make sure to flush and sync everything to disk.
 	w.buf.Close()
 	if w.tmpPth != "" {
 		err := os.Remove(w.tmpPth)
@@ -225,7 +212,12 @@ func (w *Writer) Close() error {
 	w.w.Close()
 	w.wHshr.Close()
 
-	// copy
+	// do copy
+	w.copy()
+
+	// set checksum, size
+	w.sts.SetCheckSum(w.hshr)
+	w.sts.SetSizeFromPath(w.sts.Path)
 
 	// rm tmp
 	if w.tmpPth != "" {
@@ -248,8 +240,8 @@ func (w *Writer) copy() (int64, error) {
 		// rename will move via hard link if
 		// on the same file system (same partition).
 		// otherwise it will do a system copy.
-		errMv := os.Rename(w.tmpPth, w.pth)
-		fInfo, err := os.Stat(w.pth)
+		errMv := os.Rename(w.tmpPth, w.sts.Path)
+		fInfo, err := os.Stat(w.sts.Path)
 
 		if errMv != nil {
 			return fInfo.Size(), errMv
@@ -258,31 +250,47 @@ func (w *Writer) copy() (int64, error) {
 	}
 
 	// copy from mem buffer
-	_, f, err := openF(w.pth, false)
+	_, f, err := openF(w.sts.Path, false)
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer closeF(w.sts.Path, f)
 
 	return io.Copy(f, w.buf)
 }
 
 // openF will open the pth file (in append mode if append = true)
 func openF(pth string, append bool) (string, *os.File, error) {
-	if pth == "" {
-		return "", nil, errors.New("local file path empty")
-	}
-
-	// make dir if not exists
-	err := os.MkdirAll(path.Dir(pth), 0700)
-	if err != nil {
-		return pth, nil, err
-	}
+	var f *os.File
 
 	// make pth absolute
-	pth, err = filepath.Abs(pth)
+	absPth, _ := filepath.Abs(pth)
+
+	// check for trailing '/'
+	// otherwise the '/' will get removed when converted
+	// to an absolute path and instead of a directory could get
+	// created as a file. If the user appends a '/' then we are going
+	// to assume the user meant a directory. We don't write to dirs.
+	if len(pth) > 0 && (pth[len(pth)-1] == '/') {
+		err := errors.New("references a directory")
+		if absPth != "/" {
+			absPth = absPth + "/"
+		}
+		return absPth, f, &os.PathError{"path", absPth, err}
+	}
+
+	// special writers
+	switch absPth {
+	case "/dev/stdout":
+		f = os.Stdout
+		return absPth, f, nil
+	}
+
+	// make dir(s) if not exists
+	// NOTE: the writer does not clean up directories
+	err := os.MkdirAll(path.Dir(absPth), 0700)
 	if err != nil {
-		return pth, nil, err
+		return absPth, f, err
 	}
 
 	// calculate file flags
@@ -294,12 +302,50 @@ func openF(pth string, append bool) (string, *os.File, error) {
 	}
 
 	// open
-	fPth, err := os.OpenFile(pth, fFlag, 0644)
+	f, err = os.OpenFile(absPth, fFlag, 0644)
 	if err != nil {
-		return pth, nil, err
+		return absPth, f, err
+	}
+	f.Write(nil)
+
+	return absPth, f, nil
+}
+
+func closeF(pth string, f *os.File) error {
+	if f == nil {
+		return nil
 	}
 
-	return pth, fPth, nil
+	// do not close special files
+	// doing so can cause weird side effects if
+	// other processes are using them.
+	switch pth {
+	case "/dev/null", "/dev/stdout", "/dev/stderr":
+		return nil
+	}
+
+	// close
+	return f.Close()
+}
+
+// openTmp will return the absolute path of the tmp
+func openTmp(dir, prefix string) (string, *os.File, error) {
+	var f *os.File
+	var absTmp string
+
+	// normalize dir path
+	dir, _ = filepath.Abs(dir)
+
+	err := os.MkdirAll(dir, 0700)
+	if err != nil {
+		return absTmp, f, err
+	}
+
+	f, err = ioutil.TempFile(dir, prefix)
+	if f != nil {
+		absTmp, _ = filepath.Abs(f.Name())
+	}
+	return absTmp, f, err
 }
 
 // checkFile will check:
@@ -315,11 +361,7 @@ func checkFile(pth string) (string, error) {
 	var exists bool
 	fInfo, err := os.Stat(pth)
 	if err == nil {
-		if fInfo.IsDir() {
-			return pth, errors.New("file path is directory")
-		}
-
-		if fInfo.Size() > 0 {
+		if !fInfo.IsDir() {
 			exists = true
 		}
 	}
@@ -332,7 +374,7 @@ func checkFile(pth string) (string, error) {
 	}
 
 	// close
-	errC := f.Close()
+	errC := closeF(pth, f)
 
 	// remove
 	if !exists {
@@ -348,7 +390,7 @@ func checkFile(pth string) (string, error) {
 // closeBuf provides Close method
 // to make bytes.Buffer a ReadWriteCloser
 type closeBuf struct {
-	*bytes.Buffer
+	bytes.Buffer
 }
 
 func (b closeBuf) Close() error {

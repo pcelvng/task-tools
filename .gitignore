@@ -12,3 +12,4 @@ apps/taskmasters/http/http
 apps/taskmasters/responder/responder
 apps/taskmasters/retry/retry
 apps/workers/noop/noop
+coverage
