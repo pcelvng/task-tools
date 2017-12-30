@@ -1,11 +1,22 @@
 package local
 
 import (
+	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
+	"testing"
 )
+
+func TestMain(m *testing.M) {
+	exitCode := m.Run()
+
+	// remove tmp dir
+	os.RemoveAll("./tmp")
+	os.Exit(exitCode)
+}
 
 func ExampleNewWriter() {
 	// showing:
@@ -31,11 +42,11 @@ func ExampleNewWriter() {
 	w, err = NewWriter(pth, opt)
 	fmt.Println(err)
 	fmt.Println(w.sts.Path)
-	tmpDir, tmpF := path.Split(w.tmpPth)
+	_, tmpF := path.Split(w.tmpPth)
 	fmt.Println(tmpF[0:5])
 
 	// remove tmp file and dir
-	os.RemoveAll(tmpDir)
+	os.Remove(w.tmpPth)
 
 	// write to stdout
 	pth = "/dev/stdout"
@@ -64,6 +75,157 @@ func ExampleNewWriter() {
 	// 4b3bbcd85a4c03a12b75bd1e70daa6c2
 }
 
+func ExampleWriter_copy() {
+	// showing:
+	// - copy from tmp file to stdout
+	// - copy from tmp file to local file
+	// - copy from tmp file to gzip local file
+
+	// tmp file to stdout
+	pth := "/dev/stdout"
+	opt := &Options{
+		UseTmpFile: true,
+		TmpDir:     "./tmp",
+		TmpPrefix:  "test_copy_",
+	}
+	w, _ := NewWriter(pth, opt)
+	if w == nil {
+		return
+	}
+	w.WriteLine([]byte("stdout line1"))
+	w.WriteLine([]byte("stdout line2"))
+	w.WriteLine([]byte("stdout line3"))
+	w.Close()
+
+	// tmp file to local file
+	pth = "./tmp/test_copy.txt"
+	opt = &Options{
+		UseTmpFile: true,
+		TmpDir:     "./tmp",
+		TmpPrefix:  "test_copy_",
+	}
+	w, _ = NewWriter(pth, opt)
+	if w == nil {
+		return
+	}
+	w.WriteLine([]byte("local line1"))
+	w.WriteLine([]byte("local line2"))
+	w.WriteLine([]byte("local line3"))
+	w.Close()
+	b := make([]byte, w.sts.Size)
+	r, _ := os.Open(w.sts.Path)
+	io.ReadFull(r, b)
+	fmt.Print(string(b))
+
+	// tmp file to local gzip file
+	pth = "./tmp/test_copy.gz"
+	opt = &Options{
+		UseTmpFile: true,
+		TmpDir:     "./tmp",
+		TmpPrefix:  "test_copy_",
+	}
+	w, _ = NewWriter(pth, opt)
+	if w == nil {
+		return
+	}
+	w.WriteLine([]byte("local gz line1"))
+	w.WriteLine([]byte("local gz line2"))
+	w.WriteLine([]byte("local gz line3"))
+	w.Close()
+	b = make([]byte, w.sts.ByteCnt)
+	r, _ = os.Open(w.sts.Path)
+	gr, _ := gzip.NewReader(r)
+	io.ReadFull(gr, b)
+	fmt.Print(string(b))
+
+	// Output:
+	// stdout line1
+	// stdout line2
+	// stdout line3
+	// local line1
+	// local line2
+	// local line3
+	// local gz line1
+	// local gz line2
+	// local gz line3
+}
+
+func ExampleWriter_copyerrmv() {
+	// showing:
+	// - mv err
+	// - tmp open err
+	// - openF err
+
+	// tmp mv err
+	pth := "/tmp/test.txt"
+	w, _ := NewWriter(pth, nil)
+	if w == nil {
+		return
+	}
+	w.tmpPth = "/tmp/bad.txt" // doesn't exist
+	n, err := w.copy()
+	fmt.Println(n)   // 0
+	fmt.Println(err) // rename /tmp/bad.txt /tmp/test.txt: no such file or directory
+
+	// tmp open err
+	pth = "/dev/null"
+	w, _ = NewWriter(pth, nil)
+	if w == nil {
+		return
+	}
+	w.tmpPth = "/tmp/bad.txt" // doesn't exist
+	n, err = w.copy()
+	fmt.Println(n)   // 0
+	fmt.Println(err) // rename /tmp/bad.txt /tmp/test.txt: no such file or directory
+
+	// Output:
+	// 0
+	// rename /tmp/bad.txt /tmp/test.txt: no such file or directory
+	// 0
+	// open /tmp/bad.txt: no such file or directory
+}
+
+func ExampleOpenf_err() {
+	// showing:
+	// openf open dir err
+	// openf open file err
+
+	// dir bad perms
+	_, _, err := openF("/bad/perms/dir/file.txt", false)
+	fmt.Println(err)
+
+	// file bad perms
+	_, _, err = openF("/bad_perms.txt", false)
+	fmt.Println(err)
+
+	// Output:
+	// mkdir /bad: permission denied
+	// open /bad_perms.txt: permission denied
+}
+
+func ExampleClosef_err() {
+	// showing:
+	// closeF no err on nil f
+
+	var nilF *os.File
+	err := closeF("path.txt", nilF)
+	fmt.Println(err)
+
+	// Output:
+	// <nil>
+}
+
+func ExampleOpenTmp_err() {
+	// showing:
+	// closeF no err on nil f
+
+	_, _, err := openTmp("/root/bad", "")
+	fmt.Println(err)
+
+	// Output:
+	// mkdir /root/bad: permission denied
+}
+
 func ExampleNewWriterErr() {
 	// showing:
 	// - writer is nil with an err
@@ -72,8 +234,8 @@ func ExampleNewWriterErr() {
 
 	pth := "/dir/path/"
 	w, err := NewWriter(pth, nil)
-	fmt.Println(w)
-	fmt.Println(err)
+	fmt.Println(w)   // <nil>
+	fmt.Println(err) // path /dir/path/: references a directory
 
 	pth = "./test.txt"
 	w, _ = NewWriter(pth, nil)
@@ -84,22 +246,17 @@ func ExampleNewWriterErr() {
 	var wc, wHshr io.WriteCloser
 
 	wc = w.w
-	w.w = f
-	n, err := w.WriteLine([]byte("bad write to nil"))
-	fmt.Println(n)
-	fmt.Println(err)
-
-	w.w = wc
 	wHshr = w.wHshr
+	w.w = f
 	w.wHshr = f
-	n, err = w.WriteLine([]byte("bad hasher write to nil"))
-	fmt.Println(n)
-	fmt.Println(err)
-	w.wHshr = wHshr
+	n, err := w.WriteLine([]byte("bad write to nil"))
+	fmt.Println(n)   // 0
+	fmt.Println(err) // invalid argument
+	w.w = wc         // restore writer
+	w.wHshr = wHshr  // restore write hasher
 	err = w.Close()
-	fmt.Println(err)
-	err = w.Abort() // call Abort after close to test abort after close
-	fmt.Println(err)
+	err = w.Abort()  // call Abort after close should return nil
+	fmt.Println(err) // <nil>
 	os.Remove(w.sts.Path)
 
 	// Output:
@@ -107,9 +264,6 @@ func ExampleNewWriterErr() {
 	// path /dir/path/: references a directory
 	// 0
 	// invalid argument
-	// 24
-	// invalid argument
-	// <nil>
 	// <nil>
 }
 
@@ -237,4 +391,53 @@ func Example_openTmp() {
 	// /tmp/
 	// test_
 	// <nil>
+}
+
+func ExampleMultiWriteCloser() {
+	// showing:
+	// - write err
+	// - close err
+	// - short write err
+
+	// write, close err
+	errW := new(errWriteCloser)
+	writers := make([]io.WriteCloser, 1)
+	writers[0] = errW
+	w := &multiWriteCloser{writers}
+	_, err := w.Write([]byte("test err"))
+	fmt.Println(err) // error writing
+	err = w.Close()
+	fmt.Println(err) // error closing
+
+	// short write err
+	errShort := new(shortWriteCloser)
+	writers[0] = errShort
+	w = &multiWriteCloser{writers}
+	_, err = w.Write([]byte("test short"))
+	fmt.Println(err) // short write
+
+	// Output:
+	// error writing
+	// error closing
+	// short write
+}
+
+type errWriteCloser struct{}
+
+func (w *errWriteCloser) Write(_ []byte) (int, error) {
+	return 0, errors.New("error writing")
+}
+
+func (w *errWriteCloser) Close() error {
+	return errors.New("error closing")
+}
+
+type shortWriteCloser struct{}
+
+func (w *shortWriteCloser) Write(p []byte) (int, error) {
+	return 0, nil
+}
+
+func (w *shortWriteCloser) Close() error {
+	return nil
 }
