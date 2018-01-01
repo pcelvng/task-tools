@@ -1,13 +1,7 @@
 package nop
 
 import (
-	"errors"
-
 	"github.com/pcelvng/task-tools/file/stat"
-)
-
-var (
-	NopErr = errors.New("nop error")
 )
 
 func NewWriter(pth string) *Writer {
@@ -18,19 +12,17 @@ func NewWriter(pth string) *Writer {
 	}
 }
 
-func NewErrWriter(pth string) *Writer {
-	w := NewWriter(pth)
-	w.isErr = true
-	return w
-}
-
 // Writer is a no-operation writer. It doesn't do
 // anything except keep byte count and line count.
 // If isErr == true then all func calls return
 // an err or type NopErr.
 type Writer struct {
-	isErr bool
-	sts   stat.Stat
+	// Err is the err returned from method
+	// calls.
+	// Useful for mocking err scenarios.
+	Err error
+
+	sts stat.Stat
 }
 
 func (w *Writer) WriteLine(ln []byte) (err error) {
@@ -42,11 +34,8 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
-	if w.isErr {
-		return 0, NopErr
-	}
 	w.sts.AddBytes(int64(len(p)))
-	return len(p), nil
+	return len(p), w.Err
 }
 
 func (w *Writer) Stats() stat.Stat {
@@ -54,16 +43,10 @@ func (w *Writer) Stats() stat.Stat {
 }
 
 func (w *Writer) Abort() error {
-	if w.isErr {
-		return NopErr
-	}
-	return nil
+	return w.Err
 }
 
 func (w *Writer) Close() error {
-	if w.isErr {
-		return NopErr
-	}
 	w.sts.SetSize(w.sts.ByteCnt)
-	return nil
+	return w.Err
 }
