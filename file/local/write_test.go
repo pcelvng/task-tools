@@ -249,8 +249,7 @@ func ExampleNewWriterErr() {
 	wHshr = w.wHshr
 	w.w = f
 	w.wHshr = f
-	n, err := w.WriteLine([]byte("bad write to nil"))
-	fmt.Println(n)   // 0
+	err = w.WriteLine([]byte("bad write to nil"))
 	fmt.Println(err) // invalid argument
 	w.w = wc         // restore writer
 	w.wHshr = wHshr  // restore write hasher
@@ -262,7 +261,6 @@ func ExampleNewWriterErr() {
 	// Output:
 	// <nil>
 	// path /dir/path/: references a directory
-	// 0
 	// invalid argument
 	// <nil>
 }

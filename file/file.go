@@ -1,7 +1,6 @@
 package file
 
 import (
-	"context"
 	"io"
 
 	"github.com/pcelvng/task-tools/file/stat"
@@ -24,9 +23,7 @@ type StatsReadCloser interface {
 	// should return the last line of bytes (if any) and an instance
 	// of io.EOF for the error.
 	//
-	// A call to ReadLine after Close should return an error. (panic instead???)
-	//
-	// Should be safe to call concurrently.
+	// A call to ReadLine after Close has undefined behavior.
 	ReadLine() ([]byte, error)
 
 	// Stats returns an instance of Stat.
@@ -56,14 +53,12 @@ type StatsWriteCloser interface {
 	// calling should not corrupt the output. Concurrent calling
 	// does not guarantee order but one record will not partially
 	// over-write another.
-	WriteLine([]byte) (int64, error)
+	WriteLine([]byte) error
 
 	// Stats returns the file stats. Safe to call any time.
 	Stats() stat.Stat
 
 	// Abort can be called anytime before or during a call
-	// to Close. Abort can be called after Close but doesn't do
-	// anything and listening on Context.Done() will immediately
-	// return and calling Context.Err() will return an error.
-	Abort() context.Context
+	// to Close. Will block until abort cleanup is complete.
+	Abort() error
 }

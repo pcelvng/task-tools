@@ -126,27 +126,21 @@ type Writer struct {
 	mu      sync.Mutex
 }
 
-func (w *Writer) WriteLine(ln []byte) (int64, error) {
-	n, err := w.Write(append(ln, '\n'))
-	if err != nil {
-		return int64(n), err
+func (w *Writer) WriteLine(ln []byte) (err error) {
+	_, err = w.Write(append(ln, '\n'))
+	if err == nil {
+		w.sts.AddLine()
 	}
 
-	// increment line count
-	w.sts.AddLine()
-
-	return int64(n), nil
+	return
 }
 
 func (w *Writer) Write(p []byte) (int, error) {
 	n, err := w.w.Write(p)
+	w.sts.AddBytes(int64(n))
 	if err != nil {
 		return n, err
 	}
-	written := int64(n)
-
-	// increment byte count
-	w.sts.AddBytes(written)
 
 	return n, err
 }

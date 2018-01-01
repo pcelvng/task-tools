@@ -1,4 +1,4 @@
-package noop
+package nop
 
 import (
 	"github.com/pcelvng/task-tools/file/stat"
