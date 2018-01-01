@@ -1,11 +1,10 @@
 package local
 
 import (
+	"compress/gzip"
 	"crypto/md5"
 	"fmt"
 	"os"
-
-	"compress/gzip"
 
 	"github.com/pcelvng/task-tools/file/stat"
 )
