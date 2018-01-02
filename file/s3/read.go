@@ -4,14 +4,14 @@ import (
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
-func NewReader(pth string, opt *Options) *Reader {
+func NewReader(pth string, opt *Options) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
 	return &Reader{
 		sts: sts,
 		opt: opt,
-	}
+	}, nil
 }
 
 type Reader struct {

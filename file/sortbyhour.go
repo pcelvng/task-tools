@@ -3,13 +3,11 @@ package file
 import (
 	"errors"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
-	"time"
-
-	"path"
-
 	"sync"
+	"time"
 
 	"github.com/buger/jsonparser"
 	"github.com/pcelvng/task-tools/file/stat"
@@ -83,7 +81,7 @@ func NewSortByHour(config *SortByHourConfig) (*SortByHour, error) {
 type SortByHour struct {
 	config     *SortByHourConfig
 	srcPath    string // use path object
-	reader     StatsReader
+	reader     StatsReadCloser
 	hourWriter *WriteByHour
 	parseLine  fieldParser
 }
@@ -101,11 +99,11 @@ func NewWriteByHour(config *WriteByHourConfig) (*WriteByHour, error) {
 type WriteByHour struct {
 	config       *WriteByHourConfig
 	destTemplate string
-	writers      map[string]StatsWriter // the file path/name is the map key
+	writers      map[string]StatsWriteCloser // the file path/name is the map key
 	mu           sync.Mutex
 }
 
-func (w *WriteByHour) WriteLine(l []byte, t time.Time) (int64, error) {
+func (w *WriteByHour) WriteLine(l []byte, t time.Time) (err error) {
 	pth := tmpl.FmtTemplate(w.destTemplate, t)
 	w.mu.Lock()
 	writer, found := w.writers[pth]
@@ -114,7 +112,7 @@ func (w *WriteByHour) WriteLine(l []byte, t time.Time) (int64, error) {
 		var err error
 		writer, err = NewStatsWriter(pth, nil)
 		if err != nil {
-			return 0, err
+			return err
 		}
 
 		w.writers[pth] = writer
@@ -123,31 +121,14 @@ func (w *WriteByHour) WriteLine(l []byte, t time.Time) (int64, error) {
 	return writer.WriteLine(l)
 }
 
-func (w *WriteByHour) Finish() error {
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(w.writers))
-	for _, writer := range w.writers {
-		wg.Add(1)
-		go func() {
-			err := writer.Finish()
-			if err != nil {
-				errChan <- err
-			}
-			wg.Done()
-		}()
-	}
-
-	wg.Wait()
-	close(errChan)
-	for err := range errChan {
-		return err // just return the first error
-	}
-
-	return nil
+// Stats will provide sums of all underlying writers
+func (w *WriteByHour) Stats() stat.Stat {
+	return stat.Stat{}
 }
 
-func (w *WriteByHour) Stats() []*stat.Stat {
-	var stats []*stat.Stat
+// AllStats will provide stats broken down by file.
+func (w *WriteByHour) AllStats() []stat.Stat {
+	var stats []stat.Stat
 	for _, writer := range w.writers {
 		stats = append(stats, writer.Stats())
 	}

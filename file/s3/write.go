@@ -4,13 +4,13 @@ import (
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
-func NewWriter(pth string, opt *Options) *Writer {
+func NewWriter(pth string, opt *Options) (*Writer, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 	return &Writer{
 		sts: sts,
 		opt: opt,
-	}
+	}, nil
 }
 
 type Writer struct {

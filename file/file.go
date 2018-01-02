@@ -2,7 +2,11 @@ package file
 
 import (
 	"io"
+	"net/url"
 
+	"github.com/pcelvng/task-tools/file/local"
+	"github.com/pcelvng/task-tools/file/nop"
+	"github.com/pcelvng/task-tools/file/s3"
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
@@ -61,4 +65,95 @@ type StatsWriteCloser interface {
 	// Abort can be called anytime before or during a call
 	// to Close. Will block until abort cleanup is complete.
 	Abort() error
+}
+
+func NewStatsReader(pth string, opt *Options) (r StatsReadCloser, err error) {
+	if opt == nil {
+		opt = NewOptions()
+	}
+	var u *url.URL
+	u, err = url.Parse(pth)
+	if err != nil {
+		return
+	}
+
+	switch u.Scheme {
+	case "s3://":
+		s3Opts := S3Options(*opt)
+		r, err = s3.NewReader(pth, &s3Opts)
+	case "nop://":
+		r = nop.NewReader(pth)
+	default:
+		r, err = local.NewReader(pth)
+	}
+
+	return
+}
+
+func NewStatsWriter(pth string, opt *Options) (r StatsWriteCloser, err error) {
+	if opt == nil {
+		opt = NewOptions()
+	}
+	var u *url.URL
+	u, err = url.Parse(pth)
+	if err != nil {
+		return
+	}
+
+	switch u.Scheme {
+	case "s3://":
+		s3Opts := S3Options(*opt)
+		r, err = s3.NewWriter(pth, &s3Opts)
+	case "nop://":
+		r = nop.NewWriter(pth)
+	default:
+		localOpts := LocalOptions(*opt)
+		r, err = local.NewWriter(pth, &localOpts)
+	}
+
+	return
+}
+
+func NewOptions() *Options {
+	return &Options{}
+}
+
+// Options presents general options across all stats readers and
+// writers.
+type Options struct {
+	AWSSecretToken string
+	AWSAccessToken string
+
+	// UseFileBuf specifies to use a tmp file for the delayed writing.
+	// Can optionally also specify the tmp directory and tmp name
+	// prefix.
+	UseFileBuf bool
+
+	// FileBufDir optionally specifies the temp directory. If not specified then
+	// the os default temp dir is used.
+	FileBufDir string
+
+	// FileBufPrefix optionally specifies the temp file prefix.
+	// The full tmp file name is randomly generated and guaranteed
+	// not to conflict with existing files. A prefix can help one find
+	// the tmp file.
+	FileBufPrefix string
+}
+
+func S3Options(opt Options) s3.Options {
+	s3Opts := s3.NewOptions()
+	s3Opts.AccessToken = opt.AWSAccessToken
+	s3Opts.SecretToken = opt.AWSSecretToken
+	s3Opts.UseFileBuf = opt.UseFileBuf
+	s3Opts.FileBufDir = opt.FileBufDir
+	s3Opts.FileBufPrefix = opt.FileBufPrefix
+	return *s3Opts
+}
+
+func LocalOptions(opt Options) local.Options {
+	localOpts := local.NewOptions()
+	localOpts.UseTmpFile = opt.UseFileBuf
+	localOpts.TmpDir = opt.FileBufDir
+	localOpts.TmpPrefix = opt.FileBufPrefix
+	return *localOpts
 }
