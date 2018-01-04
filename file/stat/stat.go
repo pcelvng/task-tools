@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"encoding/json"
 )
 
 func New() Stat {
@@ -88,4 +89,9 @@ func (s *Stat) Clone() Stat {
 	clone.ByteCnt = atomic.LoadInt64(&s.ByteCnt)
 	clone.Size = atomic.LoadInt64(&s.Size)
 	return clone
+}
+
+func (s *Stat) JSON() []byte {
+	b, _ := json.Marshal(s)
+	return b
 }

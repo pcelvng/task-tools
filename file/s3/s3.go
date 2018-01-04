@@ -5,8 +5,8 @@ func NewOptions() *Options {
 }
 
 type Options struct {
-	SecretToken string
-	AccessToken string
+	SecretKey string
+	AccessKey string
 
 	// UseFileBuf specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name

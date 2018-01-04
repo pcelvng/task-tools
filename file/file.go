@@ -121,8 +121,8 @@ func NewOptions() *Options {
 // Options presents general options across all stats readers and
 // writers.
 type Options struct {
-	AWSSecretToken string
-	AWSAccessToken string
+	AWSSecretKey string
+	AWSAccessKey string
 
 	// UseFileBuf specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name
@@ -142,8 +142,8 @@ type Options struct {
 
 func S3Options(opt Options) s3.Options {
 	s3Opts := s3.NewOptions()
-	s3Opts.AccessToken = opt.AWSAccessToken
-	s3Opts.SecretToken = opt.AWSSecretToken
+	s3Opts.AccessKey = opt.AWSAccessKey
+	s3Opts.SecretKey = opt.AWSSecretKey
 	s3Opts.UseFileBuf = opt.UseFileBuf
 	s3Opts.FileBufDir = opt.FileBufDir
 	s3Opts.FileBufPrefix = opt.FileBufPrefix
