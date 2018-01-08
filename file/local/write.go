@@ -1,13 +1,11 @@
 package local
 
 import (
-	"bytes"
 	"compress/gzip"
 	"crypto/md5"
 	"errors"
 	"hash"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/pcelvng/task-tools/file/stat"
+	"github.com/pcelvng/task-tools/file/util"
 )
 
 // NewWriter will create a new local writer.
@@ -55,11 +54,10 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 	tmpPth := ""
 	if opt.UseTmpFile {
 		var fBuf *os.File // tmp file buffer
-		tmpPth, fBuf, err = openTmp(opt.TmpDir, opt.TmpPrefix)
+		tmpPth, fBuf, err = util.OpenTmp(opt.TmpDir, opt.TmpPrefix)
 		buf = fBuf
 	} else {
-		var bBuf *closeBuf // bytes memory buffer
-		bBuf = &closeBuf{}
+		bBuf := util.NewCloseBuf() // memory buffer
 		buf = bBuf
 	}
 
@@ -67,18 +65,17 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 	hshr = md5.New()
 
 	// hash write closer
-	wHshr = &nopClose{hshr}
+	wHshr = util.NewNopWriteCloser(hshr)
 
 	// buf and hasher go in the same writer
 	// so that gzipping only needs to happen once.
 	// both underlying writers will get the same bytes.
 	writers := make([]io.WriteCloser, 2)
 	writers[0], writers[1] = buf, wHshr
-	w = &multiWriteCloser{writers}
+	w = util.NewMultiWriteCloser(writers)
 
 	// compression
 	if ext := filepath.Ext(pth); ext == ".gz" {
-		// file writer
 		w, _ = gzip.NewWriterLevel(w, gzip.BestSpeed)
 	}
 
@@ -115,11 +112,11 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 		w.sts.AddLine()
 	}
 
-	return
+	return err
 }
 
-func (w *Writer) Write(p []byte) (int, error) {
-	n, err := w.w.Write(p)
+func (w *Writer) Write(p []byte) (n int, err error) {
+	n, err = w.w.Write(p)
 	w.sts.AddBytes(int64(n))
 	if err != nil {
 		return n, err
@@ -149,7 +146,7 @@ func (w *Writer) Abort() error {
 
 	// close writers
 	w.w.Close()
-	w.wHshr.Close()
+	w.buf.Close()
 
 	// close and clear underlying write buffer
 	// may or may not be the same Close method as w
@@ -157,7 +154,7 @@ func (w *Writer) Abort() error {
 	// to make sure to flush and sync everything to disk.
 	// underlying buffer may still need to be closed
 	w.buf.Close()
-	return rmTmp(w.tmpPth)
+	return util.RmTmp(w.tmpPth)
 }
 
 // Close will:
@@ -180,7 +177,7 @@ func (w *Writer) Close() error {
 
 	// close writers
 	w.w.Close()
-	w.wHshr.Close()
+	w.buf.Close()
 
 	// do copy
 	w.copy()
@@ -191,15 +188,7 @@ func (w *Writer) Close() error {
 
 	// underlying buffer may still need to be closed
 	w.buf.Close()
-	return rmTmp(w.tmpPth)
-}
-
-func rmTmp(tmpPth string) error {
-	if tmpPth == "" {
-		return nil
-	}
-
-	return os.Remove(tmpPth)
+	return util.RmTmp(w.tmpPth)
 }
 
 // copy will copy the contents of buf
@@ -314,22 +303,6 @@ func closeF(pth string, f *os.File) error {
 	return f.Close()
 }
 
-func openTmp(dir, prefix string) (absTmp string, f *os.File, err error) {
-	// normalize dir path
-	dir, _ = filepath.Abs(dir)
-
-	err = os.MkdirAll(dir, 0700)
-	if err != nil {
-		return absTmp, f, err
-	}
-
-	f, err = ioutil.TempFile(dir, prefix)
-	if f != nil {
-		absTmp, _ = filepath.Abs(f.Name())
-	}
-	return absTmp, f, err
-}
-
 // checkFile will check:
 // - is not dir
 // - can be opened
@@ -364,56 +337,4 @@ func checkFile(pth string) (string, error) {
 	}
 
 	return pth, errC
-}
-
-// closeBuf provides Close method
-// to make bytes.Buffer a ReadWriteCloser
-type closeBuf struct {
-	bytes.Buffer
-}
-
-func (b closeBuf) Close() error {
-	// if the buffer has been read until EOF
-	// then this is not necessary since Reset
-	// is called internally when it reaches
-	// EOF. However, if the the writer is aborted
-	// then close will cleanup the buffer.
-	b.Reset()
-	return nil
-}
-
-type nopClose struct {
-	io.Writer
-}
-
-func (wc *nopClose) Close() error {
-	return nil
-}
-
-type multiWriteCloser struct {
-	writers []io.WriteCloser
-}
-
-func (mw *multiWriteCloser) Write(p []byte) (n int, err error) {
-	for _, w := range mw.writers {
-		n, err = w.Write(p)
-		if err != nil {
-			return
-		}
-		if n != len(p) {
-			err = io.ErrShortWrite
-			return
-		}
-	}
-	return len(p), nil
-}
-
-func (mw *multiWriteCloser) Close() (err error) {
-	for _, w := range mw.writers {
-		wErr := w.Close()
-		if wErr != nil {
-			err = wErr
-		}
-	}
-	return err
 }

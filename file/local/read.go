@@ -75,13 +75,13 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 			return ln[:len(ln)-1], err
 		}
 	}
-	return
+	return ln, err
 }
 
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.rBuf.Read(p)
 	r.sts.AddBytes(int64(n))
-	return
+	return n, err
 }
 
 func (r *Reader) Stats() stat.Stat {
@@ -98,7 +98,7 @@ func (r *Reader) Close() (err error) {
 	}
 	err = r.f.Close()
 
-	// calculate final checksum
+	// calculate checksum
 	r.sts.SetCheckSum(r.rHshr.Hshr)
 
 	r.isClosed = true

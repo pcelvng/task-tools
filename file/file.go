@@ -78,10 +78,11 @@ func NewStatsReader(pth string, opt *Options) (r StatsReadCloser, err error) {
 	}
 
 	switch u.Scheme {
-	case "s3://":
-		s3Opts := S3Options(*opt)
-		r, err = s3.NewReader(pth, &s3Opts)
-	case "nop://":
+	case "s3":
+		accessKey := opt.AWSAccessKey
+		secretKey := opt.AWSSecretKey
+		r, err = s3.NewReader(pth, accessKey, secretKey)
+	case "nop":
 		r = nop.NewReader(pth)
 	default:
 		r, err = local.NewReader(pth)
@@ -90,7 +91,7 @@ func NewStatsReader(pth string, opt *Options) (r StatsReadCloser, err error) {
 	return
 }
 
-func NewStatsWriter(pth string, opt *Options) (r StatsWriteCloser, err error) {
+func NewStatsWriter(pth string, opt *Options) (w StatsWriteCloser, err error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
@@ -101,17 +102,19 @@ func NewStatsWriter(pth string, opt *Options) (r StatsWriteCloser, err error) {
 	}
 
 	switch u.Scheme {
-	case "s3://":
+	case "s3":
+		accessKey := opt.AWSAccessKey
+		secretKey := opt.AWSSecretKey
 		s3Opts := S3Options(*opt)
-		r, err = s3.NewWriter(pth, &s3Opts)
-	case "nop://":
-		r = nop.NewWriter(pth)
+		w, err = s3.NewWriter(pth, accessKey, secretKey, &s3Opts)
+	case "nop":
+		w = nop.NewWriter(pth)
 	default:
 		localOpts := LocalOptions(*opt)
-		r, err = local.NewWriter(pth, &localOpts)
+		w, err = local.NewWriter(pth, &localOpts)
 	}
 
-	return
+	return w, err
 }
 
 func NewOptions() *Options {
@@ -142,8 +145,6 @@ type Options struct {
 
 func S3Options(opt Options) s3.Options {
 	s3Opts := s3.NewOptions()
-	s3Opts.AccessKey = opt.AWSAccessKey
-	s3Opts.SecretKey = opt.AWSSecretKey
 	s3Opts.UseFileBuf = opt.UseFileBuf
 	s3Opts.FileBufDir = opt.FileBufDir
 	s3Opts.FileBufPrefix = opt.FileBufPrefix

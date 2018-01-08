@@ -25,17 +25,17 @@ type Writer struct {
 	sts stat.Stat
 }
 
+func (w *Writer) Write(p []byte) (n int, err error) {
+	w.sts.AddBytes(int64(len(p)))
+	return len(p), w.Err
+}
+
 func (w *Writer) WriteLine(ln []byte) (err error) {
 	_, err = w.Write(append(ln, '\n'))
 	if err == nil {
 		w.sts.AddLine()
 	}
 	return
-}
-
-func (w *Writer) Write(p []byte) (n int, err error) {
-	w.sts.AddBytes(int64(len(p)))
-	return len(p), w.Err
 }
 
 func (w *Writer) Stats() stat.Stat {

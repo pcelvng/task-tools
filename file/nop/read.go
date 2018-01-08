@@ -24,34 +24,34 @@ type Reader struct {
 	sts stat.Stat
 }
 
-func (w *Reader) ReadLine() (ln []byte, err error) {
-	if w.Err == io.EOF {
-		return ln, w.Err
-	}
-
-	w.sts.AddLine()
-	w.sts.AddBytes(1)
-	ln = []byte{'1'}
-	return ln, w.Err
-}
-
-func (w *Reader) Read(p []byte) (n int, err error) {
-	if w.Err == io.EOF || len(p) == 0 {
-		return n, w.Err
+func (r *Reader) Read(p []byte) (n int, err error) {
+	if r.Err == io.EOF || len(p) == 0 {
+		return n, r.Err
 	}
 
 	p[0] = '1'
 	n = 1
-	w.sts.AddBytes(int64(1))
-	return n, w.Err
+	r.sts.AddBytes(int64(1))
+	return n, r.Err
 }
 
-func (w *Reader) Stats() stat.Stat {
-	return w.sts.Clone()
+func (r *Reader) ReadLine() (ln []byte, err error) {
+	if r.Err == io.EOF {
+		return ln, r.Err
+	}
+
+	r.sts.AddLine()
+	r.sts.AddBytes(1)
+	ln = []byte{'1'}
+	return ln, r.Err
 }
 
-func (w *Reader) Close() (err error) {
-	w.sts.SetSize(w.sts.ByteCnt)
+func (r *Reader) Stats() stat.Stat {
+	return r.sts.Clone()
+}
 
-	return w.Err
+func (r *Reader) Close() (err error) {
+	r.sts.SetSize(r.sts.ByteCnt)
+
+	return r.Err
 }
