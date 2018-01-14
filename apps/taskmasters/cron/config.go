@@ -8,12 +8,12 @@ import (
 
 func NewConfig() *Config {
 	return &Config{
-		BusConfig: bus.NewBusConfig(""),
+		BusOpt: bus.NewBusOpt(""),
 	}
 }
 
 type Config struct {
-	*bus.BusConfig
+	*bus.BusOpt
 
 	// rules
 	Rules []*Rule `toml:"rule"`

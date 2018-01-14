@@ -30,7 +30,7 @@ func main() {
 	}
 
 	// make producer
-	p, err := bus.NewProducer(conf.BusConfig)
+	p, err := bus.NewProducer(conf.BusOpt)
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
@@ -68,7 +68,7 @@ func main() {
 
 // MakeCron will create the cron and setup all the cron jobs.
 // It will not start the cron.
-func MakeCron(rules []*Rule, producer bus.Producer) (*cron.Cron, error) {
+func MakeCron(rules []*Rule, producer bus.ProducerBus) (*cron.Cron, error) {
 	c := cron.New()
 	for _, rule := range rules {
 		job := NewJob(rule, producer)
