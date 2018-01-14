@@ -8,41 +8,39 @@ import (
 	"syscall"
 )
 
-var config = flag.String("config", "config.toml", "relative or absolute file path")
+var (
+	config  = flag.String("config", "config.toml", "relative or absolute file path")
+	sigChan = make(chan os.Signal, 1)
+)
 
 func main() {
-	flag.Parse()
-	if *config == "" {
-		log.Println("'config' flag value required")
-		os.Exit(1)
-	}
-
-	conf, err := LoadConfig(*config)
-	if err != nil {
-		log.Printf("err parsing config: '%v'", err.Error())
-		os.Exit(1)
-	}
-
-	// make retryer
-	rtryr, err := NewRetryer(conf)
+	err := run()
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
 	}
+}
 
-	closeChan := make(chan os.Signal)
-	signal.Notify(closeChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+func run() error {
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+	flag.Parse()
+	conf, err := LoadConfig(*config)
+	if err != nil {
+		return err
+	}
+
+	// make retryer
+	r, err := NewRetry(conf)
+	if err != nil {
+		return err
+	}
 
 	select {
-	case <-closeChan:
+	case <-sigChan:
 		log.Println("closing...")
 
-		// close the retryer
-		if err := rtryr.Close(); err != nil {
-			log.Printf("err closing retryer: '%v'\n", err.Error())
-			os.Exit(1)
-		}
-
-		os.Exit(0)
+		err = r.Close()
+		return err
 	}
 }
