@@ -9,23 +9,30 @@ import (
 	"github.com/pcelvng/task"
 )
 
+var sigChan = make(chan os.Signal, 1)
+
 func main() {
+	err := run()
+	if err != nil {
+		log.Println(err.Error())
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// signal handling - capture signal early.
-	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
 	// config
 	config = LoadConfig()
 	if err := config.Validate(); err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+		return err
 	}
 
 	// launcher
-	l, err := task.NewLauncherWBus(MakeWorker, config.LauncherBusConfig)
+	l, err := task.NewLauncher(MakeWorker, config.LauncherOpt, config.BusOpt)
 	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+		return err
 	}
 	done, cncl := l.DoTasks()
 
@@ -37,8 +44,8 @@ func main() {
 	}
 
 	if err := l.Err(); err != nil {
-		log.Printf("err in shutdown: '%v'\n", err.Error())
-		os.Exit(1)
+		return err
 	}
-	log.Println("done")
+
+	return nil
 }

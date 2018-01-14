@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
 )
 
 var (
@@ -31,20 +32,21 @@ var (
 
 func NewConfig() Config {
 	return Config{
-		LauncherBusConfig: task.NewLauncherBusConfig(""),
+		LauncherOpt: task.NewLauncherOpt(),
+		BusOpt:      task.NewBusOpt(""),
 	}
 }
 
 type Config struct {
-	*task.LauncherBusConfig
-
-	TaskType    string        // will be used as the default topic and channel
-	Topic       string        // topic override (uses 'TaskType' if not provided)
-	Channel     string        // channel to listen for tasks of type TaskType
-	DoneTopic   string        // topic to return a done task
-	FailRate    int           // int between 0-100 representing a percent
-	Dur         time.Duration // how long the task will take to finish successfully
-	DurVariance time.Duration // random adjustment to the Dur value
+	*task.LauncherOpt               // launcher options
+	*bus.BusOpt                     // task message bus options
+	TaskType          string        // will be used as the default topic and channel
+	Topic             string        // topic override (uses 'TaskType' if not provided)
+	Channel           string        // channel to listen for tasks of type TaskType
+	DoneTopic         string        // topic to return a done task
+	FailRate          int           // int between 0-100 representing a percent
+	Dur               time.Duration // how long the task will take to finish successfully
+	DurVariance       time.Duration // random adjustment to the Dur value
 
 }
 
@@ -70,12 +72,7 @@ func (c *Config) DurString(dur string) error {
 func (c *Config) Validate() error {
 	// must have a task type
 	if c.TaskType == "" {
-		return errors.New("task type is required")
-	}
-
-	// must have a done topic value
-	if c.DoneTopic == "" {
-		return errors.New("done topic is required")
+		return errors.New("required: type flag")
 	}
 
 	return nil

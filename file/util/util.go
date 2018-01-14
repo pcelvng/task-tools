@@ -173,3 +173,10 @@ func (w *SizeWriter) Write(p []byte) (n int, err error) {
 	w.size = w.size + int64(len(p))
 	return len(p), nil
 }
+
+// FileInfo presents summary file information.
+type FileInfo struct {
+
+}
+
+

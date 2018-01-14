@@ -11,16 +11,16 @@ import (
 var config Config
 
 func MakeWorker(info string) task.Worker {
-	return &NoopWorker{
+	return &Worker{
 		info: info,
 	}
 }
 
-type NoopWorker struct {
+type Worker struct {
 	info string
 }
 
-func (w *NoopWorker) DoTask(ctx context.Context) (result task.Result, msg string) {
+func (w *Worker) DoTask(ctx context.Context) (result task.Result, msg string) {
 	doneChan := make(chan interface{})
 	go func() {
 		result, msg = w.doTask()
@@ -37,7 +37,7 @@ func (w *NoopWorker) DoTask(ctx context.Context) (result task.Result, msg string
 	return result, msg
 }
 
-func (w *NoopWorker) doTask() (task.Result, string) {
+func (w *Worker) doTask() (task.Result, string) {
 	// calc if failure
 	isFail := checkFail(config.FailRate)
 

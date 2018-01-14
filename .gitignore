@@ -4,12 +4,12 @@ apps/taskmasters/cron/*.json
 apps/taskmasters/retry/config.toml
 apps/taskmasters/retry/*.json
 apps/taskmasters/backloader/*.json
-apps/workers/noop/*.json
+apps/workers/nop/*.json
 
 apps/taskmasters/backloader/backloader
 apps/taskmasters/cron/cron
 apps/taskmasters/http/http
 apps/taskmasters/responder/responder
 apps/taskmasters/retry/retry
-apps/workers/noop/noop
+apps/workers/nop/nop
 coverage

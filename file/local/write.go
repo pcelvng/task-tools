@@ -116,6 +116,12 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.aborted == true {
+		return 0, nil
+	}
+
 	n, err = w.w.Write(p)
 	w.sts.AddBytes(int64(n))
 	if err != nil {
@@ -185,6 +191,7 @@ func (w *Writer) Close() error {
 	// set checksum, size
 	w.sts.SetCheckSum(w.hshr)
 	w.sts.SetSizeFromPath(w.sts.Path)
+	w.sts.SetCreatedFromPath(w.sts.Path)
 
 	// underlying buffer may still need to be closed
 	w.buf.Close()
