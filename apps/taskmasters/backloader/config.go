@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	tskType    = flag.String("type", "", "REQUIRED; the task type")
+	tskType     = flag.String("type", "", "REQUIRED; the task type")
 	t           = flag.String("t", "", "alias of 'type'")
 	at          = flag.String("at", "", "alias of 'from' flag")
 	from        = flag.String("from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
@@ -33,12 +33,12 @@ var (
 
 func NewConfig() *Config {
 	return &Config{
-		BusConfig: bus.NewBusConfig(""),
+		BusOpt: bus.NewBusOpt(""),
 	}
 }
 
 type Config struct {
-	*bus.BusConfig
+	*bus.BusOpt
 
 	Start time.Time // start of backload
 	End   time.Time // end of backload

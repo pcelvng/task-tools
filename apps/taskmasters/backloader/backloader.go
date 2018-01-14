@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
-	"github.com/pcelvng/task-tools"
 )
 
 // NewBackloader will validate the config, create and connect the
@@ -17,7 +17,7 @@ func NewBackloader(conf *Config) (*Backloader, error) {
 	}
 
 	// create producer
-	p, err := bus.NewProducer(conf.BusConfig)
+	p, err := bus.NewProducer(conf.BusOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func NewBackloader(conf *Config) (*Backloader, error) {
 
 type Backloader struct {
 	config      *Config
-	busProducer bus.Producer
+	busProducer bus.ProducerBus
 }
 
 // Backload returns 'int' which represents the number of
@@ -57,7 +57,7 @@ func (bl *Backloader) Backload() (int, error) {
 		// check if current hour is eligible
 		if onHours[atHour.Hour()] && checkEvery(startHour, atHour, bl.config.EveryXHours) {
 			// task value
-			tskValue := tool.FmtTemplate(bl.config.TaskTemplate, atHour)
+			tskValue := tmpl.FmtTemplate(bl.config.TaskTemplate, atHour)
 
 			// create task
 			tsk := task.New(bl.config.TaskType, tskValue)
@@ -69,7 +69,7 @@ func (bl *Backloader) Backload() (int, error) {
 			}
 
 			// send task to task bus
-			msg, err := tsk.Bytes()
+			msg, err := tsk.JSONBytes()
 			if err != nil {
 				return cnt, err
 			}

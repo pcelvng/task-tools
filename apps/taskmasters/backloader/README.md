@@ -21,5 +21,5 @@ Note: the 'to' date is inclusive
 To see all options do:
 
 ```bash
-./backloader --help
+./backloader -help
 ```
