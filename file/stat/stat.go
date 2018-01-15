@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"hash"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,29 +17,29 @@ func New() Stat {
 // json bytes.
 func NewFromBytes(b []byte) Stat {
 	sts := New()
-	json.Unmarshal(b, sts)
+	json.Unmarshal(b, &sts)
 	return sts
 }
 
 type Stat struct {
 	// LineCnt returns the file line count.
-	LineCnt int64 `json: "linecnt"`
+	LineCnt int64 `json:"linecnt"`
 
 	// ByteCount returns uncompressed raw file byte count.
-	ByteCnt int64 `json: "bytecnt"`
+	ByteCnt int64 `json:"bytecnt"`
 
 	// Size holds the actual file size.
-	Size int64 `json: "size"`
+	Size int64 `json:"size"`
 
 	// Checksum returns the base64 encoded string of the file md5 hash.
-	CheckSum string `json: "checksum"`
+	CheckSum string `json:"checksum"`
 
 	// Path returns the full absolute path of the file.
-	Path string `json: "path"`
+	Path string `json:"path"`
 
 	// Created returns the date the file was created or last updated;
 	// whichever is more recent.
-	Created string `json: "created"`
+	Created string `json:"created"`
 
 	mu sync.Mutex
 }
@@ -65,15 +64,6 @@ func (s *Stat) SetCheckSum(hsh hash.Hash) {
 	s.CheckSum = hex.EncodeToString(hsh.Sum(nil))
 }
 
-func (s *Stat) SetSizeFromPath(pth string) {
-	fInfo, _ := os.Stat(pth)
-	if fInfo != nil {
-		curSize := atomic.LoadInt64(&s.Size)
-		fSize := fInfo.Size()
-		atomic.CompareAndSwapInt64(&s.Size, curSize, fSize)
-	}
-}
-
 func (s *Stat) SetSize(size int64) {
 	curSize := atomic.LoadInt64(&s.Size)
 	atomic.CompareAndSwapInt64(&s.Size, curSize, size)
@@ -93,26 +83,6 @@ func (s *Stat) SetCreated(t time.Time) {
 	defer s.mu.Unlock()
 
 	s.Created = t.Format(time.RFC3339)
-}
-
-// SetCreatedFromPath will set the Created field in the
-// format time.RFC3339 from a local file path.
-// If unsuccessful then the Created field will not
-// be set. If it was previously set, the value will
-// not change.
-//
-// Will pick the most recent date between the file
-// creation and file updated date in case the file
-// already existed but was replaced with new contents.
-func (s *Stat) SetCreatedFromPath(pth string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	fInfo, _ := os.Stat(pth)
-	if fInfo != nil {
-		t := fInfo.ModTime()
-		s.Created = t.Format(time.RFC3339)
-	}
 }
 
 // ParseCreated will attempt to parse the Created
@@ -144,6 +114,7 @@ func (s *Stat) Clone() Stat {
 	s.mu.Lock()
 	clone.CheckSum = s.CheckSum
 	clone.Path = s.Path
+	clone.Created = s.Created
 	s.mu.Unlock()
 
 	clone.LineCnt = atomic.LoadInt64(&s.LineCnt)

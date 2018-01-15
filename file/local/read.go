@@ -40,7 +40,8 @@ func NewReader(pth string) (*Reader, error) {
 
 	sts := stat.New()
 	sts.SetPath(pth)
-	sts.SetSizeFromPath(sts.Path)
+	sts.SetSize(fileSize(sts.Path))
+	sts.SetCreated(fileCreated(sts.Path))
 
 	return &Reader{
 		f:     f,

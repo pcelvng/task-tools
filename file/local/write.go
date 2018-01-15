@@ -190,8 +190,8 @@ func (w *Writer) Close() error {
 
 	// set checksum, size
 	w.sts.SetCheckSum(w.hshr)
-	w.sts.SetSizeFromPath(w.sts.Path)
-	w.sts.SetCreatedFromPath(w.sts.Path)
+	w.sts.SetSize(fileSize(w.sts.Path))
+	w.sts.SetCreated(fileCreated(w.sts.Path))
 
 	// underlying buffer may still need to be closed
 	w.buf.Close()
