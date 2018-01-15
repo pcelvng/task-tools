@@ -146,33 +146,7 @@ func (h *HashCloser) Close() error {
 	return nil
 }
 
-func NewSizeWriter() *SizeWriter {
-	return &SizeWriter{}
-}
 
-// SizeWriter will perform a nop write and
-// close. It will keep track of the total number
-// of bytes written and provides a Size()
-// method to know the total number of bytes written.
-type SizeWriter struct {
-	size int64
-	mu   sync.Mutex
-}
-
-func (w *SizeWriter) Size() int64 {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	return w.size
-}
-
-func (w *SizeWriter) Write(p []byte) (n int, err error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.size = w.size + int64(len(p))
-	return len(p), nil
-}
 
 // FileInfo presents summary file information.
 type FileInfo struct {

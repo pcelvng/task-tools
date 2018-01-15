@@ -95,15 +95,15 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 }
 
 type Writer struct {
-	buf     io.ReadWriteCloser // buffer
-	w       io.WriteCloser     // write closer for active writes
-	wHshr   io.WriteCloser     // write closer for active hashing (close is needed to flush compression)
-	hshr    hash.Hash          // hasher
-	tmpPth  string             // tmp path (if used)
-	sts     stat.Stat
-	aborted bool
-	closed  bool
-	mu      sync.Mutex
+	buf    io.ReadWriteCloser // buffer
+	w      io.WriteCloser     // write closer for active writes
+	wHshr  io.WriteCloser     // write closer for active hashing (close is needed to flush compression)
+	hshr   hash.Hash          // hasher
+	tmpPth string             // tmp path (if used)
+	sts    stat.Stat
+
+	done bool
+	mu   sync.Mutex
 }
 
 func (w *Writer) WriteLine(ln []byte) (err error) {
@@ -118,7 +118,7 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 func (w *Writer) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.aborted == true {
+	if w.done == true {
 		return 0, nil
 	}
 
@@ -139,16 +139,16 @@ func (w *Writer) Stats() stat.Stat {
 // - clear and close buffer
 //
 // Calling Close after Abort will do nothing.
-// Writing after calling Abort has undefined behavior.
+// Writing after Abort will not write and will
+// not return a nil-error.
 func (w *Writer) Abort() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// check if closed
-	if w.closed {
+	if w.done {
 		return nil
 	}
-	w.aborted = true
+	w.done = true
 
 	// close writers
 	w.w.Close()
@@ -165,21 +165,24 @@ func (w *Writer) Abort() error {
 
 // Close will:
 // - calculate final checksum
+// - set file size
+// - set file created date
 // - copy (mv) buffer to pth file
 // - clear and close buffer
 // - report any errors
 //
 // Calling Abort after Close will do nothing.
-// Writing after calling Close has undefined behavior.
+// Writing after Close will not write and will
+// not return a nil-error.
 func (w *Writer) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	// check if aborted
-	if w.aborted {
+	if w.done {
 		return nil
 	}
-	w.closed = true
+	w.done = true
 
 	// close writers
 	w.w.Close()

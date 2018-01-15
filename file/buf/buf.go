@@ -1,14 +1,14 @@
 package buf
 
 import (
-	"io"
-
 	"bytes"
 	"compress/gzip"
+	"crypto/md5"
 	"hash"
+	"io"
 	"os"
 
-	"crypto/md5"
+	"sync"
 
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
@@ -64,9 +64,9 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 	// hash write closer
 	hshr := md5.New()
 
-	// size writer - so we can tell s3 what the
-	// upload size is.
-	wSize := util.NewSizeWriter()
+	// size writer - for knowing the number of bytes
+	// written to the buffer.
+	wSize := &sizeWriter{}
 
 	// buf and hasher go in the same writer
 	// so that gzipping only needs to happen once.
@@ -88,9 +88,12 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 
 	// make writer
 	return &Buffer{
-		w:    w,
-		hshr: hshr,
-		sts:  sts,
+		w:     w,
+		wGzip: wGzip,
+		bBuf:  bBuf,
+		fBuf:  fBuf,
+		hshr:  hshr,
+		sts:   sts,
 	}, nil
 }
 
@@ -110,40 +113,68 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 // - clean up tmp file if Abort() or Cleanup() are called.
 type Buffer struct {
 	w     io.Writer
-	wGzip *gzip.Writer
-	bBuf  bytes.Buffer // in-memory buffer
-	fBuf  *os.File     // file buffer
+	wGzip *gzip.Writer  // gzip writer (only if compression is enabled)
+	wSize *sizeWriter   // keep of size of buffer
+	bBuf  *bytes.Buffer // in-memory buffer
+	fBuf  *os.File      // file buffer
 	hshr  hash.Hash
 
 	sts stat.Stat
+
+	done bool // set to true if Close or Abort is called
+	mu   sync.Mutex
 }
 
-func (b *Buffer) Read(p []byte) (n int, err error) {
+func (bfr *Buffer) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (b *Buffer) WriteLine(ln []byte) (err error) {
+func (bfr *Buffer) WriteLine(ln []byte) (err error) {
 	return
 }
 
-func (b *Buffer) Write(p []byte) (n int, err error) {
+func (bfr *Buffer) Write(p []byte) (n int, err error) {
+	bfr.mu.Lock()
+	defer bfr.mu.Unlock()
+
 	return
 }
 
-func (b *Buffer) Stats() stat.Stat {
-	return b.sts.Clone()
+func (bfr *Buffer) Stats() stat.Stat {
+	return bfr.sts.Clone()
 }
 
-func (b *Buffer) Abort() error {
+// Abort will clear the buffer (remove tmp file if exists)
+// and prevent further buffer writes.
+func (bfr *Buffer) Abort() error {
+	bfr.mu.Lock()
+	defer bfr.mu.Unlock()
+
+	if bfr.done {
+		return nil
+	}
+	bfr.done = true
+
+	// rm tmp file
+	util.RmTmp(bfr.sts.Path)
+
 	return nil
 }
 
 // Cleanup will remove the tmp file (if exists)
 // or reset the in-memory buffer (if used)
-func (b *Buffer) Cleanup() error {
+func (bfr *Buffer) Cleanup() error {
 	return nil
 }
 
-func (w *Buffer) Close() error {
+func (bfr *Buffer) Close() error {
+	bfr.mu.Lock()
+	defer bfr.mu.Unlock()
+
+	if bfr.done {
+		return nil
+	}
+	bfr.done = true
+
 	return nil
 }
