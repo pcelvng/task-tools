@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 func NewNopWriteCloser(w io.Writer) *NopCloser {
@@ -145,12 +144,3 @@ func (h *HashCloser) Write(p []byte) (n int, err error) {
 func (h *HashCloser) Close() error {
 	return nil
 }
-
-
-
-// FileInfo presents summary file information.
-type FileInfo struct {
-
-}
-
-

@@ -1,6 +1,8 @@
 package buf
 
-import "sync"
+import (
+	"sync/atomic"
+)
 
 // sizeWriter will perform a nop write and
 // close. It will keep track of the total number
@@ -8,20 +10,14 @@ import "sync"
 // method to know the total number of bytes written.
 type sizeWriter struct {
 	size int64
-	mu   sync.Mutex
 }
 
 func (w *sizeWriter) Size() int64 {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	return w.size
+	return atomic.LoadInt64(&w.size)
 }
 
 func (w *sizeWriter) Write(p []byte) (n int, err error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	atomic.AddInt64(&w.size, int64(len(p)))
 
-	w.size = w.size + int64(len(p))
 	return len(p), nil
 }

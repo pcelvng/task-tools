@@ -191,7 +191,7 @@ func (w *Writer) Close() error {
 	// do copy
 	w.copy()
 
-	// set checksum, size
+	// set checksum, size, created
 	w.sts.SetCheckSum(w.hshr)
 	w.sts.SetSize(fileSize(w.sts.Path))
 	w.sts.SetCreated(fileCreated(w.sts.Path))
