@@ -1,10 +1,7 @@
 package local
 
 import (
-	"compress/gzip"
-	"crypto/md5"
 	"errors"
-	"hash"
 	"io"
 	"os"
 	"path"
@@ -12,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
-	"github.com/pcelvng/task-tools/file/util"
 )
 
 // NewWriter will create a new local writer.
@@ -37,110 +34,67 @@ import (
 // provided. The writer will remove a temp file with a call to Close.
 func NewWriter(pth string, opt *Options) (*Writer, error) {
 	if opt == nil {
-		opt = new(Options)
-	}
-
-	var hshr hash.Hash          // hasher
-	var buf io.ReadWriteCloser  // buffer
-	var w, wHshr io.WriteCloser // w=writer, wHshr=write hasher
-
-	// check perms - writing happens at the end
-	pth, err := checkFile(pth)
-	if err != nil {
-		return nil, err
-	}
-
-	// choose buffer
-	tmpPth := ""
-	if opt.UseTmpFile {
-		var fBuf *os.File // tmp file buffer
-		tmpPth, fBuf, err = util.OpenTmp(opt.TmpDir, opt.TmpPrefix)
-		buf = fBuf
-	} else {
-		bBuf := util.NewCloseBuf() // memory buffer
-		buf = bBuf
-	}
-
-	// md5 hasher
-	hshr = md5.New()
-
-	// hash write closer
-	wHshr = util.NewNopWriteCloser(hshr)
-
-	// buf and hasher go in the same writer
-	// so that gzipping only needs to happen once.
-	// both underlying writers will get the same bytes.
-	writers := make([]io.WriteCloser, 2)
-	writers[0], writers[1] = buf, wHshr
-	w = util.NewMultiWriteCloser(writers)
-
-	// compression
-	if ext := filepath.Ext(pth); ext == ".gz" {
-		w, _ = gzip.NewWriterLevel(w, gzip.BestSpeed)
+		opt = NewOptions()
 	}
 
 	// stats
 	sts := stat.New()
 	sts.Path = pth
 
+	// compression
+	if ext := filepath.Ext(pth); ext == ".gz" {
+		opt.Compress = true
+	}
+
+	// buffer
+	bfr, err := buf.NewBuffer(opt.Options)
+	if err != nil {
+		return nil, err
+	}
+	tmpPth := bfr.Stats().Path
+
+	// check file permissions
+	pth, err = checkFile(pth)
+	if err != nil {
+		return nil, err
+	}
+
 	// make writer
 	return &Writer{
-		buf:    buf,
-		w:      w,
-		hshr:   hshr,
-		wHshr:  wHshr,
-		tmpPth: tmpPth,
+		bfr:    bfr,
 		sts:    sts,
+		tmpPth: tmpPth,
 	}, nil
 }
 
 type Writer struct {
-	buf    io.ReadWriteCloser // buffer
-	w      io.WriteCloser     // write closer for active writes
-	wHshr  io.WriteCloser     // write closer for active hashing (close is needed to flush compression)
-	hshr   hash.Hash          // hasher
-	tmpPth string             // tmp path (if used)
+	bfr    *buf.Buffer
 	sts    stat.Stat
+	tmpPth string
 
 	done bool
 	mu   sync.Mutex
 }
 
-func (w *Writer) WriteLine(ln []byte) (err error) {
-	_, err = w.Write(append(ln, '\n'))
-	if err == nil {
-		w.sts.AddLine()
-	}
-
-	return err
+func (w *Writer) Write(p []byte) (n int, err error) {
+	return w.bfr.Write(p)
 }
 
-func (w *Writer) Write(p []byte) (n int, err error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.done == true {
-		return 0, nil
-	}
-
-	n, err = w.w.Write(p)
-	w.sts.AddBytes(int64(n))
-	if err != nil {
-		return n, err
-	}
-
-	return n, err
+func (w *Writer) WriteLine(ln []byte) (err error) {
+	return w.bfr.WriteLine(ln)
 }
 
 func (w *Writer) Stats() stat.Stat {
-	return w.sts.Clone()
+	sts := w.bfr.Stats()
+	sts.Path = w.sts.Path
+	sts.Created = w.sts.Created
+
+	return sts
 }
 
 // Abort will:
 // - clear and close buffer
-//
-// Calling Close after Abort will do nothing.
-// Writing after Abort will not write and will
-// not return a nil-error.
+// - prevent further writing
 func (w *Writer) Abort() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -149,18 +103,7 @@ func (w *Writer) Abort() error {
 		return nil
 	}
 	w.done = true
-
-	// close writers
-	w.w.Close()
-	w.buf.Close()
-
-	// close and clear underlying write buffer
-	// may or may not be the same Close method as w
-	// if using gzip. We want to make sure to close both
-	// to make sure to flush and sync everything to disk.
-	// underlying buffer may still need to be closed
-	w.buf.Close()
-	return util.RmTmp(w.tmpPth)
+	return w.bfr.Abort()
 }
 
 // Close will:
@@ -178,38 +121,34 @@ func (w *Writer) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// check if aborted
 	if w.done {
 		return nil
 	}
 	w.done = true
 
-	// close writers
-	w.w.Close()
-	w.buf.Close()
+	// close buffer to finalize writes
+	// and copy contents to final
+	// location.
+	w.bfr.Close()
+	_, err := w.copyAndClean()
 
-	// do copy
-	w.copy()
-
-	// set checksum, size, created
-	w.sts.SetCheckSum(w.hshr)
-	w.sts.SetSize(fileSize(w.sts.Path))
+	// set created date
 	w.sts.SetCreated(fileCreated(w.sts.Path))
 
-	// underlying buffer may still need to be closed
-	w.buf.Close()
-	return util.RmTmp(w.tmpPth)
+	return err
 }
 
 // copy will copy the contents of buf
 // to the path indicated at pth.
 //
 // Returns num of bytes copied and error.
-func (w *Writer) copy() (n int64, err error) {
+func (w *Writer) copyAndClean() (n int64, err error) {
 	isDev := strings.HasPrefix(w.sts.Path, "/dev/")
 
 	// mv if using tmp file buffer.
 	// can't use rename for dev files.
+	// Note: tmp file buffer cleanup not necessary with
+	// a mv operation.
 	if w.tmpPth != "" && !isDev {
 		// rename will move via hard link if
 		// on the same file system (same partition).
@@ -217,31 +156,27 @@ func (w *Writer) copy() (n int64, err error) {
 		errMv := os.Rename(w.tmpPth, w.sts.Path)
 		fInfo, err := os.Stat(w.sts.Path)
 
-		// still attempt to get destination file size
+		// destination file size
 		if fInfo != nil {
 			n = fInfo.Size()
 		}
 
 		if errMv != nil {
+			// unable to mv so tmp file
+			// cleanup still necessary.
+			w.bfr.Cleanup()
 			return n, errMv
 		}
 		return n, err
 	}
 
-	// the tmp file buffer is already closed because
-	// we needed to make sure contents are flushed to disk.
-	if w.tmpPth != "" {
-		var err error
-		w.buf, err = os.Open(w.tmpPth)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// copy from mem or tmp file buffer
+	// byte by byte copy
 	_, f, _ := openF(w.sts.Path, false)
-	defer closeF(w.sts.Path, f)
-	return io.Copy(f, w.buf)
+	n, err = io.Copy(f, w.bfr)
+	closeF(w.sts.Path, f) // assure disk sync
+	w.bfr.Cleanup()
+
+	return n, err
 }
 
 // openF will open the pth file (in append mode if append = true)

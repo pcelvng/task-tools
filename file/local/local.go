@@ -3,27 +3,18 @@ package local
 import (
 	"os"
 	"time"
+
+	"github.com/pcelvng/task-tools/file/buf"
 )
 
 func NewOptions() *Options {
-	return &Options{}
+	return &Options{
+		Options: buf.NewOptions(),
+	}
 }
 
 type Options struct {
-	// UseTmpFile specifies to use a tmp file for the delayed writing.
-	// Can optionally also specify the tmp directory and tmp name
-	// prefix.
-	UseTmpFile bool
-
-	// TmpDir optionally specifies the temp directory. If not specified then
-	// the os default temp dir is used.
-	TmpDir string
-
-	// TmpPrefix optionally specifies the temp file prefix.
-	// The full tmp file name is randomly generated and guaranteed
-	// not to conflict with existing files. A prefix can help one find
-	// the tmp file.
-	TmpPrefix string
+	*buf.Options
 }
 
 // fileSize will return the file size from pth.
