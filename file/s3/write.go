@@ -42,7 +42,7 @@ func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, 
 	// final writing doesn't happen until Close is called
 	// but getting the client now does authentication
 	// so we know early of authentication issues.
-	s3Client, err := minio.New(storeEndpoint, accessKey, secretKey, true)
+	s3Client, err := minio.New(StoreHost, accessKey, secretKey, true)
 	if err != nil {
 		return nil, err
 	}

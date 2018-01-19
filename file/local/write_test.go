@@ -13,7 +13,7 @@ func ExampleNewWriter() {
 	}
 
 	fmt.Println(strings.HasSuffix(w.sts.Path, "/test/test.txt")) // output: true
-	fmt.Println(err)                                            // output: <nil>
+	fmt.Println(err)                                             // output: <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -445,182 +445,38 @@ func ExampleWriter_copyAndCleanTmpFileToDev() {
 	// true
 }
 
-//func ExampleOpenf_err() {
-//	// showing:
-//	// openf open dir err
-//	// openf open file err
-//
-//	// dir bad perms
-//	_, _, err := openF("/bad/perms/dir/file.txt", false)
-//	fmt.Println(err)
-//
-//	// file bad perms
-//	_, _, err = openF("/bad_perms.txt", false)
-//	fmt.Println(err)
-//
-//	// Output:
-//	// mkdir /bad: permission denied
-//	// open /bad_perms.txt: permission denied
-//}
-//
-//func ExampleClosef_err() {
-//	// showing:
-//	// closeF no err on nil f
-//
-//	var nilF *os.File
-//	err := closeF("path.txt", nilF)
-//	fmt.Println(err)
-//
-//	// Output:
-//	// <nil>
-//}
-//
-//func ExampleNewWriterBufferErr() {
-//	// showing:
-//	// - buffer err on initialization
-//
-//	opt := NewOptions()
-//	opt.UseFileBuf = true
-//	opt.FileBufDir = "/bad/tmp/dir"
-//
-//	w, err := NewWriter("", opt)
-//
-//	fmt.Println(w)                                                  // <nil>
-//	fmt.Println(strings.Contains(err.Error(), "permission denied")) // output: true
-//
-//	// Output:
-//	// <nil>
-//	// true
-//}
-//
-////func ExampleNewWriterBufferErr() {
-////	// showing:
-////	// - writer is nil with an err
-////	// - err if pth is a dir
-////	// - err from bad write
-////
-////	pth := "/dir/path/"
-////	w, err := NewWriter(pth, nil)
-////	fmt.Println(w)   // <nil>
-////	fmt.Println(err) // path /dir/path/: references a directory
-////
-////	pth = "./test.txt"
-////	w, _ = NewWriter(pth, nil)
-////	if w == nil {
-////		return
-////	}
-////
-////	err = w.WriteLine([]byte("bad write to nil"))
-////	fmt.Println(err) // invalid argument
-////	err = w.Close()
-////	err = w.Abort()  // call Abort after close should return nil
-////	fmt.Println(err) // <nil>
-////	os.Remove(w.sts.Path)
-////
-////	// Output:
-////	// <nil>
-////	// path /dir/path/: references a directory
-////	// invalid argument
-////	// <nil>
-////}
-//
-//func ExampleNewWriter_Abort() {
-//	// showing:
-//	// - writer is nil with an err
-//	// - err if pth is a dir
-//	// - err from bad write
-//
-//	pth := "./test.txt"
-//	w, _ := NewWriter(pth, nil)
-//	if w == nil {
-//		return
-//	}
-//	err := w.Abort()
-//	fmt.Println(err)
-//	w.Close() // call close after to test close following abort
-//	fmt.Println(err)
-//
-//	// Output:
-//	// <nil>
-//	// <nil>
-//}
-//
-//func ExampleNewWriterGzip() {
-//	// showing:
-//	// - gzip writer errs
-//	// - gzip writer
-//
-//	pth := "./test.gz"
-//	w, err := NewWriter(pth, nil)
-//	if w == nil {
-//		return
-//	}
-//	fmt.Println(err)
-//	w.WriteLine([]byte("test line1"))
-//	w.WriteLine([]byte("test line2"))
-//	w.WriteLine([]byte("test line3"))
-//	w.Close()
-//	fmt.Println(w.sts.LineCnt)
-//	fmt.Println(w.sts.ByteCnt)
-//	fmt.Println(w.sts.CheckSum)
-//	fmt.Println(w.sts.Size)
-//	_, fName := path.Split(w.sts.Path)
-//	fmt.Println(fName)
-//	os.Remove(w.sts.Path)
-//
-//	// Output:
-//	// <nil>
-//	// 3
-//	// 33
-//	// 632e558dab3dcdebcb4b2491ed3d7696
-//	// 61
-//	// test.gz
-//}
-//
-//func Example_checkFile() {
-//	// showing:
-//	// - path normalization
-//	// - can use system files like '/dev/null'
-//
-//	pth, err := checkFile("/")
-//	fmt.Println(pth)
-//	fmt.Println(err)
-//	fmt.Println("")
-//
-//	pth, err = checkFile("//")
-//	fmt.Println(pth)
-//	fmt.Println(err)
-//	fmt.Println("")
-//
-//	pth, err = checkFile("/test/dir/../../")
-//	fmt.Println(pth)
-//	fmt.Println(err)
-//	fmt.Println("")
-//
-//	pth, err = checkFile("/test/dir/")
-//	fmt.Println(pth)
-//	fmt.Println(err)
-//	fmt.Println("")
-//
-//	pth, err = checkFile("/dev/null")
-//	fmt.Println(pth)
-//	fmt.Println(err)
-//	fmt.Println("")
-//
-//	// Output:
-//	// /
-//	// path /: references a directory
-//	//
-//	// /
-//	// path /: references a directory
-//	//
-//	// /
-//	// path /: references a directory
-//	//
-//	// /test/dir/
-//	// path /test/dir/: references a directory
-//	//
-//	// /dev/null
-//	// <nil>
-//	//
-//}
+func ExampleOpenf_ErrPerms() {
+	// dir bad perms
+	_, _, err := openF("/bad/perms/dir/file.txt", false)
+	fmt.Println(err)
+
+	// file bad perms
+	_, _, err = openF("/bad_perms.txt", false)
+	fmt.Println(err)
+
+	// Output:
+	// mkdir /bad: permission denied
+	// open /bad_perms.txt: permission denied
+}
+
+func ExampleOpenf_ErrDir() {
+	// dir bad perms
+	_, _, err := openF("/dir/path/", false)
+
+	fmt.Println(err) // output: path /dir/path/: references a directory
+
+	// Output:
+	// path /dir/path/: references a directory
+}
+
+func ExampleClosef_err() {
+	// showing:
+	// closeF no err on nil f
+
+	var nilF *os.File
+	err := closeF("path.txt", nilF)
+	fmt.Println(err)
+
+	// Output:
+	// <nil>
+}

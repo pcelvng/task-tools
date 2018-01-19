@@ -20,7 +20,7 @@ func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 	bucket, objPth := parsePth(pth)
 
 	// s3 client - using minio client library
-	s3Client, err := minio.New(storeEndpoint, accessKey, secretKey, true)
+	s3Client, err := minio.New(StoreHost, accessKey, secretKey, true)
 	if err != nil {
 		return nil, err
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/pcelvng/task-tools/file/buf"
 )
 
-var storeEndpoint = "s3.amazonaws.com"
+var StoreHost = "s3.amazonaws.com"
 
 func NewOptions() *Options {
 	return &Options{

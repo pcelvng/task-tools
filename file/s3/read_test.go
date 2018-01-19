@@ -42,8 +42,8 @@ func ExampleNewReader() {
 }
 
 func ExampleNewReaderErrBadClient() {
-	origEndpoint := storeEndpoint
-	storeEndpoint = "bad/endpoint/"
+	origHost := StoreHost
+	StoreHost = "bad/endpoint/"
 	r, err := NewReader("", "", "")
 	if err == nil {
 		return
@@ -53,7 +53,7 @@ func ExampleNewReaderErrBadClient() {
 	fmt.Println(err) // output: Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
 
 	// restore endpoint
-	storeEndpoint = origEndpoint
+	StoreHost = origHost
 
 	// Output:
 	// <nil>

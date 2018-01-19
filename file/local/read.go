@@ -14,6 +14,8 @@ import (
 
 func NewReader(pth string) (*Reader, error) {
 	pth, _ = filepath.Abs(pth)
+
+	// open
 	f, err := os.Open(pth)
 	if err != nil {
 		return nil, err
@@ -59,7 +61,7 @@ type Reader struct {
 	rGzip    *gzip.Reader
 	rHshr    *hashReader
 	sts      stat.Stat
-	isClosed bool
+	closed bool
 }
 
 func (r *Reader) ReadLine() (ln []byte, err error) {
@@ -90,7 +92,7 @@ func (r *Reader) Stats() stat.Stat {
 }
 
 func (r *Reader) Close() (err error) {
-	if r.isClosed {
+	if r.closed {
 		return nil
 	}
 
@@ -102,7 +104,7 @@ func (r *Reader) Close() (err error) {
 	// calculate checksum
 	r.sts.SetCheckSum(r.rHshr.Hshr)
 
-	r.isClosed = true
+	r.closed = true
 	return err
 }
 

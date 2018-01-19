@@ -25,19 +25,19 @@ func TestMain(m *testing.M) {
 	var err error
 
 	// switch to test endpoint
-	storeEndpoint = testEndpoint
+	StoreHost = testEndpoint
 
 	// test client
 	testS3Client, err = minio.New(testEndpoint, testAccessKey, testSecretKey, true)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		os.Exit(1)
 	}
 
 	// make test bucket
 	err = createBucket(testBucket)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		os.Exit(1)
 	}
 

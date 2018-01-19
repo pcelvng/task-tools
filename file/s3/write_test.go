@@ -111,8 +111,8 @@ func ExampleNewWriterErrBuf() {
 }
 
 func ExampleNewWriterErrBadClient() {
-	origEndpoint := storeEndpoint
-	storeEndpoint = "bad/endpoint/"
+	origHost := StoreHost
+	StoreHost = "bad/endpoint/"
 	w, err := NewWriter("", "", "", nil)
 	if err == nil {
 		return
@@ -122,7 +122,7 @@ func ExampleNewWriterErrBadClient() {
 	fmt.Println(err) // output: Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
 
 	// restore endpoint
-	storeEndpoint = origEndpoint
+	StoreHost = origHost
 
 	// Output:
 	// <nil>
