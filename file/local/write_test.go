@@ -13,7 +13,7 @@ func ExampleNewWriter() {
 	}
 
 	fmt.Println(strings.HasSuffix(w.sts.Path, "/test/test.txt")) // output: true
-	fmt.Println(err)                                             // output: <nil>
+	fmt.Println(err)                                            // output: <nil>
 
 	os.Remove("./test") // cleanup test dir
 

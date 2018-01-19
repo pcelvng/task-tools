@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio-go"
+
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )
@@ -16,15 +17,10 @@ func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 	sts.SetPath(pth)
 
 	// get bucket, objPth and validate
-	bucket, objPth, err := parsePth(pth)
-	if err != nil {
-		return nil, err
-	}
+	bucket, objPth := parsePth(pth)
 
 	// s3 client - using minio client library
-	s3Client, err := minio.New(
-		"s3.amazonaws.com", accessKey, secretKey, true,
-	)
+	s3Client, err := minio.New(storeEndpoint, accessKey, secretKey, true)
 	if err != nil {
 		return nil, err
 	}
@@ -35,11 +31,12 @@ func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 		return nil, err
 	}
 
-	// set size
+	// stats
 	objInfo, err := s3Obj.Stat()
 	if err != nil {
 		return nil, err
 	}
+	sts.SetCreated(objInfo.LastModified)
 	sts.SetSize(objInfo.Size)
 
 	// hash reader
@@ -68,12 +65,13 @@ func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 
 // Reader will read in streamed bytes from the s3 object.
 type Reader struct {
-	s3Obj    *minio.Object // s3 file object
-	rBuf     *bufio.Reader
-	rGzip    *gzip.Reader
-	rHshr    *util.HashReader
-	sts      stat.Stat
-	isClosed bool
+	s3Obj *minio.Object // s3 file object
+	rBuf  *bufio.Reader
+	rGzip *gzip.Reader
+	rHshr *util.HashReader
+
+	sts    stat.Stat
+	closed bool
 }
 
 func (r *Reader) ReadLine() (ln []byte, err error) {
@@ -104,7 +102,7 @@ func (r *Reader) Stats() stat.Stat {
 }
 
 func (r *Reader) Close() (err error) {
-	if r.isClosed {
+	if r.closed {
 		return nil
 	}
 
@@ -116,6 +114,6 @@ func (r *Reader) Close() (err error) {
 	// calculate checksum
 	r.sts.SetCheckSum(r.rHshr.Hshr)
 
-	r.isClosed = true
+	r.closed = true
 	return err
 }

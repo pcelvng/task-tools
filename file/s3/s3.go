@@ -3,27 +3,21 @@ package s3
 import (
 	"fmt"
 	"net/url"
+	"strings"
+
+	"github.com/pcelvng/task-tools/file/buf"
 )
 
+var storeEndpoint = "s3.amazonaws.com"
+
 func NewOptions() *Options {
-	return &Options{}
+	return &Options{
+		Options: buf.NewOptions(),
+	}
 }
 
 type Options struct {
-	// UseFileBuf specifies to use a tmp file for the delayed writing.
-	// Can optionally also specify the tmp directory and tmp name
-	// prefix.
-	UseFileBuf bool
-
-	// FileBufDir optionally specifies the temp directory. If not specified then
-	// the os default temp dir is used.
-	FileBufDir string
-
-	// FileBufPrefix optionally specifies the temp file prefix.
-	// The full tmp file name is randomly generated and guaranteed
-	// not to conflict with existing files. A prefix can help one find
-	// the tmp file.
-	FileBufPrefix string
+	*buf.Options
 }
 
 type PathErr string
@@ -46,19 +40,14 @@ func (e *S3Err) Error() string {
 // If either bucket or object are empty then
 // pth was not in the correct format for parsing or
 // object and or bucket do not exist in pth.
-func parsePth(pth string) (bucket, objPth string, err error) {
+func parsePth(pth string) (bucket, objPth string) {
 	// parse
 	pPth, err := url.Parse(pth)
 	if err != nil {
-		return "", "", PathErr(pth)
+		return "", ""
 	}
 
-	scheme := pPth.Scheme
 	bucket = pPth.Host
-	objPth = pPth.Path
-
-	if scheme != "s3" || bucket == "" || objPth == "" {
-		return "", "", PathErr(pth)
-	}
-	return bucket, objPth, nil
+	objPth = strings.TrimLeft(pPth.Path, "/")
+	return bucket, objPth
 }

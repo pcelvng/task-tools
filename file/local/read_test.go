@@ -1,10 +1,5 @@
 package local
 
-import (
-	"fmt"
-	"os"
-)
-
 //import (
 //	"compress/gzip"
 //	"crypto/md5"
@@ -226,82 +221,82 @@ import (
 //	// read test line2
 //}
 
-func ExampleNewReader() {
-	// showing:
-	// - returns err if unable to open file
-	// - sts.Path is set on initialization
-	// - sts.Size is set on initialization
-	// - r.f is not nil
-	// - r.rBuf is not nil
-	// - Close sets checksum
-	// - Close marks isClosed as true
-	// - Calling Close twice has err == nil the second time
-
-	// read file that does not exist
-	r, err := NewReader("/doesnot/exist.txt")
-	fmt.Println(err) // open /doesnot/exist.txt: no such file or directory
-	fmt.Println(r)   // <nil>
-
-	w, _ := NewWriter("/tmp/readtest6.txt", nil)
-	w.WriteLine([]byte("read test line1"))
-	w.WriteLine([]byte("read test line2"))
-	err = w.Close()
-	if err != nil {
-		return
-	}
-
-	// read file that does exist
-	r, err = NewReader(w.sts.Path)
-	fmt.Println(err) // <nil>
-	if r == nil {
-		return
-	}
-	fmt.Println(r.sts.LineCnt)  // 0
-	fmt.Println(r.sts.ByteCnt)  // 0
-	fmt.Println(r.sts.Size)     // 32
-	fmt.Println(r.sts.Path)     // /tmp/readtest6.txt
-	fmt.Println(r.sts.CheckSum) //
-	fmt.Println(r.isClosed)     // false
-
-	ln1, _ := r.ReadLine()
-	ln2, _ := r.ReadLine()
-	fmt.Println(string(ln1)) // read test line1
-	fmt.Println(string(ln2)) // read test line2
-	err = r.Close()
-	fmt.Println(r.isClosed) // true
-
-	// final stats
-	sts := r.Stats()
-
-	fmt.Println(sts.LineCnt)  // 2
-	fmt.Println(sts.ByteCnt)  // 32
-	fmt.Println(sts.Size)     // 32
-	fmt.Println(sts.Path)     // /tmp/readtest6.txt
-	fmt.Println(sts.CheckSum) // e7623bafac74621cd419e3e905768551
-	fmt.Println(r.Close())    // <nil>
-
-	os.Remove(w.sts.Path)
-
-	// Output:
-	// open /doesnot/exist.txt: no such file or directory
-	// <nil>
-	// <nil>
-	// 0
-	// 0
-	// 32
-	// /tmp/readtest6.txt
-	//
-	// false
-	// read test line1
-	// read test line2
-	// true
-	// 2
-	// 32
-	// 32
-	// /tmp/readtest6.txt
-	// e7623bafac74621cd419e3e905768551
-	// <nil>
-}
+//func ExampleNewReader() {
+//	// showing:
+//	// - returns err if unable to open file
+//	// - sts.Path is set on initialization
+//	// - sts.Size is set on initialization
+//	// - r.f is not nil
+//	// - r.rBuf is not nil
+//	// - Close sets checksum
+//	// - Close marks isClosed as true
+//	// - Calling Close twice has err == nil the second time
+//
+//	// read file that does not exist
+//	r, err := NewReader("/doesnot/exist.txt")
+//	fmt.Println(err) // open /doesnot/exist.txt: no such file or directory
+//	fmt.Println(r)   // <nil>
+//
+//	w, _ := NewWriter("/tmp/readtest6.txt", nil)
+//	w.WriteLine([]byte("read test line1"))
+//	w.WriteLine([]byte("read test line2"))
+//	err = w.Close()
+//	if err != nil {
+//		return
+//	}
+//
+//	// read file that does exist
+//	r, err = NewReader(w.sts.Path)
+//	fmt.Println(err) // <nil>
+//	if r == nil {
+//		return
+//	}
+//	fmt.Println(r.sts.LineCnt)  // 0
+//	fmt.Println(r.sts.ByteCnt)  // 0
+//	fmt.Println(r.sts.Size)     // 32
+//	fmt.Println(r.sts.Path)     // /tmp/readtest6.txt
+//	fmt.Println(r.sts.CheckSum) //
+//	fmt.Println(r.isClosed)     // false
+//
+//	ln1, _ := r.ReadLine()
+//	ln2, _ := r.ReadLine()
+//	fmt.Println(string(ln1)) // read test line1
+//	fmt.Println(string(ln2)) // read test line2
+//	err = r.Close()
+//	fmt.Println(r.isClosed) // true
+//
+//	// final stats
+//	sts := r.Stats()
+//
+//	fmt.Println(sts.LineCnt)  // 2
+//	fmt.Println(sts.ByteCnt)  // 32
+//	fmt.Println(sts.Size)     // 32
+//	fmt.Println(sts.Path)     // /tmp/readtest6.txt
+//	fmt.Println(sts.CheckSum) // e7623bafac74621cd419e3e905768551
+//	fmt.Println(r.Close())    // <nil>
+//
+//	os.Remove(w.sts.Path)
+//
+//	// Output:
+//	// open /doesnot/exist.txt: no such file or directory
+//	// <nil>
+//	// <nil>
+//	// 0
+//	// 0
+//	// 32
+//	// /tmp/readtest6.txt
+//	//
+//	// false
+//	// read test line1
+//	// read test line2
+//	// true
+//	// 2
+//	// 32
+//	// 32
+//	// /tmp/readtest6.txt
+//	// e7623bafac74621cd419e3e905768551
+//	// <nil>
+//}
 
 //func ExampleNewReader_gzip() {
 //	// showing:

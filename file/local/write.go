@@ -39,7 +39,8 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 
 	// stats
 	sts := stat.New()
-	sts.Path = pth
+	pth, _ = filepath.Abs(pth)
+	sts.SetPath(pth)
 
 	// compression
 	if ext := filepath.Ext(pth); ext == ".gz" {
