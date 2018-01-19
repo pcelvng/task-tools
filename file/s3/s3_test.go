@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -89,23 +88,6 @@ func createBucket(bckt string) error {
 
 func rmBucket(bckt string) error {
 	return testS3Client.RemoveBucket(bckt)
-}
-
-func ExamplePathErr_Error() {
-	pthErr := PathErr("my/bad/pth")
-	fmt.Println(pthErr.Error())
-
-	// Output:
-	// bad s3 path: my/bad/pth
-}
-
-func ExampleS3Err_Error() {
-	err := errors.New("my s3 error")
-	s3Err := S3Err{err}
-	fmt.Println(s3Err.Error())
-
-	// Output:
-	// s3: my s3 error
 }
 
 func ExampleParsePth() {

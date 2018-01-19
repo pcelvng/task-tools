@@ -36,9 +36,6 @@ func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, 
 
 	// s3 bucket, objPth
 	bucket, objPth := parsePth(pth)
-	if err != nil {
-		return nil, err
-	}
 
 	// s3 client:
 	// using minio client library;
@@ -157,7 +154,7 @@ func (w *Writer) Close() error {
 	bfrSts := w.bfr.Stats()
 	if bfrSts.CheckSum != w.objSts.CheckSum {
 		msg := fmt.Sprintf(
-			"cp: %v %v vs %v checksum mismatch",
+			"cp: %v '%v' vs '%v' checksum mismatch",
 			w.sts.Path,
 			bfrSts.CheckSum,
 			w.objSts.CheckSum,

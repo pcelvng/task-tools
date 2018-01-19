@@ -58,6 +58,7 @@ func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 	return &Reader{
 		s3Obj: s3Obj,
 		rBuf:  rBuf,
+		rGzip: rGzip,
 		rHshr: rHshr,
 		sts:   sts,
 	}, nil

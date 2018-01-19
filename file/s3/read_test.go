@@ -1,7 +1,11 @@
 package s3
 
 import (
+	"bytes"
 	"fmt"
+	"log"
+
+	"github.com/minio/minio-go"
 )
 
 func createTestFile(pth string) error {
@@ -22,11 +26,6 @@ func rmTestFile(pth string) error {
 
 func ExampleNewReader() {
 	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	err := createTestFile(pth)
-	if err != nil {
-		return
-	}
-
 	r, err := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -82,6 +81,45 @@ func ExampleNewReaderErrObjStat() {
 	// Output:
 	// <nil>
 	// The specified bucket does not exist
+}
+
+func ExampleNewReaderErrGzip() {
+	// write a normal file to s3 as if it
+	// were a gzip file. NewReader will see
+	// the .gz extension and read it as a
+	// gz file. Since it's not and there is
+	// no gz header, it will return and error.
+
+	// create 'bad' gz file.
+	var buf bytes.Buffer
+	buf.Write([]byte("test line\n"))
+	buf.Write([]byte("test line\n"))
+	opts := minio.PutObjectOptions{}
+	opts.ContentType = "application/octet-stream"
+	_, err := testS3Client.PutObject(
+		testBucket,
+		"bad.gz",
+		&buf,
+		20,
+		opts,
+	)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	pth := fmt.Sprintf("s3://%v/bad.gz", testBucket)
+	r, err := NewReader(pth, testAccessKey, testSecretKey)
+
+	fmt.Println(r)   // output: <nil>
+	fmt.Println(err) // output: gzip: invalid header
+
+	// cleanup file
+	rmTestFile(pth)
+
+	// Output:
+	// <nil>
+	// gzip: invalid header
 }
 
 func ExampleReader_Read() {
@@ -252,6 +290,34 @@ func ExampleReader_CloseCompressed() {
 	fmt.Println(sts.CheckSum) // output: 42e649f9834028184ec21940d13a300f
 
 	// Output:
+	// <nil>
+	// 20
+	// 2
+	// 42e649f9834028184ec21940d13a300f
+}
+
+func ExampleReader_CloseandClose() {
+	pth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
+	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	if r == nil {
+		return
+	}
+
+	r.ReadLine()
+	r.ReadLine()
+	r.ReadLine()
+	err1 := r.Close()
+	err2 := r.Close()
+	sts := r.Stats()
+
+	fmt.Println(err1)         // output: <nil>
+	fmt.Println(err2)         // output: <nil>
+	fmt.Println(sts.ByteCnt)  // output: 20
+	fmt.Println(sts.LineCnt)  // output: 2
+	fmt.Println(sts.CheckSum) // output: 42e649f9834028184ec21940d13a300f
+
+	// Output:
+	// <nil>
 	// <nil>
 	// 20
 	// 2
