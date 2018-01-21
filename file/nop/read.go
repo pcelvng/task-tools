@@ -82,7 +82,7 @@ func NewReader(pth string) (*Reader, error) {
 }
 
 type Reader struct {
-	sts stat.Stat
+	sts stat.Stats
 }
 
 // Read will return n as len(MockLine) or length
@@ -133,7 +133,7 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 	}
 }
 
-func (r *Reader) Stats() stat.Stat {
+func (r *Reader) Stats() stat.Stats {
 	return r.sts.Clone()
 }
 

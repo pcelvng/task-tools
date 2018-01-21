@@ -176,7 +176,7 @@ func ExampleWriter_Stats() {
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 0
-	fmt.Println(sts.CheckSum)      // output:
+	fmt.Println(sts.Checksum)      // output:
 	fmt.Println(sts.Created == "") // output: true
 
 	// Output:
@@ -204,7 +204,7 @@ func ExampleWriter_CloseStats() {
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 20
-	fmt.Println(sts.CheckSum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(sts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(sts.Created != "") // output: true
 
 	// cleanup
@@ -272,7 +272,7 @@ func ExampleWriter_Close() {
 
 	fmt.Println(err)                     // output: <nil>
 	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.CheckSum != "") // output: true
+	fmt.Println(w.objSts.Checksum != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -298,7 +298,7 @@ func ExampleWriter_CloseErrCopy() {
 
 	fmt.Println(err)                     // output: Bucket name cannot be empty
 	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.CheckSum == "") // output: true
+	fmt.Println(w.objSts.Checksum == "") // output: true
 
 	// Output:
 	// Bucket name cannot be empty
@@ -325,7 +325,7 @@ func ExampleWriter_CloseErrChecksum() {
 
 	fmt.Println(err)                     // output: cp: s3://task-tools-test/write/test.txt '' vs 'd41d8cd98f00b204e9800998ecf8427e' checksum mismatch
 	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.CheckSum != "") // output: true
+	fmt.Println(w.objSts.Checksum != "") // output: true
 
 	// Output:
 	// cp: s3://task-tools-test/write/test.txt '' vs 'd41d8cd98f00b204e9800998ecf8427e' checksum mismatch
@@ -347,7 +347,7 @@ func ExampleWriter_CloseAndClose() {
 
 	fmt.Println(err)                     // output: <nil>
 	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.CheckSum != "") // output: true
+	fmt.Println(w.objSts.Checksum != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -371,7 +371,7 @@ func ExampleWriter_AbortAndClose() {
 
 	fmt.Println(err)                     // output: <nil>
 	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.CheckSum == "") // output: true
+	fmt.Println(w.objSts.Checksum == "") // output: true
 
 	// Output:
 	// <nil>
@@ -393,7 +393,7 @@ func ExampleWriter_CloseAndAbort() {
 
 	fmt.Println(err)                     // output: <nil>
 	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.CheckSum != "") // output: true
+	fmt.Println(w.objSts.Checksum != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -424,7 +424,7 @@ func ExampleWriter_CopyTmpFile() {
 
 	fmt.Println(n)                      // output: 20
 	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.CheckSum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(w.objSts.Size)          // output: 20
 	fmt.Println(w.objSts.Path)          // output: write/test.txt
 	fmt.Println(w.objSts.Created != "") // output: true
@@ -458,7 +458,7 @@ func ExampleWriter_CopyNoExtension() {
 
 	fmt.Println(n)                      // output: 20
 	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.CheckSum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(w.objSts.Size)          // output: 20
 	fmt.Println(w.objSts.Path)          // output: write/test
 	fmt.Println(w.objSts.Created != "") // output: true
@@ -489,7 +489,7 @@ func ExampleWriter_SetObjSts() {
 	err := w.setObjSts()
 
 	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.CheckSum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(w.objSts.Size)          // output: 20
 	fmt.Println(w.objSts.Path)          // output: write/test.txt
 	fmt.Println(w.objSts.Created != "") // output: true
@@ -519,7 +519,7 @@ func ExampleWriter_SetObjStsErr() {
 	err := w.setObjSts()
 
 	fmt.Println(err)                    // output: Bucket name cannot be empty
-	fmt.Println(w.objSts.CheckSum)      // output:
+	fmt.Println(w.objSts.Checksum)      // output:
 	fmt.Println(w.objSts.Size)          // output: 0
 	fmt.Println(w.objSts.Path)          // output:
 	fmt.Println(w.objSts.Created == "") // output: true

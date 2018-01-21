@@ -7,7 +7,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 )
 
 func NewNopWriteCloser(w io.Writer) *NopCloser {
@@ -143,4 +145,15 @@ func (h *HashCloser) Write(p []byte) (n int, err error) {
 
 func (h *HashCloser) Close() error {
 	return nil
+}
+
+// Ext will retrieve a non-compression related
+// file extension. If there are multiple, it returns
+// the first behind the compression extension. It
+// is assumed the compression extension is last.
+//
+// Only supports '.gz' at the moment.
+func Ext(p string) string {
+	p = strings.Replace(p, ".gz", "", 1)
+	return path.Ext(p)
 }

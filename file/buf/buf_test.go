@@ -291,151 +291,6 @@ func ExampleBuffer_ReadAfterCleanup() {
 	// 0
 }
 
-func ExampleBuffer_ReadTmpFileAfterCleanup() {
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "./tmp"
-	opt.FileBufPrefix = "tmpprefix_"
-
-	bfr, _ := NewBuffer(opt)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	bfr.Write([]byte("test line\n"))
-	bfr.Write([]byte("test line\n"))
-	bfr.Close()
-
-	// resets/removes the underlying buffer.
-	// after calling Cleanup there is nothing
-	// left to read. So read always returns EOF.
-	bfr.Cleanup()
-
-	// read
-	b := make([]byte, 1)
-	n, err := bfr.Read(b) // nothing should be read in
-
-	fmt.Println(n)    // output: 0
-	fmt.Println(err)  // output: EOF
-	fmt.Println(b[0]) // output: 0
-
-	// read again - same result
-	b = make([]byte, 1)
-	n, err = bfr.Read(b) // nothing should be read in
-
-	fmt.Println(n)    // output: 0
-	fmt.Println(err)  // output: EOF
-	fmt.Println(b[0]) // output: 0
-
-	os.Remove("./tmp") // remove dir
-
-	// Output:
-	// 0
-	// EOF
-	// 0
-	// 0
-	// EOF
-	// 0
-}
-
-func ExampleBuffer_ReadAfterAbort() {
-	bfr, _ := NewBuffer(nil)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	bfr.Write([]byte("test line\n"))
-	bfr.Write([]byte("test line\n"))
-
-	// notice that Close is not called. If
-	// Close were called before Abort the
-	// Read could continue as if Abort were
-	// not called.
-
-	// Abort calls Cleanup so should have
-	// same behavior as calling Cleanup
-	// before Read.
-	bfr.Abort()
-
-	// read
-	b := make([]byte, 1)
-	n, err := bfr.Read(b) // nothing should be read in
-
-	fmt.Println(n)    // output: 0
-	fmt.Println(err)  // output: EOF
-	fmt.Println(b[0]) // output: 0
-
-	// read again - same result
-	b = make([]byte, 1)
-	n, err = bfr.Read(b) // nothing should be read in
-
-	fmt.Println(n)    // output: 0
-	fmt.Println(err)  // output: EOF
-	fmt.Println(b[0]) // output: 0
-
-	// Output:
-	// 0
-	// EOF
-	// 0
-	// 0
-	// EOF
-	// 0
-}
-
-func ExampleBuffer_ReadTmpFileAfterAbort() {
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "./tmp"
-	opt.FileBufPrefix = "tmpprefix_"
-
-	bfr, _ := NewBuffer(opt)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	bfr.Write([]byte("test line\n"))
-	bfr.Write([]byte("test line\n"))
-
-	// notice that Close is not called. If
-	// Close were called before Abort the
-	// Read could continue as if Abort were
-	// not called.
-
-	// Abort calls Cleanup so should have
-	// same behavior as calling Cleanup
-	// before Read.
-	bfr.Abort()
-
-	// read
-	b := make([]byte, 1)
-	n, err := bfr.Read(b) // nothing should be read in
-
-	fmt.Println(n)    // output: 0
-	fmt.Println(err)  // output: EOF
-	fmt.Println(b[0]) // output: 0
-
-	// read again - same result
-	b = make([]byte, 1)
-	n, err = bfr.Read(b) // nothing should be read in
-
-	fmt.Println(n)    // output: 0
-	fmt.Println(err)  // output: EOF
-	fmt.Println(b[0]) // output: 0
-
-	os.Remove("./tmp") // remove dir
-
-	// Output:
-	// 0
-	// EOF
-	// 0
-	// 0
-	// EOF
-	// 0
-}
-
 func ExampleBuffer_Write() {
 	bfr, _ := NewBuffer(nil)
 	if bfr == nil {
@@ -469,64 +324,6 @@ func ExampleBuffer_Write() {
 	// 20
 	// 0
 	// 20
-}
-
-func ExampleBuffer_WriteAfterAbort() {
-	bfr, _ := NewBuffer(nil)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	n1, err1 := bfr.Write([]byte("test line\n"))
-	bfr.Abort()
-	n2, err2 := bfr.Write([]byte("test line\n"))
-
-	fmt.Println(n1)               // output: 10
-	fmt.Println(err1)             // output: <nil>
-	fmt.Println(n2)               // output: 0
-	fmt.Println(err2)             // output: <nil>
-	fmt.Println(bfr.sts.ByteCnt)  // output: 10
-	fmt.Println(bfr.sts.LineCnt)  // output: 0
-	fmt.Println(bfr.wSize.Size()) // output: 10
-
-	// Output:
-	// 10
-	// <nil>
-	// 0
-	// <nil>
-	// 10
-	// 0
-	// 10
-}
-
-func ExampleBuffer_WriteAfterClose() {
-	bfr, _ := NewBuffer(nil)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	n1, err1 := bfr.Write([]byte("test line\n"))
-	bfr.Close()
-	n2, err2 := bfr.Write([]byte("test line\n"))
-
-	fmt.Println(n1)               // output: 10
-	fmt.Println(err1)             // output: <nil>
-	fmt.Println(n2)               // output: 0
-	fmt.Println(err2)             // output: <nil>
-	fmt.Println(bfr.sts.ByteCnt)  // output: 10
-	fmt.Println(bfr.sts.LineCnt)  // output: 0
-	fmt.Println(bfr.wSize.Size()) // output: 10
-
-	// Output:
-	// 10
-	// <nil>
-	// 0
-	// <nil>
-	// 10
-	// 0
-	// 10
 }
 
 func ExampleBuffer_WriteLine() {
@@ -588,99 +385,12 @@ func ExampleBuffer_Abort() {
 	// write first
 	bfr.WriteLine([]byte("test line"))
 	bfr.WriteLine([]byte("test line"))
-
-	// done and clean are false before Abort
-	fmt.Println(bfr.done)  // output: false
-	fmt.Println(bfr.clean) // output: false
-
 	err := bfr.Abort()
 
-	fmt.Println(err)       // output: <nil>
-	fmt.Println(bfr.done)  // output: true
-	fmt.Println(bfr.clean) // output: true
+	fmt.Println(err) // output: <nil>
 
 	// Output:
-	// false
-	// false
 	// <nil>
-	// true
-	// true
-}
-
-func ExampleBuffer_AbortThenClose() {
-	bfr, _ := NewBuffer(nil)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	bfr.WriteLine([]byte("test line"))
-	bfr.WriteLine([]byte("test line"))
-
-	// done and clean are false before Abort
-	fmt.Println(bfr.done)  // output: false
-	fmt.Println(bfr.clean) // output: false
-
-	err := bfr.Abort()
-
-	fmt.Println(err)       // output: <nil>
-	fmt.Println(bfr.done)  // output: true
-	fmt.Println(bfr.clean) // output: true
-
-	// close after abort has no effect
-	err = bfr.Close()
-
-	fmt.Println(err)       // output: <nil>
-	fmt.Println(bfr.done)  // output: true
-	fmt.Println(bfr.clean) // output: true
-
-	// Output:
-	// false
-	// false
-	// <nil>
-	// true
-	// true
-	// <nil>
-	// true
-	// true
-}
-
-func ExampleBuffer_AbortThenCleanup() {
-	bfr, _ := NewBuffer(nil)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	bfr.WriteLine([]byte("test line"))
-	bfr.WriteLine([]byte("test line"))
-
-	// done and clean are false before Abort
-	fmt.Println(bfr.done)  // output: false
-	fmt.Println(bfr.clean) // output: false
-
-	err := bfr.Abort()
-
-	fmt.Println(err)       // output: <nil>
-	fmt.Println(bfr.done)  // output: true
-	fmt.Println(bfr.clean) // output: true
-
-	// cleanup after abort has no effect
-	err = bfr.Cleanup()
-
-	fmt.Println(err)       // output: <nil>
-	fmt.Println(bfr.done)  // output: true
-	fmt.Println(bfr.clean) // output: true
-
-	// Output:
-	// false
-	// false
-	// <nil>
-	// true
-	// true
-	// <nil>
-	// true
-	// true
 }
 
 func ExampleBuffer_AbortCompression() {
@@ -777,41 +487,29 @@ func ExampleBuffer_Close() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.WriteLine([]byte("test line"))
 
-	fmt.Println(bfr.done)               // output: false
-	fmt.Println(bfr.clean)              // output: false
-	fmt.Println(bfr.sts.CheckSum == "") // output: true
+	fmt.Println(bfr.sts.Checksum == "") // output: true
 	fmt.Println(bfr.sts.Size)           // output: 0
 
 	err := bfr.Close()
 
 	fmt.Println(err)                    // output: <nil>
-	fmt.Println(bfr.done)               // output: true
-	fmt.Println(bfr.clean)              // output: false
-	fmt.Println(bfr.sts.CheckSum != "") // output: true
+	fmt.Println(bfr.sts.Checksum != "") // output: true
 	fmt.Println(bfr.sts.Size)           // output: 20
 
 	// closing again has no effect
 	err = bfr.Close()
 
 	fmt.Println(err)                    // output: <nil>
-	fmt.Println(bfr.done)               // output: true
-	fmt.Println(bfr.clean)              // output: false
-	fmt.Println(bfr.sts.CheckSum != "") // output: true
+	fmt.Println(bfr.sts.Checksum != "") // output: true
 	fmt.Println(bfr.sts.Size)           // output: 20
 
 	// Output:
-	// false
-	// false
 	// true
 	// 0
 	// <nil>
 	// true
-	// false
-	// true
 	// 20
 	// <nil>
-	// true
-	// false
 	// true
 	// 20
 }
@@ -879,7 +577,7 @@ func ExampleBuffer_CloseChecksum() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.CheckSum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(bfr.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
 
 	// Output:
 	// 54f30d75cf7374c7e524a4530dbc93c2
@@ -899,7 +597,7 @@ func ExampleBuffer_CloseChecksumCompressed() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.CheckSum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(bfr.sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
 
 	// Output:
 	// 42e649f9834028184ec21940d13a300f
@@ -921,7 +619,7 @@ func ExampleBuffer_CloseChecksumTmpFile() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.CheckSum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(bfr.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
 
 	os.Remove(bfr.sts.Path) // cleanup tmp file
 	os.Remove("./tmp")      // remove dir
@@ -947,51 +645,13 @@ func ExampleBuffer_CloseChecksumTmpFileCompressed() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.CheckSum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(bfr.sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
 
 	os.Remove(bfr.sts.Path) // cleanup tmp file
 	os.Remove("./tmp")      // remove dir
 
 	// Output:
 	// 42e649f9834028184ec21940d13a300f
-}
-
-func ExampleBuffer_CloseThenAbort() {
-	opt := NewOptions()
-	opt.Compress = true
-	bfr, _ := NewBuffer(opt)
-	if bfr == nil {
-		return
-	}
-
-	// write first
-	bfr.WriteLine([]byte("test line"))
-	bfr.WriteLine([]byte("test line"))
-
-	fmt.Println(bfr.done)  // output: false
-	fmt.Println(bfr.clean) // output: false
-	err := bfr.Close()
-
-	fmt.Println(err)       // output: <nil>
-	fmt.Println(bfr.done)  // output: true
-	fmt.Println(bfr.clean) // output: false
-
-	// abort after close has no effect
-	err = bfr.Abort()
-
-	fmt.Println(err)       // output: <nil>
-	fmt.Println(bfr.done)  // output: true
-	fmt.Println(bfr.clean) // output: false
-
-	// Output:
-	// false
-	// false
-	// <nil>
-	// true
-	// false
-	// <nil>
-	// true
-	// false
 }
 
 func ExampleSizeWriter() {

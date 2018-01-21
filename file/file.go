@@ -30,8 +30,8 @@ type StatsReadCloser interface {
 	// A call to ReadLine after Close has undefined behavior.
 	ReadLine() ([]byte, error)
 
-	// Stats returns an instance of Stat.
-	Stats() stat.Stat
+	// Stats returns an instance of Stats.
+	Stats() stat.Stats
 }
 
 // StatsWriteCloser is a io.WriteCloser that also provides
@@ -60,14 +60,14 @@ type StatsWriteCloser interface {
 	WriteLine([]byte) error
 
 	// Stats returns the file stats. Safe to call any time.
-	Stats() stat.Stat
+	Stats() stat.Stats
 
 	// Abort can be called anytime before or during a call
 	// to Close. Will block until abort cleanup is complete.
 	Abort() error
 }
 
-func NewStatsReader(pth string, opt *Options) (r StatsReadCloser, err error) {
+func NewReader(pth string, opt *Options) (r StatsReadCloser, err error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
@@ -83,7 +83,9 @@ func NewStatsReader(pth string, opt *Options) (r StatsReadCloser, err error) {
 		secretKey := opt.AWSSecretKey
 		r, err = s3.NewReader(pth, accessKey, secretKey)
 	case "nop":
-		r = nop.NewReader(pth)
+		r, err = nop.NewReader(pth)
+	case "local":
+		fallthrough
 	default:
 		r, err = local.NewReader(pth)
 	}
@@ -91,7 +93,7 @@ func NewStatsReader(pth string, opt *Options) (r StatsReadCloser, err error) {
 	return
 }
 
-func NewStatsWriter(pth string, opt *Options) (w StatsWriteCloser, err error) {
+func NewWriter(pth string, opt *Options) (w StatsWriteCloser, err error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
@@ -108,7 +110,9 @@ func NewStatsWriter(pth string, opt *Options) (w StatsWriteCloser, err error) {
 		s3Opts := S3Options(*opt)
 		w, err = s3.NewWriter(pth, accessKey, secretKey, &s3Opts)
 	case "nop":
-		w = nop.NewWriter(pth)
+		w, err = nop.NewWriter(pth)
+	case "local":
+		fallthrough
 	default:
 		localOpts := LocalOptions(*opt)
 		w, err = local.NewWriter(pth, &localOpts)
@@ -124,8 +128,8 @@ func NewOptions() *Options {
 // Options presents general options across all stats readers and
 // writers.
 type Options struct {
-	AWSSecretKey string
 	AWSAccessKey string
+	AWSSecretKey string
 
 	// UseFileBuf specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name
@@ -153,8 +157,8 @@ func S3Options(opt Options) s3.Options {
 
 func LocalOptions(opt Options) local.Options {
 	localOpts := local.NewOptions()
-	localOpts.UseTmpFile = opt.UseFileBuf
-	localOpts.TmpDir = opt.FileBufDir
-	localOpts.TmpPrefix = opt.FileBufPrefix
+	localOpts.UseFileBuf = opt.UseFileBuf
+	localOpts.FileBufDir = opt.FileBufDir
+	localOpts.FileBufPrefix = opt.FileBufPrefix
 	return *localOpts
 }

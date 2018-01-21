@@ -22,7 +22,7 @@ type Job struct {
 }
 
 func (j *Job) Run() {
-	tskValue := tmpl.FmtTemplate(j.TaskTemplate, offsetDate(j.HourOffset))
+	tskValue := tmpl.Parse(j.TaskTemplate, offsetDate(j.HourOffset))
 	tsk := task.New(j.TaskType, tskValue)
 	topic := j.TaskType
 	if j.Topic != "" {

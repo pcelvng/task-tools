@@ -243,7 +243,7 @@ func ExampleReader_Stats() {
 	r.sts.ByteCnt = 100
 	r.sts.Created = "created date"
 	r.sts.Size = 200
-	r.sts.CheckSum = "checksum"
+	r.sts.Checksum = "checksum"
 
 	sts := r.Stats()
 	fmt.Println(sts.Path)     // output: nop://file.txt
@@ -251,7 +251,7 @@ func ExampleReader_Stats() {
 	fmt.Println(sts.ByteCnt)  // output: 100
 	fmt.Println(sts.Created)  // output: created date
 	fmt.Println(sts.Size)     // output: 200
-	fmt.Println(sts.CheckSum) // output: checksum
+	fmt.Println(sts.Checksum) // output: checksum
 
 	// Output:
 	// nop://file.txt

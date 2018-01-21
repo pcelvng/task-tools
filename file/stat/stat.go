@@ -9,19 +9,19 @@ import (
 	"time"
 )
 
-func New() Stat {
-	return Stat{}
+func New() Stats {
+	return Stats{}
 }
 
-// NewFromBytes creates Stat from
+// NewFromBytes creates Stats from
 // json bytes.
-func NewFromBytes(b []byte) Stat {
+func NewFromBytes(b []byte) Stats {
 	sts := New()
 	json.Unmarshal(b, &sts)
 	return sts
 }
 
-type Stat struct {
+type Stats struct {
 	// LineCnt returns the file line count.
 	LineCnt int64 `json:"linecnt"`
 
@@ -32,7 +32,7 @@ type Stat struct {
 	Size int64 `json:"size"`
 
 	// Checksum returns the base64 encoded string of the file md5 hash.
-	CheckSum string `json:"checksum"`
+	Checksum string `json:"checksum"`
 
 	// Path returns the full absolute path of the file.
 	Path string `json:"path"`
@@ -46,30 +46,30 @@ type Stat struct {
 
 // AddLine will atomically and safely increment
 // LineCnt by one.
-func (s *Stat) AddLine() {
+func (s *Stats) AddLine() {
 	atomic.AddInt64(&s.LineCnt, 1)
 }
 
 // AddBytes will atomically and safely increment
 // ByteCnt by 'cnt'.
-func (s *Stat) AddBytes(cnt int64) {
+func (s *Stats) AddBytes(cnt int64) {
 	atomic.AddInt64(&s.ByteCnt, cnt)
 }
 
-// SetCheckSum will correctly calculate and set the
+// SetChecksum will correctly calculate and set the
 // base64 encoded checksum.
-func (s *Stat) SetCheckSum(hsh hash.Hash) {
+func (s *Stats) SetChecksum(hsh hash.Hash) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.CheckSum = hex.EncodeToString(hsh.Sum(nil))
+	s.Checksum = hex.EncodeToString(hsh.Sum(nil))
 }
 
-func (s *Stat) SetSize(size int64) {
+func (s *Stats) SetSize(size int64) {
 	curSize := atomic.LoadInt64(&s.Size)
 	atomic.CompareAndSwapInt64(&s.Size, curSize, size)
 }
 
-func (s *Stat) SetPath(pth string) {
+func (s *Stats) SetPath(pth string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -78,7 +78,7 @@ func (s *Stat) SetPath(pth string) {
 
 // SetCreated will set the Created field in the
 // format time.RFC3339.
-func (s *Stat) SetCreated(t time.Time) {
+func (s *Stats) SetCreated(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -90,17 +90,17 @@ func (s *Stat) SetCreated(t time.Time) {
 // ParseCreated expects the Created time string is in
 // time.RFC3339. If there is a parse error
 // then the time.Time zero value is returned.
-func (s *Stat) ParseCreated() time.Time {
+func (s *Stats) ParseCreated() time.Time {
 	t, _ := time.Parse(time.RFC3339, s.Created)
 	return t
 }
 
-func (s *Stat) JSONBytes() []byte {
+func (s *Stats) JSONBytes() []byte {
 	b, _ := json.Marshal(s)
 	return b
 }
 
-func (s *Stat) JSONString() string {
+func (s *Stats) JSONString() string {
 	return string(s.JSONBytes())
 }
 
@@ -108,11 +108,11 @@ func (s *Stat) JSONString() string {
 // race conditions. Use Clone if you are updating and
 // reading from stats at the same time. Read from the
 // clone.
-func (s *Stat) Clone() Stat {
+func (s *Stats) Clone() Stats {
 	clone := New()
 
 	s.mu.Lock()
-	clone.CheckSum = s.CheckSum
+	clone.Checksum = s.Checksum
 	clone.Path = s.Path
 	clone.Created = s.Created
 	s.mu.Unlock()

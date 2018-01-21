@@ -71,7 +71,7 @@ type Reader struct {
 	rGzip *gzip.Reader
 	rHshr *util.HashReader
 
-	sts    stat.Stat
+	sts    stat.Stats
 	closed bool
 }
 
@@ -98,7 +98,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (r *Reader) Stats() stat.Stat {
+func (r *Reader) Stats() stat.Stats {
 	return r.sts.Clone()
 }
 
@@ -113,7 +113,7 @@ func (r *Reader) Close() (err error) {
 	err = r.s3Obj.Close()
 
 	// calculate checksum
-	r.sts.SetCheckSum(r.rHshr.Hshr)
+	r.sts.SetChecksum(r.rHshr.Hshr)
 
 	r.closed = true
 	return err

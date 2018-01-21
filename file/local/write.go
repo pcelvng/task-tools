@@ -7,7 +7,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
@@ -70,11 +69,8 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 
 type Writer struct {
 	bfr    *buf.Buffer
-	sts    stat.Stat
+	sts    stat.Stats
 	tmpPth string
-
-	done bool
-	mu   sync.Mutex
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
@@ -85,7 +81,7 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 	return w.bfr.WriteLine(ln)
 }
 
-func (w *Writer) Stats() stat.Stat {
+func (w *Writer) Stats() stat.Stats {
 	sts := w.bfr.Stats()
 	sts.Path = w.sts.Path
 	sts.Created = w.sts.Created
@@ -97,13 +93,6 @@ func (w *Writer) Stats() stat.Stat {
 // - clear and close buffer
 // - prevent further writing
 func (w *Writer) Abort() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if w.done {
-		return nil
-	}
-	w.done = true
 	return w.bfr.Abort()
 }
 
@@ -119,14 +108,6 @@ func (w *Writer) Abort() error {
 // Writing after Close will not write and will
 // not return a nil-error.
 func (w *Writer) Close() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if w.done {
-		return nil
-	}
-	w.done = true
-
 	// close buffer to finalize writes
 	// and copy contents to final
 	// location.

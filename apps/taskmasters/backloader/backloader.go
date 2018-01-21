@@ -57,7 +57,7 @@ func (bl *Backloader) Backload() (int, error) {
 		// check if current hour is eligible
 		if onHours[atHour.Hour()] && checkEvery(startHour, atHour, bl.config.EveryXHours) {
 			// task value
-			tskValue := tmpl.FmtTemplate(bl.config.TaskTemplate, atHour)
+			tskValue := tmpl.Parse(bl.config.TaskTemplate, atHour)
 
 			// create task
 			tsk := task.New(bl.config.TaskType, tskValue)

@@ -54,7 +54,7 @@ func NewWriter(pth string) (*Writer, error) {
 
 // Writer is a no-operation writer useful for testing.
 type Writer struct {
-	sts stat.Stat
+	sts stat.Stats
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
@@ -76,7 +76,7 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 	return nil
 }
 
-func (w *Writer) Stats() stat.Stat {
+func (w *Writer) Stats() stat.Stats {
 	return w.sts.Clone()
 }
 

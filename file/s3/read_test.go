@@ -262,7 +262,7 @@ func ExampleReader_Close() {
 	fmt.Println(err)          // output: <nil>
 	fmt.Println(sts.ByteCnt)  // output: 20
 	fmt.Println(sts.LineCnt)  // output: 2
-	fmt.Println(sts.CheckSum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
 
 	// Output:
 	// <nil>
@@ -287,7 +287,7 @@ func ExampleReader_CloseCompressed() {
 	fmt.Println(err)          // output: <nil>
 	fmt.Println(sts.ByteCnt)  // output: 20
 	fmt.Println(sts.LineCnt)  // output: 2
-	fmt.Println(sts.CheckSum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
 
 	// Output:
 	// <nil>
@@ -314,7 +314,7 @@ func ExampleReader_CloseandClose() {
 	fmt.Println(err2)         // output: <nil>
 	fmt.Println(sts.ByteCnt)  // output: 20
 	fmt.Println(sts.LineCnt)  // output: 2
-	fmt.Println(sts.CheckSum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
 
 	// Output:
 	// <nil>

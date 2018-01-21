@@ -12,7 +12,7 @@ func ExampleNew() {
 	fmt.Println(sts.LineCnt)  // output: 0
 	fmt.Println(sts.ByteCnt)  // output: 0
 	fmt.Println(sts.Size)     // output: 0
-	fmt.Println(sts.CheckSum) // output:
+	fmt.Println(sts.Checksum) // output:
 	fmt.Println(sts.Path)     // output:
 	fmt.Println(sts.Created)  // output:
 
@@ -30,7 +30,7 @@ func ExampleNewFromBytes() {
 	fmt.Println(sts.LineCnt)  // output: 10
 	fmt.Println(sts.ByteCnt)  // output: 100
 	fmt.Println(sts.Size)     // output: 200
-	fmt.Println(sts.CheckSum) // output: test checksum
+	fmt.Println(sts.Checksum) // output: test checksum
 	fmt.Println(sts.Path)     // output: test path
 	fmt.Println(sts.Created)  // output: test created
 
@@ -75,9 +75,9 @@ func ExampleStat_SetChecksum() {
 	// checksum
 	hsh := md5.New()
 	hsh.Write([]byte("test message"))
-	sts.SetCheckSum(hsh)
+	sts.SetChecksum(hsh)
 
-	fmt.Println(sts.CheckSum) // output: c72b9698fa1927e1dd12d3cf26ed84b2
+	fmt.Println(sts.Checksum) // output: c72b9698fa1927e1dd12d3cf26ed84b2
 	// Output:
 	// c72b9698fa1927e1dd12d3cf26ed84b2
 }
@@ -132,7 +132,7 @@ func ExampleStat_Clone() {
 	sts.LineCnt = 1
 	sts.ByteCnt = 2
 	sts.Size = 3
-	sts.CheckSum = "4"
+	sts.Checksum = "4"
 	sts.Path = "5"
 	sts.Created = "6"
 
@@ -140,7 +140,7 @@ func ExampleStat_Clone() {
 	fmt.Println(cln.LineCnt)
 	fmt.Println(cln.ByteCnt)
 	fmt.Println(cln.Size)
-	fmt.Println(cln.CheckSum)
+	fmt.Println(cln.Checksum)
 	fmt.Println(cln.Path)
 	fmt.Println(cln.Created)
 
@@ -158,7 +158,7 @@ func ExampleStat_JSONBytes() {
 	sts.LineCnt = 10
 	sts.ByteCnt = 100
 	sts.Size = 200
-	sts.CheckSum = "test checksum"
+	sts.Checksum = "test checksum"
 	sts.Path = "test path"
 	sts.Created = "test created"
 
@@ -174,7 +174,7 @@ func ExampleStat_JSONString() {
 	sts.LineCnt = 10
 	sts.ByteCnt = 100
 	sts.Size = 200
-	sts.CheckSum = "test checksum"
+	sts.Checksum = "test checksum"
 	sts.Path = "test path"
 	sts.Created = "test created"
 
@@ -212,7 +212,7 @@ func BenchmarkTemplateParallel(b *testing.B) {
 			sts.AddLine()
 			sts.AddBytes(100)
 			sts.SetSize(50)
-			sts.SetCheckSum(hsh)
+			sts.SetChecksum(hsh)
 			sts.SetPath("./test/path.txt")
 			sts.SetPath("./tests/path.txt")
 			_ = sts.Clone()

@@ -130,12 +130,8 @@ type Buffer struct {
 	r     io.Reader     // underlying buffer (for reading)
 	hshr  hash.Hash
 
-	sts stat.Stat
-
-	done  bool // set to true if Close or Abort is called
-	clean bool // set to true after calling Cleanup to prevent reading.
-	mu    sync.Mutex
-	rMu   sync.Mutex
+	sts stat.Stats
+	mu  sync.Mutex // safe concurrent writing
 }
 
 // Read will read the raw underlying buffer bytes.
@@ -148,27 +144,17 @@ type Buffer struct {
 // sync the underlying buffer. This is especially
 // important when using compression and/or a tmp file.
 func (bfr *Buffer) Read(p []byte) (n int, err error) {
-	bfr.rMu.Lock()
-	defer bfr.rMu.Unlock()
-
-	// return EOF if the buffer has been cleaned out
-	if bfr.clean {
-		return 0, io.EOF
-	}
-
 	return bfr.r.Read(p)
 }
 
 // Write will write to the underlying buffer. The underlying
 // bytes writing will be compressed if compression was
 // specified on buffer initialization.
+//
+// Write is thread safe.
 func (bfr *Buffer) Write(p []byte) (n int, err error) {
 	bfr.mu.Lock()
 	defer bfr.mu.Unlock()
-
-	if bfr.done == true {
-		return 0, nil
-	}
 
 	// will write to:
 	// - gzipper (if compression == true)
@@ -181,6 +167,11 @@ func (bfr *Buffer) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
+// Write will write to the underlying buffer. The underlying
+// bytes writing will be compressed if compression was
+// specified on buffer initialization.
+//
+// WriteLine is thread safe.
 func (bfr *Buffer) WriteLine(ln []byte) (err error) {
 	var n int
 	n, err = bfr.Write(append(ln, '\n'))
@@ -192,21 +183,13 @@ func (bfr *Buffer) WriteLine(ln []byte) (err error) {
 	return err
 }
 
-func (bfr *Buffer) Stats() stat.Stat {
+func (bfr *Buffer) Stats() stat.Stats {
 	return bfr.sts.Clone()
 }
 
 // Abort will clear the buffer (remove tmp file if exists)
 // and prevent further buffer writes.
 func (bfr *Buffer) Abort() (err error) {
-	bfr.mu.Lock()
-	defer bfr.mu.Unlock()
-
-	if bfr.done {
-		return nil
-	}
-	bfr.done = true
-
 	// flush gzip writer (if exists)
 	if bfr.wGzip != nil {
 		bfr.wGzip.Close()
@@ -231,13 +214,6 @@ func (bfr *Buffer) Abort() (err error) {
 // if using compression since Close flushes the
 // compression buffer and finalizes writing.
 func (bfr *Buffer) Cleanup() (err error) {
-	bfr.rMu.Lock()
-	defer bfr.rMu.Unlock()
-
-	if bfr.clean {
-		return nil
-	}
-
 	// cleanup bytes buffer (if used)
 	if bfr.bBuf != nil {
 		// reset still retains underlying slice
@@ -254,9 +230,6 @@ func (bfr *Buffer) Cleanup() (err error) {
 		// rm tmp file
 		err = util.RmTmp(bfr.sts.Path)
 	}
-
-	bfr.clean = true
-
 	return err
 }
 
@@ -264,14 +237,6 @@ func (bfr *Buffer) Cleanup() (err error) {
 // and flushes writes to the underlying
 // buffer.
 func (bfr *Buffer) Close() (err error) {
-	bfr.mu.Lock()
-	defer bfr.mu.Unlock()
-
-	if bfr.done {
-		return nil
-	}
-	bfr.done = true
-
 	// flush gzip writer (if exists)
 	if bfr.wGzip != nil {
 		err = bfr.wGzip.Close()
@@ -284,7 +249,7 @@ func (bfr *Buffer) Close() (err error) {
 	}
 
 	// set checksum, size
-	bfr.sts.SetCheckSum(bfr.hshr)
+	bfr.sts.SetChecksum(bfr.hshr)
 	bfr.sts.SetSize(bfr.wSize.Size())
 
 	return err

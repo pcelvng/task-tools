@@ -71,8 +71,8 @@ func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, 
 type Writer struct {
 	s3Client *minio.Client
 	bfr      *buf.Buffer
-	sts      stat.Stat
-	objSts   stat.Stat // stats as reported by s3
+	sts      stat.Stats
+	objSts   stat.Stats // stats as reported by s3
 
 	tmpPth string
 	bucket string // destination s3 bucket
@@ -90,7 +90,7 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 	return w.bfr.WriteLine(ln)
 }
 
-func (w *Writer) Stats() stat.Stat {
+func (w *Writer) Stats() stat.Stats {
 	sts := w.bfr.Stats()
 	sts.Path = w.sts.Path
 	sts.Created = w.sts.Created
@@ -152,12 +152,12 @@ func (w *Writer) Close() error {
 
 	// compare checksums
 	bfrSts := w.bfr.Stats()
-	if bfrSts.CheckSum != w.objSts.CheckSum {
+	if bfrSts.Checksum != w.objSts.Checksum {
 		msg := fmt.Sprintf(
 			"cp: %v '%v' vs '%v' checksum mismatch",
 			w.sts.Path,
-			bfrSts.CheckSum,
-			w.objSts.CheckSum,
+			bfrSts.Checksum,
+			w.objSts.Checksum,
 		)
 		w.bfr.Cleanup()
 		return errors.New(msg)
@@ -218,7 +218,7 @@ func (w *Writer) setObjSts() error {
 	}
 
 	w.objSts.SetCreated(objInfo.LastModified)
-	w.objSts.CheckSum = objInfo.ETag
+	w.objSts.Checksum = objInfo.ETag
 	w.objSts.SetPath(objInfo.Key)
 	w.objSts.SetSize(objInfo.Size)
 

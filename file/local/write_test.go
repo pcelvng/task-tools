@@ -160,18 +160,14 @@ func ExampleWriter_Abort() {
 	if w == nil {
 		return
 	}
-	fmt.Println(w.done) // output: false
 	err := w.Abort()
 
-	fmt.Println(err)    // output: <nil>
-	fmt.Println(w.done) // output: true
+	fmt.Println(err) // output: <nil>
 
 	os.Remove("./test") // cleanup test dir
 
 	// Output:
-	// false
 	// <nil>
-	// true
 }
 
 func ExampleWriter_Close() {
@@ -197,9 +193,8 @@ func ExampleWriter_Close() {
 
 	fmt.Println(err)               // output: <nil>
 	fmt.Println(sts.Created != "") // output: true
-	fmt.Println(sts.CheckSum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(sts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(removed)           // output: true
-	fmt.Println(w.done)            // output: true
 
 	// cleanup
 	os.Remove("./test/tmp")
@@ -210,7 +205,6 @@ func ExampleWriter_Close() {
 	// <nil>
 	// true
 	// 54f30d75cf7374c7e524a4530dbc93c2
-	// true
 	// true
 }
 

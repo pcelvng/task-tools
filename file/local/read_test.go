@@ -299,7 +299,7 @@ func ExampleReader_Close() {
 	err := r.Close()
 
 	fmt.Println(err)            // output: <nil>
-	fmt.Println(r.sts.CheckSum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(r.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(r.closed)       // output: true
 
 	// cleanup
@@ -325,7 +325,7 @@ func ExampleReader_CloseGzip() {
 	err := r.Close()
 
 	fmt.Println(err)            // output: <nil>
-	fmt.Println(r.sts.CheckSum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(r.sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
 	fmt.Println(r.closed)       // output: true
 
 	// cleanup
@@ -352,7 +352,7 @@ func ExampleReader_CloseAndClose() {
 	err := r.Close()
 
 	fmt.Println(err)            // output: <nil>
-	fmt.Println(r.sts.CheckSum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(r.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(r.closed)       // output: true
 
 	// cleanup
