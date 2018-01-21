@@ -7,7 +7,7 @@ import (
 	"github.com/pcelvng/task"
 )
 
-var appOpt *options
+
 
 // infoOptions contains the parsed info values
 // of a task.

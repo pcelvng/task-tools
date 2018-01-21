@@ -30,6 +30,7 @@ var (
 	// if using a file buffer while writing.
 	fileBufPrefix = "sortbyhour_"
 	sigChan       = make(chan os.Signal, 1)
+	appOpt        options
 )
 
 func main() {
