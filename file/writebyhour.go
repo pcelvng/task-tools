@@ -17,16 +17,15 @@ var (
 	defaultDateFmt = time.RFC3339 // "2006-01-02T15:04:05Z07:00"
 )
 
-func NewWriteByHour(destTmpl string, extractDate DateExtractor, opt *Options) *WriteByHour {
+func NewWriteByHour(destTmpl string, opt *Options) *WriteByHour {
 	if opt == nil {
 		opt = NewOptions()
 	}
 
 	return &WriteByHour{
-		opt:         opt,
-		destTmpl:    destTmpl,
-		extractDate: extractDate,
-		writers:     make(map[string]StatsWriteCloser),
+		opt:      opt,
+		destTmpl: destTmpl,
+		writers:  make(map[string]StatsWriteCloser),
 	}
 }
 
@@ -39,9 +38,6 @@ type WriteByHour struct {
 	// Example:
 	// s3://bucket/base/dir/{YYYY}/{MM}/{DD}/{HH}/{TS}.txt
 	destTmpl string
-
-	// extractDate extracts the date from the line bytes
-	extractDate DateExtractor
 
 	// writers map key is the destination file path (parsed destTmpl)
 	writers map[string]StatsWriteCloser
@@ -59,13 +55,7 @@ type WriteByHour struct {
 // or if there is a problem extracting the date.
 //
 // Write order is not guaranteed.
-func (w *WriteByHour) WriteLine(ln []byte) (err error) {
-	// extract date
-	t, err := w.extractDate(ln)
-	if err != nil {
-		return err
-	}
-
+func (w *WriteByHour) WriteLine(ln []byte, t time.Time) (err error) {
 	// generate path
 	pth := tmpl.Parse(w.destTmpl, t)
 

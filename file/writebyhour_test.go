@@ -8,8 +8,7 @@ import (
 
 func ExampleNewWriteByHour() {
 	destTmpl := "./test/{HH}.csv"
-	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
@@ -26,8 +25,7 @@ func ExampleNewWriteByHour() {
 
 func ExampleNewWriteByHourJSON() {
 	destTmpl := "./test/{HH}.json"
-	jsonExtractor := JSONDateExtractor("dateField", "")
-	wBy := NewWriteByHour(destTmpl, jsonExtractor, nil)
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
@@ -47,13 +45,15 @@ func ExampleWriteByHour_WriteLine() {
 
 	destTmpl := "./test/{HH}.csv"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-02-03T16:05:06Z,test field")
+	t1, _ := csvExtractor(ln1)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	ln1 := []byte("2007-02-03T16:05:06Z,test field")
-	err := wBy.WriteLine(ln1)
+	err := wBy.WriteLine(ln1, t1)
 	if err != nil {
 		return
 	}
@@ -85,20 +85,24 @@ func ExampleWriteByHour_WriteLineMulti() {
 
 	destTmpl := "./test/{HH}.csv"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-03-04T16:05:06Z,test field")
+	ln2 := []byte("2007-04-05T17:05:06Z,test field")
+	ln3 := []byte("2007-03-04T16:05:06Z,test field") // same hour as ln1
+	t1, _ := csvExtractor(ln1)
+	t2, _ := csvExtractor(ln2)
+	t3, _ := csvExtractor(ln3)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	ln1 := []byte("2007-03-04T16:05:06Z,test field")
-	ln2 := []byte("2007-04-05T17:05:06Z,test field")
-	ln3 := []byte("2007-03-04T16:05:06Z,test field") // same hour as ln1
-	wBy.WriteLine(ln1)
-	err := wBy.WriteLine(ln2)
+	wBy.WriteLine(ln1, t1)
+	err := wBy.WriteLine(ln2, t2)
 	if err != nil {
 		return
 	}
-	err = wBy.WriteLine(ln3)
+	err = wBy.WriteLine(ln3, t3)
 	if err != nil {
 		return
 	}
@@ -141,40 +145,20 @@ func ExampleWriteByHour_WriteLineMulti() {
 	// 3
 }
 
-func ExampleWriteByHour_WriteLineErrExtractDate() {
-	os.Setenv("TZ", "UTC")
-
-	destTmpl := "nop://{HH}.csv"
-	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
-	if wBy == nil {
-		return
-	}
-
-	ln1 := []byte("not date,test field")
-	err := wBy.WriteLine(ln1)
-
-	fmt.Println(err) // output: parsing time "not date" as "2006-01-02T15:04:05Z07:00": cannot parse "not date" as "2006"
-
-	// cleanup
-	os.Unsetenv("TZ")
-
-	// Output:
-	// parsing time "not date" as "2006-01-02T15:04:05Z07:00": cannot parse "not date" as "2006"
-}
-
 func ExampleWriteByHour_WriteLineErrNewWriter() {
 	os.Setenv("TZ", "UTC")
 
 	destTmpl := "nop://init_err/"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-02-03T16:05:06Z,test field")
+	t, _ := csvExtractor(ln1)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	ln1 := []byte("2007-02-03T16:05:06Z,test field")
-	err := wBy.WriteLine(ln1)
+	err := wBy.WriteLine(ln1, t)
 
 	fmt.Println(err) // output: init_err
 
@@ -190,13 +174,15 @@ func ExampleWriteByHour_WriteLineErrWriteLine() {
 
 	destTmpl := "nop://writeline_err/"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-02-03T16:05:06Z,test field")
+	t, _ := csvExtractor(ln1)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	ln1 := []byte("2007-02-03T16:05:06Z,test field")
-	err := wBy.WriteLine(ln1)
+	err := wBy.WriteLine(ln1, t)
 
 	fmt.Println(err) // output: writeline_err
 
@@ -212,13 +198,15 @@ func ExampleWriteByHour_LineCnt() {
 
 	destTmpl := "./test/{HH}.csv"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln := []byte("2007-02-03T16:05:06Z,test field")
+	t, _ := csvExtractor(ln)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	ln := []byte("2007-02-03T16:05:06Z,test field")
-	wBy.WriteLine(ln)
+	wBy.WriteLine(ln, t)
 
 	fmt.Println(wBy.LineCnt()) // output: 1
 
@@ -235,14 +223,21 @@ func ExampleWriteByHour_Stats() {
 
 	destTmpl := "./test/{HH}.csv"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-02-03T16:05:06Z,test field")
+	ln2 := []byte("2007-02-03T17:05:06Z,test field")
+	ln3 := []byte("2007-02-03T18:05:06Z,test field")
+	t1, _ := csvExtractor(ln1)
+	t2, _ := csvExtractor(ln2)
+	t3, _ := csvExtractor(ln3)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	wBy.WriteLine([]byte("2007-02-03T16:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T17:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T18:05:06Z,test field"))
+	wBy.WriteLine(ln1, t1)
+	wBy.WriteLine(ln2, t2)
+	wBy.WriteLine(ln3, t3)
 	allSts := wBy.Stats()
 
 	for _, sts := range allSts {
@@ -270,14 +265,21 @@ func ExampleWriteByHour_Abort() {
 
 	destTmpl := "./test/{HH}.csv"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-02-03T16:05:06Z,test field")
+	ln2 := []byte("2007-02-03T17:05:06Z,test field")
+	ln3 := []byte("2007-02-03T18:05:06Z,test field")
+	t1, _ := csvExtractor(ln1)
+	t2, _ := csvExtractor(ln2)
+	t3, _ := csvExtractor(ln3)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	wBy.WriteLine([]byte("2007-02-03T16:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T17:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T18:05:06Z,test field"))
+	wBy.WriteLine(ln1, t1)
+	wBy.WriteLine(ln2, t2)
+	wBy.WriteLine(ln3, t3)
 	err := wBy.Abort()
 
 	fmt.Println(err) // output: <nil>
@@ -293,16 +295,23 @@ func ExampleWriteByHour_Abort() {
 func ExampleWriteByHour_AbortErr() {
 	os.Setenv("TZ", "UTC")
 
-	destTmpl := "nop://abort_err/"
+	destTmpl := "nop://abort_err/" // simulate err on abort
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-02-03T16:05:06Z,test field")
+	ln2 := []byte("2007-02-03T17:05:06Z,test field")
+	ln3 := []byte("2007-02-03T18:05:06Z,test field")
+	t1, _ := csvExtractor(ln1)
+	t2, _ := csvExtractor(ln2)
+	t3, _ := csvExtractor(ln3)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	wBy.WriteLine([]byte("2007-02-03T16:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T17:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T18:05:06Z,test field"))
+	wBy.WriteLine(ln1, t1)
+	wBy.WriteLine(ln2, t2)
+	wBy.WriteLine(ln3, t3)
 	err := wBy.Abort()
 
 	fmt.Println(err) // output: abort_err
@@ -319,14 +328,21 @@ func ExampleWriteByHour_CloseErr() {
 
 	destTmpl := "nop://close_err/{HH}.txt"
 	csvExtractor := CSVDateExtractor("", "", 0)
-	wBy := NewWriteByHour(destTmpl, csvExtractor, nil)
+	ln1 := []byte("2007-02-03T16:05:06Z,test field")
+	ln2 := []byte("2007-02-03T17:05:06Z,test field")
+	ln3 := []byte("2007-02-03T18:05:06Z,test field")
+	t1, _ := csvExtractor(ln1)
+	t2, _ := csvExtractor(ln2)
+	t3, _ := csvExtractor(ln3)
+
+	wBy := NewWriteByHour(destTmpl, nil)
 	if wBy == nil {
 		return
 	}
 
-	wBy.WriteLine([]byte("2007-02-03T16:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T17:05:06Z,test field"))
-	wBy.WriteLine([]byte("2007-02-03T18:05:06Z,test field"))
+	wBy.WriteLine(ln1, t1)
+	wBy.WriteLine(ln2, t2)
+	wBy.WriteLine(ln3, t3)
 	err := wBy.Close()
 
 	fmt.Println(err) // output: close_err
