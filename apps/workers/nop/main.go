@@ -9,28 +9,31 @@ import (
 	"github.com/pcelvng/task"
 )
 
-var sigChan = make(chan os.Signal, 1)
+var (
+	sigChan = make(chan os.Signal, 1)
+
+	// appOpt contains the application options
+	appOpt options
+)
 
 func main() {
-	err := run()
-	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+	if err := run(); err != nil {
+		log.Fatalln(err)
 	}
 }
 
 func run() error {
-	// signal handling - capture signal early.
+	// signal handling - be ready to capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	// config
-	config = LoadConfig()
-	if err := config.Validate(); err != nil {
+	// appOpt
+	loadAppOptions()
+	if err := appOpt.Validate(); err != nil {
 		return err
 	}
 
 	// launcher
-	l, err := task.NewLauncher(MakeWorker, config.LauncherOpt, config.BusOpt)
+	l, err := task.NewLauncher(MakeWorker, appOpt.LauncherOptions, appOpt.Options)
 	if err != nil {
 		return err
 	}

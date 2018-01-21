@@ -15,14 +15,14 @@ var (
 
 func NewConfig() *Config {
 	return &Config{
-		BusOpt:      bus.NewBusOpt(""),
+		Options:     bus.NewOptions(""),
 		DoneTopic:   defaultDoneTopic,
 		DoneChannel: defaultDoneChannel,
 	}
 }
 
 type Config struct {
-	*bus.BusOpt
+	*bus.Options
 
 	// topic and channel to listen to
 	// done tasks for retry review.

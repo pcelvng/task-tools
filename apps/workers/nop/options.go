@@ -30,36 +30,36 @@ var (
 	lifetimeMaxWorkers = flag.Int("lifetime-max-workers", 0, "maximum number of tasks that will be completed before the application will shut down. A value less than one sets no limit.")
 )
 
-func NewConfig() Config {
-	return Config{
-		LauncherOpt: task.NewLauncherOpt(),
-		BusOpt:      task.NewBusOpt(""),
+func newOptions() options {
+	return options{
+		LauncherOptions: task.NewLauncherOptions(),
+		Options:         task.NewBusOptions(""),
 	}
 }
 
-type Config struct {
-	*task.LauncherOpt               // launcher options
-	*bus.BusOpt                     // task message bus options
-	TaskType          string        // will be used as the default topic and channel
-	Topic             string        // topic override (uses 'TaskType' if not provided)
-	Channel           string        // channel to listen for tasks of type TaskType
-	DoneTopic         string        // topic to return a done task
-	FailRate          int           // int between 0-100 representing a percent
-	Dur               time.Duration // how long the task will take to finish successfully
-	DurVariance       time.Duration // random adjustment to the Dur value
+type options struct {
+	*task.LauncherOptions               // launcher options
+	*bus.Options                        // task message bus options
+	TaskType              string        // will be used as the default topic and channel
+	Topic                 string        // topic override (uses 'TaskType' if not provided)
+	Channel               string        // channel to listen for tasks of type TaskType
+	DoneTopic             string        // topic to return a done task
+	FailRate              int           // int between 0-100 representing a percent
+	Dur                   time.Duration // how long the task will take to finish successfully
+	DurVariance           time.Duration // random adjustment to the Dur value
 
 }
 
-// NsqdHostsString will set Config.NsqdHosts from a comma
+// NsqdHostsString will set Options.NsqdHosts from a comma
 // separated string of hosts.
-func (c *Config) NsqdHostsString(hosts string) {
+func (c *options) NsqdHostsString(hosts string) {
 	c.NsqdHosts = strings.Split(hosts, ",")
 }
 
 // DurString will parse the 'dur' string and attempt to
 // convert it to a duration using time.ParseDuration and assign
 // that value to c.Dur.
-func (c *Config) DurString(dur string) error {
+func (c *options) DurString(dur string) error {
 	d, err := time.ParseDuration(dur)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (c *Config) DurString(dur string) error {
 	return nil
 }
 
-func (c *Config) Validate() error {
+func (c *options) Validate() error {
 	// must have a task type
 	if c.TaskType == "" {
 		return errors.New("required: type flag")
@@ -81,7 +81,7 @@ func (c *Config) Validate() error {
 // DurVarianceString will parse the 'dur' string and attempt to
 // convert it to a duration using time.ParseDuration and assign
 // that value to c.DurVariance.
-func (c *Config) DurVarianceString(dur string) error {
+func (c *options) DurVarianceString(dur string) error {
 	d, err := time.ParseDuration(dur)
 	if err != nil {
 		return err
@@ -91,33 +91,36 @@ func (c *Config) DurVarianceString(dur string) error {
 	return nil
 }
 
-func LoadConfig() Config {
+// loadAppOptions loads the applications
+// options and sets those options to the
+// global appOpt variable.
+func loadAppOptions() {
 	flag.Parse()
 
 	// load config
-	c := NewConfig()
-	c.Bus = *tskBus
-	c.InBus = *inBus
-	c.OutBus = *outBus
-	c.InFile = *inFile
-	c.OutFile = *outFile
-	c.TaskType = *tskType
-	c.Topic = *tskType // default topic
+	opt := newOptions()
+	opt.Bus = *tskBus
+	opt.InBus = *inBus
+	opt.OutBus = *outBus
+	opt.InFile = *inFile
+	opt.OutFile = *outFile
+	opt.TaskType = *tskType
+	opt.Topic = *tskType // default topic
 	if *topic != "" {
-		c.Topic = *topic
+		opt.Topic = *topic
 	}
-	c.Channel = *tskType // default channel
+	opt.Channel = *tskType // default channel
 	if *channel != "" {
-		c.Channel = *channel
+		opt.Channel = *channel
 	}
-	c.DoneTopic = *doneTopic
-	c.FailRate = *failRate
-	c.NsqdHostsString(*nsqdHosts)
-	c.DurString(*dur)
-	c.DurVarianceString(*durVariance)
-	c.MaxInProgress = *maxInProgress
-	c.WorkerTimeout = *workerTimeout
-	c.LifetimeMaxWorkers = *lifetimeMaxWorkers
+	opt.DoneTopic = *doneTopic
+	opt.FailRate = *failRate
+	opt.NsqdHostsString(*nsqdHosts)
+	opt.DurString(*dur)
+	opt.DurVarianceString(*durVariance)
+	opt.MaxInProgress = *maxInProgress
+	opt.WorkerTimeout = *workerTimeout
+	opt.LifetimeMaxWorkers = *lifetimeMaxWorkers
 
-	return c
+	appOpt = opt
 }

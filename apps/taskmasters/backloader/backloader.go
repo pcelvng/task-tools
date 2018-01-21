@@ -17,7 +17,7 @@ func NewBackloader(conf *Config) (*Backloader, error) {
 	}
 
 	// create producer
-	p, err := bus.NewProducer(conf.BusOpt)
+	p, err := bus.NewProducer(conf.Options)
 	if err != nil {
 		return nil, err
 	}

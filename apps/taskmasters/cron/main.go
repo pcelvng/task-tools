@@ -30,7 +30,7 @@ func main() {
 	}
 
 	// make producer
-	p, err := bus.NewProducer(conf.BusOpt)
+	p, err := bus.NewProducer(conf.Options)
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)

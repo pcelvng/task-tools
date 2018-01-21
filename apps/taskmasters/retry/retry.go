@@ -16,17 +16,17 @@ func NewRetry(conf *Config) (*Retryer, error) {
 	}
 
 	// map over done topic and channel for consumer
-	conf.BusOpt.Topic = conf.DoneTopic
-	conf.BusOpt.Channel = conf.DoneChannel
+	conf.Options.Topic = conf.DoneTopic
+	conf.Options.Channel = conf.DoneChannel
 
 	// make consumer
-	c, err := bus.NewConsumer(conf.BusOpt)
+	c, err := bus.NewConsumer(conf.Options)
 	if err != nil {
 		return nil, err
 	}
 
 	// make producer
-	p, err := bus.NewProducer(conf.BusOpt)
+	p, err := bus.NewProducer(conf.Options)
 	if err != nil {
 		return nil, err
 	}

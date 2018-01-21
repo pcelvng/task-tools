@@ -33,12 +33,12 @@ var (
 
 func NewConfig() *Config {
 	return &Config{
-		BusOpt: bus.NewBusOpt(""),
+		Options: bus.NewOptions(""),
 	}
 }
 
 type Config struct {
-	*bus.BusOpt
+	*bus.Options
 
 	Start time.Time // start of backload
 	End   time.Time // end of backload

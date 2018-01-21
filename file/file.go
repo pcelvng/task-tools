@@ -67,6 +67,48 @@ type StatsWriteCloser interface {
 	Abort() error
 }
 
+func NewOptions() *Options {
+	return &Options{}
+}
+
+// Options presents general options across all stats readers and
+// writers.
+type Options struct {
+	AWSAccessKey string
+	AWSSecretKey string
+
+	// UseFileBuf specifies to use a tmp file for the delayed writing.
+	// Can optionally also specify the tmp directory and tmp name
+	// prefix.
+	UseFileBuf bool
+
+	// FileBufDir optionally specifies the temp directory. If not specified then
+	// the os default temp dir is used.
+	FileBufDir string
+
+	// FileBufPrefix optionally specifies the temp file prefix.
+	// The full tmp file name is randomly generated and guaranteed
+	// not to conflict with existing files. A prefix can help one find
+	// the tmp file.
+	FileBufPrefix string
+}
+
+func s3Options(opt Options) s3.Options {
+	s3Opts := s3.NewOptions()
+	s3Opts.UseFileBuf = opt.UseFileBuf
+	s3Opts.FileBufDir = opt.FileBufDir
+	s3Opts.FileBufPrefix = opt.FileBufPrefix
+	return *s3Opts
+}
+
+func localOptions(opt Options) local.Options {
+	localOpts := local.NewOptions()
+	localOpts.UseFileBuf = opt.UseFileBuf
+	localOpts.FileBufDir = opt.FileBufDir
+	localOpts.FileBufPrefix = opt.FileBufPrefix
+	return *localOpts
+}
+
 func NewReader(pth string, opt *Options) (r StatsReadCloser, err error) {
 	if opt == nil {
 		opt = NewOptions()
@@ -107,58 +149,16 @@ func NewWriter(pth string, opt *Options) (w StatsWriteCloser, err error) {
 	case "s3":
 		accessKey := opt.AWSAccessKey
 		secretKey := opt.AWSSecretKey
-		s3Opts := S3Options(*opt)
+		s3Opts := s3Options(*opt)
 		w, err = s3.NewWriter(pth, accessKey, secretKey, &s3Opts)
 	case "nop":
 		w, err = nop.NewWriter(pth)
 	case "local":
 		fallthrough
 	default:
-		localOpts := LocalOptions(*opt)
+		localOpts := localOptions(*opt)
 		w, err = local.NewWriter(pth, &localOpts)
 	}
 
 	return w, err
-}
-
-func NewOptions() *Options {
-	return &Options{}
-}
-
-// Options presents general options across all stats readers and
-// writers.
-type Options struct {
-	AWSAccessKey string
-	AWSSecretKey string
-
-	// UseFileBuf specifies to use a tmp file for the delayed writing.
-	// Can optionally also specify the tmp directory and tmp name
-	// prefix.
-	UseFileBuf bool
-
-	// FileBufDir optionally specifies the temp directory. If not specified then
-	// the os default temp dir is used.
-	FileBufDir string
-
-	// FileBufPrefix optionally specifies the temp file prefix.
-	// The full tmp file name is randomly generated and guaranteed
-	// not to conflict with existing files. A prefix can help one find
-	// the tmp file.
-	FileBufPrefix string
-}
-
-func S3Options(opt Options) s3.Options {
-	s3Opts := s3.NewOptions()
-	s3Opts.UseFileBuf = opt.UseFileBuf
-	s3Opts.FileBufDir = opt.FileBufDir
-	s3Opts.FileBufPrefix = opt.FileBufPrefix
-	return *s3Opts
-}
-
-func LocalOptions(opt Options) local.Options {
-	localOpts := local.NewOptions()
-	localOpts.UseFileBuf = opt.UseFileBuf
-	localOpts.FileBufDir = opt.FileBufDir
-	localOpts.FileBufPrefix = opt.FileBufPrefix
-	return *localOpts
 }
