@@ -21,7 +21,7 @@ type Worker struct {
 	data      map[string]string
 	ReadPath  string `uri:"origin"`
 	WritePath string
-	writer    file.StatsWriteCloser
+	writer    file.Writer
 	reader    io.ReadCloser
 }
 
@@ -44,15 +44,15 @@ func (c *Config) NewWorker(info string) task.Worker {
 
 	var err error
 	if err := uri2struct.Convert(w, info); err != nil {
-		return task.NewInvalidWorker("Error parsing info: %s", err)
+		return task.InvalidWorker("Error parsing info: %s", err)
 	}
 
-	if w.writer, err = file.NewStatsWriter(w.WritePath, nil); err != nil {
-		return task.NewInvalidWorker("invalid write path '%s'", w.WritePath)
+	if w.writer, err = file.NewWriter(w.WritePath, nil); err != nil {
+		return task.InvalidWorker("invalid write path '%s'", w.WritePath)
 	}
 
-	if w.reader, err = file.NewStatsReader(w.ReadPath, nil); err != nil {
-		return task.NewInvalidWorker("invalid read path '%s'", w.ReadPath)
+	if w.reader, err = file.NewReader(w.ReadPath, nil); err != nil {
+		return task.InvalidWorker("invalid read path '%s'", w.ReadPath)
 	}
 	return w
 }

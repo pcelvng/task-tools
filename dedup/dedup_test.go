@@ -16,7 +16,7 @@ func TestNewWorker(t *testing.T) {
 	}{
 		{
 			msg:  "Valid Worker",
-			info: "?Key=key&TimeField=time&ReadPath=/&WritePath=nop",
+			info: "?Key=key&TimeField=time&ReadPath=/&WritePath=nop://",
 		},
 		{
 			msg:       "Invalid Worker - Bad URI",
@@ -46,7 +46,7 @@ func TestNewWorker(t *testing.T) {
 }
 
 func ExampleWorker_DoTask() {
-	w := (&Config{}).NewWorker("?Key=field1,field2&TimeFile=timestamp&WritePath=nop")
+	w := (&Config{}).NewWorker("?Key=field1,field2&TimeFile=timestamp&WritePath=nop://")
 	r, s := w.DoTask(nil)
 	fmt.Println(r, s)
 	// Output: complete Lines written: 0

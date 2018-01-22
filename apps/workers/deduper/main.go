@@ -10,8 +10,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/dedup"
 	"github.com/pcelvng/task/bus"
+
+	"github.com/pcelvng/task-tools/dedup"
 )
 
 var filePath = flag.String("config", "", "file path for toml config file")
