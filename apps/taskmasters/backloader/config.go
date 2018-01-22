@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	tskType    = flag.String("type", "", "REQUIRED; the task type")
+	tskType     = flag.String("type", "", "REQUIRED; the task type")
 	t           = flag.String("t", "", "alias of 'type'")
 	at          = flag.String("at", "", "alias of 'from' flag")
 	from        = flag.String("from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
@@ -33,12 +33,12 @@ var (
 
 func NewConfig() *Config {
 	return &Config{
-		BusConfig: bus.NewBusConfig(""),
+		Options: bus.NewOptions(""),
 	}
 }
 
 type Config struct {
-	*bus.BusConfig
+	*bus.Options
 
 	Start time.Time // start of backload
 	End   time.Time // end of backload
@@ -52,10 +52,10 @@ type Config struct {
 	OffHours    []bool // each key represents the hour and bool is if that value is turned off.
 }
 
-// NsqdHostsString will set Config.NsqdHosts from a comma
+// nsqdHostsString will set Config.NsqdHosts from a comma
 // separated string of hosts.
 func (c *Config) NsqdHostsString(hosts string) {
-	c.NsqdHosts = strings.Split(hosts, ",")
+	c.NSQdHosts = strings.Split(hosts, ",")
 }
 
 // SetOnHours will parse onHours string and set

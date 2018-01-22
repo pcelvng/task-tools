@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
-	"github.com/pcelvng/task-tools"
 )
 
-func NewJob(r *Rule, p bus.Producer) *Job {
+func NewJob(r *Rule, p bus.ProducerBus) *Job {
 	return &Job{
 		Rule:     r,
 		producer: p,
@@ -18,18 +18,18 @@ func NewJob(r *Rule, p bus.Producer) *Job {
 
 type Job struct {
 	*Rule
-	producer bus.Producer
+	producer bus.ProducerBus
 }
 
 func (j *Job) Run() {
-	tskValue := tool.FmtTemplate(j.TaskTemplate, offsetDate(j.HourOffset))
+	tskValue := tmpl.Parse(j.TaskTemplate, offsetDate(j.HourOffset))
 	tsk := task.New(j.TaskType, tskValue)
 	topic := j.TaskType
 	if j.Topic != "" {
 		topic = j.Topic
 	}
 
-	b, err := tsk.Bytes()
+	b, err := tsk.JSONBytes()
 	if err != nil {
 		log.Printf("err creating json bytes: '%v'", err.Error())
 	}

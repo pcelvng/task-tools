@@ -7,39 +7,45 @@ import (
 	"syscall"
 )
 
+var sigChan = make(chan os.Signal, 1)
+
 func main() {
-	c, err := LoadConfig()
+	err := run()
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
 	}
+}
 
-	// create backloader
-	bl, err := NewBackloader(c)
+func run() error {
+	// signal handling - capture signal early.
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+	// app config
+	appConf, err := LoadConfig()
 	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+		return err
 	}
 
-	closeChan := make(chan os.Signal)
-	signal.Notify(closeChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	// backloader
+	bl, err := NewBackloader(appConf)
+	if err != nil {
+		return err
+	}
 
+	doneChan := make(chan error)
 	go func() {
-		cnt, err := bl.Backload()
-		log.Printf("loaded %v tasks\n", cnt)
-		if err != nil {
-			log.Println(err.Error())
-			os.Exit(1)
-		}
-		os.Exit(0)
+		_, err := bl.Backload()
+		doneChan <- err
 	}()
 
 	select {
-	case <-closeChan:
-		// close the backloader
+	case blErr := <-doneChan:
+		return blErr
+	case <-sigChan:
 		if err := bl.Stop(); err != nil {
-			log.Printf("err closing: '%v'\n", err.Error())
-			os.Exit(1)
+			return err
 		}
 	}
+	return nil
 }

@@ -1,19 +1,14 @@
 package local
 
 import (
-	"bytes"
-	"compress/gzip"
-	"crypto/md5"
 	"errors"
-	"hash"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 
+	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
@@ -38,179 +33,104 @@ import (
 // provided. The writer will remove a temp file with a call to Close.
 func NewWriter(pth string, opt *Options) (*Writer, error) {
 	if opt == nil {
-		opt = new(Options)
-	}
-
-	var hshr hash.Hash          // hasher
-	var buf io.ReadWriteCloser  // buffer
-	var w, wHshr io.WriteCloser // w=writer, wHshr=write hasher
-
-	// check perms - writing happens at the end
-	pth, err := checkFile(pth)
-	if err != nil {
-		return nil, err
-	}
-
-	// choose buffer
-	tmpPth := ""
-	if opt.UseTmpFile {
-		var fBuf *os.File // tmp file buffer
-		tmpPth, fBuf, err = openTmp(opt.TmpDir, opt.TmpPrefix)
-		buf = fBuf
-	} else {
-		var bBuf *closeBuf // bytes memory buffer
-		bBuf = &closeBuf{}
-		buf = bBuf
-	}
-
-	// md5 hasher
-	hshr = md5.New()
-
-	// hash write closer
-	wHshr = &nopClose{hshr}
-
-	// buf and hasher go in the same writer
-	// so that gzipping only needs to happen once.
-	// both underlying writers will get the same bytes.
-	writers := make([]io.WriteCloser, 2)
-	writers[0], writers[1] = buf, wHshr
-	w = &multiWriteCloser{writers}
-
-	// compression
-	if ext := filepath.Ext(pth); ext == ".gz" {
-		// file writer
-		w, _ = gzip.NewWriterLevel(w, gzip.BestSpeed)
+		opt = NewOptions()
 	}
 
 	// stats
 	sts := stat.New()
-	sts.Path = pth
+	pth, _ = filepath.Abs(pth)
+	sts.SetPath(pth)
+
+	// compression
+	if ext := filepath.Ext(pth); ext == ".gz" {
+		opt.Compress = true
+	}
+
+	// buffer
+	bfr, err := buf.NewBuffer(opt.Options)
+	if err != nil {
+		return nil, err
+	}
+	tmpPth := bfr.Stats().Path
+
+	// check file permissions
+	pth, err = checkFile(pth)
+	if err != nil {
+		return nil, err
+	}
 
 	// make writer
 	return &Writer{
-		buf:    buf,
-		w:      w,
-		hshr:   hshr,
-		wHshr:  wHshr,
-		tmpPth: tmpPth,
+		bfr:    bfr,
 		sts:    sts,
+		tmpPth: tmpPth,
 	}, nil
 }
 
 type Writer struct {
-	buf     io.ReadWriteCloser // buffer
-	w       io.WriteCloser     // write closer for active writes
-	wHshr   io.WriteCloser     // write closer for active hashing (close is needed to flush compression)
-	hshr    hash.Hash          // hasher
-	tmpPth  string             // tmp path (if used)
-	sts     stat.Stat
-	aborted bool
-	closed  bool
-	mu      sync.Mutex
+	bfr    *buf.Buffer
+	sts    stat.Stats
+	tmpPth string
+}
+
+func (w *Writer) Write(p []byte) (n int, err error) {
+	return w.bfr.Write(p)
 }
 
 func (w *Writer) WriteLine(ln []byte) (err error) {
-	_, err = w.Write(append(ln, '\n'))
-	if err == nil {
-		w.sts.AddLine()
-	}
-
-	return
+	return w.bfr.WriteLine(ln)
 }
 
-func (w *Writer) Write(p []byte) (int, error) {
-	n, err := w.w.Write(p)
-	w.sts.AddBytes(int64(n))
-	if err != nil {
-		return n, err
-	}
+func (w *Writer) Stats() stat.Stats {
+	sts := w.bfr.Stats()
+	sts.Path = w.sts.Path
+	sts.Created = w.sts.Created
 
-	return n, err
-}
-
-func (w *Writer) Stats() stat.Stat {
-	return w.sts.Clone()
+	return sts
 }
 
 // Abort will:
 // - clear and close buffer
-//
-// Calling Close after Abort will do nothing.
-// Writing after calling Abort has undefined behavior.
+// - prevent further writing
 func (w *Writer) Abort() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	// check if closed
-	if w.closed {
-		return nil
-	}
-	w.aborted = true
-
-	// close writers
-	w.w.Close()
-	w.wHshr.Close()
-
-	// close and clear underlying write buffer
-	// may or may not be the same Close method as w
-	// if using gzip. We want to make sure to close both
-	// to make sure to flush and sync everything to disk.
-	// underlying buffer may still need to be closed
-	w.buf.Close()
-	return rmTmp(w.tmpPth)
+	return w.bfr.Abort()
 }
 
 // Close will:
 // - calculate final checksum
+// - set file size
+// - set file created date
 // - copy (mv) buffer to pth file
 // - clear and close buffer
 // - report any errors
 //
 // Calling Abort after Close will do nothing.
-// Writing after calling Close has undefined behavior.
+// Writing after Close will not write and will
+// not return a nil-error.
 func (w *Writer) Close() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	// close buffer to finalize writes
+	// and copy contents to final
+	// location.
+	w.bfr.Close()
+	_, err := w.copyAndClean()
 
-	// check if aborted
-	if w.aborted {
-		return nil
-	}
-	w.closed = true
+	// set created date
+	w.sts.SetCreated(fileCreated(w.sts.Path))
 
-	// close writers
-	w.w.Close()
-	w.wHshr.Close()
-
-	// do copy
-	w.copy()
-
-	// set checksum, size
-	w.sts.SetCheckSum(w.hshr)
-	w.sts.SetSizeFromPath(w.sts.Path)
-
-	// underlying buffer may still need to be closed
-	w.buf.Close()
-	return rmTmp(w.tmpPth)
-}
-
-func rmTmp(tmpPth string) error {
-	if tmpPth == "" {
-		return nil
-	}
-
-	return os.Remove(tmpPth)
+	return err
 }
 
 // copy will copy the contents of buf
 // to the path indicated at pth.
 //
 // Returns num of bytes copied and error.
-func (w *Writer) copy() (n int64, err error) {
+func (w *Writer) copyAndClean() (n int64, err error) {
 	isDev := strings.HasPrefix(w.sts.Path, "/dev/")
 
 	// mv if using tmp file buffer.
 	// can't use rename for dev files.
+	// Note: tmp file buffer cleanup not necessary with
+	// a mv operation.
 	if w.tmpPth != "" && !isDev {
 		// rename will move via hard link if
 		// on the same file system (same partition).
@@ -218,31 +138,27 @@ func (w *Writer) copy() (n int64, err error) {
 		errMv := os.Rename(w.tmpPth, w.sts.Path)
 		fInfo, err := os.Stat(w.sts.Path)
 
-		// still attempt to get destination file size
+		// destination file size
 		if fInfo != nil {
 			n = fInfo.Size()
 		}
 
 		if errMv != nil {
+			// unable to mv so tmp file
+			// cleanup still necessary.
+			w.bfr.Cleanup()
 			return n, errMv
 		}
 		return n, err
 	}
 
-	// the tmp file buffer is already closed because
-	// we needed to make sure contents are flushed to disk.
-	if w.tmpPth != "" {
-		var err error
-		w.buf, err = os.Open(w.tmpPth)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// copy from mem or tmp file buffer
+	// byte by byte copy
 	_, f, _ := openF(w.sts.Path, false)
-	defer closeF(w.sts.Path, f)
-	return io.Copy(f, w.buf)
+	n, err = io.Copy(f, w.bfr)
+	closeF(w.sts.Path, f) // assure disk sync
+	w.bfr.Cleanup()
+
+	return n, err
 }
 
 // openF will open the pth file (in append mode if append = true)
@@ -314,22 +230,6 @@ func closeF(pth string, f *os.File) error {
 	return f.Close()
 }
 
-func openTmp(dir, prefix string) (absTmp string, f *os.File, err error) {
-	// normalize dir path
-	dir, _ = filepath.Abs(dir)
-
-	err = os.MkdirAll(dir, 0700)
-	if err != nil {
-		return absTmp, f, err
-	}
-
-	f, err = ioutil.TempFile(dir, prefix)
-	if f != nil {
-		absTmp, _ = filepath.Abs(f.Name())
-	}
-	return absTmp, f, err
-}
-
 // checkFile will check:
 // - is not dir
 // - can be opened
@@ -364,56 +264,4 @@ func checkFile(pth string) (string, error) {
 	}
 
 	return pth, errC
-}
-
-// closeBuf provides Close method
-// to make bytes.Buffer a ReadWriteCloser
-type closeBuf struct {
-	bytes.Buffer
-}
-
-func (b closeBuf) Close() error {
-	// if the buffer has been read until EOF
-	// then this is not necessary since Reset
-	// is called internally when it reaches
-	// EOF. However, if the the writer is aborted
-	// then close will cleanup the buffer.
-	b.Reset()
-	return nil
-}
-
-type nopClose struct {
-	io.Writer
-}
-
-func (wc *nopClose) Close() error {
-	return nil
-}
-
-type multiWriteCloser struct {
-	writers []io.WriteCloser
-}
-
-func (mw *multiWriteCloser) Write(p []byte) (n int, err error) {
-	for _, w := range mw.writers {
-		n, err = w.Write(p)
-		if err != nil {
-			return
-		}
-		if n != len(p) {
-			err = io.ErrShortWrite
-			return
-		}
-	}
-	return len(p), nil
-}
-
-func (mw *multiWriteCloser) Close() (err error) {
-	for _, w := range mw.writers {
-		wErr := w.Close()
-		if wErr != nil {
-			err = wErr
-		}
-	}
-	return err
 }

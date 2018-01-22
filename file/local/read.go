@@ -14,6 +14,8 @@ import (
 
 func NewReader(pth string) (*Reader, error) {
 	pth, _ = filepath.Abs(pth)
+
+	// open
 	f, err := os.Open(pth)
 	if err != nil {
 		return nil, err
@@ -40,7 +42,8 @@ func NewReader(pth string) (*Reader, error) {
 
 	sts := stat.New()
 	sts.SetPath(pth)
-	sts.SetSizeFromPath(sts.Path)
+	sts.SetSize(fileSize(sts.Path))
+	sts.SetCreated(fileCreated(sts.Path))
 
 	return &Reader{
 		f:     f,
@@ -57,13 +60,12 @@ type Reader struct {
 	rBuf     *bufio.Reader
 	rGzip    *gzip.Reader
 	rHshr    *hashReader
-	sts      stat.Stat
-	isClosed bool
+	sts      stat.Stats
+	closed bool
 }
 
 func (r *Reader) ReadLine() (ln []byte, err error) {
 	ln, err = r.rBuf.ReadBytes('\n')
-
 	if len(ln) > 0 {
 		r.sts.AddLine()
 
@@ -75,21 +77,21 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 			return ln[:len(ln)-1], err
 		}
 	}
-	return
+	return ln, err
 }
 
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.rBuf.Read(p)
 	r.sts.AddBytes(int64(n))
-	return
+	return n, err
 }
 
-func (r *Reader) Stats() stat.Stat {
+func (r *Reader) Stats() stat.Stats {
 	return r.sts.Clone()
 }
 
 func (r *Reader) Close() (err error) {
-	if r.isClosed {
+	if r.closed {
 		return nil
 	}
 
@@ -98,10 +100,10 @@ func (r *Reader) Close() (err error) {
 	}
 	err = r.f.Close()
 
-	// calculate final checksum
-	r.sts.SetCheckSum(r.rHshr.Hshr)
+	// calculate checksum
+	r.sts.SetChecksum(r.rHshr.Hshr)
 
-	r.isClosed = true
+	r.closed = true
 	return err
 }
 

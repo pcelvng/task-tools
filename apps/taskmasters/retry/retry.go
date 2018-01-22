@@ -10,23 +10,23 @@ import (
 	"github.com/pcelvng/task/bus"
 )
 
-func NewRetryer(conf *Config) (*Retryer, error) {
+func NewRetry(conf *Config) (*Retryer, error) {
 	if len(conf.RetryRules) == 0 {
 		return nil, errors.New("no retry rules specified")
 	}
 
 	// map over done topic and channel for consumer
-	conf.BusConfig.Topic = conf.DoneTopic
-	conf.BusConfig.Channel = conf.DoneChannel
+	conf.Options.Topic = conf.DoneTopic
+	conf.Options.Channel = conf.DoneChannel
 
 	// make consumer
-	c, err := bus.NewConsumer(conf.BusConfig)
+	c, err := bus.NewConsumer(conf.Options)
 	if err != nil {
 		return nil, err
 	}
 
 	// make producer
-	p, err := bus.NewProducer(conf.BusConfig)
+	p, err := bus.NewProducer(conf.Options)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +50,8 @@ func NewRetryer(conf *Config) (*Retryer, error) {
 
 type Retryer struct {
 	conf       *Config
-	consumer   bus.Consumer
-	producer   bus.Producer
+	consumer   bus.ConsumerBus
+	producer   bus.ProducerBus
 	rules      []*RetryRule
 	rulesMap   map[string]*RetryRule // key is the task type
 	closeChan  chan interface{}
@@ -182,7 +182,7 @@ func (r *Retryer) doRetry(tsk *task.Task, rule *RetryRule) {
 	if rule.Topic != "" {
 		topic = rule.Topic
 	}
-	msg, err := nTsk.Bytes()
+	msg, err := nTsk.JSONBytes()
 	if err != nil {
 		log.Println(err.Error())
 		return

@@ -1,25 +1,34 @@
 package s3
 
+import (
+	"net/url"
+	"strings"
+
+	"github.com/pcelvng/task-tools/file/buf"
+)
+
+var StoreHost = "s3.amazonaws.com"
+
 func NewOptions() *Options {
-	return &Options{}
+	return &Options{
+		Options: buf.NewOptions(),
+	}
 }
 
 type Options struct {
-	SecretKey string
-	AccessKey string
+	*buf.Options
+}
 
-	// UseFileBuf specifies to use a tmp file for the delayed writing.
-	// Can optionally also specify the tmp directory and tmp name
-	// prefix.
-	UseFileBuf bool
-
-	// FileBufDir optionally specifies the temp directory. If not specified then
-	// the os default temp dir is used.
-	FileBufDir string
-
-	// FileBufPrefix optionally specifies the temp file prefix.
-	// The full tmp file name is randomly generated and guaranteed
-	// not to conflict with existing files. A prefix can help one find
-	// the tmp file.
-	FileBufPrefix string
+// parsePth will parse an s3 path of the form:
+// "s3://{bucket}/{path/to/object.txt}
+// and return the bucket and object path.
+// If either bucket or object are empty then
+// pth was not in the correct format for parsing or
+// object and or bucket do not exist in pth.
+func parsePth(pth string) (bucket, objPth string) {
+	// err is not possible since it's not via a request.
+	pPth, _ := url.Parse(pth)
+	bucket = pPth.Host
+	objPth = strings.TrimLeft(pPth.Path, "/")
+	return bucket, objPth
 }

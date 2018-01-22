@@ -2,198 +2,602 @@ package nop
 
 import (
 	"fmt"
-	"io"
 )
 
-func ExampleReader() {
+func ExampleNewReader() {
 	// showing:
 	// - new reader
-	// - stats path set
-	// - Close sets Size from ByteCnt
-	// - Close returns value of r.Err
 
-	r := NewReader("file.txt")
+	r, err := NewReader("nop://file.txt")
 	if r == nil {
 		return
 	}
-	fmt.Println(r.sts.Path)    // file.txt
-	fmt.Println(r.sts.ByteCnt) // 0
-	fmt.Println(r.sts.Size)    // 0
-	r.sts.ByteCnt = 10
-	fmt.Println(r.Close())  // <nil>
-	fmt.Println(r.sts.Size) // 10
-	r.Err = io.EOF
-	fmt.Println(r.Close()) // EOF
+	fmt.Println(err)        // output: <nil>
+	fmt.Println(r.sts.Path) // output: nop://file.txt
 
 	// Output:
-	// file.txt
-	// 0
-	// 0
 	// <nil>
-	// 10
-	// EOF
+	// nop://file.txt
 }
 
-func ExampleReader_ReadLine() {
+func ExampleNewReaderErr() {
 	// showing:
-	// - ReadLine returns a '1' for the line
-	// - ReadLine increments line count by 1
-	// - ReadLine increments byte count by 1
-	// - ReadLine err = io.EOF when Err = io.EOF
+	// - new reader with err
 
-	r := NewReader("")
-	if r == nil {
+	r, err := NewReader("nop://init_err")
+	if err == nil {
 		return
 	}
-	fmt.Println(r.sts.LineCnt) // 0
-	fmt.Println(r.sts.ByteCnt) // 0
-	ln, err := r.ReadLine()
-	fmt.Println(string(ln)) // 1
-	fmt.Println(err)        // <nil>
-	sts := r.Stats()
-	fmt.Println(sts.LineCnt) // 1
-	fmt.Println(sts.ByteCnt) // 1
-	r.Err = io.EOF
-	_, err = r.ReadLine()
-	fmt.Println(err) // EOF
+	fmt.Println(r)           // output: <nil>
+	fmt.Println(err.Error()) // output: init_err
 
 	// Output:
-	// 0
-	// 0
-	// 1
 	// <nil>
-	// 1
-	// 1
-	// EOF
+	// init_err
 }
 
 func ExampleReader_Read() {
 	// showing:
-	// - Read '1' for first element of buffer
-	// - Read returns n == 1
-	// - Read increments byte count by 1
-	// - Read returns n == 0 when len(buffer) == 0
-	// - Read returns err == r.Err
+	// - Reader.Read() happy path
 
-	r := NewReader("")
+	r, _ := NewReader("nop://file.txt")
 	if r == nil {
 		return
 	}
-	buf := make([]byte, 2)
-	n, err := r.Read(buf)
-	fmt.Println(n)              // 1
-	fmt.Println(err)            // <nil>
-	fmt.Println(string(buf[0])) // 1
-	fmt.Println(buf[1])         // 0
-	fmt.Println(r.sts.ByteCnt)  // 1
-	n, err = r.Read([]byte{})
-	fmt.Println(n) // 0
-	r.Err = io.EOF
-	_, err = r.Read([]byte{})
-	fmt.Println(err) // EOF
+	n, err := r.Read([]byte{})
+	fmt.Println(n)             // output: 10
+	fmt.Println(err)           // output: <nil>
+	fmt.Println(r.sts.ByteCnt) // output: 10
 
 	// Output:
-	// 1
-	// <nil>
-	// 1
-	// 0
-	// 1
-	// 0
-	// EOF
-}
-
-func ExampleWriter() {
-	// showing:
-	// - new writer
-	// - writer sts.Path set
-	// - Stats returns stats
-	// - Close returns w.Err
-	// - Close sets sts.Size
-	// - Abort returns w.Err
-
-	w := NewWriter("file.txt")
-	if w == nil {
-		return
-	}
-	fmt.Println(w.sts.Path) // file.txt
-	fmt.Println(w.sts.Size) // 0
-	w.sts.ByteCnt = 10
-	fmt.Println(w.Stats().Path)    // file.txt
-	fmt.Println(w.Stats().ByteCnt) // 10
-	fmt.Println(w.Close())         // <nil>
-	fmt.Println(w.sts.Size)        // 10
-	fmt.Println(w.Abort())         // <nil>
-	w.Err = io.EOF
-	fmt.Println(w.Close()) // EOF
-	fmt.Println(w.Abort()) // EOF
-
-	// Output:
-	// file.txt
-	// 0
-	// file.txt
 	// 10
 	// <nil>
 	// 10
-	// <nil>
-	// EOF
-	// EOF
 }
 
-func ExampleWriter_WriteLine() {
+func ExampleReader_ReadErr() {
 	// showing:
-	// - WriteLine increments LineCnt
-	// - WriteLine increments ByteCnt
-	// - WriteLine returns w.Err
-	// - WriteLine does not increment LineCnt when w.Err != nil
+	// - Reader.Read() with returned err
 
-	w := NewWriter("")
-	if w == nil {
+	r, _ := NewReader("nop://read_err")
+	if r == nil {
 		return
 	}
 
-	fmt.Println(w.WriteLine([]byte("line"))) // <nil>
-	fmt.Println(w.sts.LineCnt)               // 1
-	fmt.Println(w.sts.ByteCnt)               // 5
-	w.Err = io.EOF
-	fmt.Println(w.WriteLine([]byte("line"))) // EOF
-	fmt.Println(w.sts.LineCnt)               // 1
-	fmt.Println(w.sts.ByteCnt)               // 10
+	n, err := r.Read([]byte{})
+	fmt.Println(n)             // output: 0
+	fmt.Println(err)           // output: read_err
+	fmt.Println(r.sts.ByteCnt) // output: 0
+
+	// Output:
+	// 0
+	// read_err
+	// 0
+}
+
+func ExampleReader_ReadUsingMsgChan() {
+	// showing:
+	// - Reader.Read() where the message comes
+	// from the message sent on MsgChan
+
+	r, _ := NewReader("nop://file.txt")
+	if r == nil {
+		return
+	}
+	mockLine := MockLine       // save to reset
+	MockLine = make([]byte, 0) // set to len == 0 to use MsgChan
+	go func() {
+		MsgChan <- []byte("test msg") // len == 8
+	}()
+
+	n, err := r.Read([]byte{})
+	fmt.Println(n)             // output: 8
+	fmt.Println(err)           // output: <nil>
+	fmt.Println(r.sts.ByteCnt) // output: 8
+
+	MockLine = mockLine // reset MockLine
+
+	// Output:
+	// 8
+	// <nil>
+	// 8
+}
+
+func ExampleReader_ReadUsingEOFChan() {
+	// showing:
+	// - Reader.Read() with EOF returned error
+
+	r, _ := NewReader("nop://file.txt")
+	if r == nil {
+		return
+	}
+
+	// good practice to set and close
+	// EOFChan to avoid panics.
+	EOFChan = make(chan interface{})
+	close(EOFChan)
+
+	n, err := r.Read([]byte{})
+	fmt.Println(n)             // output: 10
+	fmt.Println(err)           // output: EOF
+	fmt.Println(r.sts.ByteCnt) // output: 10
+
+	EOFChan = make(chan interface{}) // reset EOFChan
+
+	// Output:
+	// 10
+	// EOF
+	// 10
+}
+
+func ExampleReader_ReadLine() {
+	// showing:
+	// - Reader.ReadLine() happy path
+
+	r, _ := NewReader("nop://file.txt")
+	if r == nil {
+		return
+	}
+	ln, err := r.ReadLine()
+	fmt.Print(string(ln))      // output: mock line
+	fmt.Println(err)           // output: <nil>
+	fmt.Println(r.sts.ByteCnt) // output: 10
+	fmt.Println(r.sts.LineCnt) // output: 1
+
+	// Output:
+	// mock line
+	// <nil>
+	// 10
+	// 1
+}
+
+func ExampleReader_ReadLineErr() {
+	// showing:
+	// - Reader.ReadLine() returning an error
+
+	r, _ := NewReader("nop://readline_err")
+	if r == nil {
+		return
+	}
+	ln, err := r.ReadLine()
+	fmt.Print(string(ln))      // output:
+	fmt.Println(err)           // output: readline_err
+	fmt.Println(r.sts.ByteCnt) // output: 0
+	fmt.Println(r.sts.LineCnt) // output: 0
+
+	// Output:
+	//
+	// readline_err
+	// 0
+	// 0
+}
+
+func ExampleReader_ReadLineUsingMsgChan() {
+	// showing:
+	// - Reader.Read() where the message comes
+	// from the message sent on MsgChan
+
+	r, _ := NewReader("nop://file.txt")
+	if r == nil {
+		return
+	}
+	mockLine := MockLine       // save to reset
+	MockLine = make([]byte, 0) // set to len == 0 to use MsgChan
+	go func() {
+		MsgChan <- []byte("test msg") // len == 8
+	}()
+
+	ln, err := r.ReadLine()
+	fmt.Println(string(ln))    // output: test msg
+	fmt.Println(err)           // output: <nil>
+	fmt.Println(r.sts.ByteCnt) // output: 8
+	fmt.Println(r.sts.LineCnt) // output: 1
+
+	MockLine = mockLine // reset MockLine
+
+	// Output:
+	// test msg
+	// <nil>
+	// 8
+	// 1
+}
+
+func ExampleReader_ReadLineUsingEOFChan() {
+	// showing:
+	// - Reader.Read() with EOF returned error
+
+	r, _ := NewReader("nop://file.txt")
+	if r == nil {
+		return
+	}
+
+	// good practice to set and close
+	// EOFChan to avoid panics.
+	EOFChan = make(chan interface{})
+	close(EOFChan)
+
+	ln, err := r.ReadLine()
+	fmt.Print(string(ln))      // output: mock line
+	fmt.Println(err)           // output: EOF
+	fmt.Println(r.sts.ByteCnt) // output: 10
+	fmt.Println(r.sts.LineCnt) // output: 1
+
+	EOFChan = make(chan interface{}) // reset EOFChan
+
+	// Output:
+	// mock line
+	// EOF
+	// 10
+	// 1
+}
+
+func ExampleReader_Stats() {
+	// showing:
+	// - Reader.Stats() happy path
+
+	r, _ := NewReader("nop://file.txt")
+	if r == nil {
+		return
+	}
+	r.sts.LineCnt = 10
+	r.sts.ByteCnt = 100
+	r.sts.Created = "created date"
+	r.sts.Size = 200
+	r.sts.Checksum = "checksum"
+
+	sts := r.Stats()
+	fmt.Println(sts.Path)     // output: nop://file.txt
+	fmt.Println(sts.LineCnt)  // output: 10
+	fmt.Println(sts.ByteCnt)  // output: 100
+	fmt.Println(sts.Created)  // output: created date
+	fmt.Println(sts.Size)     // output: 200
+	fmt.Println(sts.Checksum) // output: checksum
+
+	// Output:
+	// nop://file.txt
+	// 10
+	// 100
+	// created date
+	// 200
+	// checksum
+}
+
+func ExampleReader_Close() {
+	// showing:
+	// - Reader.ReadLine() returning an error
+
+	r, _ := NewReader("nop://file.txt")
+	if r == nil {
+		return
+	}
+	r.sts.ByteCnt = 10
+	err := r.Close()
+	fmt.Println(err)        // output: <nil>
+	fmt.Println(r.sts.Size) // output: 10
 
 	// Output:
 	// <nil>
-	// 1
-	// 5
-	// EOF
-	// 1
 	// 10
+}
+
+func ExampleReader_CloseErr() {
+	// showing:
+	// - Reader.ReadLine() returning an error
+
+	r, _ := NewReader("nop://close_err")
+	if r == nil {
+		return
+	}
+	err := r.Close()
+	fmt.Println(err) // output: close_err
+
+	// Output:
+	// close_err
+}
+
+func ExampleReader_AllErr() {
+	// showing:
+	// - all methods return err
+
+	r, rErr := NewReader("nop://err")
+	if r == nil {
+		return
+	}
+
+	_, readErr := r.Read([]byte{})
+	_, readlineErr := r.ReadLine()
+	closeErr := r.Close()
+
+	fmt.Println(rErr)        // output: <nil>
+	fmt.Println(readErr)     // output: err
+	fmt.Println(readlineErr) // output: err
+	fmt.Println(closeErr)    // output: err
+
+	// Output:
+	// <nil>
+	// err
+	// err
+	// err
+}
+
+func ExampleReader_MockReadMode() {
+	// showing:
+	// - reader uses MockReadMode set
+	// directly on global variable.
+
+	MockReadMode = "err"
+	r := &Reader{}
+
+	_, readErr := r.Read([]byte{})
+	_, readlineErr := r.ReadLine()
+	closeErr := r.Close()
+
+	fmt.Println(readErr)     // output: err
+	fmt.Println(readlineErr) // output: err
+	fmt.Println(closeErr)    // output: err
+
+	MockReadMode = "" // reset MockReadMode
+	// Output:
+	// err
+	// err
+	// err
+}
+
+func ExampleNewWriter() {
+	// showing:
+	// - new writer happy path
+
+	w, err := NewWriter("nop://file.txt")
+	if w == nil {
+		return
+	}
+	fmt.Println(err)        // output: <nil>
+	fmt.Println(w.sts.Path) // output: nop://file.txt
+
+	// Output:
+	// <nil>
+	// nop://file.txt
+}
+
+func ExampleNewWriterErr() {
+	// showing:
+	// - new writer that returns a non-nil err
+
+	w, err := NewWriter("nop://init_err")
+
+	fmt.Println(w)   // output: <nil>
+	fmt.Println(err) // output: init_err
+
+	// Output:
+	// <nil>
+	// init_err
 }
 
 func ExampleWriter_Write() {
 	// showing:
-	// - Write returns n = len(p)
-	// - Write increments ByteCnt by len(p)
-	// - Write returns w.Err
+	// - writer.Write happy path
 
-	w := NewWriter("")
+	w, _ := NewWriter("nop://file.txt")
 	if w == nil {
 		return
 	}
 
-	n, err := w.Write([]byte("line"))
-	fmt.Println(n)             // 4
-	fmt.Println(w.sts.ByteCnt) // 4
-	fmt.Println(err)           // <nil>
-	w.Err = io.EOF
-	n, err = w.Write([]byte("line"))
-	fmt.Println(n)             // 4
-	fmt.Println(w.sts.ByteCnt) // 8
-	fmt.Println(err)           // EOF
+	n, err := w.Write([]byte("test line"))
+	fmt.Println(n)             // output: 9
+	fmt.Println(err)           // output: <nil>
+	fmt.Println(w.sts.ByteCnt) // output: 9
+	fmt.Println(w.sts.LineCnt) // output: 0
 
 	// Output:
-	// 4
-	// 4
+	// 9
 	// <nil>
-	// 4
-	// 8
-	// EOF
+	// 9
+	// 0
+}
+
+func ExampleWriter_WriteErr() {
+	// showing:
+	// - writer.Write happy path
+
+	w, _ := NewWriter("nop://write_err")
+	if w == nil {
+		return
+	}
+
+	n, err := w.Write([]byte("test line"))
+	fmt.Println(n)             // output: 0
+	fmt.Println(err)           // output: write_err
+	fmt.Println(w.sts.ByteCnt) // output: 0
+	fmt.Println(w.sts.LineCnt) // output: 0
+
+	// Output:
+	// 0
+	// write_err
+	// 0
+	// 0
+}
+
+func ExampleWriter_WriteLine() {
+	// showing:
+	// - writer.WriteLine happy path
+
+	w, _ := NewWriter("nop://file.txt")
+	if w == nil {
+		return
+	}
+
+	err := w.WriteLine([]byte("test line"))
+	fmt.Println(err)           // output: <nil>
+	fmt.Println(w.sts.ByteCnt) // output: 10
+	fmt.Println(w.sts.LineCnt) // output: 1
+
+	// Output:
+	// <nil>
+	// 10
+	// 1
+}
+
+func ExampleWriter_WriteLineErr() {
+	// showing:
+	// - writer.WriteLine happy path
+
+	w, _ := NewWriter("nop://writeline_err")
+	if w == nil {
+		return
+	}
+
+	err := w.WriteLine([]byte("test line"))
+	fmt.Println(err)           // output: writeline_err
+	fmt.Println(w.sts.ByteCnt) // output: 0
+	fmt.Println(w.sts.LineCnt) // output: 0
+
+	// Output:
+	// writeline_err
+	// 0
+	// 0
+}
+
+func ExampleWriter_Stats() {
+	// showing:
+	// - writer.WriteLine happy path
+
+	w, _ := NewWriter("nop://file.txt")
+	if w == nil {
+		return
+	}
+
+	sts := w.Stats()
+	fmt.Println(sts.Path) // output: nop://file.txt
+
+	// Output:
+	// nop://file.txt
+}
+
+func ExampleWriter_Abort() {
+	// showing:
+	// - writer.Abort happy path
+
+	w, _ := NewWriter("nop://file.txt")
+	if w == nil {
+		return
+	}
+
+	err := w.Abort()
+	fmt.Println(err) // output: <nil>
+
+	// Output:
+	// <nil>
+}
+
+func ExampleWriter_AbortErr() {
+	// showing:
+	// - writer.Abort returning non-nil error
+
+	w, _ := NewWriter("nop://abort_err")
+	if w == nil {
+		return
+	}
+
+	err := w.Abort()
+	fmt.Println(err) // output: abort_err
+
+	// Output:
+	// abort_err
+}
+
+func ExampleWriter_Close() {
+	// showing:
+	// - writer.Close happy path
+
+	w, _ := NewWriter("nop://file.txt")
+	if w == nil {
+		return
+	}
+	w.sts.ByteCnt = 10 // Size is set from final byte count
+	err := w.Close()
+	isCreated := w.sts.Created != "" // close sets sts.Created
+	fmt.Println(err)                 // output: <nil>
+	fmt.Println(w.sts.Size)          // output: 10
+	fmt.Println(isCreated)           // output: true
+
+	// Output:
+	// <nil>
+	// 10
+	// true
+}
+
+func ExampleWriter_CloseErr() {
+	// showing:
+	// - writer.Close returns err
+
+	w, _ := NewWriter("nop://close_err")
+	if w == nil {
+		return
+	}
+	w.sts.ByteCnt = 10 // Size is set from final byte count
+	err := w.Close()
+	isCreated := w.sts.Created != "" // close sets sts.Created
+	fmt.Println(err)                 // output: <nil>
+	fmt.Println(w.sts.Size)          // output: 0
+	fmt.Println(isCreated)           // output: false
+
+	// Output:
+	// close_err
+	// 0
+	// false
+}
+
+func ExampleWriter_AllErr() {
+	// showing:
+	// - all methods return non-nil err
+
+	w, wErr := NewWriter("nop://err")
+	if w == nil {
+		return
+	}
+
+	_, writeErr := w.Write([]byte("test"))
+	writelineErr := w.WriteLine([]byte("test line"))
+	abortErr := w.Abort()
+	closeErr := w.Close()
+
+	fmt.Println(wErr)         // output: <nil>
+	fmt.Println(writeErr)     // output: err
+	fmt.Println(writelineErr) // output: err
+	fmt.Println(abortErr)     // output: err
+	fmt.Println(closeErr)     // output: err
+
+	// Output:
+	// <nil>
+	// err
+	// err
+	// err
+	// err
+}
+
+func ExampleWriter_MockWriteMode() {
+	// showing:
+	// - reader uses MockWriteMode set
+	// directly on global variable.
+
+	MockWriteMode = "err"
+	w := &Writer{}
+
+	_, writeErr := w.Write([]byte("test"))
+	writelineErr := w.WriteLine([]byte("test line"))
+	abortErr := w.Abort()
+	closeErr := w.Close()
+
+	fmt.Println(writeErr)     // output: err
+	fmt.Println(writelineErr) // output: err
+	fmt.Println(abortErr)     // output: err
+	fmt.Println(closeErr)     // output: err
+
+	MockWriteMode = "" // reset MockWriteMode
+
+	// Output:
+	// err
+	// err
+	// err
+	// err
 }

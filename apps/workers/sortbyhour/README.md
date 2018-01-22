@@ -1,80 +1,164 @@
-# Sort By Hour Worker
+# SortByHour Worker
 
-The sortbyhour worker accepts a file location in the task info and sorts the records into 'hourly'
-destination files. 
+The sortbyhour worker reads from a source file and sorts its records into 'hourly'
+destination files.
 
-The worker supports JSON and CSV formats. 
+The worker assumes the source file contains json records. 
 
-The date field to sort on is also specified in the info string. If the file format is a 
-CSV then the date field is provided as a column number. If the input file format is JSON then
-the date field to sort is the name of the JSON field. The sorter will not parse out entire JSON
-records but will look for any JSON field with that name. Therefore, if the field name is repeated then 
-only the first instance value of that field will be used in sorting.
-
-If the field is not found then the worker will stop working on the task and return the task with an
-'error' result and a 'date field not found' msg.
-
-If the field value is not time parsable then the worker will fail out the task with an 'error' result 
-and a 'date field not parsable' msg.
-
-CSV files have another option to specify the separator value. The default separator is ','.
-
-sortbyhour is expecting a uri-like format as follows:
+## task type
 
 ```
-'{file-location}?{querystring parameters}'
+# task type
+sortbyhour
 ```
 
-File Location
+## task info
 
-Full location of the source file. If it begins with 's3://' then the sorter will 
-know it is an s3 source location. Otherwise the sorter will assume the source file
-comes from a local file location. If the source file name ends in '.gz' then the 
-sorter will assume the file is gzipped.
-
-Supported Query-string parameters
+The task info field is in the following format:
 
 ```
-date-field={field-name}
-date-field-format={format} # uses golang date formatting # default: 2006-01-02T15:04:05Z07:00
-sorted-file-template={template} # see below on usage
-separator={separator-value}
+# info 
+{source-file-path}?{querystring_params}
 ```
 
-Sample info string for a JSON file input:
+Example:
 
 ```
-'./file.json?date-field=date_created'
+# example json info
+s3://bucket/file.json.gz?date-field=date&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/sorted-{SRC_TS}.json.gz&discard=true
+
+# example csv info
+s3://bucket/file.csv.gz?date-field-index=1&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv.gz&sep=,&discard=true
 ```
 
-Sample info string for a CSV file input:
+### date-field (required)
+
+Represents json date field.
 
 ```
-'./file.csv?date-field=3'
+# "createdAt" contains the date to sort on
+?date-field=createdAt
 ```
 
-CSV with tab separation:
+### date-field-index (required)
+
+Represents the zero-offset date field index. Must be a positive integer.
 
 ```
-'./file.csv?date-field=3&separator=\t'
+# first field contains the date
+?date-field=0
+
+# tenth field contains the date
+?date-field=9
 ```
 
-### sorted-file-template
+### date-format
+
+Takes a golang standard time.Time string format. See: https://golang.org/pkg/time/#pkg-constants
+
+```
+# default (time.RFC3339)
+?date-format=2006-01-02T15:04:05Z07:00
+```
+
+### dest-template (required)
 
 Represents the full destination path and file name. Supports the following
 template parameters:
 
-- {yyyy}   four digit year ie 2007
-- {mm}     two digit month ie 01
-- {dd}     two digit day ie 29
-- {hh}     two digit hour ie 00
-- {host}   host name of sort-by-hour application
-- {cur_ts} current timestamp (when processing starts) in following format: 20060102T150405
+- {YYYY}     four digit year ie 2007
+- {YY}       two digit year ie 07
+- {MM}       two digit month ie 01
+- {DD}       two digit day ie 29
+- {HH}       two digit hour ie 00
+- {TS}       current timestamp (when processing starts) in following format: 20060102T150405
+- {DAY_SLUG}     shorthand for {YYYY}/{MM}/{DD}/{HH}
+- {SLUG}     shorthand for {YYYY}/{MM}/{DD}/{HH}
+- {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
+- {SRC_TS}   source file timestamp (if available) in following format: 20060102T150405
 
-If the sorted-file-template ends in '.gz' the output files will be compressed.
+A template '.gz' file extension will result in compressed destination files.
 
 Examples:
 
-s3://bucket-name/path/{yyyy}/{mm}/{dd}/{hh}/{hh}-{cur_ts}.json.gz # gzipped output
-s3://bucket-name/path/{yyyy}/{mm}/{dd}/{hh}/{hh}-{cur_ts}.json # non-gzipped output
-/local/path/{yyyy}/{mm}/{dd}/{hh}-{cur_ts}.json.gz # local file output
+```
+# gzipped output
+?dest_template=s3://bucket-name/path/{YYYY}/{MM}/{DD}/{HH}/{HH}-{SRC_TS}.json.gz
+
+# non-gzipped output
+?dest_template=s3://bucket-name/path/{YYYY}/{MM}/{DD}/{HH}/{HH}-{TS}.json 
+
+# local file output (gzipped)
+?dest_template=/local/path/{YYYY}/{MM}/{DD}/{HH}-{TS}.json.gz 
+```
+
+### sep
+
+Common field separation values:
+
+```
+# comma (default)
+?sep=,
+
+# tab
+?sep=\t
+
+# pipe
+?sep=|
+```
+
+### discard
+
+When true records that are missing the date field or do not parse correctly are
+discarded. 
+
+When false, task processing will fail on the first record where:
+
+- Record does not parse
+- Number of fields is less than the date field index
+- Date field does not parse
+
+```
+# discard turned off (default)
+?discard=false
+
+# discard turned on
+?discard=true
+```
+
+## task msg
+
+### complete result
+
+The task msg provides human readable statistics.
+
+Examples:
+
+```
+# typical
+wrote 1000 lines over 3 files
+
+# with discard option
+wrote 900 lines over 3 files (100 discarded) 
+```
+
+### error result
+
+Will provide approximately how many lines were processed 
+before the error and the error.
+
+Example:
+
+```
+issue at line 10: 'json parse error'
+```
+
+If no records were processed then will just provide the
+error.
+
+Example:
+
+```
+path 's3://bucket/path/to/file.txt' not found
+```
+

@@ -8,19 +8,13 @@ import (
 	"github.com/pcelvng/task"
 )
 
-var config Config
-
-func MakeWorker(info string) task.Worker {
-	return &NoopWorker{
-		info: info,
-	}
+func MakeWorker(_ string) task.Worker {
+	return &Worker{}
 }
 
-type NoopWorker struct {
-	info string
-}
+type Worker struct{}
 
-func (w *NoopWorker) DoTask(ctx context.Context) (result task.Result, msg string) {
+func (w *Worker) DoTask(ctx context.Context) (result task.Result, msg string) {
 	doneChan := make(chan interface{})
 	go func() {
 		result, msg = w.doTask()
@@ -37,15 +31,15 @@ func (w *NoopWorker) DoTask(ctx context.Context) (result task.Result, msg string
 	return result, msg
 }
 
-func (w *NoopWorker) doTask() (task.Result, string) {
+func (w *Worker) doTask() (task.Result, string) {
 	// calc if failure
-	isFail := checkFail(config.FailRate)
+	isFail := checkFail(appOpt.FailRate)
 
 	var dur time.Duration
 	if isFail { // calc failDuration
-		dur = failDuration(config.Dur, config.DurVariance)
+		dur = failDuration(appOpt.Dur, appOpt.DurVariance)
 	} else {
-		dur = successDuration(config.Dur, config.DurVariance)
+		dur = successDuration(appOpt.Dur, appOpt.DurVariance)
 	}
 
 	// wait for duration

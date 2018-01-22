@@ -10,9 +10,9 @@ import (
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
-// StatsReadCloser is an io.ReadCloser that also provides
+// Reader is an io.ReadCloser that also provides
 // file statistics along with a few additional methods.
-type StatsReadCloser interface {
+type Reader interface {
 	// Read should behave as defined in the io.Read interface.
 	// In this way we can take advantage of all standard library
 	// methods that rely on Read such as copy.
@@ -30,13 +30,13 @@ type StatsReadCloser interface {
 	// A call to ReadLine after Close has undefined behavior.
 	ReadLine() ([]byte, error)
 
-	// Stats returns an instance of Stat.
-	Stats() stat.Stat
+	// Stats returns an instance of Stats.
+	Stats() stat.Stats
 }
 
-// StatsWriteCloser is a io.WriteCloser that also provides
+// Writer is a io.WriteCloser that also provides
 // file statistics along with a few additional methods.
-type StatsWriteCloser interface {
+type Writer interface {
 	// Write should behave as defined in io.Writer so that it
 	// is compatible with standard library tooling such as
 	// io.Copy. Additionally concurrent calls to Write should
@@ -60,58 +60,11 @@ type StatsWriteCloser interface {
 	WriteLine([]byte) error
 
 	// Stats returns the file stats. Safe to call any time.
-	Stats() stat.Stat
+	Stats() stat.Stats
 
 	// Abort can be called anytime before or during a call
 	// to Close. Will block until abort cleanup is complete.
 	Abort() error
-}
-
-func NewStatsReader(pth string, opt *Options) (r StatsReadCloser, err error) {
-	if opt == nil {
-		opt = NewOptions()
-	}
-	var u *url.URL
-	u, err = url.Parse(pth)
-	if err != nil {
-		return
-	}
-
-	switch u.Scheme {
-	case "s3://":
-		s3Opts := S3Options(*opt)
-		r, err = s3.NewReader(pth, &s3Opts)
-	case "nop://":
-		r = nop.NewReader(pth)
-	default:
-		r, err = local.NewReader(pth)
-	}
-
-	return
-}
-
-func NewStatsWriter(pth string, opt *Options) (r StatsWriteCloser, err error) {
-	if opt == nil {
-		opt = NewOptions()
-	}
-	var u *url.URL
-	u, err = url.Parse(pth)
-	if err != nil {
-		return
-	}
-
-	switch u.Scheme {
-	case "s3://":
-		s3Opts := S3Options(*opt)
-		r, err = s3.NewWriter(pth, &s3Opts)
-	case "nop://":
-		r = nop.NewWriter(pth)
-	default:
-		localOpts := LocalOptions(*opt)
-		r, err = local.NewWriter(pth, &localOpts)
-	}
-
-	return
 }
 
 func NewOptions() *Options {
@@ -121,8 +74,8 @@ func NewOptions() *Options {
 // Options presents general options across all stats readers and
 // writers.
 type Options struct {
-	AWSSecretKey string
 	AWSAccessKey string
+	AWSSecretKey string
 
 	// UseFileBuf specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name
@@ -140,20 +93,72 @@ type Options struct {
 	FileBufPrefix string
 }
 
-func S3Options(opt Options) s3.Options {
+func s3Options(opt Options) s3.Options {
 	s3Opts := s3.NewOptions()
-	s3Opts.AccessKey = opt.AWSAccessKey
-	s3Opts.SecretKey = opt.AWSSecretKey
 	s3Opts.UseFileBuf = opt.UseFileBuf
 	s3Opts.FileBufDir = opt.FileBufDir
 	s3Opts.FileBufPrefix = opt.FileBufPrefix
 	return *s3Opts
 }
 
-func LocalOptions(opt Options) local.Options {
+func localOptions(opt Options) local.Options {
 	localOpts := local.NewOptions()
-	localOpts.UseTmpFile = opt.UseFileBuf
-	localOpts.TmpDir = opt.FileBufDir
-	localOpts.TmpPrefix = opt.FileBufPrefix
+	localOpts.UseFileBuf = opt.UseFileBuf
+	localOpts.FileBufDir = opt.FileBufDir
+	localOpts.FileBufPrefix = opt.FileBufPrefix
 	return *localOpts
+}
+
+func NewReader(pth string, opt *Options) (r Reader, err error) {
+	if opt == nil {
+		opt = NewOptions()
+	}
+	var u *url.URL
+	u, err = url.Parse(pth)
+	if err != nil {
+		return
+	}
+
+	switch u.Scheme {
+	case "s3":
+		accessKey := opt.AWSAccessKey
+		secretKey := opt.AWSSecretKey
+		r, err = s3.NewReader(pth, accessKey, secretKey)
+	case "nop":
+		r, err = nop.NewReader(pth)
+	case "local":
+		fallthrough
+	default:
+		r, err = local.NewReader(pth)
+	}
+
+	return
+}
+
+func NewWriter(pth string, opt *Options) (w Writer, err error) {
+	if opt == nil {
+		opt = NewOptions()
+	}
+	var u *url.URL
+	u, err = url.Parse(pth)
+	if err != nil {
+		return
+	}
+
+	switch u.Scheme {
+	case "s3":
+		accessKey := opt.AWSAccessKey
+		secretKey := opt.AWSSecretKey
+		s3Opts := s3Options(*opt)
+		w, err = s3.NewWriter(pth, accessKey, secretKey, &s3Opts)
+	case "nop":
+		w, err = nop.NewWriter(pth)
+	case "local":
+		fallthrough
+	default:
+		localOpts := localOptions(*opt)
+		w, err = local.NewWriter(pth, &localOpts)
+	}
+
+	return w, err
 }
