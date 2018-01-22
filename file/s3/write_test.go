@@ -306,33 +306,6 @@ func ExampleWriter_CloseErrCopy() {
 	// true
 }
 
-func ExampleWriter_CloseErrChecksum() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
-	if w == nil {
-		return
-	}
-
-	w.WriteLine([]byte("test line"))
-	w.WriteLine([]byte("test line"))
-
-	// call abort to clear buffer.
-	// remote checksum will be calculated but
-	// local checksum will not so the checksums
-	// will mismatch.
-	w.bfr.Abort()
-	err := w.Close()
-
-	fmt.Println(err)                     // output: cp: s3://task-tools-test/write/test.txt '' vs 'd41d8cd98f00b204e9800998ecf8427e' checksum mismatch
-	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.Checksum != "") // output: true
-
-	// Output:
-	// cp: s3://task-tools-test/write/test.txt '' vs 'd41d8cd98f00b204e9800998ecf8427e' checksum mismatch
-	// true
-	// true
-}
-
 func ExampleWriter_CloseAndClose() {
 	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)

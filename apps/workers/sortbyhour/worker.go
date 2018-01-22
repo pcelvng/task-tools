@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 
 	"github.com/jbsmith7741/go-tools/uri2struct"
 	"github.com/pcelvng/task"
@@ -42,10 +41,6 @@ func (i *infoOptions) validate() error {
 			return errors.New(`date-field required`)
 		}
 	case "csv":
-		// date-field-index required
-		if i.DateField == "" {
-			return errors.New(`date-field-index required`)
-		}
 	default:
 		return errors.New(`record-type must be "csv" or "json"`)
 	}
@@ -59,16 +54,10 @@ func (i *infoOptions) validate() error {
 }
 
 func MakeWorker(info string) task.Worker {
-	iOpt, err := newInfoOptions(info)
-	if iOpt == nil {
-		iOpt = &infoOptions{} // in case of err
-	}
+	iOpt, _ := newInfoOptions(info)
 
 	// validate
-	vErr := iOpt.validate()
-	if vErr != nil && err == nil {
-		err = vErr // don't override existing err
-	}
+	err := iOpt.validate()
 
 	// date extractor
 	var extractor file.DateExtractor
@@ -116,7 +105,7 @@ func MakeWorker(info string) task.Worker {
 type Worker struct {
 	iOpt         infoOptions
 	fOpt         file.Options
-	r            file.StatsReadCloser
+	r            file.Reader
 	w            *file.WriteByHour
 	err          error // initialization error
 	extractDate  file.DateExtractor
@@ -167,7 +156,7 @@ func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
 	wkr.r.Close()
 	err := wkr.w.Close()
 	if err != nil {
-		return task.ErrResult, fmt.Sprint(wkr.err.Error())
+		return task.ErrResult, fmt.Sprint(err.Error())
 	}
 
 	// publish files stats
@@ -192,7 +181,7 @@ func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
 // -handles discarding
 // -does WriteByHour write
 func (wkr *Worker) writeLine(ln []byte) error {
-	if len(ln) > 0 {
+	if len(ln) == 0 {
 		return nil
 	}
 
@@ -205,7 +194,9 @@ func (wkr *Worker) writeLine(ln []byte) error {
 	if err != nil {
 		if wkr.iOpt.Discard {
 			wkr.discardedCnt += 1
-			log.Printf("parse: '%v' at line %v for '%v'", err.Error(), wkr.r.Stats().LineCnt, string(ln))
+			// TODO: add with central logging
+			//log.Printf("parse: '%v' at line %v for '%v'", err.Error(), wkr.r.Stats().LineCnt, string(ln))
+			return nil
 		} else {
 			return err
 		}

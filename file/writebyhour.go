@@ -25,7 +25,7 @@ func NewWriteByHour(destTmpl string, opt *Options) *WriteByHour {
 	return &WriteByHour{
 		opt:      opt,
 		destTmpl: destTmpl,
-		writers:  make(map[string]StatsWriteCloser),
+		writers:  make(map[string]Writer),
 	}
 }
 
@@ -40,7 +40,7 @@ type WriteByHour struct {
 	destTmpl string
 
 	// writers map key is the destination file path (parsed destTmpl)
-	writers map[string]StatsWriteCloser
+	writers map[string]Writer
 	lineCnt stat.Stats // just for keeping track of total line count.
 	done    bool       // set to true if either Close or Abort are called. Prevents subsequent writes.
 	mu      sync.RWMutex

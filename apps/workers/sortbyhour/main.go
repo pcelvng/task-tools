@@ -54,20 +54,17 @@ func run() (err error) {
 
 	select {
 	case <-sigChan:
-		log.Println("shutting down")
 		cncl() // cancel launcher
 		<-done.Done()
-		log.Println("done")
 	case <-done.Done():
 	}
 
-	log.Println("returning")
 	return err
 }
 
 var (
 	confPth            = flag.String("config", "", "toml config file path; over-written by flag values")
-	tskType            = flag.String("type", "sort-by-hour", "task type; also is the default topic value")
+	tskType            = flag.String("type", "sortbyhour", "task type; also is the default topic value")
 	tskBus             = flag.String("bus", "stdio", "'stdio', 'file', 'nsq'")
 	inBus              = flag.String("in-bus", "", "one of 'stdin', 'file', 'nsq'; useful if you want the in and out bus to be different types")
 	outBus             = flag.String("out-bus", "", "one of 'stdout', 'file', 'nsq'; useful if you want the in and out bus to be different types")
@@ -127,25 +124,49 @@ func loadAppOptions() error {
 	}
 
 	// load config
-	opt.Bus.Bus = *tskBus
-	opt.Bus.InBus = *inBus
-	opt.Bus.OutBus = *outBus
-	opt.Bus.InFile = *inFile
-	opt.Bus.OutFile = *outFile
-	opt.Bus.Topic = *tskType // default consumer topic
+	if *tskBus != "" {
+		opt.Bus.Bus = *tskBus
+	}
+	if *inBus != "" {
+		opt.Bus.InBus = *inBus
+	}
+	if *outBus != "" {
+		opt.Bus.OutBus = *outBus
+	}
+	if *inFile != "" {
+		opt.Bus.InFile = *inFile
+	}
+	if *outFile != "" {
+		opt.Bus.OutFile = *outFile
+	}
+	if opt.Bus.Topic == "" {
+		opt.Bus.Topic = *tskType // default consumer topic
+	}
 	if *topic != "" {
 		opt.Bus.Topic = *topic
 	}
-	opt.Bus.Channel = *tskType // default consumer channel
+	if opt.Bus.Channel == "" {
+		opt.Bus.Channel = *tskType // default consumer channel
+	}
 	if *channel != "" {
 		opt.Bus.Channel = *channel
 	}
-	opt.Launcher.TaskType = *tskType
-	opt.Launcher.DoneTopic = *doneTopic
+	if opt.Launcher.TaskType == "" {
+		opt.Launcher.TaskType = *tskType
+	}
+	if *doneTopic != "done" {
+		opt.Launcher.DoneTopic = *doneTopic
+	}
+	if *maxInProgress != 0 {
+		opt.Launcher.MaxInProgress = *maxInProgress
+	}
+	if *workerTimeout != time.Duration(0) {
+		opt.Launcher.WorkerTimeout = *workerTimeout
+	}
+	if *lifetimeMaxWorkers != 0 {
+		opt.Launcher.LifetimeMaxWorkers = *lifetimeMaxWorkers
+	}
 	opt.nsqdHostsString(*nsqdHosts)
-	opt.Launcher.MaxInProgress = *maxInProgress
-	opt.Launcher.WorkerTimeout = *workerTimeout
-	opt.Launcher.LifetimeMaxWorkers = *lifetimeMaxWorkers
 
 	appOpt = opt
 	return nil

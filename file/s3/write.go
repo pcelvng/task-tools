@@ -1,8 +1,6 @@
 package s3
 
 import (
-	"errors"
-	"fmt"
 	"mime"
 	"path/filepath"
 	"sync"
@@ -149,19 +147,6 @@ func (w *Writer) Close() error {
 
 	// set object stats
 	w.setObjSts()
-
-	// compare checksums
-	bfrSts := w.bfr.Stats()
-	if bfrSts.Checksum != w.objSts.Checksum {
-		msg := fmt.Sprintf(
-			"cp: %v '%v' vs '%v' checksum mismatch",
-			w.sts.Path,
-			bfrSts.Checksum,
-			w.objSts.Checksum,
-		)
-		w.bfr.Cleanup()
-		return errors.New(msg)
-	}
 
 	// set created
 	w.sts.Created = w.objSts.Created

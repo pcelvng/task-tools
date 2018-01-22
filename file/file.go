@@ -10,9 +10,9 @@ import (
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
-// StatsReadCloser is an io.ReadCloser that also provides
+// Reader is an io.ReadCloser that also provides
 // file statistics along with a few additional methods.
-type StatsReadCloser interface {
+type Reader interface {
 	// Read should behave as defined in the io.Read interface.
 	// In this way we can take advantage of all standard library
 	// methods that rely on Read such as copy.
@@ -34,9 +34,9 @@ type StatsReadCloser interface {
 	Stats() stat.Stats
 }
 
-// StatsWriteCloser is a io.WriteCloser that also provides
+// Writer is a io.WriteCloser that also provides
 // file statistics along with a few additional methods.
-type StatsWriteCloser interface {
+type Writer interface {
 	// Write should behave as defined in io.Writer so that it
 	// is compatible with standard library tooling such as
 	// io.Copy. Additionally concurrent calls to Write should
@@ -109,7 +109,7 @@ func localOptions(opt Options) local.Options {
 	return *localOpts
 }
 
-func NewReader(pth string, opt *Options) (r StatsReadCloser, err error) {
+func NewReader(pth string, opt *Options) (r Reader, err error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
@@ -135,7 +135,7 @@ func NewReader(pth string, opt *Options) (r StatsReadCloser, err error) {
 	return
 }
 
-func NewWriter(pth string, opt *Options) (w StatsWriteCloser, err error) {
+func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	if opt == nil {
 		opt = NewOptions()
 	}

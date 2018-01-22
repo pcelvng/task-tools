@@ -38,10 +38,11 @@ func ExampleOpenTmp_err() {
 	// closeF no err on nil f
 
 	_, _, err := OpenTmp("/root/bad", "")
-	fmt.Println(err)
+	isDenied := os.IsPermission(err)
+	fmt.Println(isDenied) // output: true
 
 	// Output:
-	// mkdir /root/bad: permission denied
+	// true
 }
 
 func ExampleMultiWriteCloser() {

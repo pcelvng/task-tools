@@ -66,7 +66,6 @@ type Reader struct {
 
 func (r *Reader) ReadLine() (ln []byte, err error) {
 	ln, err = r.rBuf.ReadBytes('\n')
-
 	if len(ln) > 0 {
 		r.sts.AddLine()
 
