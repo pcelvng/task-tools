@@ -67,9 +67,9 @@ var (
 	failRate           = flag.Int("fail-rate", 0, "choose 0-100; the rate at which tasks will be marked with an error; does not support fractions of a percentage.")
 	dur                = flag.String("duration", "1s", "'1s' = 1 second, '1m' = 1 minute, '1h' = 1 hour")
 	durVariance        = flag.String("variance", "", "+ evenly distributed variation when a task completes; 1s = 1 second, 1m = 1 minute, 1h = 1 hour")
-	maxInProgress      = flag.Int("max-in-progress", 1, "maximum number of workers running at one time; workers cannot be less than 1.")
+	maxInProgress      = flag.Uint("max-in-progress", 1, "maximum number of workers running at one time; workers cannot be less than 1.")
 	workerTimeout      = flag.Duration("worker-timeout", time.Second*10, "time to wait for a worker to finish when being asked to shut down.")
-	lifetimeMaxWorkers = flag.Int("lifetime-max-workers", 0, "maximum number of tasks that will be completed before the application will shut down. A value less than one sets no limit.")
+	lifetimeMaxWorkers = flag.Uint("lifetime-max-workers", 0, "maximum number of tasks that will be completed before the application will shut down. A value less than one sets no limit.")
 )
 
 func newOptions() options {
@@ -91,10 +91,10 @@ type options struct {
 	DurVariance           time.Duration // random adjustment to the Dur value
 }
 
-// NsqdHostsString will set Options.NsqdHosts from a comma
+// nsqdHostsString will set Options.NsqdHosts from a comma
 // separated string of hosts.
 func (c *options) NsqdHostsString(hosts string) {
-	c.NsqdHosts = strings.Split(hosts, ",")
+	c.NSQdHosts = strings.Split(hosts, ",")
 }
 
 // DurString will parse the 'dur' string and attempt to

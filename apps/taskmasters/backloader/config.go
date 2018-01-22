@@ -52,10 +52,10 @@ type Config struct {
 	OffHours    []bool // each key represents the hour and bool is if that value is turned off.
 }
 
-// NsqdHostsString will set Config.NsqdHosts from a comma
+// nsqdHostsString will set Config.NsqdHosts from a comma
 // separated string of hosts.
 func (c *Config) NsqdHostsString(hosts string) {
-	c.NsqdHosts = strings.Split(hosts, ",")
+	c.NSQdHosts = strings.Split(hosts, ",")
 }
 
 // SetOnHours will parse onHours string and set
