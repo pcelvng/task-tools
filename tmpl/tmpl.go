@@ -2,9 +2,18 @@ package tmpl
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+)
+
+var (
+	regYear      = regexp.MustCompile(`{(Y|y){4}}`)
+	regYearShort = regexp.MustCompile(`{(Y|y){2}}`)
+	regMonth     = regexp.MustCompile(`{(M|m){2}}`)
+	regDay       = regexp.MustCompile(`{(D|d){2}}`)
+	regHour      = regexp.MustCompile(`{(H|h){2}}`)
 )
 
 // Parse will parse a template string according to the provided
@@ -31,35 +40,62 @@ import (
 //
 // template: "base/path/{SLUG}/records-{TS}.json.gz"
 // could return: "base/path/2017/01/01/23/records-20170101T230101.json.gz"
-func Parse(tmplt string, t time.Time) string {
+func Parse(s string, t time.Time) string {
 	// {DAY_SLUG}
-	tmplt = strings.Replace(tmplt, "{DAY_SLUG}", "{YYYY}/{MM}/{DD}", -1)
+	s = strings.Replace(s, "{DAY_SLUG}", "{YYYY}/{MM}/{DD}", -1)
 
 	// {SLUG}
-	tmplt = strings.Replace(tmplt, "{SLUG}", "{YYYY}/{MM}/{DD}/{HH}", -1)
+	s = strings.Replace(s, "{SLUG}", "{YYYY}/{MM}/{DD}/{HH}", -1)
 
 	// {TS}
 	ts := t.Format("20060102T150405")
-	s := strings.Replace(tmplt, "{TS}", ts, -1)
+	s = strings.Replace(s, "{TS}", ts, -1)
 
-	// {YYYY}
-	y := strconv.Itoa(t.Year())
-	s = strings.Replace(tmplt, "{YYYY}", y, -1)
+	y, m, d := t.Date()
+	year := strconv.Itoa(y)
+	s = regYear.ReplaceAllString(s, year)
+	s = regYearShort.ReplaceAllString(s, year[2:])
 
-	// {YY}
-	s = strings.Replace(s, "{YY}", y[2:], -1)
+	month := fmt.Sprintf("%02d", m)
+	s = regMonth.ReplaceAllString(s, month)
 
-	// {MM}
-	m := fmt.Sprintf("%02d", int(t.Month()))
-	s = strings.Replace(s, "{MM}", m, -1)
+	day := fmt.Sprintf("%02d", d)
+	s = regDay.ReplaceAllString(s, day)
 
-	// {DD}
-	d := fmt.Sprintf("%02d", t.Day())
-	s = strings.Replace(s, "{DD}", d, -1)
-
-	// {HH}
-	h := fmt.Sprintf("%02d", t.Hour())
-	s = strings.Replace(s, "{HH}", h, -1)
+	s = regHour.ReplaceAllString(s, strconv.Itoa(t.Hour()))
 
 	return s
 }
+
+/*func Parse(s string, t time.Time) (result string) {
+	// {DAY_SLUG}
+	s = strings.Replace(s, "{DAY_SLUG}", "{YYYY}/{MM}/{DD}", -1)
+
+	// {SLUG}
+	s = strings.Replace(s, "{SLUG}", "{YYYY}/{MM}/{DD}/{HH}", -1)
+
+	// {TS}
+	ts := t.Format("20060102T150405")
+	result = strings.Replace(s, "{TS}", ts, -1)
+
+	// {YYYY}
+	y := strconv.Itoa(t.Year())
+	result = strings.Replace(s, "{YYYY}", y, -1)
+
+	// {YY}
+	result = strings.Replace(result, "{YY}", y[2:], -1)
+
+	// {MM}
+	m := fmt.Sprintf("%02d", int(t.Month()))
+	result = strings.Replace(result, "{MM}", m, -1)
+
+	// {DD}
+	d := fmt.Sprintf("%02d", t.Day())
+	result = strings.Replace(result, "{DD}", d, -1)
+
+	// {HH}
+	h := fmt.Sprintf("%02d", t.Hour())
+	result = strings.Replace(result, "{HH}", h, -1)
+
+	return result
+}*/

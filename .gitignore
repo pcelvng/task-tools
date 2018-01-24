@@ -7,7 +7,7 @@ apps/taskmasters/backloader/*.json
 apps/workers/nop/*.json
 
 apps/taskmasters/backloader/backloader
-apps/taskmasters/cron/cron
+apps/taskmasters/crontask/crontask
 apps/taskmasters/http/http
 apps/taskmasters/responder/responder
 apps/taskmasters/retry/retry
