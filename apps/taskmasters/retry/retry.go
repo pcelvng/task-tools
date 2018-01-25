@@ -50,8 +50,8 @@ func NewRetry(conf *Config) (*Retryer, error) {
 
 type Retryer struct {
 	conf       *Config
-	consumer   bus.ConsumerBus
-	producer   bus.ProducerBus
+	consumer   bus.Consumer
+	producer   bus.Producer
 	rules      []*RetryRule
 	rulesMap   map[string]*RetryRule // key is the task type
 	closeChan  chan interface{}

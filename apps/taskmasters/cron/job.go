@@ -9,7 +9,7 @@ import (
 	"github.com/pcelvng/task/bus"
 )
 
-func NewJob(r *Rule, p bus.ProducerBus) *Job {
+func NewJob(r *Rule, p bus.Producer) *Job {
 	return &Job{
 		Rule:     r,
 		producer: p,
@@ -18,7 +18,7 @@ func NewJob(r *Rule, p bus.ProducerBus) *Job {
 
 type Job struct {
 	*Rule
-	producer bus.ProducerBus
+	producer bus.Producer
 }
 
 func (j *Job) Run() {

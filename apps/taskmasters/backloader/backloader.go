@@ -30,7 +30,7 @@ func NewBackloader(conf *Config) (*Backloader, error) {
 
 type Backloader struct {
 	config      *Config
-	busProducer bus.ProducerBus
+	busProducer bus.Producer
 }
 
 // Backload returns 'int' which represents the number of

@@ -5,8 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/jbsmith7741/go-tools/uri2struct"
+
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 )
@@ -58,6 +62,9 @@ func MakeWorker(info string) task.Worker {
 
 	// validate
 	err := iOpt.validate()
+	if err != nil {
+		return task.InvalidWorker(err.Error())
+	}
 
 	// date extractor
 	var extractor file.DateExtractor
@@ -84,20 +91,22 @@ func MakeWorker(info string) task.Worker {
 	fOpt.AWSSecretKey = appOpt.AWSSecretKey
 
 	// reader
-	r, rErr := file.NewReader(iOpt.SrcPath, fOpt)
-	if rErr != nil && err == nil {
-		err = rErr // don't override existing err
+	r, err := file.NewReader(iOpt.SrcPath, fOpt)
+	if err != nil {
+		return task.InvalidWorker(err.Error())
 	}
 
+	// destination template
+	destTempl := parseTmpl(iOpt.SrcPath, iOpt.DestTemplate)
+
 	// writer
-	w := file.NewWriteByHour(iOpt.DestTemplate, fOpt)
+	w := file.NewWriteByHour(destTempl, fOpt)
 
 	return &Worker{
 		iOpt:        *iOpt,
 		fOpt:        *fOpt,
 		r:           r,
 		w:           w,
-		err:         err,
 		extractDate: extractor,
 	}
 }
@@ -107,73 +116,33 @@ type Worker struct {
 	fOpt         file.Options
 	r            file.Reader
 	w            *file.WriteByHour
-	err          error // initialization error
 	extractDate  file.DateExtractor
 	discardedCnt int64 // number of records discarded
 }
 
 func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
-	// report initialization error
-	if wkr.err != nil {
-		return task.ErrResult, fmt.Sprint(wkr.err.Error())
-	}
-
 	// read/write loop
-	done := false
-	for !done {
-		select {
-		case <-ctx.Done():
-			return task.ErrResult, "task interrupted"
-		default:
-			// read line
-			ln, rErr := wkr.r.ReadLine()
-			if rErr != nil && rErr != io.EOF {
-				wkr.r.Close()
-				wkr.w.Abort() // cleanup writes to this point
+	for ctx.Err() == nil {
+		ln, err := wkr.r.ReadLine()
+		if err != nil && err != io.EOF {
+			return wkr.abort(fmt.Sprintf("issue at line %v: %v", wkr.r.Stats().LineCnt+1, err.Error()))
+		}
 
-				msg := fmt.Sprintf("issue at line %v: %v", wkr.r.Stats().LineCnt+1, rErr.Error())
-				return task.ErrResult, msg
-			}
+		wErr := wkr.writeLine(ln)
+		if wErr != nil {
+			return wkr.abort(fmt.Sprintf("issue at line %v: %v", wkr.r.Stats().LineCnt, wErr.Error()))
+		}
 
-			// write line
-			err := wkr.writeLine(ln)
-			if err != nil {
-				wkr.r.Close()
-				wkr.w.Abort() // cleanup writes to this point
-
-				msg := fmt.Sprintf("issue at line %v: %v", wkr.r.Stats().LineCnt, err.Error())
-				return task.ErrResult, msg
-			}
-
-			// EOF
-			if rErr == io.EOF {
-				done = true
-			}
+		if err == io.EOF {
+			break
 		}
 	}
 
-	// close
-	wkr.r.Close()
-	err := wkr.w.Close()
-	if err != nil {
-		return task.ErrResult, fmt.Sprint(err.Error())
+	if task.IsDone(ctx) {
+		wkr.abort("")
+		return task.Interrupted()
 	}
-
-	// publish files stats
-	allSts := wkr.w.Stats()
-	for _, sts := range allSts {
-		producer.Send(appOpt.FileTopic, sts.JSONBytes())
-	}
-
-	// msg
-	var msg string
-	if wkr.iOpt.Discard {
-		msg = fmt.Sprintf("wrote %v lines over %v files (%v discarded)", wkr.w.LineCnt(), len(allSts), wkr.discardedCnt)
-	} else {
-		msg = fmt.Sprintf("wrote %v lines over %v files", wkr.w.LineCnt(), len(allSts))
-	}
-
-	return task.CompleteResult, msg
+	return wkr.done(ctx)
 }
 
 // writeLine
@@ -203,4 +172,83 @@ func (wkr *Worker) writeLine(ln []byte) error {
 	}
 
 	return wkr.w.WriteLine(ln, t)
+}
+
+// abort will abort processing by closing the
+// reading and then cleaning up written records.
+func (wkr *Worker) abort(msg string) (task.Result, string) {
+	wkr.r.Close()
+	wkr.w.Abort() // cleanup writes to this point
+
+	return task.ErrResult, msg
+}
+
+// done assumes writing is done; will finalize
+// writes and return a task response. Will also
+// handle sending created files messages on the
+// producer.
+func (wkr *Worker) done(ctx context.Context) (task.Result, string) {
+	// close
+	wkr.r.Close()
+	err := wkr.w.CloseWithContext(ctx)
+	if err != nil {
+		return task.ErrResult, fmt.Sprint(err.Error())
+	}
+
+	// publish files stats
+	allSts := wkr.w.Stats()
+	for _, sts := range allSts {
+		if sts.Size > 0 { // only successful files
+			producer.Send(appOpt.FileTopic, sts.JSONBytes())
+		}
+	}
+
+	// msg
+	var msg string
+	if wkr.iOpt.Discard {
+		msg = fmt.Sprintf("wrote %v lines over %v files (%v discarded)", wkr.w.LineCnt(), len(allSts), wkr.discardedCnt)
+	} else {
+		msg = fmt.Sprintf("wrote %v lines over %v files", wkr.w.LineCnt(), len(allSts))
+	}
+
+	return task.CompleteResult, msg
+}
+
+// parseTmpl is a one-time tmpl parsing that supports the
+// following template tags:
+// - {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
+// - {SRC_TS}   source file timestamp (if available) in following format: 20060102T150405
+//
+// If templ contains any of the supported template tokens but that token
+// is unable to be populated from srcPth then an error is returned. The existence
+// of a non-nil error will return parsedTmpl as the unmodified input tmpl value.
+//
+// If templ does not contain any of the supported tokens, then parsedTmpl is
+// returned as the unmodified tmpl value and err == nil.
+//
+// If the source file full path was:
+// s3://bucket/path/2017/02/03/16/file-20070203T160101.json.gz
+//
+// Then the value of {SRC_FILE} would be:
+// file-20070203T160101.json.gz
+//
+// And the value of {SRC_TS} would be:
+// 20070203T160101
+func parseTmpl(srcPth, tmpl string) string {
+	_, srcFile := filepath.Split(srcPth)
+
+	re := regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
+	srcTS := re.FindString(srcFile)
+
+	// {SRC_FILE}
+	if srcFile != "" {
+		tmpl = strings.Replace(tmpl, "{SRC_FILE}", srcFile, -1)
+	}
+
+	// {SRC_TS}
+	if srcTS != "" {
+		tmpl = strings.Replace(tmpl, "{SRC_TS}", srcTS, -1)
+	}
+
+	return tmpl
 }
