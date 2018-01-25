@@ -1,12 +1,15 @@
 package file
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/buger/jsonparser"
+
+	"errors"
 
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -142,6 +145,37 @@ func (w *WriteByHour) Close() error {
 			writer.Abort()
 			continue
 		}
+		cErr := writer.Close()
+		if cErr != nil {
+			err = cErr
+		}
+	}
+
+	return err
+}
+
+// CloseWContext is just like close but accepts a context.
+// ctx.Done is checked before starting each file close.
+//
+// Returns an error with body "interrupted" if prematurely
+// shutdown by ctx.
+func (w *WriteByHour) CloseWithContext(ctx context.Context) error {
+	var err error
+	for _, writer := range w.writers {
+		// if an error is found then abort
+		// the remaining writers.
+		if err != nil {
+			writer.Abort()
+			continue
+		}
+
+		// context cancel
+		if err = ctx.Err(); err != nil {
+			err = errors.New("interrupted")
+			writer.Abort()
+			continue
+		}
+
 		cErr := writer.Close()
 		if cErr != nil {
 			err = cErr

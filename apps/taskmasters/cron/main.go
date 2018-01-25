@@ -68,7 +68,7 @@ func main() {
 
 // MakeCron will create the cron and setup all the cron jobs.
 // It will not start the cron.
-func MakeCron(rules []*Rule, producer bus.ProducerBus) (*cron.Cron, error) {
+func MakeCron(rules []*Rule, producer bus.Producer) (*cron.Cron, error) {
 	c := cron.New()
 	for _, rule := range rules {
 		job := NewJob(rule, producer)
