@@ -1,7 +1,6 @@
 package dedup
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -22,11 +21,11 @@ type Worker struct {
 	ReadPath  string `uri:"origin"`
 	WritePath string
 	writer    file.Writer
-	reader    io.ReadCloser
+	reader    file.Reader
 }
 
 type Config struct {
-	Path string
+	file.Options
 }
 
 const (
@@ -43,15 +42,15 @@ func (c *Config) NewWorker(info string) task.Worker {
 	}
 
 	var err error
-	if err := uri2struct.Convert(w, info); err != nil {
+	if err := uri2struct.Unmarshal(w, info); err != nil {
 		return task.InvalidWorker("Error parsing info: %s", err)
 	}
 
-	if w.writer, err = file.NewWriter(w.WritePath, nil); err != nil {
+	if w.writer, err = file.NewWriter(w.WritePath, &c.Options); err != nil {
 		return task.InvalidWorker("invalid write path '%s'", w.WritePath)
 	}
 
-	if w.reader, err = file.NewReader(w.ReadPath, nil); err != nil {
+	if w.reader, err = file.NewReader(w.ReadPath, &c.Options); err != nil {
 		return task.InvalidWorker("invalid read path '%s'", w.ReadPath)
 	}
 	return w
@@ -60,12 +59,16 @@ func (c *Config) NewWorker(info string) task.Worker {
 func (w *Worker) DoTask(ctx context.Context) (task.Result, string) {
 
 	// read
-	reader := bufio.NewScanner(w.reader)
-	for reader.Scan() {
+	//reader := bufio.NewScanner(w.reader)
+
+	for ln, err := w.reader.ReadLine(); err != io.EOF; ln, err = w.reader.ReadLine() {
+		if err != nil {
+			return task.Failed(err)
+		}
 		if task.IsDone(ctx) {
 			return task.Interrupted()
 		}
-		if err := w.dedup(reader.Bytes()); err != nil {
+		if err := w.dedup(ln); err != nil {
 			return task.Failed(err)
 		}
 	}
@@ -74,6 +77,9 @@ func (w *Worker) DoTask(ctx context.Context) (task.Result, string) {
 	// write
 	defer w.writer.Close()
 	for _, b := range w.data {
+		if task.IsDone(ctx) {
+			return task.Interrupted()
+		}
 		err := w.writer.WriteLine([]byte(b))
 		if err != nil {
 			return task.Failed(err)

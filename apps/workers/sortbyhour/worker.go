@@ -17,7 +17,7 @@ import (
 
 func newInfoOptions(info string) (*infoOptions, error) {
 	iOpt := &infoOptions{}
-	err := uri2struct.Convert(iOpt, info)
+	err := uri2struct.Unmarshal(iOpt, info)
 	return iOpt, err
 }
 

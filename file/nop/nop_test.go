@@ -44,7 +44,8 @@ func ExampleReader_Read() {
 	if r == nil {
 		return
 	}
-	n, err := r.Read([]byte{})
+	buf := make([]byte, 100)
+	n, err := r.Read(buf)
 	fmt.Println(n)             // output: 10
 	fmt.Println(err)           // output: <nil>
 	fmt.Println(r.sts.ByteCnt) // output: 10
@@ -63,8 +64,8 @@ func ExampleReader_ReadErr() {
 	if r == nil {
 		return
 	}
-
-	n, err := r.Read([]byte{})
+	buf := make([]byte, 100)
+	n, err := r.Read(buf)
 	fmt.Println(n)             // output: 0
 	fmt.Println(err)           // output: read_err
 	fmt.Println(r.sts.ByteCnt) // output: 0
@@ -90,7 +91,8 @@ func ExampleReader_ReadUsingMsgChan() {
 		MsgChan <- []byte("test msg") // len == 8
 	}()
 
-	n, err := r.Read([]byte{})
+	buf := make([]byte, 100)
+	n, err := r.Read(buf)
 	fmt.Println(n)             // output: 8
 	fmt.Println(err)           // output: <nil>
 	fmt.Println(r.sts.ByteCnt) // output: 8
@@ -116,8 +118,8 @@ func ExampleReader_ReadUsingEOFChan() {
 	// EOFChan to avoid panics.
 	EOFChan = make(chan interface{})
 	close(EOFChan)
-
-	n, err := r.Read([]byte{})
+	buf := make([]byte, 100)
+	n, err := r.Read(buf)
 	fmt.Println(n)             // output: 10
 	fmt.Println(err)           // output: EOF
 	fmt.Println(r.sts.ByteCnt) // output: 10
@@ -325,8 +327,9 @@ func ExampleReader_MockReadMode() {
 	// - reader uses MockReadMode set
 	// directly on global variable.
 
-	MockReadMode = "err"
-	r := &Reader{}
+	r := &Reader{
+		MockReadMode: "err",
+	}
 
 	_, readErr := r.Read([]byte{})
 	_, readlineErr := r.ReadLine()
@@ -336,7 +339,6 @@ func ExampleReader_MockReadMode() {
 	fmt.Println(readlineErr) // output: err
 	fmt.Println(closeErr)    // output: err
 
-	MockReadMode = "" // reset MockReadMode
 	// Output:
 	// err
 	// err
@@ -580,8 +582,7 @@ func ExampleWriter_MockWriteMode() {
 	// - reader uses MockWriteMode set
 	// directly on global variable.
 
-	MockWriteMode = "err"
-	w := &Writer{}
+	w := &Writer{MockWriteMode: "err"}
 
 	_, writeErr := w.Write([]byte("test"))
 	writelineErr := w.WriteLine([]byte("test line"))
@@ -592,8 +593,6 @@ func ExampleWriter_MockWriteMode() {
 	fmt.Println(writelineErr) // output: err
 	fmt.Println(abortErr)     // output: err
 	fmt.Println(closeErr)     // output: err
-
-	MockWriteMode = "" // reset MockWriteMode
 
 	// Output:
 	// err
