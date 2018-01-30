@@ -18,7 +18,7 @@ var (
 	fileBufPrefix = "sortbyhour_"           // tmp file prefix
 	sigChan       = make(chan os.Signal, 1) // app signal handling
 	appOpt        options                   // app options
-	producer      bus.Producer           // special producer instance
+	producer      bus.Producer              // special producer instance
 )
 
 func main() {

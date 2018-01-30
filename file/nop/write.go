@@ -2,6 +2,7 @@ package nop
 
 import (
 	"errors"
+	"log"
 	"net/url"
 	"time"
 
@@ -27,39 +28,44 @@ import (
 // - "writeline_err" - returns err on Writer.WriteLine() call.
 // - "abort_err" - returns err on Writer.Abort() call.
 // - "close_err" - returns non-nil error on Writer.Close() call.
-var MockWriteMode string
+//var MockWriteMode string
 
 func NewWriter(pth string) (*Writer, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
+	w := &Writer{
+		sts: sts,
+	}
 	// set mock write mode
 	// Note: the parsed write mode value
 	// will over-write pre-existing value.
 	// Manually set MockWriteMode values
 	// may need to be set after initialization.
-	mockWriteMode, _ := url.Parse(pth)
+	mockWriteMode, err := url.Parse(pth)
+	if err != nil {
+		log.Println(err)
+	}
 	if mockWriteMode != nil {
-		MockWriteMode = mockWriteMode.Host
+		w.MockWriteMode = mockWriteMode.Host
 	}
 
-	if MockWriteMode == "init_err" {
-		return nil, errors.New(MockWriteMode)
+	if w.MockWriteMode == "init_err" {
+		return nil, errors.New(w.MockWriteMode)
 	}
 
-	return &Writer{
-		sts: sts,
-	}, nil
+	return w, nil
 }
 
 // Writer is a no-operation writer useful for testing.
 type Writer struct {
-	sts stat.Stats
+	sts           stat.Stats
+	MockWriteMode string
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
-	if MockWriteMode == "write_err" || MockWriteMode == "err" {
-		return 0, errors.New(MockWriteMode)
+	if w.MockWriteMode == "write_err" || w.MockWriteMode == "err" {
+		return 0, errors.New(w.MockWriteMode)
 	}
 
 	w.sts.AddBytes(int64(len(p)))
@@ -67,8 +73,8 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 }
 
 func (w *Writer) WriteLine(ln []byte) (err error) {
-	if MockWriteMode == "writeline_err" || MockWriteMode == "err" {
-		return errors.New(MockWriteMode)
+	if w.MockWriteMode == "writeline_err" || w.MockWriteMode == "err" {
+		return errors.New(w.MockWriteMode)
 	}
 
 	w.sts.AddBytes(int64(len(ln) + 1))
@@ -81,16 +87,16 @@ func (w *Writer) Stats() stat.Stats {
 }
 
 func (w *Writer) Abort() error {
-	if MockWriteMode == "abort_err" || MockWriteMode == "err" {
-		return errors.New(MockWriteMode)
+	if w.MockWriteMode == "abort_err" || w.MockWriteMode == "err" {
+		return errors.New(w.MockWriteMode)
 	}
 
 	return nil
 }
 
 func (w *Writer) Close() error {
-	if MockWriteMode == "close_err" || MockWriteMode == "err" {
-		return errors.New(MockWriteMode)
+	if w.MockWriteMode == "close_err" || w.MockWriteMode == "err" {
+		return errors.New(w.MockWriteMode)
 	}
 
 	w.sts.SetSize(w.sts.ByteCnt)

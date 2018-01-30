@@ -3,7 +3,9 @@ package nop
 import (
 	"errors"
 	"io"
+	"math"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pcelvng/task-tools/file/stat"
@@ -53,43 +55,53 @@ var MockLine = []byte("mock line\n")
 // - "init_err" - returns err on NewReader
 // - "err" - every method than can, returns an error
 // - "read_err" - returns err on Reader.Read() call.
+// - "read_EOF" - returns io.EOF on Reader.Read() call.
 // - "readline_err" - returns err on Reader.ReadLine() call.
+// - "readline_EOF" - returns io.EOF on Reader.ReadLine() call.
 // - "close_err" - returns non-nil error on Reader.Close() call.
-var MockReadMode string
 
-// MockCreatedDate represents the date the mock file is created.
+/*// MockCreatedDate represents the date the mock file is created.
 // The default is just the zero value of time.Time.
-var MockCreatedDate = time.Time{}
+var MockCreatedDate = time.Time{}*/
 
 func NewReader(pth string) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 	sts.SetCreated(time.Now())
 
+	r := &Reader{sts: sts}
 	// set MockReader
 	mockReadMode, _ := url.Parse(pth)
 	if mockReadMode != nil {
-		MockReadMode = mockReadMode.Host
+		r.MockReadMode = mockReadMode.Host
 	}
 
-	if MockReadMode == "init_err" {
-		return nil, errors.New(MockReadMode)
+	if r.MockReadMode == "init_err" {
+		return nil, errors.New(r.MockReadMode)
 	}
 
-	return &Reader{
-		sts: sts,
-	}, nil
+	return r, nil
 }
 
 type Reader struct {
-	sts stat.Stats
+	sts          stat.Stats
+	MockReadMode string
 }
 
 // Read will return n as len(MockLine) or length
 // of MsgChan bytes.
 func (r *Reader) Read(p []byte) (n int, err error) {
-	if MockReadMode == "read_err" || MockReadMode == "err" {
-		return n, errors.New(MockReadMode)
+	switch strings.ToLower(r.MockReadMode) {
+	case "read_err", "err":
+		return n, errors.New(r.MockReadMode)
+	case "read_eof":
+		return n, io.EOF
+	}
+
+	writefn := func(msg []byte) int {
+		cnt := int(math.Min(float64(len(msg)), float64(len(p))))
+		p = msg[:cnt]
+		return cnt
 	}
 
 	// use MsgChan if MockLine has
@@ -97,21 +109,24 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	if len(MockLine) == 0 {
 		msg := <-MsgChan
 		r.sts.AddBytes(int64(len(msg)))
-		return len(msg), nil
+		return writefn(msg), nil
 	}
 
 	defer r.sts.AddBytes(int64(len(MockLine)))
 	select {
 	case <-EOFChan: // EOF if EOFChan is closed
-		return len(MockLine), io.EOF
+		return writefn(MockLine), io.EOF
 	default:
-		return len(MockLine), nil
+		return writefn(MockLine), nil
 	}
 }
 
 func (r *Reader) ReadLine() (ln []byte, err error) {
-	if MockReadMode == "readline_err" || MockReadMode == "err" {
-		return ln, errors.New(MockReadMode)
+	switch strings.ToLower(r.MockReadMode) {
+	case "readline_err", "err":
+		return ln, errors.New(r.MockReadMode)
+	case "readline_eof":
+		return ln, io.EOF
 	}
 	defer r.sts.AddLine()
 
@@ -140,8 +155,8 @@ func (r *Reader) Stats() stat.Stats {
 func (r *Reader) Close() (err error) {
 	r.sts.SetSize(r.sts.ByteCnt)
 
-	if MockReadMode == "close_err" || MockReadMode == "err" {
-		return errors.New(MockReadMode)
+	if r.MockReadMode == "close_err" || r.MockReadMode == "err" {
+		return errors.New(r.MockReadMode)
 	}
 	return nil
 }

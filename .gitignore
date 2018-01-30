@@ -1,10 +1,6 @@
 .idea/
-apps/taskmasters/cron/config.toml
-apps/taskmasters/cron/*.json
-apps/taskmasters/retry/config.toml
-apps/taskmasters/retry/*.json
-apps/taskmasters/backloader/*.json
-apps/workers/nop/*.json
+*.toml
+*.json
 
 apps/taskmasters/backloader/backloader
 apps/taskmasters/crontask/crontask
@@ -12,4 +8,6 @@ apps/taskmasters/http/http
 apps/taskmasters/responder/responder
 apps/taskmasters/retry/retry
 apps/workers/nop/nop
+apps/workers/deduper/deduper
+
 coverage
