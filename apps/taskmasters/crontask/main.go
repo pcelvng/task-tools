@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -68,15 +67,12 @@ func main() {
 
 // MakeCron will create the cron and setup all the cron jobs.
 // It will not start the cron.
-func MakeCron(rules []*Rule, producer bus.Producer) (*cron.Cron, error) {
+func MakeCron(rules []Rule, producer bus.Producer) (*cron.Cron, error) {
 	c := cron.New()
 	for _, rule := range rules {
 		job := NewJob(rule, producer)
 		if err := c.AddJob(rule.CronRule, job); err != nil {
-			return nil, errors.New(fmt.Sprintf(
-				"err parsing cron: '%v'",
-				err.Error(),
-			))
+			return nil, fmt.Errorf("invalid cron rule: '%s' '%v'", rule.CronRule, err.Error())
 		}
 	}
 

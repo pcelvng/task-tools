@@ -16,7 +16,7 @@ type Config struct {
 	*bus.Options
 
 	// rules
-	Rules []*Rule `toml:"rule"`
+	Rules []Rule `toml:"rule"`
 }
 
 type Rule struct {
