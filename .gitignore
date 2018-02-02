@@ -9,5 +9,6 @@ apps/taskmasters/responder/responder
 apps/taskmasters/retry/retry
 apps/workers/nop/nop
 apps/workers/deduper/deduper
+apps/workers/sortbyhour/sortbyhour
 
 coverage
