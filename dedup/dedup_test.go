@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/file/mock"
 )
 
 func TestNewWorker(t *testing.T) {
@@ -56,44 +57,80 @@ func TestWorker_DoTask(t *testing.T) {
 		cancel   time.Duration
 	}{
 		{
-			msg:      "Good Path",
-			worker:   testWorker("nop://readline_eof?WritePath=nop://&TimeField=time", `{"key""time":"2018-01-02T12:00:00Z"}`, 10),
+			msg: "Good Path",
+			worker: &Worker{
+				Key:       []string{"key"},
+				TimeField: "time",
+				data:      make(map[string]string),
+				reader:    mock.NewReader("", []string{`{"key":"a","time":"2018-01-02T12:00:00Z"}`, `{"key":"b","time":"2018-01-02T12:00:00Z"}`}, 2),
+				writer:    mock.NewWriter("nop://", 0),
+			},
 			result:   task.CompleteResult,
-			expected: "Lines written: 10",
+			expected: "lines written: 2",
 		},
 		{
-			msg:      "Invalid write line",
-			worker:   testWorker("nop://readline_eof?WritePath=nop://writeline_err/other/fake/path.txt", "Random data", 100),
+			msg: "Invalid write line",
+			worker: &Worker{
+				Key:       []string{"key"},
+				TimeField: "time",
+				data:      make(map[string]string),
+				reader:    mock.NewReader("", []string{`{"key":"a","time":"2018-01-02T12:00:00Z"}`}, 10),
+				writer:    mock.NewWriter("nop://writeline_err", 0),
+			},
 			result:   task.ErrResult,
 			expected: "writeline_err",
 		},
 		{
-			msg:      "Cancel context in write loop",
-			worker:   testWorker("nop://readline_eof?WritePath=nop://", "Random data", 10000),
+			msg: "Cancel context in write loop",
+			worker: &Worker{
+				Key:       []string{"time"},
+				TimeField: "time",
+				data:      genData("mock data", 100),
+				reader:    mock.NewReader("", nil, 0),
+				writer:    mock.NewWriter("nop://", time.Microsecond),
+			},
 			result:   task.ErrResult,
 			cancel:   1,
 			expected: "task interrupted",
 		},
 		{
-			msg:    "Invalid read line",
-			worker: mockReadWorker("nop://readline_err?WritePath=nop://", []string{"mock"}, 1),
+			msg: "Invalid read line",
+			worker: &Worker{
+				Key:       []string{"time"},
+				TimeField: "time",
+				data:      make(map[string]string),
+				reader:    mock.NewReader("nop://readline_err", nil, 0),
+				writer:    mock.NewWriter("", 0),
+			},
 			result: task.ErrResult,
 		},
 		{
-			msg:    "Fail on Dedup (invalid data)",
-			worker: mockReadWorker("nop://host/path.txt?WritePath=nop://", []string{"mock"}, 1),
+			msg: "Fail on Dedup (invalid data)",
+			worker: &Worker{
+				Key:       []string{"time"},
+				TimeField: "time",
+				data:      make(map[string]string),
+				reader:    mock.NewReader("nop://readline_err", []string{"mock"}, 1),
+				writer:    mock.NewWriter("", 0),
+			},
 			result: task.ErrResult,
 		},
 		{
-			msg:    "Cancel context in read loop",
-			worker: mockReadWorker("nop://host/path.txt?WritePath=nop://&Key=key&TimeField=time", []string{`{"key":"a","time":"2018-01-15T12:00:00Z"}`}, 1000),
+			msg: "Cancel context in read loop",
+			worker: &Worker{
+				Key:       []string{"time"},
+				TimeField: "time",
+				data:      make(map[string]string),
+				reader:    mock.NewReader("nop://readline_err", []string{`{"key":"a","time":"2018-01-15T12:00:00Z"}`}, 1000),
+				writer:    mock.NewWriter("", 0),
+			},
 			result: task.ErrResult,
 			cancel: time.Nanosecond,
 		},
 	}
 	for _, test := range cases {
 		ctx, cancelfn := context.WithCancel(context.Background())
-		if test.cancel > 0 {
+		if test.cancel != 0 {
 			go func() {
 				time.Sleep(test.cancel)
 				cancelfn()
@@ -111,33 +148,13 @@ func TestWorker_DoTask(t *testing.T) {
 	}
 }
 
-func testWorker(uri string, line string, count int) *Worker {
-	w := (&Config{}).NewWorker(uri)
-	if invalid, msg := task.IsInvalidWorker(w); invalid {
-		panic(msg)
+func genData(line string, n int) map[string]string {
+	m := make(map[string]string)
+	for i := 0; i < n; i++ {
+		m[strconv.Itoa(i)] = line
 	}
-	worker := w.(*Worker)
-	if count > 0 {
-		for i := 0; i < count; i++ {
-			worker.data[strconv.Itoa(i)] = line
-		}
-	}
-	return worker
+	return m
 }
-
-func mockReadWorker(uri string, data []string, count int) *Worker {
-	w := (&Config{}).NewWorker(uri)
-	if invalid, msg := task.IsInvalidWorker(w); invalid {
-		panic(msg)
-	}
-	worker := w.(*Worker)
-	reader, _ := newMockReader(worker.ReadPath)
-	reader.Lines = data
-	reader.LineCount = count
-	worker.reader = reader
-	return worker
-}
-
 func TestWorker_Dedup(t *testing.T) {
 	cases := []struct {
 		msg       string
