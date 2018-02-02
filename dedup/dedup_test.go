@@ -69,7 +69,7 @@ func TestWorker_DoTask(t *testing.T) {
 		},
 		{
 			msg:      "Cancel context in write loop",
-			worker:   testWorker("nop://readline_eof?WritePath=nop://", "Random data", 1000),
+			worker:   testWorker("nop://readline_eof?WritePath=nop://", "Random data", 10000),
 			result:   task.ErrResult,
 			cancel:   1,
 			expected: "task interrupted",
