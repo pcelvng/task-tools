@@ -95,12 +95,12 @@ func (s *Stats) ParseCreated() time.Time {
 	return t
 }
 
-func (s *Stats) JSONBytes() []byte {
+func (s Stats) JSONBytes() []byte {
 	b, _ := json.Marshal(s)
 	return b
 }
 
-func (s *Stats) JSONString() string {
+func (s Stats) JSONString() string {
 	return string(s.JSONBytes())
 }
 
@@ -108,7 +108,7 @@ func (s *Stats) JSONString() string {
 // race conditions. Use Clone if you are updating and
 // reading from stats at the same time. Read from the
 // clone.
-func (s *Stats) Clone() Stats {
+func (s Stats) Clone() Stats {
 	clone := New()
 
 	s.mu.Lock()
