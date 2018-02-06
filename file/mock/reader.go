@@ -1,32 +1,39 @@
-package dedup
+package mock
 
 import (
-	"errors"
 	"io"
+	"math"
 	"strings"
 
-	"math"
-
 	"github.com/pcelvng/task-tools/file/nop"
+	"github.com/pkg/errors"
 )
 
-type mockReader struct {
+type reader struct {
 	*nop.Reader
 	Lines     []string
 	LineCount int
 	i         int
 }
 
-func newMockReader(pth string) (*mockReader, error) {
+func NewReader(pth string, data []string, count int) *reader {
 	r, err := nop.NewReader(pth)
-	return &mockReader{
-		Reader: r,
-		Lines:  []string{"Mock Line"},
-		i:      0,
-	}, err
+	if err != nil {
+		panic(errors.Wrap(err, "invalid mock reader"))
+	}
+
+	if len(data) == 0 {
+		data = []string{"mock line"}
+	}
+	return &reader{
+		Reader:    r,
+		Lines:     data,
+		LineCount: count,
+		i:         0,
+	}
 }
 
-func (r *mockReader) Read(p []byte) (n int, err error) {
+func (r *reader) Read(p []byte) (n int, err error) {
 	switch strings.ToLower(r.MockReadMode) {
 	case "read_err", "err":
 		return 0, errors.New(r.MockReadMode)
@@ -47,13 +54,14 @@ func (r *mockReader) Read(p []byte) (n int, err error) {
 	return ln, nil
 }
 
-func (r *mockReader) nextLine() string {
-	s := r.Lines[r.i]
-	r.i += (r.i + 1) % len(r.Lines)
+func (r *reader) nextLine() string {
+	index := r.i % len(r.Lines)
+	s := r.Lines[index]
+	r.i++
 	return s
 }
 
-func (r *mockReader) ReadLine() (ln []byte, err error) {
+func (r *reader) ReadLine() (ln []byte, err error) {
 	switch strings.ToLower(r.MockReadMode) {
 	case "readline_err", "err":
 		return ln, errors.New(r.MockReadMode)

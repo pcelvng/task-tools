@@ -43,7 +43,7 @@ func (c *Config) NewWorker(info string) task.Worker {
 
 	var err error
 	if err := uri2struct.Unmarshal(w, info); err != nil {
-		return task.InvalidWorker("Error parsing info: %s", err)
+		return task.InvalidWorker("error parsing info: %s", err)
 	}
 
 	if w.writer, err = file.NewWriter(w.WritePath, &c.Options); err != nil {
@@ -85,7 +85,7 @@ func (w *Worker) DoTask(ctx context.Context) (task.Result, string) {
 			return task.Failed(err)
 		}
 	}
-	return task.Completed("Lines written: %d", w.writer.Stats().LineCnt)
+	return task.Completed("lines written: %d", w.writer.Stats().LineCnt)
 }
 
 func (w *Worker) dedup(b []byte) error {
