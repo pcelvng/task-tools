@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jbsmith7741/go-tools/uri2struct"
+	"github.com/jbsmith7741/go-tools/uri"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
@@ -17,7 +17,7 @@ import (
 
 func newInfoOptions(info string) (*infoOptions, error) {
 	iOpt := &infoOptions{}
-	err := uri2struct.Unmarshal(iOpt, info)
+	err := uri.Unmarshal(iOpt, info)
 	return iOpt, err
 }
 
