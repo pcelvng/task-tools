@@ -6,42 +6,53 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	pq "github.com/lib/pq"
 
 	"github.com/pcelvng/task-tools/db/stat"
-	"database/sql"
 )
 
 // BulkInserter implementations should have an initializer that
 // also pings the db to check the connection.
 type BulkInserter interface {
-	// Delete takes a fully formed delete query string that
-	// will be executed in the transaction before the inserts.
-	Delete(query string)
-
-	// AddRow should prepare the insert query but not actually send
-	// the insert to the db until Commit is called.
+	// Delete takes a delete query string with optional vals values
+	// and will be executed in the transaction before bulk inserts.
+	// The delete will be rolled back if there was a problem anywhere
+	// during the transaction.
 	//
-	// The reported Stats.InsertCnt will reflect the number of times
-	// this method is called. The implementation will not attempt to
-	// do a select count of the inserted records after insert or tally
-	// the insert count as reported by the db.
+	// The delete statement will not be executed until Commit is
+	// called.
 	//
-	// Even through the row column values and tableName could change
-	// from call to call, if the user does so, the batch insert will
-	// most likely fail since the underlying implementation will likely
-	// perform multi-line inserts with each insert statment.
-	// It is up to the user to make sure row map keys and values
-	// are consistent across all AddRow calls.
-	AddRow(r map[string]interface{}, tableName string)
+	// If query does not end with a ';' to end the statement then
+	// a semicolon will be added. (necessary?)
+	Delete(query string, vals ...interface{})
 
-	// Commit will execute the delete query and all inserts as efficiently
-	// as the underlying adapter will allow. If there is a problem executing
-	// or ctx is cancelled then the transaction should rollback.
+	// Columns is required before calling Commit. If Columns has
+	// not been called then a call to Commit will return an error.
+	// cols represents the table column names. The order of cols
+	// is important and must match the order of row values when
+	// calling AddRow.
+	Columns(cols []string)
+
+	// AddRow will add a row to the totals rows that will be prepared,
+	// executed and committed when Commit is called. No validation is performed
+	// when calling AddRow but if the len of any row provided to AddRow != len(cols)
+	// then Commit will return an error without starting the transaction.
+	// Other types of errors, such as problems with the row values will be detected
+	// by the specific db server or by the underlying go adapter. Either way, such
+	// errors will be detected and returned only after a call to Commit.
+	AddRow(r []interface{})
+
+	// Commit will execute the delete query and efficiently insert all rows. The
+	// delete and inserts will all occur in a single transaction. If there is
+	// a problem during the transaction then the transaction will be rolled back.
 	//
 	// In the presence of a delete query the stat.Stats will do its best to
-	// populate the number of rows deleted if possible from the underlying adapter.
-	Commit(ctx context.Context) (stat.Stats, error)
+	// populate the number of rows deleted from the underlying adapter.
+	//
+	// Cancelling ctx will cancel the transaction and rollback. A cancelled context
+	// will result in Commit returning a non-nil error.
+	//
+	// Calling Commit more than once is allowed and will repeat the entire transaction.
+	Commit(ctx context.Context, tableName string) (stat.Stats, error)
 }
 
 type Options struct {

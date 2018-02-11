@@ -103,10 +103,10 @@ func ExampleStat_JSONBytes() {
 	sts.ColumnCnt = 5
 
 	b := sts.JSONBytes()
-	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"inserted":100,"columns":5}
+	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
 
 	// Output:
-	// {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"inserted":100,"columns":5}
+	// {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
 }
 
 func ExampleStat_JSONString() {
@@ -120,10 +120,10 @@ func ExampleStat_JSONString() {
 	sts.ColumnCnt = 5
 
 	s := sts.JSONString()
-	fmt.Println(s) // output: {"linecnt":10,"bytecnt":100,"size":200,"checksum":"test checksum","path":"test path","created":"test created"}
+	fmt.Println(s) // output: {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
 
 	// Output:
-	// {"linecnt":10,"bytecnt":100,"size":200,"checksum":"test checksum","path":"test path","created":"test created"}
+	// {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
 }
 
 //func BenchmarkAddLine(b *testing.B) {
