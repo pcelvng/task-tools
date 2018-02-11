@@ -36,7 +36,13 @@ type Stats struct {
 	// the bulk insert.
 	RemovedCnt int64 `json:"removed"`
 
+	// RowCnt is the number of raw rows added. This is not
+	// the actual insert numbers reported back by the db
+	// after inserting.
+	RowCnt int64 `json:"rows"`
+
 	// InsertCnt is the number of records inserted with the bulk insert.
+	// This is the actual number reported back by the db.
 	InsertCnt int64 `json:"inserted"`
 
 	// ColumnCnt is the number of columns of each row inserted.
