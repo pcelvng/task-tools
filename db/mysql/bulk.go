@@ -1,64 +1,26 @@
 package mysql
 
 import (
-	"fmt"
-	"strings"
+	"context"
 	"database/sql"
 
-	"github.com/lib/pq"
-	"github.com/jmoiron/sqlx"
-
-	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/db/stat"
-	"context"
 )
-
-/*
-`
-START TRANSACTION;
-
-INSERT INTO table_name (column1, column2, column3,...)
-values (value1, value2, value3,...);
-
-INSERT INTO table_name (column1, column2, column3,...)
-values (value1, value2, value3,...);
-
-INSERT INTO table_name (column1, column2, column3,...)
-values (value1, value2, value3,...);
-
-INSERT INTO table_name (column1, column2, column3,...)
-values (value1, value2, value3,...);
-
-END TRANSACTION;
-`
-*/
 
 var (
 	insertTmpl = "INSERT INTO %s (%s) VALUES (%s);\n"
 )
 
-func NewBulkInserter(dsn string) (db.BulkInserter, error) {
+func NewBatchLoader(db *sql.DB) (*BatchLoader, error) {
 
-	db, _ := sql.Open(driverName, dataSourceName)
-	pq.Array()
-
-
-	if db == nil {
-		return nil, err
-	}
-
-	err = db.Ping()
-	if err != nil {
-		return nil, err
-	}
-
-	return &SQLBatchLoader{
-		db:    db,
-		dbSts: stat.New(),
+	return &BatchLoader{
+		db:   db,
+		cols: make([]string, 0),
+		rows: make([][]interface{}, 0),
 	}, nil
 }
 
-// SQLBatchLoader will:
+// BatchLoader will:
 // - accept records row-by-row to insert as a batch
 // - remove records to be replaced or updated.
 // - get a count of removed records
@@ -78,80 +40,28 @@ func NewBulkInserter(dsn string) (db.BulkInserter, error) {
 // - table to insert into
 // - columns names and number of columns
 // - column values
-type BatchInsert struct {
-	db        *sql.DB
-	tx        *sql.Tx
-	fields    string
-	fieldCnt  int
-	tableName string
-	dbSts     stat.Stats
-	rows      []map[string]interface{}
+type BatchLoader struct {
+	db       *sql.DB
+	delQuery string
+	delVals  []interface{}
+	cols     []string        // column names - order must match each row value order.
+	rows     [][]interface{} // row values - order must match provided column order.
 }
 
-type Record struct {
-	Field1 string `db:"field1"`
-	Field2 string
+func (l *BatchLoader) Delete(query string, vals ...interface{}) {
+	l.delQuery = query
+	l.delVals = vals
 }
 
-func Ping(db *sqlx.DB) error {
-	if db == nil {
-		return nil
-	}
-
-	// ping
-	err = db.Ping()
-	if err != nil {
-		return err
-	}
+func (l *BatchLoader) Columns(cols []string) {
+	l.cols = cols
 }
 
-func (l *SQLBatchLoader) AddRow(r map[string]interface{}) error {
-	columns := make([]string, len(r))
-	values := make([]interface{}, len(r))
-	placeholders := make([]string, len(r))
-	i := 0
-	for k, v := range r {
-		columns[i] = k
-		values[i] = v
-		placeholders[i] = "?"
-		i++
-	}
-
-	// generate '?' notation query (without insert values)
-	insQ := fmt.Sprintf(
-		`INSERT INTO table_name (%s) VALUES (%s);`,
-		strings.Join(columns, ","), // join column
-		// names
-		strings.Join(placeholders, ","), // join "?"
-	)
-
-	// convert '?' standard notation into adapter specific notation
-	insQ = l.db.Rebind(insQ)
-
-	//stmt, err := l.db.Prepare(insQ)
-	stmt, err := l.db.Preparex(insQ)
-	sqlx.LoadFile()
+func (l *BatchLoader) AddRow(row []interface{}) {
+	l.rows = append(l.rows, row)
 }
 
-func (l *SQLBatchLoader) CommitTx(ctx context.Context) error {
-	tx, err := l.conn.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	fieldNames := strings.Join(l.fields, ",")
-	fieldNameValues := strings.Join(l.fields, ",:")
-	tmpl := fmt.Sprintf(`INSERT INTO %s (%s) values (:%s)`, l.tableName, fieldNames, fieldNameValues)
-	//stmt, err := l.tx.PrepareNamed(tmpl)
+func (l *BatchLoader) Commit(ctx context.Context, tableName string) (stat.Stats, error) {
 
-	l.tx.Rebind()
-	for _, r := range l.rows {
-		result, err := l.tx.NamedExec(tmpl, r)
-		result.
-	}
-	//tx.Prepare(l.inserts)
-	return nil
-}
-
-func (l *SQLBatchLoader) Stats() stat.Stats {
-	return l.dbSts.Clone()
+	return stat.Stats{}, nil
 }
