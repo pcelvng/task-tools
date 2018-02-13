@@ -6,21 +6,21 @@ import (
 )
 
 func ExampleNewFromBytes() {
-	sts := NewFromBytes([]byte(`{"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"inserted":100,"columns":5}`))
+	sts := NewFromBytes([]byte(`{"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5}`))
 	fmt.Println(sts.Started)      // output: teststarted
 	fmt.Println(sts.Dur.String()) // output: 1s
-	fmt.Println(sts.DBName)       // output: test-db-name
-	fmt.Println(sts.DBTable)      // output: test.table
+	fmt.Println(sts.Table)        // output: test.table
 	fmt.Println(sts.Removed)      // output: 10
+	fmt.Println(sts.Rows)         // output: 100
 	fmt.Println(sts.Inserted)     // output: 100
 	fmt.Println(sts.Cols)         // output: 5
 
 	// Output:
 	// teststarted
 	// 1s
-	// test-db-name
 	// test.table
 	// 10
+	// 100
 	// 100
 	// 5
 }
@@ -67,8 +67,7 @@ func ExampleStat_Clone() {
 	sts := New()
 	sts.Started = "teststarted"
 	sts.Dur = Duration{time.Second}
-	sts.DBName = "test-db-name"
-	sts.DBTable = "test.table"
+	sts.Table = "test.table"
 	sts.Removed = 10
 	sts.Inserted = 100
 	sts.Cols = 5
@@ -76,8 +75,7 @@ func ExampleStat_Clone() {
 	cln := sts.Clone()
 	fmt.Println(cln.Started)
 	fmt.Println(cln.Dur.String())
-	fmt.Println(cln.DBName)
-	fmt.Println(cln.DBTable)
+	fmt.Println(cln.Table)
 	fmt.Println(cln.Removed)
 	fmt.Println(cln.Inserted)
 	fmt.Println(cln.Cols)
@@ -85,7 +83,6 @@ func ExampleStat_Clone() {
 	// Output:
 	// teststarted
 	// 1s
-	// test-db-name
 	// test.table
 	// 10
 	// 100
@@ -96,34 +93,36 @@ func ExampleStat_JSONBytes() {
 	sts := New()
 	sts.Started = "teststarted"
 	sts.Dur = Duration{time.Second}
-	sts.DBName = "test-db-name"
-	sts.DBTable = "test.table"
+	sts.Table = "test.table"
 	sts.Removed = 10
+	sts.Rows = 100
 	sts.Inserted = 100
 	sts.Cols = 5
+	sts.BatchHour = "testbatchhour"
 
 	b := sts.JSONBytes()
-	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
+	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
 
 	// Output:
-	// {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
+	// {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
 }
 
 func ExampleStat_JSONString() {
 	sts := New()
 	sts.Started = "teststarted"
 	sts.Dur = Duration{time.Second}
-	sts.DBName = "test-db-name"
-	sts.DBTable = "test.table"
+	sts.Table = "test.table"
 	sts.Removed = 10
+	sts.Rows = 100
 	sts.Inserted = 100
 	sts.Cols = 5
+	sts.BatchHour = "testbatchhour"
 
-	s := sts.JSONString()
-	fmt.Println(s) // output: {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
+	b := sts.JSONString()
+	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
 
 	// Output:
-	// {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
+	// {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
 }
 
 //func BenchmarkAddLine(b *testing.B) {
