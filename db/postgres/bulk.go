@@ -3,9 +3,13 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+
+	"sync"
 
 	"github.com/pcelvng/task-tools/db/stat"
 )
@@ -17,10 +21,10 @@ var maxBatchSize = 100 // max number of rows in a single insert statement
 // Postgres. It is up to the user to make sure it is.
 func NewBatchLoader(db *sql.DB) *BatchLoader {
 	return &BatchLoader{
-		db:        db,
-		batchSize: maxBatchSize,
-		cols:      make([]string, 0),
-		fRows:     make([][]interface{}, 0),
+		db:           db,
+		maxBatchSize: maxBatchSize,
+		cols:         make([]string, 0),
+		fRows:        make([]interface{}, 0),
 	}
 }
 
@@ -45,12 +49,14 @@ func NewBatchLoader(db *sql.DB) *BatchLoader {
 // - columns names and number of columns
 // - column values
 type BatchLoader struct {
-	db        *sql.DB
-	batchSize int // maximum size of a batch
-	delQuery  string
-	delVals   []interface{}
-	cols      []string        // column names - order must match each row value order.
-	fRows     [][]interface{} // flatten/batched row values - order must match provided column order.
+	db           *sql.DB
+	maxBatchSize int // maximum size of a batch
+	delQuery     string
+	delVals      []interface{}
+	cols         []string      // column names - order must match each row value order.
+	fRows        []interface{} // flattened row values for all rows
+
+	mu sync.Mutex
 }
 
 func (l *BatchLoader) Delete(query string, vals ...interface{}) {
@@ -63,53 +69,73 @@ func (l *BatchLoader) Columns(cols []string) {
 }
 
 func (l *BatchLoader) AddRow(row []interface{}) {
-	l.fRows = append(l.fRows, row)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.fRows = append(l.fRows, row...)
 }
 
 func (l *BatchLoader) Commit(ctx context.Context, tableName string) (stat.Stats, error) {
-	// num of batches
-	batches, lastBatchSize := numBatches(maxBatchSize, len(l.fRows))
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	sts := stat.New()
 
-	// batch sizes
-	batchSize := maxBatchSize
-	if batches == 1 {
-		batchSize = lastBatchSize
+	// must have cols defined
+	if len(l.cols) == 0 {
+		return sts, errors.New("columns not provided")
 	}
 
-	// standard batch bulk insert
-	ins := GenInsert(l.cols, batchSize, tableName)
+	// check rows have correct number of values
+	if len(l.fRows)%len(l.cols) > 0 {
+		return sts, errors.New("rows values do not match number of columns")
+	}
 
-	// last batch bulk insert
-	lastIns := GenInsert(l.cols, lastBatchSize, tableName)
+	// number of rows
+	numRows := len(l.fRows) / len(l.cols)
+
+	// batches info
+	numBatches, batchSize, lastBatchSize := numBatches(l.maxBatchSize, numRows)
 
 	// do transaction
-	return l.doTx(batches, ins, lastIns, ctx)
+	return l.doTx(numRows, numBatches, batchSize, lastBatchSize, tableName, ctx)
 }
 
 // doTx will execute the transaction.
-func (l *BatchLoader) doTx(batchCnt int, ins, lastIns string, ctx context.Context) (stat.Stats, error) {
+func (l *BatchLoader) doTx(numRows, numBatches, batchSize, lastBatchSize int, tableName string, ctx context.Context) (stat.Stats, error) {
 	sts := stat.New()
 
+	// standard batch bulk insert
+	insQ := GenInsert(l.cols, batchSize, tableName)
+
+	// last batch bulk insert
+	var lastInsQ string
+	if lastBatchSize != batchSize {
+		lastInsQ = GenInsert(l.cols, lastBatchSize, tableName)
+	}
+
 	// begin
+	started := time.Now()
 	tx, err := l.db.BeginTx(ctx, nil)
 	if err != nil {
-		return sts, nil
+		return sts, err
 	}
 
 	// prepare ins stmt
 	cx, _ := context.WithCancel(ctx)
-	insStmt, err := tx.PrepareContext(cx, ins)
+	insStmt, err := tx.PrepareContext(cx, insQ)
 	if err != nil {
-		return sts, nil
+		tx.Rollback()
+		return sts, err
 	}
 
 	// prepare last ins stmt (if needed)
-	var lstStmt *sql.Tx
-	if lastIns != "" {
+	lastStmt := insStmt
+	if lastInsQ != "" {
 		cx, _ = context.WithCancel(ctx)
-		lstStmt, err := tx.PrepareContext(cx, lastIns)
+		lastStmt, err = tx.PrepareContext(cx, lastInsQ)
 		if err != nil {
-			return sts, nil
+			tx.Rollback()
+			return sts, err
 		}
 	}
 
@@ -118,41 +144,61 @@ func (l *BatchLoader) doTx(batchCnt int, ins, lastIns string, ctx context.Contex
 		cx, _ = context.WithCancel(ctx)
 		rslt, err := tx.ExecContext(cx, l.delQuery, l.delVals...)
 		if err != nil {
-			return sts, nil
+			tx.Rollback()
+			return sts, err
 		}
-		sts.RemovedCnt, _ = rslt.RowsAffected()
+		sts.Removed, _ = rslt.RowsAffected()
 	}
 
 	// execute inserts
-	for b := 0; b < batchCnt-1; b++ {
+	numCols := len(l.cols)
+	numVals := batchSize * numCols // number of values in a standard batch
+	for b := 0; b < numBatches; b++ {
 		cx, _ = context.WithCancel(ctx)
 
-		rslt, err := insStmt.ExecContext(cx, l.rows...)
-		if err != nil {
-			return sts, nil
+		// handle last batch
+		if b == (numBatches - 1) {
+			insStmt = lastStmt
+			numVals = lastBatchSize * numCols
 		}
-		sts.RemovedCnt, _ = rslt.RowsAffected()
-	}
-}
 
-// flattenRows will flatten the rows so
-// that each new 'row' will contains all the columns
-// of a single batch.
-func flattenRows(batches, lastBatchSize, numFRows int, rows [][]interface{}) [][]interface{} {
-	fRows := make([][]interface{}, batches)
+		// do insert
+		rslt, err := insStmt.ExecContext(cx, l.fRows[b*numCols:b*numCols+numVals]...)
+		if err != nil {
+			tx.Rollback()
+			return sts, err
+		}
+		insertCnt, _ := rslt.RowsAffected()
+		sts.Inserted += insertCnt
+	}
+	ended := time.Now()
+
+	// more stats
+	sts.SetStarted(started)
+	sts.Dur = stat.Duration{ended.Sub(started)}
+	sts.Table = tableName
+	sts.Rows = int64(numRows)
+	sts.Cols = numCols
+
+	return sts, nil
 }
 
 // numBatches will return the number of batches and the
 // number of rows in the last batch.
 // If batches = 1 then last will be the length of the first
 // batch because first and last are the same.
-func numBatches(batchSize, numRows int) (batches int, last int) {
+func numBatches(maxBatchSize, numRows int) (batches int, batchSize, lastBatchSize int) {
 	batches = numRows / batchSize
-	last = numRows % batchSize
-	if last > 0 {
+	lastBatchSize = numRows % batchSize
+	if lastBatchSize > 0 {
 		batches += 1
 	}
-	return batches, last
+
+	batchSize = maxBatchSize
+	if batches == 1 {
+		batchSize = lastBatchSize
+	}
+	return batches, batchSize, lastBatchSize
 }
 
 // GenBatchInsert will generate a Postgres parsable

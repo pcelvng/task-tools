@@ -26,34 +26,36 @@ type Stats struct {
 	// Dur is the execution duration.
 	Dur Duration `json:"dur"`
 
-	// DBName
-	DBName string `json:"db"`
+	// Table is the table or schema.table value
+	Table string `json:"table"`
 
-	// DBTable is the table or schema.table value
-	DBTable string `json:"table"`
-
-	// RemovedCnt is the number of records removed before
+	// Removed is the number of records removed before
 	// the bulk insert.
-	RemovedCnt int64 `json:"removed"`
+	Removed int64 `json:"removed"`
 
-	// RowCnt is the number of raw rows added. This is not
+	// Rows is the number of raw rows added. This is not
 	// the actual insert numbers reported back by the db
-	// after inserting.
-	RowCnt int64 `json:"rows"`
+	// after inserting but should be.
+	Rows int64 `json:"rows"`
 
-	// InsertCnt is the number of records inserted with the bulk insert.
+	// Inserted is the number of records inserted with the bulk insert.
 	// This is the actual number reported back by the db.
-	InsertCnt int64 `json:"inserted"`
+	Inserted int64 `json:"inserted"`
 
-	// ColumnCnt is the number of columns of each row inserted.
-	ColumnCnt int `json:"columns"`
+	// Cols is the number of columns of each row inserted.
+	Cols int `json:"cols"`
+
+	// BatchHour is the hour of data for which the
+	// batch data belongs. Not populated by bulk
+	// inserter.
+	BatchHour string `json:"batch_hour"`
 
 	mu sync.Mutex
 }
 
-// AddRow will atomically increment the InsertCnt value.
+// AddRow will atomically increment the Inserted value.
 func (s *Stats) AddRow() {
-	atomic.AddInt64(&s.InsertCnt, 1)
+	atomic.AddInt64(&s.Inserted, 1)
 }
 
 // SetStarted will set the Created field in the

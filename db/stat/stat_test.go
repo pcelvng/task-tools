@@ -11,9 +11,9 @@ func ExampleNewFromBytes() {
 	fmt.Println(sts.Dur.String()) // output: 1s
 	fmt.Println(sts.DBName)       // output: test-db-name
 	fmt.Println(sts.DBTable)      // output: test.table
-	fmt.Println(sts.RemovedCnt)   // output: 10
-	fmt.Println(sts.InsertCnt)    // output: 100
-	fmt.Println(sts.ColumnCnt)    // output: 5
+	fmt.Println(sts.Removed)      // output: 10
+	fmt.Println(sts.Inserted)     // output: 100
+	fmt.Println(sts.Cols)         // output: 5
 
 	// Output:
 	// teststarted
@@ -32,7 +32,7 @@ func ExampleStat_AddRow() {
 	sts.AddRow()
 	sts.AddRow()
 
-	fmt.Println(sts.InsertCnt) // output: 3
+	fmt.Println(sts.Inserted) // output: 3
 
 	// Output:
 	// 3
@@ -69,18 +69,18 @@ func ExampleStat_Clone() {
 	sts.Dur = Duration{time.Second}
 	sts.DBName = "test-db-name"
 	sts.DBTable = "test.table"
-	sts.RemovedCnt = 10
-	sts.InsertCnt = 100
-	sts.ColumnCnt = 5
+	sts.Removed = 10
+	sts.Inserted = 100
+	sts.Cols = 5
 
 	cln := sts.Clone()
 	fmt.Println(cln.Started)
 	fmt.Println(cln.Dur.String())
 	fmt.Println(cln.DBName)
 	fmt.Println(cln.DBTable)
-	fmt.Println(cln.RemovedCnt)
-	fmt.Println(cln.InsertCnt)
-	fmt.Println(cln.ColumnCnt)
+	fmt.Println(cln.Removed)
+	fmt.Println(cln.Inserted)
+	fmt.Println(cln.Cols)
 
 	// Output:
 	// teststarted
@@ -98,9 +98,9 @@ func ExampleStat_JSONBytes() {
 	sts.Dur = Duration{time.Second}
 	sts.DBName = "test-db-name"
 	sts.DBTable = "test.table"
-	sts.RemovedCnt = 10
-	sts.InsertCnt = 100
-	sts.ColumnCnt = 5
+	sts.Removed = 10
+	sts.Inserted = 100
+	sts.Cols = 5
 
 	b := sts.JSONBytes()
 	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
@@ -115,9 +115,9 @@ func ExampleStat_JSONString() {
 	sts.Dur = Duration{time.Second}
 	sts.DBName = "test-db-name"
 	sts.DBTable = "test.table"
-	sts.RemovedCnt = 10
-	sts.InsertCnt = 100
-	sts.ColumnCnt = 5
+	sts.Removed = 10
+	sts.Inserted = 100
+	sts.Cols = 5
 
 	s := sts.JSONString()
 	fmt.Println(s) // output: {"started":"teststarted","dur":"1s","db":"test-db-name","table":"test.table","removed":10,"rows":0,"inserted":100,"columns":5}
