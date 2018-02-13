@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jbsmith7741/go-tools/uri2struct"
+	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/json-iterator/go"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
@@ -42,7 +42,7 @@ func (c *Config) NewWorker(info string) task.Worker {
 	}
 
 	var err error
-	if err := uri2struct.Unmarshal(w, info); err != nil {
+	if err := uri.Unmarshal(w, info); err != nil {
 		return task.InvalidWorker("error parsing info: %s", err)
 	}
 
