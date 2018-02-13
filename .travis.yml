@@ -3,5 +3,12 @@ language: go
 go:
   - 1.9
 
+services:
+  - mysql
+  - postgresql
+
+addons:
+  - postgres: "9.6"
+
 script:
   - go test -cover -v ./...

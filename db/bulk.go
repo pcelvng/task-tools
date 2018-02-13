@@ -10,6 +10,7 @@ import (
 
 	"github.com/pcelvng/task-tools/db/postgres"
 	"github.com/pcelvng/task-tools/db/stat"
+	"github.com/pcelvng/task-tools/db/generic"
 )
 
 // BatchLoader implementations should have an initializer that
@@ -26,13 +27,6 @@ type BatchLoader interface {
 	// If query does not end with a ';' to end the statement then
 	// a semicolon will be added. (necessary?)
 	Delete(query string, vals ...interface{})
-
-	// Columns is required before calling Commit. If Columns has
-	// not been called then a call to Commit will return an error.
-	// cols represents the table column names. The order of cols
-	// is important and must match the order of row values when
-	// calling AddRow.
-	Columns(cols []string)
 
 	// AddRow will add a row to the totals rows that will be prepared,
 	// executed and committed when Commit is called. No validation is performed
@@ -54,21 +48,32 @@ type BatchLoader interface {
 	// will result in Commit returning a non-nil error.
 	//
 	// Calling Commit more than once is allowed and will repeat the entire transaction.
-	Commit(ctx context.Context, tableName string) (stat.Stats, error)
+	//
+	// The order of cols is important and must match the order of row values when
+	// calling AddRow.
+	Commit(ctx context.Context, tableName string, cols ...string) (stat.Stats, error)
 }
 
 // MySQLDB is a convenience initializer to obtain a MySQL DB connection.
-func MySQLDB(un, pass, host string, dbName string) (*sql.DB, error) {
+func MySQLDB(un, pass, host, dbName string) (*sql.DB, error) {
 	connStr := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?parseTime=true", un, pass, host, dbName)
 	return sql.Open("mysql", connStr)
 }
 
 // PostgresDB is a convenience initializer to obtain a Posgres DB connection.
-func PostgresDB(un, pass, host string, dbName string) (*sql.DB, error) {
-	connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=enable", un, pass, host)
+func PostgresDB(un, pass, host, dbName string) (*sql.DB, error) {
+	connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=enable", un, pass, host, dbName)
 	return sql.Open("postgres", connStr)
 }
 
-func NewBatchLoader(db *sql.DB) BatchLoader {
-	return postgres.NewBatchLoader(db)
+func NewBatchLoader(driverName string, sqlDB *sql.DB) BatchLoader {
+
+	switch driverName {
+	case "postgres":
+		return postgres.NewBatchLoader(sqlDB)
+	default:
+		return generic.NewBatchLoader(sqlDB)
+	}
+
+	return postgres.NewBatchLoader(sqlDB)
 }
