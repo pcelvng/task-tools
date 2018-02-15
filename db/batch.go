@@ -8,9 +8,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 
-	"github.com/pcelvng/task-tools/db/postgres"
+	"github.com/pcelvng/task-tools/db/batch"
 	"github.com/pcelvng/task-tools/db/stat"
-	"github.com/pcelvng/task-tools/db/generic"
 )
 
 // BatchLoader implementations should have an initializer that
@@ -54,26 +53,26 @@ type BatchLoader interface {
 	Commit(ctx context.Context, tableName string, cols ...string) (stat.Stats, error)
 }
 
-// MySQLDB is a convenience initializer to obtain a MySQL DB connection.
-func MySQLDB(un, pass, host, dbName string) (*sql.DB, error) {
-	connStr := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?parseTime=true", un, pass, host, dbName)
+// MySQL is a convenience initializer to obtain a MySQL DB connection.
+func MySQL(un, pass, host, dbName string) (*sql.DB, error) {
+	connStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", un, pass, host, dbName)
 	return sql.Open("mysql", connStr)
 }
 
-// PostgresDB is a convenience initializer to obtain a Posgres DB connection.
-func PostgresDB(un, pass, host, dbName string) (*sql.DB, error) {
+// Postgres is a convenience initializer to obtain a Postgres DB connection.
+func Postgres(un, pass, host, dbName string) (*sql.DB, error) {
 	connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=enable", un, pass, host, dbName)
 	return sql.Open("postgres", connStr)
 }
 
-func NewBatchLoader(driverName string, sqlDB *sql.DB) BatchLoader {
-
-	switch driverName {
-	case "postgres":
-		return postgres.NewBatchLoader(sqlDB)
-	default:
-		return generic.NewBatchLoader(sqlDB)
-	}
-
-	return postgres.NewBatchLoader(sqlDB)
+// NewBatchLoader will create a BatchLoader.
+// dbType should be:
+// * "postgres" for Postgres loading
+// * "mysql" for MySQL loading
+//
+// Other adapters have not been tested but will likely work
+// if they support transactions and the '?' execution placeholder
+// value.
+func NewBatchLoader(dbType string, sqlDB *sql.DB) BatchLoader {
+	return batch.NewBatchLoader(dbType, sqlDB)
 }

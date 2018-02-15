@@ -1,4 +1,4 @@
-package postgres
+package batch
 
 import (
 	"context"
@@ -11,55 +11,22 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
 
-var pgConnStr = "user=%s password=%s host=%s dbname=%s sslmode=disable"
-var pgConn *sql.DB
+var (
+	// postgres
+	pgConn, pgDB *sql.DB
+	pgConnStr    = "user=%s password=%s host=%s dbname=%s sslmode=disable"
 
-func TestMain(m *testing.M) {
-	// postgres user (default is current user)
-	usr, _ := user.Current()
-
-	// setup postgres test db
-	pgDB, err := sql.Open("postgres", fmt.Sprintf(pgConnStr, usr.Username, "", "", "postgres"))
-	if err != nil {
-		log.Fatalln(err)
-	}
-	_, err = pgDB.Exec("CREATE DATABASE ci_test;")
-	if err != nil {
-		if err.Error() != `pq: database "ci_test" already exists` {
-			log.Fatalln(err)
-		}
-	}
-
-	// pg conn for all tests to use
-	pgConn, err = sql.Open("postgres", fmt.Sprintf(pgConnStr, usr.Username, "", "", "ci_test"))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// create test schema
-	_, err = pgConn.Exec(`Create SCHEMA IF NOT EXISTS test;`)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// run tests
-	code := m.Run()
-
-	// close ci_test database session so it can be dropped
-	pgConn.Close()
-
-	// remove postgres test db
-	pgDB.Exec("DROP DATABASE ci_test;")
-	pgDB.Close()
-
-	os.Exit(code)
-}
+	// mysql
+	msqlConn, msqlDB *sql.DB
+	msqlConnStr      = "%s:%s@tcp(%s)/%s?parseTime=true"
+)
 
 func TestBatchLoader_Delete(t *testing.T) {
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	bl.Delete("delete query", []interface{}{"one", "two"}...)
 
@@ -77,7 +44,7 @@ func TestBatchLoader_Delete(t *testing.T) {
 }
 
 func TestBatchLoader_AddRow(t *testing.T) {
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	bl.AddRow([]interface{}{"one", "two", "three"})
 	bl.AddRow([]interface{}{"one", "two", "three"})
@@ -94,7 +61,7 @@ func TestBatchLoader_Commit(t *testing.T) {
 	createTable(tableTestCommit)
 	defer dropTable("test.test_commit")
 
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	bl.fRows = []interface{}{"one", 2, dt}
@@ -109,11 +76,30 @@ func TestBatchLoader_Commit(t *testing.T) {
 	}
 }
 
+func TestBatchLoader_MySQL(t *testing.T) {
+	createTableMySQL(tableTestMySQL)
+	defer dropTableMySQL("test_mysql")
+
+	bl := NewBatchLoader("mysql", msqlConn)
+
+	dt := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
+	bl.fRows = []interface{}{"one", 2, dt}
+
+	sts, err := bl.Commit(context.Background(), "test_mysql", []string{"f1", "f2", "f3"}...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sts.Started == "" {
+		t.Error("expected value for sts.Started")
+	}
+}
+
 func TestBatchLoader_DeleteCommit(t *testing.T) {
 	createTable(tableTestCommit)
 	defer dropTable("test.test_commit")
 
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -146,7 +132,7 @@ func TestBatchLoader_MultipleBatches(t *testing.T) {
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 2
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -184,7 +170,7 @@ func TestBatchLoader_MultipleSameBatches(t *testing.T) {
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 2
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -219,7 +205,7 @@ func TestBatchLoader_CommitNoCols(t *testing.T) {
 	// Test that num of cols is validated. Must be greater
 	// than zero.
 
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	bl.AddRow([]interface{}{"one", 2, dt1})
@@ -250,13 +236,13 @@ func TestBatchLoader_DoTx(t *testing.T) {
 	ctxCncld, cncl := context.WithCancel(ctx)
 	cncl() // call cancel
 
-	bl1 := NewBatchLoader(pgConn) // vanilla
+	bl1 := NewBatchLoader("postgres", pgConn) // vanilla
 
-	bl2 := NewBatchLoader(pgConn)
+	bl2 := NewBatchLoader("postgres", pgConn)
 	bl2.cols = []string{"f2"}            // with cols
 	bl2.fRows = []interface{}{"badval1"} // one row
 
-	bl3 := NewBatchLoader(pgConn) // bad del query
+	bl3 := NewBatchLoader("postgres", pgConn) // bad del query
 	bl3.Delete("bad")
 
 	scenarios := []scenario{
@@ -328,7 +314,7 @@ func BenchmarkBatchLoader_CommitNoIndexSmallTable(b *testing.B) {
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -363,7 +349,7 @@ func BenchmarkBatchLoader_Commit1IndexSmallTable(b *testing.B) {
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -399,7 +385,7 @@ func BenchmarkBatchLoader_Commit2IndexSmallTable(b *testing.B) {
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -432,7 +418,7 @@ func BenchmarkBatchLoader_CommitNoIndexSmallTableWithDeletes(b *testing.B) {
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -467,7 +453,7 @@ func BenchmarkBatchLoader_Commit1IndexSmallTableWithDeletesOnIndex(b *testing.B)
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -502,7 +488,7 @@ func BenchmarkBatchLoader_Commit1IndexSmallTableWithDeletesOffIndex(b *testing.B
 	defer dropTable("test.test_commit")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	dt1 := time.Date(2017, 02, 03, 04, 05, 06, 0, time.UTC)
 	dt2 := time.Date(2017, 03, 03, 04, 05, 06, 0, time.UTC)
@@ -537,7 +523,7 @@ func BenchmarkBatchLoader_CommitNoIndexLargeTable(b *testing.B) {
 	defer dropTable("test.test_large")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	// prep with 10,000 rows
 	for i := 0; i < 10000; i++ {
@@ -562,7 +548,7 @@ func BenchmarkBatchLoader_CommitNoIndexLargeTableSmallBatch(b *testing.B) {
 	defer dropTable("test.test_large")
 
 	maxBatchSize = 1
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	// prep with 10,000 rows
 	for i := 0; i < 10000; i++ {
@@ -591,7 +577,7 @@ func BenchmarkBatchLoader_Commit1IndexLargeTable(b *testing.B) {
 	defer dropTable("test.test_large")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	// prep with 10,000 rows
 	for i := 0; i < 10000; i++ {
@@ -618,7 +604,7 @@ func BenchmarkBatchLoader_Commit2IndexLargeTable(b *testing.B) {
 	defer dropTable("test.test_large")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 
 	// prep with 10,000 rows
 	for i := 0; i < 10000; i++ {
@@ -644,7 +630,7 @@ func BenchmarkBatchLoader_Commit2IndexLargeTableWithDeleteNotIndex(b *testing.B)
 	defer dropTable("test.test_large")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 	bl.Delete(`DELETE FROM test.test_large WHERE ts2 >= '2017-04-03 04:05:06'`)
 
 	// prep with 10,000 rows
@@ -671,7 +657,7 @@ func BenchmarkBatchLoader_Commit2IndexLargeTableWithDeleteOnIndex(b *testing.B) 
 	defer dropTable("test.test_large")
 
 	maxBatchSize = 200
-	bl := NewBatchLoader(pgConn)
+	bl := NewBatchLoader("postgres", pgConn)
 	bl.Delete(`DELETE FROM test.test_large WHERE ts1 >= '2017-02-03 04:05:06'`)
 
 	// prep with 10,000 rows
@@ -701,6 +687,30 @@ func dropTable(tableName string) {
 		log.Fatalln(err)
 	}
 }
+
+func createTableMySQL(query string) {
+	_, err := msqlConn.Exec(query)
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func dropTableMySQL(tableName string) {
+	_, err := msqlConn.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName))
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+var tableTestMySQL = `
+	CREATE TABLE IF NOT EXISTS test_mysql (
+		id int UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+		f1 varchar(10) NOT NULL,
+		f2 int NOT NULL,
+		f3 timestamp NOT NULL,
+		created timestamp DEFAULT NOW()
+	);
+`
 
 var tableTestCommit = `
 	CREATE TABLE IF NOT EXISTS test.test_commit (
@@ -1171,4 +1181,99 @@ var largeRowVals = []interface{}{
 	"6 hundred years",
 	"2017-02-03 04:05:06",
 	"2017-04-03 04:05:06",
+}
+
+func TestMain(m *testing.M) {
+	err := setupPG()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = setupMySQL()
+	if err != nil {
+		teardownPG()
+		log.Fatal(err)
+	}
+
+	// run tests
+	code := m.Run()
+
+	// teardown
+	teardownPG()
+	teardownMySQL()
+
+	os.Exit(code)
+}
+
+func setupPG() error {
+	// postgres user (default is current user)
+	usr, _ := user.Current()
+	un := usr.Username
+
+	// setup postgres test db
+	var err error
+	pgDB, err = sql.Open("postgres", fmt.Sprintf(pgConnStr, un, "", "", "postgres"))
+	if err != nil {
+		return err
+	}
+	_, err = pgDB.Exec("CREATE DATABASE ci_test;")
+	if err != nil {
+		if err.Error() != `pq: database "ci_test" already exists` {
+			return err
+		}
+	}
+
+	// pg conn for all tests to use
+	pgConn, err = sql.Open("postgres", fmt.Sprintf(pgConnStr, un, "", "", "ci_test"))
+	if err != nil {
+		return err
+	}
+
+	// create test schema
+	_, err = pgConn.Exec(`Create SCHEMA IF NOT EXISTS test;`)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func teardownPG() {
+	// close ci_test database session so it can be dropped
+	pgConn.Close()
+
+	// remove postgres test db
+	pgDB.Exec("DROP DATABASE ci_test;")
+	pgDB.Close()
+}
+
+func setupMySQL() error {
+	// setup mysql test db
+	var err error
+	msqlDB, err = sql.Open("mysql", fmt.Sprintf(msqlConnStr, "root", "", "", ""))
+	if err != nil {
+		return err
+	}
+	_, err = msqlDB.Exec("CREATE DATABASE IF NOT EXISTS ci_test;")
+	if err != nil {
+		return err
+
+	}
+
+	// mysql conn for all tests to use
+	msqlConn, err = sql.Open("mysql", fmt.Sprintf(msqlConnStr, "root", "", "", "ci_test"))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func teardownMySQL() {
+	// close ci_test database session so it can be dropped
+	msqlConn.Close()
+
+	// remove mysql test db
+	msqlDB.Exec("DROP DATABASE ci_test;")
+	msqlDB.Close()
 }
