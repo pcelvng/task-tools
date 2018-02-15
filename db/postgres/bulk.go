@@ -13,7 +13,7 @@ import (
 	"github.com/pcelvng/task-tools/db/stat"
 )
 
-var maxBatchSize = 100 // max number of rows in a single insert statement
+var maxBatchSize = 200 // max number of rows in a single insert statement
 
 // NewBatchLoader will return an instance of a Postgres BatchLoader.
 // The initializer will not verify that the underlying driver is
@@ -81,11 +81,6 @@ func (l *BatchLoader) Commit(ctx context.Context, tableName string, cols ...stri
 		return sts, errors.New("columns not provided")
 	}
 
-	// check rows have correct number of values
-	if len(l.fRows)%len(l.cols) > 0 {
-		return sts, errors.New("rows values do not match number of columns")
-	}
-
 	// number of rows
 	numRows := len(l.fRows) / len(l.cols)
 
@@ -93,11 +88,11 @@ func (l *BatchLoader) Commit(ctx context.Context, tableName string, cols ...stri
 	numBatches, batchSize, lastBatchSize := numBatches(l.maxBatchSize, numRows)
 
 	// do transaction
-	return l.doTx(numRows, numBatches, batchSize, lastBatchSize, tableName, ctx)
+	return l.doTx(ctx, numRows, numBatches, batchSize, lastBatchSize, tableName)
 }
 
 // doTx will execute the transaction.
-func (l *BatchLoader) doTx(numRows, numBatches, batchSize, lastBatchSize int, tableName string, ctx context.Context) (stat.Stats, error) {
+func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, lastBatchSize int, tableName string) (stat.Stats, error) {
 	sts := stat.New()
 
 	// standard batch bulk insert
@@ -124,13 +119,12 @@ func (l *BatchLoader) doTx(numRows, numBatches, batchSize, lastBatchSize int, ta
 	}
 
 	// prepare last ins stmt (if needed)
-	lastStmt := insStmt
+	var lastStmt *sql.Stmt
 	if lastInsQ != "" {
-		lastStmt, err = tx.PrepareContext(ctx, lastInsQ)
-		if err != nil {
-			tx.Rollback()
-			return sts, err
-		}
+		lastStmt, _ = tx.PrepareContext(ctx, lastInsQ)
+	}
+	if lastStmt == nil {
+		lastStmt = insStmt
 	}
 
 	// execute delete (if provided)
@@ -165,9 +159,6 @@ func (l *BatchLoader) doTx(numRows, numBatches, batchSize, lastBatchSize int, ta
 
 	// commit
 	err = tx.Commit()
-	if err != nil {
-		return sts, err
-	}
 	ended := time.Now()
 
 	// more stats
@@ -177,7 +168,7 @@ func (l *BatchLoader) doTx(numRows, numBatches, batchSize, lastBatchSize int, ta
 	sts.Rows = int64(numRows)
 	sts.Cols = numCols
 
-	return sts, nil
+	return sts, err
 }
 
 // numBatches will return the number of batches and the
@@ -185,16 +176,39 @@ func (l *BatchLoader) doTx(numRows, numBatches, batchSize, lastBatchSize int, ta
 // If batches = 1 then last will be the length of the first
 // batch because first and last are the same.
 func numBatches(maxBatchSize, numRows int) (batches int, batchSize, lastBatchSize int) {
-	batches = numRows / batchSize
-	lastBatchSize = numRows % batchSize
+	// will not allow divide by zero panic
+	if maxBatchSize == 0 {
+		return 0, 0, 0
+	}
+
+	// calc number of batches and the remainder.
+	// if there is a remainder then that also counts
+	// as a batch.
+	batches = numRows / maxBatchSize
+	lastBatchSize = numRows % maxBatchSize
 	if lastBatchSize > 0 {
 		batches += 1
 	}
 
+	// if there is just one batch
+	// then the batchSize and the
+	// lastBatchSize are the same. If
+	// lastBatchSize is also zero then
+	// there is one even batch equal to
+	// the maxBatchSize.
 	batchSize = maxBatchSize
-	if batches == 1 {
+	if batches == 1 && lastBatchSize != 0 {
 		batchSize = lastBatchSize
 	}
+
+	// lastBatchSize == 0 when the number of rows is
+	// evenly divisible by maxBatchSize.
+	// In this case the lastBatchSize is the maxBatchSize
+	// which is also the batchSize.
+	if lastBatchSize == 0 {
+		lastBatchSize = batchSize
+	}
+
 	return batches, batchSize, lastBatchSize
 }
 
