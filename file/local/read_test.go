@@ -3,6 +3,8 @@ package local
 import (
 	"fmt"
 	"os"
+	"strings"
+	"testing"
 )
 
 func createFile(pth string) {
@@ -363,4 +365,64 @@ func ExampleReader_CloseAndClose() {
 	// <nil>
 	// 54f30d75cf7374c7e524a4530dbc93c2
 	// true
+}
+
+func TestListFiles(t *testing.T) {
+	// setup - create objects
+	pths := []string{
+		"./test/f1.txt",
+		"./test/f2.txt",
+		"./test/dir/f3.txt",
+	}
+
+	for _, pth := range pths {
+		createFile(pth)
+	}
+
+	// test returns only files - no directories
+	dirPth := "./test/"
+	allSts, err := ListFiles(dirPth)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(allSts) == 2 {
+		sts1 := allSts[0]
+		sts2 := allSts[1]
+
+		// make sure stats are set
+		if sts1.Created == "" {
+			t.Error("file sts.Created not set")
+		}
+		if sts1.Size == 0 {
+			t.Error("file sts.Size not set")
+		}
+
+		f1Txt := strings.Contains(sts1.Path, "f1.txt")
+		if !f1Txt {
+			f1Txt = strings.Contains(sts2.Path, "f1.txt")
+		}
+
+		f2Txt := strings.Contains(sts1.Path, "f2.txt")
+		if !f2Txt {
+			f2Txt = strings.Contains(sts2.Path, "f2.txt")
+		}
+
+		if !f1Txt {
+			t.Error("f1.txt not returned")
+		}
+
+		if !f2Txt {
+			t.Error("f2.txt not returned")
+		}
+	} else {
+		t.Errorf("expected 2 files but got %v instead\n", len(allSts))
+	}
+
+	// cleanup
+	for _, pth := range pths {
+		os.Remove(pth)
+	}
+	os.Remove("./test/dir/")
+	os.Remove("./test")
 }

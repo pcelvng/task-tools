@@ -56,20 +56,18 @@ func ExampleFileSizeErr() {
 }
 
 func ExampleFileCreated() {
-	os.Setenv("TZ", "UTC")
-	pth, _, _ := util.OpenTmp("./test/", "")
+	pth, _, _ := util.OpenTmp("./test/", "pre_")
 
 	d := "2018-01-01T01:01:01Z"
 	c, _ := time.Parse(time.RFC3339, d)
 	os.Chtimes(pth, c, c)
 	created := fileCreated(pth)
-
+	created = created.In(time.UTC)
 	fmt.Println(created.Format(time.RFC3339)) // output: 2018-01-01T01:01:01Z
 
 	// cleanup
 	os.Remove(pth)
 	os.Remove("./test")
-	os.Unsetenv("TZ")
 
 	// Output:
 	// 2018-01-01T01:01:01Z

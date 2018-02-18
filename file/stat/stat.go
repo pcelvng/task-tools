@@ -77,12 +77,12 @@ func (s *Stats) SetPath(pth string) {
 }
 
 // SetCreated will set the Created field in the
-// format time.RFC3339.
+// format time.RFC3339 in UTC.
 func (s *Stats) SetCreated(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.Created = t.Format(time.RFC3339)
+	s.Created = t.In(time.UTC).Format(time.RFC3339)
 }
 
 // ParseCreated will attempt to parse the Created
@@ -90,9 +90,11 @@ func (s *Stats) SetCreated(t time.Time) {
 // ParseCreated expects the Created time string is in
 // time.RFC3339. If there is a parse error
 // then the time.Time zero value is returned.
+//
+// The returned time will always be in UTC.
 func (s *Stats) ParseCreated() time.Time {
 	t, _ := time.Parse(time.RFC3339, s.Created)
-	return t
+	return t.In(time.UTC)
 }
 
 func (s Stats) JSONBytes() []byte {

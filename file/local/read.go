@@ -6,8 +6,11 @@ import (
 	"crypto/md5"
 	"hash"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"path"
 
 	"github.com/pcelvng/task-tools/file/stat"
 )
@@ -56,11 +59,11 @@ func NewReader(pth string) (*Reader, error) {
 
 // Reader
 type Reader struct {
-	f        *os.File
-	rBuf     *bufio.Reader
-	rGzip    *gzip.Reader
-	rHshr    *hashReader
-	sts      stat.Stats
+	f      *os.File
+	rBuf   *bufio.Reader
+	rGzip  *gzip.Reader
+	rHshr  *hashReader
+	sts    stat.Stats
 	closed bool
 }
 
@@ -120,4 +123,33 @@ func (r *hashReader) Read(p []byte) (n int, err error) {
 	// writing nothing doesn't affect the final sum
 	r.Hshr.Write(p[:n])
 	return
+}
+
+// ListFiles will list all files in the provided pth directory.
+// pth must be a directory.
+//
+// Will not list recursively and does not return directories.
+// Checksums are not returned.
+func ListFiles(pth string) ([]stat.Stats, error) {
+	pth, _ = filepath.Abs(pth)
+	filesInfo, err := ioutil.ReadDir(pth)
+	if err != nil {
+		return nil, err
+	}
+
+	allSts := make([]stat.Stats, 0)
+	for _, fInfo := range filesInfo {
+		if fInfo.IsDir() {
+			continue
+		}
+
+		sts := stat.New()
+		sts.SetCreated(fInfo.ModTime())
+		sts.SetPath(path.Join(pth, fInfo.Name())) // full abs path
+		sts.SetSize(fInfo.Size())
+
+		allSts = append(allSts, sts)
+	}
+
+	return allSts, nil
 }
