@@ -1230,7 +1230,7 @@ func setupPG() error {
 	}
 
 	// create test schema
-	_, err = pgConn.Exec(`Create SCHEMA IF NOT EXISTS test;`)
+	_, err = pgConn.Exec(`CREATE SCHEMA test;`)
 	if err != nil {
 		log.Println("problem setting up postgres schema")
 		return err
