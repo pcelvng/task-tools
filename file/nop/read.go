@@ -160,3 +160,22 @@ func (r *Reader) Close() (err error) {
 	}
 	return nil
 }
+
+// ListFiles will return a single stat.Stats record
+// whose path is the same as pth.
+//
+// if pth has 'err' in the first part of the path
+// then no stats will be returned along with an
+// instance of error.
+func ListFiles(pth string) ([]stat.Stats, error) {
+	sts := stat.New()
+
+	// determine to return err
+	errMode, _ := url.Parse(pth)
+	if errMode != nil && errMode.Host == "err" {
+		return nil, errors.New(errMode.Host)
+	}
+	sts.SetPath(pth)
+
+	return []stat.Stats{sts}, nil
+}
