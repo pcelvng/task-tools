@@ -4,6 +4,10 @@ import (
 	"io"
 	"net/url"
 
+	"path/filepath"
+
+	"path"
+
 	"github.com/pcelvng/task-tools/file/local"
 	"github.com/pcelvng/task-tools/file/nop"
 	"github.com/pcelvng/task-tools/file/s3"
@@ -139,13 +143,8 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
-	var u *url.URL
-	u, err = url.Parse(pth)
-	if err != nil {
-		return
-	}
 
-	switch u.Scheme {
+	switch parseScheme(pth) {
 	case "s3":
 		accessKey := opt.AWSAccessKey
 		secretKey := opt.AWSSecretKey
@@ -161,4 +160,77 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	}
 
 	return w, err
+}
+
+// List is a generic List function that will call the
+// correct type of implementation based on the file schema, aka
+// 's3://'. If there is no schema or if the schema is 'local://'
+// then the local file List will be called.
+//
+// pthDir is expected to be a dir.
+func List(pthDir string, opt *Options) ([]stat.Stats, error) {
+	if opt == nil {
+		opt = NewOptions()
+	}
+
+	fileType := parseScheme(pthDir)
+	switch fileType {
+	case "s3":
+		accessKey := opt.AWSAccessKey
+		secretKey := opt.AWSSecretKey
+		return s3.ListFiles(pthDir, accessKey, secretKey)
+	case "nop":
+		return nop.ListFiles(pthDir)
+	}
+	return local.ListFiles(pthDir)
+}
+
+// Glob will only match to files and will
+// not match recursively. Only files directly in pthDir
+// are candidates for matching.
+//
+// Supports the same globbing patterns as provided in *nix
+// terminals.
+//
+// Globing in directories is not supported.
+// ie - s3://bucket/path/*/files.txt will not work
+// but s3://bucket/path/to/*.txt will work.
+func Glob(pth string, opt *Options) ([]stat.Stats, error) {
+	if opt == nil {
+		opt = NewOptions()
+	}
+	pthDir, pattern := path.Split(pth)
+
+	// get all files in dir
+	allSts, err := List(pthDir, opt)
+	if err != nil {
+		return nil, err
+	}
+
+	// filter out files that don't match the glob pattern
+	glbSts := make([]stat.Stats, 0)
+	for _, sts := range allSts {
+		_, fName := path.Split(sts.Path)
+		isMatch, err := filepath.Match(pattern, fName)
+		if err != nil {
+			return nil, err
+		}
+
+		if isMatch {
+			glbSts = append(glbSts, sts)
+		}
+	}
+
+	return glbSts, nil
+}
+
+// parseScheme will return the pth scheme (if exists).
+// If there is no scheme then an empty string is returned.
+func parseScheme(pth string) string {
+	u, err := url.Parse(pth)
+	if err != nil {
+		return ""
+	}
+
+	return u.Scheme
 }

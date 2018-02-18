@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"testing"
-
 	"strings"
+	"testing"
 
 	"github.com/minio/minio-go"
 )

@@ -3,7 +3,6 @@ package s3
 import (
 	"net/url"
 	"strings"
-
 	"sync"
 
 	"github.com/minio/minio-go"
