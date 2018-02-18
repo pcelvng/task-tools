@@ -4,10 +4,22 @@ import (
 	"net/url"
 	"strings"
 
+	"sync"
+
+	"github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/buf"
 )
 
-var StoreHost = "s3.amazonaws.com"
+var (
+	// domain of s3 compatible api
+	StoreHost = "s3.amazonaws.com"
+
+	// map that maintains s3 clients
+	// to prevent creating new clients with
+	// every file for the same auth credentials
+	s3Clients = make(map[string]*minio.Client)
+	mu        sync.Mutex
+)
 
 func NewOptions() *Options {
 	return &Options{
@@ -17,6 +29,18 @@ func NewOptions() *Options {
 
 type Options struct {
 	*buf.Options
+}
+
+func newS3Client(accessKey, secretKey string) (s3Client *minio.Client, err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	s3Client, _ = s3Clients[StoreHost+accessKey+secretKey]
+	if s3Client == nil {
+		s3Client, err = minio.New(StoreHost, accessKey, secretKey, true)
+		s3Clients[StoreHost+accessKey+secretKey] = s3Client
+	}
+	return s3Client, err
 }
 
 // parsePth will parse an s3 path of the form:

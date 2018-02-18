@@ -4,25 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"testing"
+
+	"strings"
 
 	"github.com/minio/minio-go"
 )
-
-func createTestFile(pth string) error {
-	w, err := NewWriter(pth, testAccessKey, testSecretKey, nil)
-	if err != nil {
-		return err
-	}
-	w.WriteLine([]byte("test line"))
-	w.WriteLine([]byte("test line"))
-	err = w.Close()
-	return err
-}
-
-func rmTestFile(pth string) error {
-	bckt, objPth := parsePth(pth)
-	return testS3Client.RemoveObject(bckt, objPth)
-}
 
 func ExampleNewReader() {
 	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
@@ -322,4 +309,89 @@ func ExampleReader_CloseandClose() {
 	// 20
 	// 2
 	// 42e649f9834028184ec21940d13a300f
+}
+
+func TestListFiles(t *testing.T) {
+	// setup - create objects
+	pths := []string{
+		fmt.Sprintf("s3://%s/list-test/f1.txt", testBucket),
+		fmt.Sprintf("s3://%s/list-test/f2.txt", testBucket),
+		fmt.Sprintf("s3://%s/list-test/dir/f3.txt", testBucket),
+	}
+
+	for _, pth := range pths {
+		createTestFile(pth)
+	}
+
+	// test returns only files
+	dirPth := fmt.Sprintf("s3://%s/list-test/", testBucket)
+	allSts, err := ListFiles(dirPth, testAccessKey, testSecretKey)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(allSts) == 2 {
+		f1Txt := strings.Contains(allSts[0].Path, "f1.txt")
+		if !f1Txt {
+			f1Txt = strings.Contains(allSts[1].Path, "f1.txt")
+		}
+
+		f2Txt := strings.Contains(allSts[0].Path, "f2.txt")
+		if !f2Txt {
+			f2Txt = strings.Contains(allSts[1].Path, "f2.txt")
+		}
+
+		if !f1Txt {
+			t.Error("f1.txt not returned")
+		}
+
+		if !f2Txt {
+			t.Error("f2.txt not returned")
+		}
+	} else {
+		t.Errorf("expected 2 files but got %v instead\n", len(allSts))
+	}
+
+	// test that missing trailing "/" has same results
+	dirPth = fmt.Sprintf("s3://%s/list-test", testBucket)
+	allSts, err = ListFiles(dirPth, testAccessKey, testSecretKey)
+	if err != nil {
+		t.Errorf("expected nil but got err '%v'\n", err.Error())
+	}
+
+	if len(allSts) == 2 {
+		f1Txt := strings.Contains(allSts[0].Path, "f1.txt")
+		if !f1Txt {
+			f1Txt = strings.Contains(allSts[1].Path, "f1.txt")
+		}
+
+		f2Txt := strings.Contains(allSts[0].Path, "f2.txt")
+		if !f2Txt {
+			f2Txt = strings.Contains(allSts[1].Path, "f2.txt")
+		}
+
+		if !f1Txt {
+			t.Error("f1.txt not returned")
+		}
+
+		if !f2Txt {
+			t.Error("f2.txt not returned")
+		}
+	} else {
+		t.Errorf("expected 2 files but got %v instead\n", len(allSts))
+	}
+
+	// test bad s3 client
+	origHost := StoreHost
+	StoreHost = "bad/endpoint/"
+	_, err = ListFiles(dirPth, testAccessKey, testSecretKey)
+	if err == nil {
+		t.Error("expected err but got nil instead")
+	}
+
+	// cleanup
+	StoreHost = origHost // restore endpoint
+	for _, pth := range pths {
+		rmTestFile(pth)
+	}
 }

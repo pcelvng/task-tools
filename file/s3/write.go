@@ -12,6 +12,20 @@ import (
 )
 
 func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, error) {
+	// s3 client:
+	// using minio client library;
+	// final writing doesn't happen until Close is called
+	// but getting the client now does authentication
+	// so we know early of authentication issues.
+	s3Client, err := newS3Client(accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return newWriterFromS3Client(pth, s3Client, opt)
+}
+
+func newWriterFromS3Client(pth string, s3Client *minio.Client, opt *Options) (*Writer, error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
@@ -34,16 +48,6 @@ func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, 
 
 	// s3 bucket, objPth
 	bucket, objPth := parsePth(pth)
-
-	// s3 client:
-	// using minio client library;
-	// final writing doesn't happen until Close is called
-	// but getting the client now does authentication
-	// so we know early of authentication issues.
-	s3Client, err := minio.New(StoreHost, accessKey, secretKey, true)
-	if err != nil {
-		return nil, err
-	}
 
 	return &Writer{
 		s3Client: s3Client,

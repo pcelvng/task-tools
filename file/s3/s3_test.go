@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 	StoreHost = testEndpoint
 
 	// test client
-	testS3Client, err = minio.New(testEndpoint, testAccessKey, testSecretKey, true)
+	testS3Client, err = newTestS3Client()
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
@@ -73,6 +73,10 @@ func TestMain(m *testing.M) {
 	os.Exit(runRslt)
 }
 
+func newTestS3Client() (*minio.Client, error) {
+	return newS3Client(testAccessKey, testSecretKey)
+}
+
 func createBucket(bckt string) error {
 	exists, err := testS3Client.BucketExists(bckt)
 	if err != nil {
@@ -88,6 +92,22 @@ func createBucket(bckt string) error {
 
 func rmBucket(bckt string) error {
 	return testS3Client.RemoveBucket(bckt)
+}
+
+func createTestFile(pth string) error {
+	w, err := newWriterFromS3Client(pth, testS3Client, nil)
+	if err != nil {
+		return err
+	}
+	w.WriteLine([]byte("test line"))
+	w.WriteLine([]byte("test line"))
+	err = w.Close()
+	return err
+}
+
+func rmTestFile(pth string) error {
+	bckt, objPth := parsePth(pth)
+	return testS3Client.RemoveObject(bckt, objPth)
 }
 
 func ExampleParsePth() {
@@ -116,6 +136,10 @@ func TestParsePth(t *testing.T) {
 		{"s3://", "", ""},
 		{"s3://bucket", "bucket", ""},
 		{"s3://bucket/", "bucket", ""},
+		{"s3://bucket/pth/to", "bucket", "pth/to"},
+		{"s3://bucket/pth/to/", "bucket", "pth/to/"},
+		{"s3://bucket/pth//to/", "bucket", "pth//to/"},
+		{"s3://bucket/pth//to//", "bucket", "pth//to//"},
 		{"s3://bucket/pth/to/object.txt", "bucket", "pth/to/object.txt"},
 	}
 
