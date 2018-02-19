@@ -1,12 +1,12 @@
 package s3
 
 import (
-	"net/url"
 	"strings"
 	"sync"
 
 	"github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/buf"
+	"github.com/pcelvng/task-tools/file/util"
 )
 
 var (
@@ -49,9 +49,7 @@ func newS3Client(accessKey, secretKey string) (s3Client *minio.Client, err error
 // pth was not in the correct format for parsing or
 // object and or bucket do not exist in pth.
 func parsePth(pth string) (bucket, objPth string) {
-	// err is not possible since it's not via a request.
-	pPth, _ := url.Parse(pth)
-	bucket = pPth.Host
-	objPth = strings.TrimLeft(pPth.Path, "/")
+	_, bucket, objPth = util.ParsePath(pth)
+	objPth = strings.TrimLeft(objPth, "/")
 	return bucket, objPth
 }

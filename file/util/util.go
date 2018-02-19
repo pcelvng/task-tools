@@ -6,6 +6,7 @@ import (
 	"hash"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -156,4 +157,24 @@ func (h *HashCloser) Close() error {
 func Ext(p string) string {
 	p = strings.Replace(p, ".gz", "", 1)
 	return path.Ext(p)
+}
+
+// ParsePath will parse a path of the form:
+// "{scheme}://{host}/{path/to/file.txt}
+// and return the scheme, host and file path.
+//
+// Example:
+// "s3://my-host/path/to/file.txt"
+//
+// Returns:
+// scheme: "s3"
+// host: "my-host"
+// fPth: "path/to/file.txt"
+func ParsePath(pth string) (scheme, host, fPth string) {
+	pPth, _ := url.Parse(pth) // err is not possible since it's not via a request.
+	scheme = pPth.Scheme
+	host = pPth.Host
+	fPth = strings.TrimLeft(pPth.Path, "/")
+
+	return scheme, host, fPth
 }
