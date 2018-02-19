@@ -1,13 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"context"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pcelvng/task"
@@ -41,8 +40,18 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
+	doneCtx := tskMstr.DoFileWatch(ctx)
 
-	<-sigChan
+	select {
+	case <-sigChan:
+		cncl()
+		<-doneCtx.Done() // wait for taskmaster to shutdown
+	case <-doneCtx.Done():
+		// done of its own accord
+		// can be done of its own accord if
+		// using a file bus.
+	}
+
 	return err
 }
 
