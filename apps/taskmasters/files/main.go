@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -28,10 +30,10 @@ func run() (err error) {
 	// signal handling - be ready to capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	// set appOpt
+	// app options
 	appOpt, err := loadAppOptions()
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("config: '%v'\n", err.Error()))
 	}
 
 	// task master

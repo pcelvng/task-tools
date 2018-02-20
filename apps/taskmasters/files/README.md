@@ -43,7 +43,8 @@ count_check = 100
 [[rule]]
 type = "dedup"
 src_pattern = "s3://rmd-partners/facebook/hourly/raw-sorted/{yyyy}/{mm}/{dd}/{hh}/"
-mode = "immediate_response" # default
+count_check = 100
+cron_check = "* * * * *"
 
 [[rule]]
 type = "fb-hourly-transform"
@@ -62,4 +63,7 @@ src_pattern = "s3://rmd-partners/facebook/hourly/processed/{yyyy}/{mm}/{dd}/{hh}
 
 1. Respond immediately on file creation
 2. Check file 'groups' periodically
-	- every hour on a minute offset
+	- based on a cron event
+	- based on reaching a maximum count
+	- both cron and max count, whichever comes first
+	
