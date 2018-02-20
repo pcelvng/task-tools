@@ -19,14 +19,13 @@ Listens on a message bus for file stats json objects.
 ## Toml Fields
 ```toml
 bus = "" #
-glob_hourly_start = 30 # run 30 minutes after the hour
 ```
 
 
 ```toml
 [[rule]]
 type = "sortbyhour"
-src_pattern = "s3://rmd-partners/facebook/raw-hourly/{yyyy}/{mm}/{dd}/{hh}/"
+src_pattern = "s3://rmd-partners/facebook/raw-hourly/*/*/*/*/"
 
 # if cron_check is specified, then files that match src_pattern are sequestered until
 # the croncheck triggers a check that will create a task for every pattern match
@@ -44,7 +43,8 @@ count_check = 100
 [[rule]]
 type = "dedup"
 src_pattern = "s3://rmd-partners/facebook/hourly/raw-sorted/{yyyy}/{mm}/{dd}/{hh}/"
-mode = "immediate_response" # default
+count_check = 100
+cron_check = "* * * * *"
 
 [[rule]]
 type = "fb-hourly-transform"
@@ -63,4 +63,7 @@ src_pattern = "s3://rmd-partners/facebook/hourly/processed/{yyyy}/{mm}/{dd}/{hh}
 
 1. Respond immediately on file creation
 2. Check file 'groups' periodically
-	- every hour on a minute offset
+	- based on a cron event
+	- based on reaching a maximum count
+	- both cron and max count, whichever comes first
+	

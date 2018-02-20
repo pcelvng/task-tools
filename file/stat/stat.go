@@ -4,9 +4,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"hash"
+	"net/url"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/jbsmith7741/go-tools/uri"
+	"github.com/pcelvng/task-tools/file/util"
 )
 
 func New() Stats {
@@ -21,25 +26,34 @@ func NewFromBytes(b []byte) Stats {
 	return sts
 }
 
+// NewFromInfo creates Stats from a
+// uri formatted info string.
+func NewFromInfo(info string) Stats {
+	sts := &Stats{}
+	uri.Unmarshal(sts, info)
+
+	return *sts
+}
+
 type Stats struct {
 	// LineCnt returns the file line count.
-	LineCnt int64 `json:"linecnt"`
+	LineCnt int64 `json:"linecnt" uri:"linecnt"`
 
 	// ByteCount returns uncompressed raw file byte count.
-	ByteCnt int64 `json:"bytecnt"`
+	ByteCnt int64 `json:"bytecnt" uri:"bytecnt"`
 
 	// Size holds the actual file size.
-	Size int64 `json:"size"`
+	Size int64 `json:"size" uri:"size"`
 
 	// Checksum returns the base64 encoded string of the file md5 hash.
-	Checksum string `json:"checksum"`
+	Checksum string `json:"checksum" uri:"checksum"`
 
 	// Path returns the full absolute path of the file.
-	Path string `json:"path"`
+	Path string `json:"path" uri:"origin"`
 
 	// Created returns the date the file was created or last updated;
 	// whichever is more recent.
-	Created string `json:"created"`
+	Created string `json:"created" uri:"created"`
 
 	mu sync.Mutex
 }
@@ -77,12 +91,12 @@ func (s *Stats) SetPath(pth string) {
 }
 
 // SetCreated will set the Created field in the
-// format time.RFC3339.
+// format time.RFC3339 in UTC.
 func (s *Stats) SetCreated(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.Created = t.Format(time.RFC3339)
+	s.Created = t.In(time.UTC).Format(time.RFC3339)
 }
 
 // ParseCreated will attempt to parse the Created
@@ -90,9 +104,15 @@ func (s *Stats) SetCreated(t time.Time) {
 // ParseCreated expects the Created time string is in
 // time.RFC3339. If there is a parse error
 // then the time.Time zero value is returned.
+//
+// The returned time will always be in UTC.
 func (s *Stats) ParseCreated() time.Time {
 	t, _ := time.Parse(time.RFC3339, s.Created)
-	return t
+	return t.In(time.UTC)
+}
+
+func (s Stats) ParsePath() (scheme, host, fPth string) {
+	return util.ParsePath(s.Path)
 }
 
 func (s Stats) JSONBytes() []byte {
@@ -102,6 +122,22 @@ func (s Stats) JSONBytes() []byte {
 
 func (s Stats) JSONString() string {
 	return string(s.JSONBytes())
+}
+
+// InfoString creates a uri-style info string from
+// Stats.
+func (s Stats) InfoString() string {
+	u := &url.URL{}
+	u.Scheme, u.Host, u.Path = s.ParsePath()
+	qVal := u.Query()
+	qVal.Set("linecnt", strconv.FormatInt(s.LineCnt, 10))
+	qVal.Set("bytecnt", strconv.FormatInt(s.ByteCnt, 10))
+	qVal.Set("size", strconv.FormatInt(s.Size, 10))
+	qVal.Set("checksum", s.Checksum)
+	qVal.Set("created", s.Created)
+	u.RawQuery = qVal.Encode()
+
+	return u.String()
 }
 
 // Clone will create a copy of stat that won't trigger

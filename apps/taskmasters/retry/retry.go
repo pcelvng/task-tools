@@ -182,16 +182,10 @@ func (r *Retryer) doRetry(tsk *task.Task, rule *RetryRule) {
 	if rule.Topic != "" {
 		topic = rule.Topic
 	}
-	msg, err := nTsk.JSONBytes()
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
 
-	err = r.producer.Send(topic, msg)
+	err := r.producer.Send(topic, nTsk.JSONBytes())
 	if err != nil {
 		log.Println(err.Error())
-		return
 	}
 }
 

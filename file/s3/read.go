@@ -8,22 +8,30 @@ import (
 
 	"github.com/minio/minio-go"
 
+	"fmt"
+
+	"strings"
+
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )
 
 func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
+	// get s3 client
+	s3Client, err := newS3Client(accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return newReaderFromS3Client(pth, s3Client)
+}
+
+func newReaderFromS3Client(pth string, s3Client *minio.Client) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
 	// get bucket, objPth and validate
 	bucket, objPth := parsePth(pth)
-
-	// s3 client - using minio client library
-	s3Client, err := minio.New(StoreHost, accessKey, secretKey, true)
-	if err != nil {
-		return nil, err
-	}
 
 	// get object
 	s3Obj, err := s3Client.GetObject(bucket, objPth, minio.GetObjectOptions{})
@@ -64,7 +72,7 @@ func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 	}, nil
 }
 
-// Reader will read in streamed bytes from the s3 object.
+// Reader will read in streamed bytes from the s3 object.NewS3Client
 type Reader struct {
 	s3Obj *minio.Object // s3 file object
 	rBuf  *bufio.Reader
@@ -117,4 +125,47 @@ func (r *Reader) Close() (err error) {
 
 	r.closed = true
 	return err
+}
+
+// ListFiles will list all file objects in the provided pth directory.
+// pth is assumed to be a directory and so a trailing "/" is appended
+// if one does not already exist.
+func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
+	// get s3 client
+	s3Client, err := newS3Client(accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	bucket, objPth := parsePth(pth)
+
+	// objPth should always have trailing '/' (assumed to be dir)
+	if !strings.HasSuffix(objPth, "/") {
+		objPth = objPth + "/"
+	}
+
+	// create a done channel to control 'ListObjectsV2' go routine.
+	doneCh := make(chan struct{}) // being used like a context.Context
+
+	// indicate to our routine to exit cleanly upon return.
+	defer close(doneCh)
+
+	allSts := make([]stat.Stats, 0)
+	objInfoCh := s3Client.ListObjectsV2(bucket, objPth, false, doneCh)
+	for objInfo := range objInfoCh {
+		// don't include dir and err objects
+		if strings.HasSuffix(objInfo.Key, "/") || objInfo.Err != nil {
+			continue
+		}
+
+		sts := stat.New()
+		sts.SetCreated(objInfo.LastModified)
+		sts.Checksum = objInfo.ETag
+		sts.SetPath(fmt.Sprintf("s3://%s/%s", bucket, objInfo.Key))
+		sts.SetSize(objInfo.Size)
+
+		allSts = append(allSts, sts)
+	}
+
+	return allSts, nil
 }

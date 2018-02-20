@@ -69,12 +69,7 @@ func (bl *Backloader) Backload() (int, error) {
 			}
 
 			// send task to task bus
-			msg, err := tsk.JSONBytes()
-			if err != nil {
-				return cnt, err
-			}
-
-			if err := bl.busProducer.Send(topic, msg); err != nil {
+			if err := bl.busProducer.Send(topic, tsk.JSONBytes()); err != nil {
 				return cnt, err
 			}
 			cnt = cnt + 1
