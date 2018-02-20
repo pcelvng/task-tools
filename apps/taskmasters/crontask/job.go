@@ -1,40 +1,52 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"time"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
+	"github.com/robfig/cron"
 )
 
-func NewJob(r Rule, p bus.Producer) *Job {
-	return &Job{
-		Rule:     r,
-		producer: p,
+// makeCron will create the cron and setup all the cron jobs.
+// It will not start the cron.
+func makeCron(rules []Rule, producer bus.Producer) (*cron.Cron, error) {
+	c := cron.New()
+	for _, rule := range rules {
+		job := newJob(rule, producer)
+		if err := c.AddJob(rule.CronRule, job); err != nil {
+			return nil, fmt.Errorf("cron: '%s' '%v'", rule.CronRule, err.Error())
+		}
+	}
+
+	return c, nil
+}
+
+func newJob(rule Rule, p bus.Producer) *job {
+	// normalize topic
+	if rule.Topic == "" {
+		rule.Topic = rule.TaskType
+	}
+
+	return &job{
+		Rule: rule,
+		p:    p,
 	}
 }
 
-type Job struct {
+type job struct {
 	Rule
-	producer bus.Producer
+	p bus.Producer
 }
 
-func (j *Job) Run() {
-	tskValue := tmpl.Parse(j.TaskTemplate, offsetDate(j.HourOffset))
-	tsk := task.New(j.TaskType, tskValue)
-	topic := j.TaskType
-	if j.Topic != "" {
-		topic = j.Topic
-	}
+func (j *job) Run() {
+	// make task
+	info := tmpl.Parse(j.TaskTemplate, offsetDate(j.HourOffset))
+	tsk := task.New(j.TaskType, info)
 
-	b, err := tsk.JSONBytes()
-	if err != nil {
-		log.Printf("err creating json bytes: '%v'", err.Error())
-	}
-
-	j.producer.Send(topic, b)
+	j.p.Send(j.Topic, tsk.JSONBytes())
 }
 
 // offsetDate will return the time.Time value with the
