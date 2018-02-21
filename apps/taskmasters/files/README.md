@@ -19,10 +19,7 @@ Listens on a message bus for file stats json objects.
 ## Toml Fields
 ```toml
 bus = "" #
-```
 
-
-```toml
 [[rule]]
 type = "sortbyhour"
 src_pattern = "s3://rmd-partners/facebook/raw-hourly/*/*/*/*/"

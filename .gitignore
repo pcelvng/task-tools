@@ -1,5 +1,5 @@
 .idea/
-*.toml
+config.toml
 *.json
 
 apps/taskmasters/backloader/backloader
