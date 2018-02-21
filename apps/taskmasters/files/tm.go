@@ -122,10 +122,10 @@ func (tm *tskMaster) doWatch(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			tm.producer.Stop() // starve msgs
+			tm.consumer.Stop()
 			tm.wg.Wait()       // wait for in-bound messages to process
 			tm.clearFiles()    // flush out counts and cron
-			tm.consumer.Stop()
+			tm.producer.Stop() // starve msgs
 
 			// signal a completed shutdown
 			tm.doneCncl()
@@ -207,6 +207,9 @@ func (tm *tskMaster) waitClearFiles() {
 }
 
 func (tm *tskMaster) isFilesEmpty() bool {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
 	for rule, rSts := range tm.files {
 		// skip cron rules
 		if rule.CronCheck == "" {

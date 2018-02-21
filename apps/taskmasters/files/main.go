@@ -67,8 +67,8 @@ func newOptions() *options {
 }
 
 type options struct {
-	*bus.Options `toml:"bus"` // bus options
-	Rules        []*Rule      `toml:"rule"`
+	*bus.Options         // bus options
+	Rules        []*Rule `toml:"rule"`
 }
 
 type Rule struct {
