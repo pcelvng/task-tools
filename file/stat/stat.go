@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"strings"
+
 	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task-tools/file/util"
 )
@@ -137,7 +139,11 @@ func (s Stats) InfoString() string {
 	qVal.Set("created", s.Created)
 	u.RawQuery = qVal.Encode()
 
-	return u.String()
+	info := u.String()
+	if u.Scheme == "" && !strings.HasPrefix(info, "/") {
+		info = "/" + info
+	}
+	return info
 }
 
 // Clone will create a copy of stat that won't trigger

@@ -18,6 +18,9 @@ import (
 var (
 	configPth = flag.String("config", "config.toml", "relative or absolute file path")
 	sigChan   = make(chan os.Signal, 1) // app signal handling
+
+	defaultTopic   = "files"
+	defaultChannel = "tm-files"
 )
 
 func main() {
@@ -64,10 +67,8 @@ func newOptions() *options {
 }
 
 type options struct {
-	*bus.Options `toml:"bus"` // bus options
-	TmpDir       string       // tmp dir where in-process file objects are written.
-
-	Rules []Rule `toml:"rule"`
+	*bus.Options         // bus options
+	Rules        []*Rule `toml:"rule"`
 }
 
 type Rule struct {
@@ -78,7 +79,7 @@ type Rule struct {
 	// checks for rules that checks on groups of files instead of responding
 	// immediately to an individual file.
 	CronCheck  string `toml:"cron_check"`  // optional cron parsable string representing when to check src pattern matching files
-	CountCheck int    `toml:"count_check"` // optional int representing how many files matching that rule to wait for until the rule is exercised
+	CountCheck uint   `toml:"count_check"` // optional int representing how many files matching that rule to wait for until the rule is exercised
 }
 
 // loadAppOptions loads the applications
@@ -87,6 +88,8 @@ type Rule struct {
 func loadAppOptions() (*options, error) {
 	flag.Parse()
 	opt := newOptions()
+	opt.Topic = defaultTopic
+	opt.Channel = defaultChannel
 
 	// parse toml first - override with flag values
 	_, err := toml.DecodeFile(*configPth, opt)

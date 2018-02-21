@@ -2,28 +2,33 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/robfig/cron"
 
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task/bus"
 )
 
 var (
-	dumpPrefix = "tsk-files_"
+	dumpPrefix = "tm-files_"
 )
 
 func newTskMaster(appOpt *options) (*tskMaster, error) {
+	// validate
+	err := validateAppOpts(appOpt)
+	if err != nil {
+		return nil, err
+	}
+
 	// producer
 	producer, err := bus.NewProducer(appOpt.Options)
 	if err != nil {
@@ -38,6 +43,8 @@ func newTskMaster(appOpt *options) (*tskMaster, error) {
 
 	// context to indicate tskMaster is done shutting down.
 	doneCtx, doneCncl := context.WithCancel(context.Background())
+
+	// tm
 	tm := &tskMaster{
 		producer: producer,
 		consumer: consumer,
@@ -51,31 +58,31 @@ func newTskMaster(appOpt *options) (*tskMaster, error) {
 	}
 
 	// make cron
-	c, err := makeCron(appOpt.Rules, tm)
+	tm.c, err = makeCron(appOpt.Rules, tm)
 	if err != nil {
 		return nil, err
-	}
-	tm.c = c
-
-	// read-in locally dumped file objects
-	// in case app was shut down.
-	fSts, err := readinFiles(appOpt.TmpDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// read in batch based matches
-	for _, rule := range appOpt.Rules {
-		if rule.CronCheck == "" && rule.CountCheck == 0 {
-			continue
-		}
-
-		for _, sts := range fSts {
-			tm.match(sts, &rule)
-		}
 	}
 
 	return tm, nil
+}
+
+func validateAppOpts(appOpt *options) error {
+	if len(appOpt.Rules) == 0 {
+		return errors.New("no rules provided")
+	}
+
+	// validate each rule
+	for _, rule := range appOpt.Rules {
+		if rule.TaskType == "" {
+			return errors.New("task type required for all rules")
+		}
+
+		if rule.SrcPattern == "" {
+			return errors.New("src_pattern required for all rules")
+		}
+	}
+
+	return nil
 }
 
 // tskMaster is the main application runtime
@@ -90,7 +97,7 @@ type tskMaster struct {
 	finishCncl context.CancelFunc      // internally indicate taskmaster needs to shutdown
 	files      map[*Rule][]*stat.Stats // stats files associated with one or more rules stored for later.
 	msgCh      chan *stat.Stats
-	rules      []Rule // a complete list of rules
+	rules      []*Rule // a complete list of rules
 	l          *log.Logger
 	c          *cron.Cron
 
@@ -115,14 +122,10 @@ func (tm *tskMaster) doWatch(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			tm.producer.Stop() // starve msgs
-			tm.wg.Wait()       // wait for outstanding messages to clear.
 			tm.consumer.Stop()
-
-			// dump outstanding file stats to file
-			// for recovery next time the app is started
-			// back up.
-			tm.dumpFiles()
+			tm.wg.Wait()       // wait for in-bound messages to process
+			tm.clearFiles()    // flush out counts and cron
+			tm.producer.Stop() // starve msgs
 
 			// signal a completed shutdown
 			tm.doneCncl()
@@ -143,7 +146,7 @@ func (tm *tskMaster) readFileStats(ctx context.Context) {
 		default:
 			msg, done, err := tm.consumer.Msg()
 			if err != nil {
-				tm.l.Printf("msg: %v", err.Error())
+				tm.l.Println(err.Error())
 			}
 
 			if len(msg) > 0 {
@@ -151,11 +154,74 @@ func (tm *tskMaster) readFileStats(ctx context.Context) {
 				tm.msgCh <- &sts
 			}
 
-			if done {
-				tm.finishCncl() // send internal shutdown message
+			if done && ctx.Err() == nil {
+				// wait for outstanding messages to process
+				tm.wg.Wait()
+
+				// clear out remaining bucket items
+				tm.waitClearFiles()
+
+				// send internal shutdown message
+				tm.finishCncl()
 			}
 		}
 	}
+}
+
+// clearFiles will clear out count and cron based
+// rules and send out the corresponding tasks.
+func (tm *tskMaster) clearFiles() {
+	// clear out count based matches immediately
+	for rule, rSts := range tm.files {
+		if len(rSts) == 0 {
+			continue
+		}
+
+		tm.sendDirTsks(rule)
+	}
+}
+
+// clearFiles will wait for cron tasks to
+// clear out via cron and clear out CountCheck
+// type rules immediately.
+func (tm *tskMaster) waitClearFiles() {
+	// clear out count based matches immediately
+	for rule, rSts := range tm.files {
+		// skip cron rules
+		if rule.CronCheck != "" {
+			continue
+		}
+
+		if len(rSts) == 0 {
+			continue
+		}
+
+		tm.sendDirTsks(rule)
+	}
+
+	// wait for cron rules to clear remaining
+	for !tm.isFilesEmpty() {
+		tkr := time.NewTicker(time.Second)
+		<-tkr.C
+	}
+}
+
+func (tm *tskMaster) isFilesEmpty() bool {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	for rule, rSts := range tm.files {
+		// skip cron rules
+		if rule.CronCheck == "" {
+			continue
+		}
+
+		if len(rSts) > 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 // matchAll will discover if the file matches one or more rules
@@ -166,7 +232,7 @@ func (tm *tskMaster) matchAll(sts *stat.Stats) {
 	defer tm.wg.Done()
 
 	for _, rule := range tm.rules {
-		tm.match(sts, &rule)
+		tm.match(sts, rule)
 	}
 }
 
@@ -222,11 +288,11 @@ func (tm *tskMaster) countCheck(rule *Rule) {
 }
 
 // lenFiles returns the number of file stats associated with that rule
-func (tm *tskMaster) lenFiles(rule *Rule) int {
+func (tm *tskMaster) lenFiles(rule *Rule) uint {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
-	return len(tm.files[rule])
+	return uint(len(tm.files[rule]))
 }
 
 // fileStats will return a unique list of file directories stashed
@@ -278,134 +344,20 @@ func (tm *tskMaster) sendTsk(tsk *task.Task, rule *Rule) {
 	}
 }
 
-// dumpFiles will write all in-progress to a tmp file.
-// For simplicity dumpFiles just writes the json file objects
-// to the default os.TmpDir with  prefix.
-func (tm *tskMaster) dumpFiles() {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-
-	// create unique map (since there can be dups)
-	allSts := make(map[string]*stat.Stats)
-	for _, stsSet := range tm.files {
-		for _, sts := range stsSet {
-			// the key is over-kill in case Created
-			// or Checksum is not present.
-			key := sts.Path + sts.Created + sts.Checksum
-			allSts[key] = sts
-		}
-	}
-
-	// don't try writing if there is nothing to write
-	// that way an empty tmp file isn't created.
-	if len(allSts) == 0 {
-		return
-	}
-
-	// create file bfr
-	opt := buf.NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = tm.appOpt.TmpDir
-	opt.FileBufPrefix = dumpPrefix
-	bfr, err := buf.NewBuffer(opt)
-	if err != nil {
-		// log error and return
-		tm.l.Printf("files dump: '%v'", err.Error())
-		return
-	}
-
-	// write to tmp file
-	for _, sts := range allSts {
-		bfr.WriteLine(sts.JSONBytes())
-	}
-	bfr.Close() // flush to file
-
-	return
-}
-
-// readinFiles will access the tmp dir, read in files that
-// match the tmp file prefix and create a unique list of
-// file stats. tmp files the match the file prefix. Default
-// tmpDir is os.TempDir.
-//
-// It may be a good idea to use a custom tmpDir if there is
-// concern that the application will shut down and then the
-// server will restart. On restart, servers may clear out the
-// contents of os.TempDir().
-func readinFiles(tmpDir string) ([]*stat.Stats, error) {
-	if tmpDir == "" {
-		tmpDir = os.TempDir()
-	}
-
-	// find matching tmp files
-	glbPth := path.Join(tmpDir, dumpPrefix)
-	glbPth = fmt.Sprintf("%v*", glbPth)
-	pths, err := filepath.Glob(glbPth)
-	if err != nil {
-		return nil, err
-	}
-
-	// read in records
-	allStsMp := make(map[string]*stat.Stats)
-	for _, pth := range pths {
-		// reader
-		r, err := file.NewReader(pth, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		// read in file
-		for {
-			ln, err := r.ReadLine()
-			if len(ln) > 0 {
-				sts := stat.NewFromBytes(ln)
-				if sts.Path != "" {
-					// key is overkill in case Created or Checksum
-					// are not provided.
-					key := sts.Path + sts.Created + sts.Checksum
-					allStsMp[key] = &sts
-				}
-			}
-
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				return nil, err
-			}
-		}
-	}
-
-	// unique list
-	allSts := make([]*stat.Stats, len(allStsMp))
-	var i int
-	for _, sts := range allStsMp {
-		allSts[i] = sts
-		i++
-	}
-
-	// rm existing files
-	for _, pth := range pths {
-		os.Remove(pth)
-	}
-
-	return allSts, nil
-}
-
 // makeCron will create the cron and setup all the cron jobs.
 // It will also start the cron if there are no errors and if there
 // is at least one job.
-func makeCron(rules []Rule, tm *tskMaster) (*cron.Cron, error) {
+func makeCron(rules []*Rule, tm *tskMaster) (*cron.Cron, error) {
 	c := cron.New()
 	for _, rule := range rules {
 		if rule.CronCheck == "" {
 			continue
 		}
 
-		job := newJob(&rule, tm)
+		job := newJob(rule, tm)
 		err := c.AddJob(rule.CronCheck, job)
 		if err != nil {
-			return nil, fmt.Errorf("cron: '%s' '%v'", rule.CronCheck, err.Error())
+			return nil, fmt.Errorf("invalid cron: '%v'", err.Error())
 		}
 	}
 	c.Location()

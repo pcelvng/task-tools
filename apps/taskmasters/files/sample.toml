@@ -1,0 +1,36 @@
+bus = "stdio" # options: stdio,file,nsq
+#in_bus = "" # options: stdin,file,nsq
+#out_bus = "" # options: stdout,file,nsq
+#in_file = "./in.tsks.json"\
+#out_file = "./out.tsks.json"
+#nsqd_hosts = ["localhost:4150"]
+#lookupd_hosts = [""]
+#topic = "files"
+#channel = "tm-files"
+
+[[rule]]
+# task type for the task that will be created
+type = "sample-type"
+
+# the pattern to match on incoming files. Uses linux style wildcard fuzzy
+# matching (also called globbing).
+# see: http://tldp.org/LDP/GNU-Linux-Tools-Summary/html/x11655.htm
+src_pattern = "s3://sample/pattern/*.json"
+
+# default topic is the task type but that
+# can be changed by specifying a topic.
+topic = "sample-topic"
+
+# if cron_check is specified, then files that match src_pattern are sequestered until
+# the croncheck triggers a check that will create a task for every pattern match. Tasks
+# are created for the directory of the files and not for every single sequestered file.
+# s m h mday m wday (https://godoc.org/github.com/robfig/cron)
+cron_check = "* * * * *"
+
+# If count_check is specified then task creation will occur after
+# count_check number of files has been received that match src_pattern.
+# A task will be created for every unique directory in the file group.
+count_check = 10
+
+
+
