@@ -279,7 +279,7 @@ func ExampleDoTaskJSONBadRecord() {
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: issue at line 5: field "dateField" not in '{"badField":"2007-02-03T18:05:06Z"}'
+	fmt.Println(msg)    // output: issue at line 5: field "dateField" not in '{"badField":"2007-02-03T18:05:06Z"}' (./test/test.json)
 
 	// cleanup
 	os.Remove("./test/test.json")
@@ -290,7 +290,7 @@ func ExampleDoTaskJSONBadRecord() {
 
 	// Output:
 	// error
-	// issue at line 5: field "dateField" not in '{"badField":"2007-02-03T18:05:06Z"}'
+	// issue at line 5: field "dateField" not in '{"badField":"2007-02-03T18:05:06Z"}' (./test/test.json)
 }
 
 func ExampleDoTaskJSONBadRecordDiscard() {
@@ -402,11 +402,67 @@ func ExampleDoTaskReadLineErr() {
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: issue at line 1: readline_err
+	fmt.Println(msg)    // output: issue at line 1: readline_err (nop://readline_err/)
 
 	// Output:
 	// error
-	// issue at line 1: readline_err
+	// issue at line 1: readline_err (nop://readline_err/)
+}
+
+func ExampleWorker_DoTaskDirSrc() {
+	os.Setenv("TZ", "UTC")
+	defer os.Unsetenv("TZ")
+
+	// initialize producer
+	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+
+	// src file 1
+	w1, _ := file.NewWriter("./test/dir/test1.csv", nil)
+	w1.WriteLine([]byte(`2007-02-03T16:05:06Z`))
+	w1.WriteLine([]byte(`2007-02-03T16:05:06Z`))
+	w1.WriteLine([]byte(`2007-02-03T17:05:06Z`))
+	w1.WriteLine([]byte(`2007-02-03T18:05:06Z`))
+	w1.Close()
+
+	// src file 2
+	w2, _ := file.NewWriter("./test/dir/test2.csv", nil)
+	w2.WriteLine([]byte(`2007-02-03T16:05:06Z`))
+	w2.WriteLine([]byte(`2007-02-03T16:05:06Z`))
+	w2.WriteLine([]byte(`2007-02-03T17:05:06Z`))
+	w2.WriteLine([]byte(`2007-02-03T20:05:06Z`))
+	w2.Close()
+
+	// src file 3
+	w3, _ := file.NewWriter("./test/dir/test3.csv", nil)
+	w3.WriteLine([]byte(`2007-02-03T16:05:06Z`))
+	w3.WriteLine([]byte(`2007-02-03T16:05:06Z`))
+	w3.WriteLine([]byte(`2007-02-03T17:05:06Z`))
+	w3.WriteLine([]byte(`2007-02-03T19:05:06Z`))
+	w3.Close()
+
+	ctx, _ := context.WithCancel(context.Background())
+	info := `./test/dir?record-type=csv&date-field-index=0&dest-template=./test/{HH}.csv`
+	wkr := MakeWorker(info)
+	result, msg := wkr.DoTask(ctx)
+
+	fmt.Println(result) // output: complete
+	fmt.Println(msg)    // output: wrote 8 lines over 3 files
+
+	// cleanup
+	os.Remove("./test/dir/test1.csv")
+	os.Remove("./test/dir/test2.csv")
+	os.Remove("./test/dir/test3.csv")
+	os.Remove("./test/16.csv")
+	os.Remove("./test/17.csv")
+	os.Remove("./test/18.csv")
+	os.Remove("./test/19.csv")
+	os.Remove("./test/20.csv")
+	os.Remove("./test/dir")
+	os.Remove("./test")
+
+	// Output:
+	// complete
+	// wrote 12 lines over 5 files
 }
 
 func TestParseTmpl(t *testing.T) {
@@ -417,24 +473,28 @@ func TestParseTmpl(t *testing.T) {
 	}
 	cases := []tCase{
 		// {SRC_FILE} cases
-		tCase{srcPth: "dir/path/file.txt.gz", tmpl: "srcf-{SRC_FILE}", expected: "srcf-file.txt.gz"},
-		tCase{srcPth: "dir/path/file.txt", tmpl: "srcf-{SRC_FILE}", expected: "srcf-file.txt"},
-		tCase{srcPth: "file.txt", tmpl: "srcf-{SRC_FILE}", expected: "srcf-file.txt"},
-		tCase{srcPth: "", tmpl: "srcf-{SRC_FILE}", expected: "srcf-{SRC_FILE}"},
-		tCase{srcPth: "dir/path/", tmpl: "srcf-{SRC_FILE}", expected: "srcf-{SRC_FILE}"},
-		tCase{srcPth: "dir/path", tmpl: "srcf-{SRC_FILE}", expected: "srcf-path"},
-		tCase{srcPth: "dir/path/file.txt", tmpl: "srcf-{src_file}", expected: "srcf-{src_file}"},
+		{srcPth: "dir/path/file.txt.gz", tmpl: "srcf-{SRC_FILE}", expected: "srcf-file.txt.gz"},
+		{srcPth: "dir/path/file.txt", tmpl: "srcf-{SRC_FILE}", expected: "srcf-file.txt"},
+		{srcPth: "file.txt", tmpl: "srcf-{SRC_FILE}", expected: "srcf-file.txt"},
+		{srcPth: "", tmpl: "srcf-{SRC_FILE}", expected: "srcf-{SRC_FILE}"},
+		{srcPth: "dir/path/", tmpl: "srcf-{SRC_FILE}", expected: "srcf-{SRC_FILE}"},
+		{srcPth: "dir/path", tmpl: "srcf-{SRC_FILE}", expected: "srcf-path"},
+		{srcPth: "dir/path/file.txt", tmpl: "srcf-{src_file}", expected: "srcf-{src_file}"},
 
 		// {SRC_TS} cases
-		tCase{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "srcts-{SRC_TS}", expected: "srcts-20070203T160101"},
-		tCase{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-20070203T160101.json.gz"},
-		tCase{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "srcts-{src_ts}.json.gz", expected: "srcts-{src_ts}.json.gz"},
-		tCase{srcPth: "file-20070203T160101.json.gz", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-20070203T160101.json.gz"},
-		tCase{srcPth: "dir/path/", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-{SRC_TS}.json.gz"},
-		tCase{srcPth: "", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-{SRC_TS}.json.gz"},
+		{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "srcts-{SRC_TS}", expected: "srcts-20070203T160101"},
+		{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-20070203T160101.json.gz"},
+		{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "srcts-{src_ts}.json.gz", expected: "srcts-{src_ts}.json.gz"},
+		{srcPth: "file-20070203T160101.json.gz", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-20070203T160101.json.gz"},
+		{srcPth: "dir/path/", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-{SRC_TS}.json.gz"},
+		{srcPth: "", tmpl: "srcts-{SRC_TS}.json.gz", expected: "srcts-{SRC_TS}.json.gz"},
+		{srcPth: "dir/path/2017/02/03/04/file.txt", tmpl: "srcts-{SRC_TS}.txt", expected: "srcts-20170203T040000.txt"},
+		{srcPth: "dir/path/2017/02/03/file.txt", tmpl: "srcts-{SRC_TS}.txt", expected: "srcts-20170203T000000.txt"},
+		{srcPth: "dir/path/2017/02/file.txt", tmpl: "srcts-{SRC_TS}.txt", expected: "srcts-20170201T000000.txt"},
+		{srcPth: "dir/path/2017/file.txt", tmpl: "srcts-{SRC_TS}.txt", expected: "srcts-{SRC_TS}.txt"},
 
 		// {SRC_TS} with {SRC_FILE} cases
-		tCase{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "{SRC_TS}-{SRC_FILE}", expected: "20070203T160101-file-20070203T160101.json.gz"},
+		{srcPth: "dir/path/file-20070203T160101.json.gz", tmpl: "{SRC_TS}-{SRC_FILE}", expected: "20070203T160101-file-20070203T160101.json.gz"},
 	}
 
 	for _, tc := range cases {

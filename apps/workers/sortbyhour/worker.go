@@ -11,8 +11,11 @@ import (
 
 	"github.com/jbsmith7741/go-tools/uri"
 
+	"time"
+
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/file/stat"
 )
 
 func newInfoOptions(info string) (*infoOptions, error) {
@@ -90,10 +93,25 @@ func MakeWorker(info string) task.Worker {
 	fOpt.AWSAccessKey = appOpt.AWSAccessKey
 	fOpt.AWSSecretKey = appOpt.AWSSecretKey
 
-	// reader
-	r, err := file.NewReader(iOpt.SrcPath, fOpt)
-	if err != nil {
-		return task.InvalidWorker(err.Error())
+	// all paths (if pth is directory)
+	fSts, _ := file.List(iOpt.SrcPath, fOpt)
+
+	// path not directory - assume just one file
+	if len(fSts) == 0 {
+		sts := stat.New()
+		sts.Path = iOpt.SrcPath
+		fSts = append(fSts, sts)
+	}
+
+	// reader(s)
+	stsRdrs := make([]*StatsReader, 0)
+	for _, sts := range fSts {
+		sr := &StatsReader{sts: &sts}
+		sr.r, err = file.NewReader(sts.Path, fOpt)
+		if err != nil {
+			return task.InvalidWorker(err.Error())
+		}
+		stsRdrs = append(stsRdrs, sr)
 	}
 
 	// destination template
@@ -105,16 +123,21 @@ func MakeWorker(info string) task.Worker {
 	return &Worker{
 		iOpt:        *iOpt,
 		fOpt:        *fOpt,
-		r:           r,
+		stsRdrs:     stsRdrs,
 		w:           w,
 		extractDate: extractor,
 	}
 }
 
+type StatsReader struct {
+	sts *stat.Stats
+	r   file.Reader
+}
+
 type Worker struct {
 	iOpt         infoOptions
 	fOpt         file.Options
-	r            file.Reader
+	stsRdrs      []*StatsReader
 	w            *file.WriteByHour
 	extractDate  file.DateExtractor
 	discardedCnt int64 // number of records discarded
@@ -122,19 +145,24 @@ type Worker struct {
 
 func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
 	// read/write loop
-	for ctx.Err() == nil {
-		ln, err := wkr.r.ReadLine()
-		if err != nil && err != io.EOF {
-			return wkr.abort(fmt.Sprintf("issue at line %v: %v", wkr.r.Stats().LineCnt+1, err.Error()))
-		}
+	for _, rdr := range wkr.stsRdrs { // loop through all readers
+		sts := rdr.sts
+		r := rdr.r
 
-		wErr := wkr.writeLine(ln)
-		if wErr != nil {
-			return wkr.abort(fmt.Sprintf("issue at line %v: %v", wkr.r.Stats().LineCnt, wErr.Error()))
-		}
+		for ctx.Err() == nil {
+			ln, err := r.ReadLine()
+			if err != nil && err != io.EOF {
+				return wkr.abort(fmt.Sprintf("issue at line %v: %v (%v)", r.Stats().LineCnt+1, err.Error(), sts.Path))
+			}
 
-		if err == io.EOF {
-			break
+			wErr := wkr.writeLine(ln)
+			if wErr != nil {
+				return wkr.abort(fmt.Sprintf("issue at line %v: %v (%v)", r.Stats().LineCnt, wErr.Error(), sts.Path))
+			}
+
+			if err == io.EOF {
+				break
+			}
 		}
 	}
 
@@ -177,7 +205,9 @@ func (wkr *Worker) writeLine(ln []byte) error {
 // abort will abort processing by closing the
 // reading and then cleaning up written records.
 func (wkr *Worker) abort(msg string) (task.Result, string) {
-	wkr.r.Close()
+	for _, rdr := range wkr.stsRdrs {
+		rdr.r.Close()
+	}
 	wkr.w.Abort() // cleanup writes to this point
 
 	return task.ErrResult, msg
@@ -189,7 +219,9 @@ func (wkr *Worker) abort(msg string) (task.Result, string) {
 // producer.
 func (wkr *Worker) done(ctx context.Context) (task.Result, string) {
 	// close
-	wkr.r.Close()
+	for _, rdr := range wkr.stsRdrs {
+		rdr.r.Close()
+	}
 	err := wkr.w.CloseWithContext(ctx)
 	if err != nil {
 		return task.ErrResult, fmt.Sprint(err.Error())
@@ -218,6 +250,11 @@ func (wkr *Worker) done(ctx context.Context) (task.Result, string) {
 // following template tags:
 // - {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
 // - {SRC_TS}   source file timestamp (if available) in following format: 20060102T150405
+//              If reading from all files in a directory then SRC_TS is derived from the path
+//              slug. So a path with /2018/02/03/04/ would show 20180203T040000 and
+//              a path with /2018/02/03/ (but no hour) would show 20180203T000000
+//              a path with /2018/02/ (but no day) would show 20180200T000000. Only having
+//              a year value in the path time slug is not supported.
 //
 // If templ contains any of the supported template tokens but that token
 // is unable to be populated from srcPth then an error is returned. The existence
@@ -235,10 +272,23 @@ func (wkr *Worker) done(ctx context.Context) (task.Result, string) {
 // And the value of {SRC_TS} would be:
 // 20070203T160101
 func parseTmpl(srcPth, tmpl string) string {
-	_, srcFile := filepath.Split(srcPth)
+	srcDir, srcFile := filepath.Split(srcPth)
 
+	// filename regex
 	re := regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
 	srcTS := re.FindString(srcFile)
+
+	// hour slug regex
+	hSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}`)
+	hSrcTS := hSlugRe.FindString(srcDir)
+
+	// day slug regex
+	dSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}`)
+	dSrcTS := dSlugRe.FindString(srcDir)
+
+	// month slug regex
+	mSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)
+	mSrcTS := mSlugRe.FindString(srcDir)
 
 	// {SRC_FILE}
 	if srcFile != "" {
@@ -246,8 +296,31 @@ func parseTmpl(srcPth, tmpl string) string {
 	}
 
 	// {SRC_TS}
+	tsFmt := "20060102T150405" // output format
 	if srcTS != "" {
+		// src ts in filename
 		tmpl = strings.Replace(tmpl, "{SRC_TS}", srcTS, -1)
+	} else if hSrcTS != "" {
+		// src ts in hour slug
+		hFmt := "2006/01/02/15"
+		t, _ := time.Parse(hFmt, hSrcTS)
+		if !t.IsZero() {
+			tmpl = strings.Replace(tmpl, "{SRC_TS}", t.Format(tsFmt), -1)
+		}
+	} else if dSrcTS != "" {
+		// src ts in day slug
+		dFmt := "2006/01/02"
+		t, _ := time.Parse(dFmt, dSrcTS)
+		if !t.IsZero() {
+			tmpl = strings.Replace(tmpl, "{SRC_TS}", t.Format(tsFmt), -1)
+		}
+	} else if mSrcTS != "" {
+		// src ts in month slug
+		mFmt := "2006/01"
+		t, _ := time.Parse(mFmt, mSrcTS)
+		if !t.IsZero() {
+			tmpl = strings.Replace(tmpl, "{SRC_TS}", t.Format(tsFmt), -1)
+		}
 	}
 
 	return tmpl
