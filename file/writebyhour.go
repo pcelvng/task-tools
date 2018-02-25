@@ -2,14 +2,13 @@ package file
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/buger/jsonparser"
-
-	"errors"
 
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"

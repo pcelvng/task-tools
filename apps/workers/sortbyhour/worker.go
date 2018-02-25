@@ -51,7 +51,7 @@ func (i *infoOptions) validate() error {
 		var err error
 		i.dateIndex, err = strconv.Atoi(i.DateField)
 		if err != nil {
-			return errors.New(`date-field must be an integer`)
+			return errors.New(`date-field must be an integer when using a csv field separator`)
 		}
 	}
 
