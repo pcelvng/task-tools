@@ -66,36 +66,3 @@ func Parse(s string, t time.Time) string {
 
 	return s
 }
-
-/*func Parse(s string, t time.Time) (result string) {
-	// {DAY_SLUG}
-	s = strings.Replace(s, "{DAY_SLUG}", "{YYYY}/{MM}/{DD}", -1)
-
-	// {SLUG}
-	s = strings.Replace(s, "{SLUG}", "{YYYY}/{MM}/{DD}/{HH}", -1)
-
-	// {TS}
-	ts := t.Format("20060102T150405")
-	result = strings.Replace(s, "{TS}", ts, -1)
-
-	// {YYYY}
-	y := strconv.Itoa(t.Year())
-	result = strings.Replace(s, "{YYYY}", y, -1)
-
-	// {YY}
-	result = strings.Replace(result, "{YY}", y[2:], -1)
-
-	// {MM}
-	m := fmt.Sprintf("%02d", int(t.Month()))
-	result = strings.Replace(result, "{MM}", m, -1)
-
-	// {DD}
-	d := fmt.Sprintf("%02d", t.Day())
-	result = strings.Replace(result, "{DD}", d, -1)
-
-	// {HH}
-	h := fmt.Sprintf("%02d", t.Hour())
-	result = strings.Replace(result, "{HH}", h, -1)
-
-	return result
-}*/

@@ -7,11 +7,11 @@ import (
 	"io"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jbsmith7741/go-tools/uri"
-
-	"time"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
@@ -27,29 +27,32 @@ func newInfoOptions(info string) (*infoOptions, error) {
 // infoOptions contains the parsed info values
 // of a task.
 type infoOptions struct {
-	SrcPath        string `uri:"origin"`           // source file path
-	RecordType     string `uri:"record-type"`      // required; type of record to parse (options: json or csv)
-	DateField      string `uri:"date-field"`       // json date field
-	DateFieldIndex int    `uri:"date-field-index"` // csv date field index
-	DateFormat     string `uri:"date-format"`      // expected date format (go time.Time format)
-	CSVSep         string `uri:"sep"`              // csv separator (default=",")
-	DestTemplate   string `uri:"dest-template"`    // template for destination files
-	Discard        bool   `uri:"discard"`          // discard the record on error or end the task with an error
-	UseFileBuffer  bool   `uri:"use-file-buffer"`  // directs the writer to use a file buffer instead of in-memory
+	SrcPath       string `uri:"origin"`          // source file path
+	DateField     string `uri:"date-field"`      // json date field, unless sep is provided then must be integer and expecting csv style format records.
+	DateFormat    string `uri:"date-format"`     // expected date format (go time.Time format)
+	Sep           string `uri:"sep"`             // csv separator - must be provided to indicate csv style records
+	DestTemplate  string `uri:"dest-template"`   // template for destination files
+	Discard       bool   `uri:"discard"`         // discard the record on error or end the task with an error
+	UseFileBuffer bool   `uri:"use-file-buffer"` // directs the writer to use a file buffer instead of in-memory
+
+	dateIndex int // DateField converted to int when sep present (set during validation)
 }
 
 // validate populated info options
 func (i *infoOptions) validate() error {
-	// record type validation
-	switch i.RecordType {
-	case "json":
-		// date-field required
-		if i.DateField == "" {
-			return errors.New(`date-field required`)
+	// date-field required
+	if len(i.DateField) == 0 {
+		return errors.New(`date-field required`)
+	}
+
+	// date-field index value if sep is present
+	if len(i.Sep) > 0 {
+		// attempt to convert DateField to int
+		var err error
+		i.dateIndex, err = strconv.Atoi(i.DateField)
+		if err != nil {
+			return errors.New(`date-field must be an integer`)
 		}
-	case "csv":
-	default:
-		return errors.New(`record-type must be "csv" or "json"`)
 	}
 
 	// dest-template required
@@ -71,17 +74,16 @@ func MakeWorker(info string) task.Worker {
 
 	// date extractor
 	var extractor file.DateExtractor
-	switch iOpt.RecordType {
-	case "json":
+	if len(iOpt.Sep) > 0 { // if using sep then record type is csv
+		extractor = file.CSVDateExtractor(
+			iOpt.Sep,
+			iOpt.DateFormat,
+			iOpt.dateIndex,
+		)
+	} else { // no sep then assume json
 		extractor = file.JSONDateExtractor(
 			iOpt.DateField,
 			iOpt.DateFormat,
-		)
-	case "csv":
-		extractor = file.CSVDateExtractor(
-			iOpt.CSVSep,
-			iOpt.DateFormat,
-			iOpt.DateFieldIndex,
 		)
 	}
 

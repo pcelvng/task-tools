@@ -28,7 +28,19 @@ Example:
 s3://bucket/file.json.gz?date-field=date&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/sorted-{SRC_TS}.json.gz&discard=true
 
 # example csv info
-s3://bucket/file.csv.gz?date-field-index=1&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv.gz&sep=,&discard=true
+s3://bucket/file.csv.gz?date-field=1&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv.gz&sep=,&discard=true
+
+# example info from directory source path
+s3://bucket/path/?date-field=1&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv.gz&sep=,&discard=true
+
+# example minimal csv info
+s3://bucket/path/file.csv?date-field=1&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv&sep=,
+
+# example minimal json info
+s3://bucket/path/file.json?date-field=date&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.json
+
+# example minimal json info from directory source path
+s3://bucket/path/?date-field=date&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.json
 ```
 
 ### date-field (required)
@@ -72,7 +84,7 @@ template parameters:
 - {DD}       two digit day ie 29
 - {HH}       two digit hour ie 00
 - {TS}       current timestamp (when processing starts) in following format: 20060102T150405
-- {DAY_SLUG}     shorthand for {YYYY}/{MM}/{DD}/{HH}
+- {DAY_SLUG} shorthand for {YYYY}/{MM}/{DD}
 - {SLUG}     shorthand for {YYYY}/{MM}/{DD}/{HH}
 - {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
 - {SRC_TS}   source file timestamp (if available) in following format: 20060102T150405
