@@ -43,6 +43,10 @@ var (
 // template: "base/path/{SLUG}/records-{TS}.json.gz"
 // could return: "base/path/2017/01/01/23/records-20170101T230101.json.gz"
 func Parse(s string, t time.Time) string {
+	if t.IsZero() {
+		return s
+	}
+
 	// {SLUG}
 	s = strings.Replace(s, "{SLUG}", "{HOUR_SLUG}", -1)
 

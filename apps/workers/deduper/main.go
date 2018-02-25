@@ -13,6 +13,8 @@ import (
 )
 
 var (
+	defaultFileTopic = "files"
+
 	confPth = flag.String("config", "config.toml", "file path for toml config file")
 
 	sigChan       = make(chan os.Signal, 1)
@@ -22,13 +24,16 @@ var (
 )
 
 func main() {
-	flag.Parse()
-	if err := Run(); err != nil {
+	if err := loadOptions(); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := run(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func Run() (err error) {
+func run() (err error) {
 	// signal handling - capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
@@ -59,11 +64,18 @@ func Run() (err error) {
 
 func cloneBusOpts(opt bus.Options) bus.Options { return opt }
 
+func newOptions() *options {
+	return &options{
+		Bus:      bus.NewOptions(""),
+		Launcher: task.NewLauncherOptions(),
+	}
+}
+
 type options struct {
 	Bus      *bus.Options
 	Launcher *task.LauncherOptions
 
-	FileTopic     string // topic with file stats
+	FileTopic     string // topic with file stats (default=files but can be turned off by setting it to "-")
 	FileBufferDir string `toml:"file_buffer_dir"` // if using a file buffer, use this base directory
 	AWSAccessKey  string `toml:"aws_access_key"`  // required for s3 usage
 	AWSSecretKey  string `toml:"aws_secret_key"`  // required for s3 usage
@@ -72,11 +84,10 @@ type options struct {
 func loadOptions() error {
 	flag.Parse()
 
-	appOpt = &options{
-		Bus:      bus.NewOptions(""),
-		Launcher: task.NewLauncherOptions(),
-	}
+	appOpt = newOptions()
+	appOpt.FileTopic = defaultFileTopic
 
 	_, err := toml.DecodeFile(*confPth, appOpt)
+
 	return err
 }

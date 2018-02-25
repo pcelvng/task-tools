@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"fmt"
 
 	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task"
@@ -70,11 +70,6 @@ func (i *infoOptions) validate() error {
 	return nil
 }
 
-type StatsReader struct {
-	sts *stat.Stats
-	r   file.Reader
-}
-
 func NewWorker(info string) task.Worker {
 	// parse info
 	iOpt, _ := newInfoOptions(info)
@@ -105,15 +100,25 @@ func NewWorker(info string) task.Worker {
 	}
 
 	// reader(s)
-	stsRdrs := make([]*StatsReader, 0)
+	stsRdrs := make(StatsReaders, 0)
 	for _, sts := range fSts {
-		sr := &StatsReader{sts: &sts}
-		sr.r, err = file.NewReader(sts.Path, fOpt)
+		// reader
+		r, err := file.NewReader(sts.Path, fOpt)
 		if err != nil {
 			return task.InvalidWorker(err.Error())
 		}
+
+		// stats reader
+		sr := &StatsReader{
+			sts:     &sts,
+			pthTime: parsePthTS(sts.Path),
+			r:       r,
+		}
 		stsRdrs = append(stsRdrs, sr)
 	}
+
+	// sort readers (oldest to newest)
+	sort.Sort(stsRdrs) // implements sort interface
 
 	// deduper
 	dedup := dedup.New()
@@ -228,7 +233,7 @@ func (wkr *Worker) done() (task.Result, string) {
 	}
 
 	// msg
-	msg := fmt.Sprintf(`read %v lines over %v files and wrote %v deduped lines`, wkr.linesRead, len(wkr.stsRdrs), wkr.w.Stats().LineCnt)
+	msg := fmt.Sprintf(`read %v lines from %v files and wrote %v lines`, wkr.linesRead(), len(wkr.stsRdrs), wkr.w.Stats().LineCnt)
 
 	return task.CompleteResult, msg
 }
@@ -248,7 +253,22 @@ func (wkr *Worker) linesRead() (lnCnt int64) {
 // - all template tags found from running tmpl.Parse() where the time passed in
 //   is the value of the discovered source ts.
 func parseTmpl(srcPth, destTmpl string) string {
-	srcDir, srcFile := filepath.Split(srcPth)
+	_, srcFile := filepath.Split(srcPth)
+
+	// {SRC_FILE}
+	if srcFile != "" {
+		destTmpl = strings.Replace(destTmpl, "{SRC_FILE}", srcFile, -1)
+	}
+
+	t := parsePthTS(srcPth)
+
+	return tmpl.Parse(destTmpl, t)
+}
+
+// parsePthTS will attempt to extract a time value from the path
+// by first looking at the file name then the directory structure.
+func parsePthTS(pth string) time.Time {
+	srcDir, srcFile := filepath.Split(pth)
 
 	// filename regex
 	re := regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
@@ -265,11 +285,6 @@ func parseTmpl(srcPth, destTmpl string) string {
 	// month slug regex
 	mSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)
 	mSrcTS := mSlugRe.FindString(srcDir)
-
-	// {SRC_FILE}
-	if srcFile != "" {
-		destTmpl = strings.Replace(destTmpl, "{SRC_FILE}", srcFile, -1)
-	}
 
 	// discover the source path timestamp from the following
 	// supported formats.
@@ -292,5 +307,36 @@ func parseTmpl(srcPth, destTmpl string) string {
 		t, _ = time.Parse(mFmt, mSrcTS)
 	}
 
-	return tmpl.Parse(destTmpl, t)
+	return t
+}
+
+type StatsReader struct {
+	sts     *stat.Stats
+	pthTime time.Time // src path extracted time
+	r       file.Reader
+}
+
+type StatsReaders []*StatsReader
+
+func (d StatsReaders) Len() int {
+	return len(d)
+}
+
+func (d StatsReaders) Swap(i, j int) {
+	d[i], d[j] = d[j], d[i]
+}
+
+// Less will check if:
+// i path time is less than j path time
+// if i and j path times are equal then
+// i created date will check if less then j created.
+func (d StatsReaders) Less(i, j int) bool {
+	// first by path src date
+	if d[i].pthTime.Equal(d[j].pthTime) {
+		// then by created date (if path src date is equal)
+		return d[i].sts.ParseCreated().Before(d[j].sts.ParseCreated())
+	}
+
+	// is i pthTime before j pthTime?
+	return d[i].pthTime.Before(d[j].pthTime)
 }

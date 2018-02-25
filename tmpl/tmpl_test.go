@@ -9,6 +9,7 @@ import (
 
 func TestParse(t *testing.T) {
 	tm, _ := time.Parse(time.RFC3339, "2018-01-15T12:17:34Z")
+	tmZero := time.Time{}
 	cases := []struct {
 		template string
 		time     time.Time
@@ -58,6 +59,21 @@ func TestParse(t *testing.T) {
 			template: "{DAY_SLUG}",
 			time:     tm,
 			expected: "2018/01/15",
+		},
+		{
+			template: "",
+			time:     tm,
+			expected: "",
+		},
+		{
+			template: "./file.txt",
+			time:     tm,
+			expected: "./file.txt",
+		},
+		{
+			template: "./file.txt",
+			time:     tmZero,
+			expected: "./file.txt",
 		},
 	}
 	for _, test := range cases {

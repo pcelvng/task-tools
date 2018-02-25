@@ -2,291 +2,215 @@ package main
 
 import (
 	"context"
-	"strconv"
+	"os"
+	"sort"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/file/mock"
+	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/file/stat"
+	"github.com/pcelvng/task/bus"
 )
 
 func TestNewWorker(t *testing.T) {
-	cases := []struct {
-		msg       string
-		info      string
-		shouldErr bool
-	}{
+	// setup
+	nopProducer, _ := bus.NewProducer(bus.NewOptions("nop"))
+	//bOpt := bus.NewOptions("file")
+	//bOpt.OutFile = "./test/files_stats.json"
+	//fileProducer, _ := bus.NewProducer(bOpt)
+
+	pths := []string{
+		"./test/1/dups.json",
+		"./test/2/file-20160101T000000.json",
+		"./test/2/file-20170101T000000.json",
+		"./test/2/file-20180101T000000.json",
+	}
+
+	createdDates := []time.Time{
+		time.Date(2016, 01, 01, 00, 00, 00, 00, time.UTC),
+	}
+	// line sets
+	lineSets := [][]string{
+		// set 1 - dups in set
 		{
-			msg:  "Valid Worker",
-			info: "?Key=key&TimeField=time&WritePath=nop://",
+			`{"f1":"v1","f2":"v1","f3":"v1"}`,
+			`{"f1":"v2","f2":"v1","f3":"v2"}`,
+			`{"f1":"v1","f2":"v1","f3":"v3"}`,
+			`{"f1":"v3","f2":"v1","f3":"v4"}`,
+			`{"f1":"v2","f2":"v2","f3":"v5"}`,
+			`{"f1":"v2","f2":"v2","f3":"v6"}`,
 		},
+
+		// set 2a - no dups in set (across one field key)
 		{
-			msg:       "Invalid Worker - Bad URI",
-			info:      "://",
-			shouldErr: true,
+			`{"f1":"v1","f2":"v1","f3":"v1"}`,
+			`{"f1":"v2","f2":"v1","f3":"v2"}`,
+			`{"f1":"v3","f2":"v1","f3":"v3"}`,
 		},
+
+		// set 2b - no dups in set (across one field key)
 		{
-			msg:       "Invalid Worker - bad r",
-			info:      "nop://init_err/path/file.txt?WritePath=nop",
-			shouldErr: true,
+			`{"f1":"v1","f2":"v1","f3":"v4"}`,
+			`{"f1":"v2","f2":"v1","f3":"v5"}`,
+			`{"f1":"v3","f2":"v1","f3":"v6"}`,
 		},
+
+		// set 2c - no dups in set (across one field key)
 		{
-			msg:       "Invalid Worker - bad writer",
-			info:      "?Key=key&TimeField=time",
-			shouldErr: true,
+			`{"f1":"v1","f2":"v1","f3":"v7"}`,
+		},
+
+		//// set 3 - no dups in set (across two field keys)
+		//{
+		//	`{"f1":"v1","f2":"v1","f3":"v7"}`,
+		//	`{"f1":"v2","f2":"v1","f3":"v8"}`,
+		//	`{"f1":"v3","f2":"v1","f3":"v9"}`,
+		//	`{"f1":"v1","f2":"v2","f3":"v10"}`,
+		//	`{"f1":"v2","f2":"v2","f3":"v11"}`,
+		//	`{"f1":"v3","f2":"v2","f3":"v12"}`,
+		//},
+	}
+
+	// scenario 1 file
+	createFile(lineSets[0], pths[0], createdDates[0])
+
+	// scenario 2 files
+	createFile(lineSets[1], pths[1], createdDates[0])
+	createFile(lineSets[2], pths[2], createdDates[0])
+	createFile(lineSets[3], pths[3], createdDates[0])
+
+	// case1: single file with duplicates
+	type scenario struct {
+		appOpt         *options
+		producer       bus.Producer
+		info           string
+		expectedResult task.Result
+		expectedMsg    string
+	}
+	scenarios := []scenario{
+		// scenario1: single file input deduping file lines
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           `./test/1/dups.json?dest-template=./test/1/deduped.json&fields=f1,f2`,
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 6 lines from 1 files and wrote 4 lines`,
+		},
+
+		// scenario2: multiple input files deduping across files
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           `./test/2?dest-template=./test/2/dedup/dedup.json&fields=f1`,
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 7 lines from 3 files and wrote 3 lines`,
 		},
 	}
-	for _, test := range cases {
-		w := (&Config{}).NewWorker(test.info)
-		if invalid, msg := task.IsInvalidWorker(w); invalid != test.shouldErr {
-			t.Errorf("FAIL: %s %s", test.msg, msg)
-		} else {
-			t.Logf("PASS: %s %s", test.msg, msg)
+
+	for sNum, s := range scenarios {
+		appOpt = s.appOpt
+		producer = s.producer
+		wkr := NewWorker(s.info)
+		gotRslt, gotMsg := wkr.DoTask(context.Background())
+
+		// check result
+		if gotRslt != s.expectedResult {
+			t.Errorf("scenario %v expected result '%v' but got '%v'", sNum, s.expectedResult, gotRslt)
 		}
 
-	}
-}
-
-func TestWorker_DoTask(t *testing.T) {
-	cases := []struct {
-		msg      string
-		worker   *Worker
-		result   task.Result
-		expected string
-		cancel   time.Duration
-	}{
-		{
-			msg: "Good Path",
-			worker: &Worker{
-				Key:       []string{"key"},
-				TimeField: "time",
-				data:      make(map[string]string),
-				r:         mock.NewReader("", []string{`{"key":"a","time":"2018-01-02T12:00:00Z"}`, `{"key":"b","time":"2018-01-02T12:00:00Z"}`}, 2),
-				writer:    mock.NewWriter("nop://", 0),
-			},
-			result:   task.CompleteResult,
-			expected: "lines written: 2",
-		},
-		{
-			msg: "Invalid write line",
-			worker: &Worker{
-				Key:       []string{"key"},
-				TimeField: "time",
-				data:      make(map[string]string),
-				r:         mock.NewReader("", []string{`{"key":"a","time":"2018-01-02T12:00:00Z"}`}, 10),
-				writer:    mock.NewWriter("nop://writeline_err", 0),
-			},
-			result:   task.ErrResult,
-			expected: "writeline_err",
-		},
-		{
-			msg: "Cancel context in write loop",
-			worker: &Worker{
-				Key:       []string{"time"},
-				TimeField: "time",
-				data:      genData("mock data", 100),
-				r:         mock.NewReader("", nil, 0),
-				writer:    mock.NewWriter("nop://", time.Millisecond),
-			},
-			result:   task.ErrResult,
-			cancel:   1,
-			expected: "task interrupted",
-		},
-		{
-			msg: "Invalid read line",
-			worker: &Worker{
-				Key:       []string{"time"},
-				TimeField: "time",
-				data:      make(map[string]string),
-				r:         mock.NewReader("nop://readline_err", nil, 0),
-				writer:    mock.NewWriter("", 0),
-			},
-			result: task.ErrResult,
-		},
-		{
-			msg: "Fail on Dedup (invalid data)",
-			worker: &Worker{
-				Key:       []string{"time"},
-				TimeField: "time",
-				data:      make(map[string]string),
-				r:         mock.NewReader("nop://", []string{"mock"}, 1),
-				writer:    mock.NewWriter("", 0),
-			},
-			result: task.ErrResult,
-		},
-		{
-			msg: "Cancel context in read loop",
-			worker: &Worker{
-				Key:       []string{"time"},
-				TimeField: "time",
-				data:      make(map[string]string),
-				r:         mock.NewReader("nop://", []string{`{"key":"a","time":"2018-01-15T12:00:00Z"}`}, 100000),
-				writer:    mock.NewWriter("", 0),
-			},
-			result: task.ErrResult,
-			cancel: -1,
-		},
-	}
-	for _, test := range cases {
-		ctx, cancelfn := context.WithCancel(context.Background())
-		if test.cancel != 0 {
-			go func() {
-				time.Sleep(test.cancel)
-				cancelfn()
-			}()
-		}
-		r, s := test.worker.DoTask(ctx)
-
-		if r != test.result {
-			t.Errorf("FAIL: %s %s %s", test.msg, cmp.Diff(r, test.result), s)
-		} else if test.expected != "" && s != test.expected {
-			t.Errorf("FAIL: %s %s", test.msg, cmp.Diff(s, test.expected))
-		} else {
-			t.Logf("PASS: %s %s", test.msg, s)
+		// check msg
+		if gotMsg != s.expectedMsg {
+			t.Errorf("scenario %v expected msg '%v' but got '%v'", sNum, s.expectedMsg, gotMsg)
 		}
 	}
+
 }
 
-func genData(line string, n int) map[string]string {
-	m := make(map[string]string)
-	for i := 0; i < n; i++ {
-		m[strconv.Itoa(i)] = line
+func TestStatsReaders_Sort(t *testing.T) {
+	// 1,2,3 have different dates
+	sts1 := stat.New()
+	sts1.Created = "2016-01-01T00:00:00Z" // oldest
+	sts1.Path = "sts1"                    // set to identify
+	sts2 := stat.New()
+	sts2.Created = "2017-01-01T00:00:00Z"
+	sts2.Path = "sts2"
+	sts3 := stat.New()
+	sts3.Created = "2018-01-01T00:00:00Z" // youngest
+	sts3.Path = "sts3"
+	// 4,5,6 have same date
+	sts4 := stat.New()
+	sts4.Created = "2016-01-01T00:00:00Z"
+	sts4.Path = "sts4"
+	sts5 := stat.New()
+	sts5.Created = "2016-01-01T00:00:00Z"
+	sts5.Path = "sts5"
+	sts6 := stat.New()
+	sts6.Created = "2016-01-01T00:00:00Z"
+	sts6.Path = "sts6"
+
+	// oldest to youngest
+	pthTime1 := time.Date(2016, 01, 01, 00, 00, 00, 00, time.UTC)
+	pthTime2 := time.Date(2017, 01, 01, 00, 00, 00, 00, time.UTC)
+	pthTime3 := time.Date(2018, 01, 01, 00, 00, 00, 00, time.UTC)
+
+	type scenario struct {
+		stsRdrs       StatsReaders
+		expectedOrder []string
 	}
-	return m
-}
-func TestWorker_Dedup(t *testing.T) {
-	cases := []struct {
-		msg       string
-		worker    *Worker
-		data      []string
-		result    map[string]string
-		shouldErr bool
-	}{
+
+	scenarios := []scenario{
+		// scenario 1: pthTime is the same, sts.Created are different
 		{
-			msg:    "1 entry",
-			worker: defaultWorker(),
-			data:   []string{`{"key":"a","time":"2018-01-01T01:01:01Z"}`},
-			result: map[string]string{"a": `{"key":"a","time":"2018-01-01T01:01:01Z"}`},
+			stsRdrs: StatsReaders{
+				&StatsReader{sts: &sts3, pthTime: pthTime1},
+				&StatsReader{sts: &sts1, pthTime: pthTime1},
+				&StatsReader{sts: &sts2, pthTime: pthTime1},
+			},
+			expectedOrder: []string{
+				"sts1",
+				"sts2",
+				"sts3",
+			},
 		},
+
+		// scenario 2: pthTime is different, sts.Created are same
 		{
-			msg:    "dedup - keep newest",
-			worker: defaultWorker(),
-			data: []string{
-				`{"key":"a","time":"2018-01-01T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-01T01:02:01Z"}`,
-				`{"key":"a","time":"2018-02-01T01:02:01Z"}`,
-				`{"key":"a","time":"2018-02-02T01:02:01Z"}`,
+			stsRdrs: StatsReaders{
+				&StatsReader{sts: &sts6, pthTime: pthTime3},
+				&StatsReader{sts: &sts4, pthTime: pthTime1},
+				&StatsReader{sts: &sts5, pthTime: pthTime2},
 			},
-			result: map[string]string{"a": `{"key":"a","time":"2018-02-02T01:02:01Z"}`},
-		},
-		{
-			msg: "dedup - keep oldest",
-			worker: &Worker{
-				Key:       []string{"key"},
-				TimeField: "time",
-				Keep:      Oldest,
-				data:      make(map[string]string),
+			expectedOrder: []string{
+				"sts4",
+				"sts5",
+				"sts6",
 			},
-			data: []string{
-				`{"key":"a","time":"2018-01-03T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-02T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-01T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-04T01:01:01Z"}`,
-			},
-			result: map[string]string{"a": `{"key":"a","time":"2018-01-01T01:01:01Z"}`},
-		},
-		{
-			msg: "dedup - keep first",
-			worker: &Worker{
-				Key:       []string{"key"},
-				TimeField: "time",
-				Keep:      First,
-				data:      make(map[string]string),
-			},
-			data: []string{
-				`{"key":"a","time":"2018-01-03T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-02T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-01T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-04T01:01:01Z"}`,
-			},
-			result: map[string]string{"a": `{"key":"a","time":"2018-01-03T01:01:01Z"}`},
-		},
-		{
-			msg: "dedup - keep last",
-			worker: &Worker{
-				Key:       []string{"key"},
-				TimeField: "time",
-				Keep:      Last,
-				data:      make(map[string]string),
-			},
-			data: []string{
-				`{"key":"a","time":"2018-01-03T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-02T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-01T01:01:01Z"}`,
-				`{"key":"a","time":"2018-01-04T01:01:01Z"}`,
-			},
-			result: map[string]string{"a": `{"key":"a","time":"2018-01-04T01:01:01Z"}`},
-		},
-		{
-			msg: "multiple keys",
-			worker: &Worker{
-				Key:       []string{"key1", "key2", "key3"},
-				TimeField: "time",
-				data:      make(map[string]string),
-			},
-			data:   []string{`{"key1":"a","key2":"b","key3":"c","time":"2018-01-01T01:01:01Z"}`},
-			result: map[string]string{"a|b|c": `{"key1":"a","key2":"b","key3":"c","time":"2018-01-01T01:01:01Z"}`},
-		},
-		{
-			msg: "dedup - multiple keys (newest)",
-			worker: &Worker{
-				Key:       []string{"key1", "key2", "key3"},
-				TimeField: "time",
-				data:      make(map[string]string),
-			},
-			data: []string{
-				`{"key1":"a","key2":"b","key3":"c","time":"2018-02-01T01:01:01Z"}`,
-				`{"key3":"c","key1":"a","key2":"b","time":"2018-01-01T01:01:01Z"}`,
-				`{"key2":"b","key1":"a","key3":"c","time":"2018-01-02T01:01:01Z"}`,
-			},
-			result: map[string]string{"a|b|c": `{"key1":"a","key2":"b","key3":"c","time":"2018-02-01T01:01:01Z"}`},
-		},
-		{
-			msg: "Invalid time field",
-			worker: &Worker{
-				Key:       []string{"key"},
-				TimeField: "t",
-			},
-			data: []string{
-				`{"key":"a"}`,
-			},
-			shouldErr: true,
 		},
 	}
-	for _, test := range cases {
-		var errored bool
-		for _, b := range test.data {
-			err := test.worker.dedup([]byte(b))
-			if err != nil {
-				errored = true
+
+	for sNum, s := range scenarios {
+		sort.Sort(s.stsRdrs)
+		for i, expected := range s.expectedOrder {
+			got := s.stsRdrs[i].sts.Path
+			if expected != got {
+				t.Errorf("scenario %v expected %v but got %v", sNum, expected, got)
 			}
 		}
-		if errored != test.shouldErr {
-			t.Errorf("FAIL: '%s' error mismatch", test.msg)
-		} else if !cmp.Equal(test.worker.data, test.result) {
-			t.Errorf("FAIL: '%s' %s", test.msg, cmp.Diff(test.worker.data, test.result))
-		} else {
-			t.Logf("PASS: %v", test.msg)
-		}
 	}
 }
 
-func defaultWorker() *Worker {
-	return &Worker{
-		Key:       []string{"key"},
-		TimeField: "time",
-		Keep:      Newest,
-		data:      make(map[string]string),
+// createFile creates file with lines at pth with created time as
+// the created date.
+func createFile(lines []string, pth string, created time.Time) {
+	w, _ := file.NewWriter(pth, nil)
+
+	for _, ln := range lines {
+		w.WriteLine([]byte(ln))
 	}
+	w.Close()
+	pth = w.Stats().Path // full path
+
+	// set created date
+	os.Chtimes(pth, created, created)
 }
