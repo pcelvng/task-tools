@@ -72,9 +72,10 @@ type options struct {
 }
 
 type Rule struct {
-	TaskType   string `toml:"type"`        // task type - also default topic
-	SrcPattern string `toml:"src_pattern"` // source file path pattern to match (supports glob style matching)
-	Topic      string `toml:"topic"`       // topic override (task type is default)
+	TaskType     string `toml:"type"`          // task type - also default topic
+	SrcPattern   string `toml:"src_pattern"`   // source file path pattern to match (supports glob style matching)
+	InfoTemplate string `toml:"info_template"` // info template (not required)
+	Topic        string `toml:"topic"`         // topic override (task type is default)
 
 	// checks for rules that checks on groups of files instead of responding
 	// immediately to an individual file.

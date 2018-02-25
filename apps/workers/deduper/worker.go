@@ -1,4 +1,4 @@
-package dedup
+package main
 
 import (
 	"context"
