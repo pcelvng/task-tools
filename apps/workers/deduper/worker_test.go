@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"os"
-	"sort"
 	"testing"
 	"time"
+
+	"sort"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
@@ -22,13 +23,24 @@ func TestNewWorker(t *testing.T) {
 
 	pths := []string{
 		"./test/1/dups.json",
+
 		"./test/2/file-20160101T000000.json",
 		"./test/2/file-20170101T000000.json",
 		"./test/2/file-20180101T000000.json",
+
+		"./test/3/file-20160101T000000.json",
+		"./test/3/file-20170101T000000.json",
+		"./test/3/file-20180101T000000.json",
+
+		"./test/4/file1.json",
+		"./test/4/file2.json",
+		"./test/4/file3.json",
 	}
 
 	createdDates := []time.Time{
 		time.Date(2016, 01, 01, 00, 00, 00, 00, time.UTC),
+		time.Date(2017, 01, 01, 00, 00, 00, 00, time.UTC),
+		time.Date(2018, 01, 01, 00, 00, 00, 00, time.UTC),
 	}
 	// line sets
 	lineSets := [][]string{
@@ -61,6 +73,21 @@ func TestNewWorker(t *testing.T) {
 			`{"f1":"v1","f2":"v1","f3":"v7"}`,
 		},
 
+		// set 3a - single record (across two field keys)
+		{
+			`{"f1":"v1","f2":"v1","f3":"v1"}`,
+		},
+
+		// set 3b - single record (across two field keys)
+		{
+			`{"f1":"v1","f2":"v1","f3":"v2"}`,
+		},
+
+		// set 3c - single record (across two field keys)
+		{
+			`{"f1":"v1","f2":"v1","f3":"v3"}`,
+		},
+
 		//// set 3 - no dups in set (across two field keys)
 		//{
 		//	`{"f1":"v1","f2":"v1","f3":"v7"}`,
@@ -80,6 +107,16 @@ func TestNewWorker(t *testing.T) {
 	createFile(lineSets[2], pths[2], createdDates[0])
 	createFile(lineSets[3], pths[3], createdDates[0])
 
+	// scenario 3 files
+	createFile(lineSets[4], pths[4], createdDates[0])
+	createFile(lineSets[5], pths[5], createdDates[0])
+	createFile(lineSets[6], pths[6], createdDates[0])
+
+	// scenario 4 files
+	createFile(lineSets[4], pths[7], createdDates[2])
+	createFile(lineSets[5], pths[8], createdDates[0])
+	createFile(lineSets[6], pths[9], createdDates[1])
+
 	// case1: single file with duplicates
 	type scenario struct {
 		appOpt         *options
@@ -89,7 +126,7 @@ func TestNewWorker(t *testing.T) {
 		expectedMsg    string
 	}
 	scenarios := []scenario{
-		// scenario1: single file input deduping file lines
+		// scenario 1: single file input deduping file lines
 		{
 			appOpt:         newOptions(),
 			producer:       nopProducer,
@@ -98,13 +135,31 @@ func TestNewWorker(t *testing.T) {
 			expectedMsg:    `read 6 lines from 1 files and wrote 4 lines`,
 		},
 
-		// scenario2: multiple input files deduping across files
+		// scenario 2: multiple input files deduping across files
 		{
 			appOpt:         newOptions(),
 			producer:       nopProducer,
 			info:           `./test/2?dest-template=./test/2/dedup/dedup.json&fields=f1`,
 			expectedResult: task.CompleteResult,
 			expectedMsg:    `read 7 lines from 3 files and wrote 3 lines`,
+		},
+
+		// scenario 3: lines over-writing in the correct file order - by file ts date
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           `./test/3/?dest-template=./test/3/dedup/dedup.json&fields=f1,f2`,
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 3 lines from 3 files and wrote 1 lines`,
+		},
+
+		// scenario 4: lines over-writing in the correct file order - by file created date
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           `./test/4?dest-template=./test/4/dedup/dedup.json&fields=f1,f2`,
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 3 lines from 3 files and wrote 1 lines`,
 		},
 	}
 
@@ -116,14 +171,39 @@ func TestNewWorker(t *testing.T) {
 
 		// check result
 		if gotRslt != s.expectedResult {
-			t.Errorf("scenario %v expected result '%v' but got '%v'", sNum, s.expectedResult, gotRslt)
+			t.Errorf("scenario %v expected result '%v' but got '%v'", sNum+1, s.expectedResult, gotRslt)
 		}
 
 		// check msg
 		if gotMsg != s.expectedMsg {
-			t.Errorf("scenario %v expected msg '%v' but got '%v'", sNum, s.expectedMsg, gotMsg)
+			t.Errorf("scenario %v expected msg '%v' but got '%v'", sNum+1, s.expectedMsg, gotMsg)
 		}
 	}
+
+	// scenario 3 special check
+	// match written line to expected
+	expected := lineSets[6][0]
+	b := make([]byte, len(expected))
+	f, _ := os.Open("./test/3/dedup/dedup.json")
+	f.Read(b)
+	got := string(b)
+	if expected != got {
+		t.Errorf("got '%v' from file but expected '%v'", got, expected)
+	}
+
+	// scenario 4 special check
+	// match written line to expected
+	expected = lineSets[4][0]
+	b = make([]byte, len(expected))
+	f, _ = os.Open("./test/4/dedup/dedup.json")
+	f.Read(b)
+	got = string(b)
+	if expected != got {
+		t.Errorf("got '%v' from file but expected '%v'", got, expected)
+	}
+
+	// cleanup
+	os.RemoveAll("./test/")
 
 }
 
@@ -163,9 +243,9 @@ func TestStatsReaders_Sort(t *testing.T) {
 		// scenario 1: pthTime is the same, sts.Created are different
 		{
 			stsRdrs: StatsReaders{
-				&StatsReader{sts: &sts3, pthTime: pthTime1},
-				&StatsReader{sts: &sts1, pthTime: pthTime1},
-				&StatsReader{sts: &sts2, pthTime: pthTime1},
+				&StatsReader{sts: sts3, pthTime: pthTime1},
+				&StatsReader{sts: sts1, pthTime: pthTime1},
+				&StatsReader{sts: sts2, pthTime: pthTime1},
 			},
 			expectedOrder: []string{
 				"sts1",
@@ -177,9 +257,9 @@ func TestStatsReaders_Sort(t *testing.T) {
 		// scenario 2: pthTime is different, sts.Created are same
 		{
 			stsRdrs: StatsReaders{
-				&StatsReader{sts: &sts6, pthTime: pthTime3},
-				&StatsReader{sts: &sts4, pthTime: pthTime1},
-				&StatsReader{sts: &sts5, pthTime: pthTime2},
+				&StatsReader{sts: sts6, pthTime: pthTime3},
+				&StatsReader{sts: sts4, pthTime: pthTime1},
+				&StatsReader{sts: sts5, pthTime: pthTime2},
 			},
 			expectedOrder: []string{
 				"sts4",

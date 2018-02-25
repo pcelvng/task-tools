@@ -100,8 +100,8 @@ func NewWorker(info string) task.Worker {
 	}
 
 	// reader(s)
-	stsRdrs := make(StatsReaders, 0)
-	for _, sts := range fSts {
+	stsRdrs := make(StatsReaders, len(fSts))
+	for i, sts := range fSts {
 		// reader
 		r, err := file.NewReader(sts.Path, fOpt)
 		if err != nil {
@@ -109,12 +109,11 @@ func NewWorker(info string) task.Worker {
 		}
 
 		// stats reader
-		sr := &StatsReader{
-			sts:     &sts,
+		stsRdrs[i] = &StatsReader{
+			sts:     sts,
 			pthTime: parsePthTS(sts.Path),
 			r:       r,
 		}
-		stsRdrs = append(stsRdrs, sr)
 	}
 
 	// sort readers (oldest to newest)
@@ -311,7 +310,7 @@ func parsePthTS(pth string) time.Time {
 }
 
 type StatsReader struct {
-	sts     *stat.Stats
+	sts     stat.Stats
 	pthTime time.Time // src path extracted time
 	r       file.Reader
 }
