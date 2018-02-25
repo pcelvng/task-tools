@@ -13,10 +13,12 @@ import (
 )
 
 var (
-	fileBufPrefix = "deduper_" // tmp file prefix
+	confPth = flag.String("config", "config.toml", "file path for toml config file")
+
 	sigChan       = make(chan os.Signal, 1)
-	confPth       = flag.String("config", "config.toml", "file path for toml config file")
+	fileBufPrefix = "deduper_" // tmp file prefix
 	appOpt        *options
+	producer      bus.Producer // special producer instance
 )
 
 func main() {
@@ -26,9 +28,18 @@ func main() {
 	}
 }
 
-func Run() error {
+func Run() (err error) {
 	// signal handling - capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+	// producer
+	busOpt := cloneBusOpts(*appOpt.Bus)
+	if appOpt.FileTopic == "" || appOpt.FileTopic == "-" {
+		busOpt.Bus = "nop" // disable producing
+	}
+	if producer, err = bus.NewProducer(&busOpt); err != nil {
+		return err
+	}
 
 	// launcher
 	l, err := task.NewLauncher(NewWorker, appOpt.Launcher, appOpt.Bus)
@@ -46,6 +57,8 @@ func Run() error {
 	return nil
 }
 
+func cloneBusOpts(opt bus.Options) bus.Options { return opt }
+
 type options struct {
 	Bus      *bus.Options
 	Launcher *task.LauncherOptions
@@ -59,11 +72,11 @@ type options struct {
 func loadOptions() error {
 	flag.Parse()
 
-	appOpts = &options{
+	appOpt = &options{
 		Bus:      bus.NewOptions(""),
 		Launcher: task.NewLauncherOptions(),
 	}
 
-	_, err := toml.DecodeFile(*confPth, appOpts)
+	_, err := toml.DecodeFile(*confPth, appOpt)
 	return err
 }

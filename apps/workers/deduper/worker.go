@@ -4,13 +4,20 @@ import (
 	"context"
 	"errors"
 	"io"
+	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
+	"time"
+
+	"fmt"
 
 	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/dedup"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
+	"github.com/pcelvng/task-tools/tmpl"
 )
 
 func newInfoOptions(info string) (*infoOptions, error) {
@@ -28,7 +35,8 @@ type infoOptions struct {
 	Sep           string   `uri:"sep"`             // csv separator - must be provided if expecting csv style records
 	UseFileBuffer bool     `uri:"use-file-buffer"` // directs the writer to use a file buffer instead of in-memory when writing final deduped records
 
-	indexFields []int // csv index fields (set during validation)
+	indexFields []int  // csv index fields (set during validation)
+	sep         []byte // byte version of Sep (set during validation)
 }
 
 // validate populated info options
@@ -55,6 +63,9 @@ func (i *infoOptions) validate() error {
 	if i.DestTemplate == "" {
 		return errors.New(`dest-template required`)
 	}
+
+	// set bytes sep
+	i.sep = []byte(i.Sep)
 
 	return nil
 }
@@ -87,6 +98,7 @@ func NewWorker(info string) task.Worker {
 
 	// path not directory - assume just one file
 	if len(fSts) == 0 {
+		// token sts for one src file
 		sts := stat.New()
 		sts.Path = iOpt.SrcPath
 		fSts = append(fSts, sts)
@@ -106,8 +118,11 @@ func NewWorker(info string) task.Worker {
 	// deduper
 	dedup := dedup.New()
 
+	// parse destination template
+	destPth := parseTmpl(iOpt.SrcPath, iOpt.DestTemplate)
+
 	// writer
-	w, err := file.NewWriter(iOpt.DestTemplate, fOpt)
+	w, err := file.NewWriter(destPth, fOpt)
 	if err != nil {
 		return task.InvalidWorker(err.Error())
 	}
@@ -116,6 +131,7 @@ func NewWorker(info string) task.Worker {
 		iOpt:    *iOpt,
 		stsRdrs: stsRdrs,
 		dedup:   dedup,
+		w:       w,
 	}
 }
 
@@ -123,32 +139,158 @@ type Worker struct {
 	iOpt    infoOptions
 	stsRdrs []*StatsReader
 	dedup   *dedup.Dedup
+	w       file.Writer
 }
 
-func (w *Worker) DoTask(ctx context.Context) (task.Result, string) {
-	for ln, err := w.r.ReadLine(); err != io.EOF; ln, err = w.r.ReadLine() {
-		if err != nil {
-			return task.Failed(err)
-		}
-		if task.IsDone(ctx) {
-			return task.Interrupted()
-		}
-		if err := w.dedup.WriteLine("key", ln); err != nil {
-			return task.Failed(err)
-		}
-	}
-	w.r.Close()
+func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
+	// read/write loop
+	for _, rdr := range wkr.stsRdrs { // loop through all readers
+		sts := rdr.sts
+		r := rdr.r
 
-	// finish write
-	w.dedup.Close()
-	for _, b := range w.data {
-		if task.IsDone(ctx) {
-			return task.Interrupted()
-		}
-		err := w.writer.WriteLine([]byte(b))
-		if err != nil {
-			return task.Failed(err)
+		for ctx.Err() == nil {
+			ln, err := r.ReadLine()
+			if err != nil && err != io.EOF {
+				return wkr.abort(fmt.Sprintf("issue at line %v: %v (%v)", r.Stats().LineCnt+1, err.Error(), sts.Path))
+			}
+
+			wkr.addLine(ln)
+
+			if err == io.EOF {
+				break
+			}
 		}
 	}
-	return task.Completed("lines written: %d", w.writer.Stats().LineCnt)
+
+	// write deduped records
+	for _, ln := range wkr.dedup.Lines() {
+		select {
+		case <-ctx.Done():
+			wkr.abort("")
+			return task.Interrupted()
+		default:
+			wkr.w.WriteLine(ln)
+		}
+	}
+
+	return wkr.done()
+}
+
+// writeLine
+// -extracts key from ln
+// -adds line and key to deduper
+func (wkr *Worker) addLine(ln []byte) {
+	if len(ln) == 0 {
+		return
+	}
+
+	// make key
+	var key string
+	if len(wkr.iOpt.Sep) > 0 {
+		key = dedup.KeyFromCSV(ln, wkr.iOpt.indexFields, wkr.iOpt.sep)
+	} else {
+		key = dedup.KeyFromJSON(ln, wkr.iOpt.Fields)
+	}
+
+	// add
+	wkr.dedup.Add(key, ln)
+}
+
+// abort will abort processing by closing the
+// reading and then cleaning up written records.
+func (wkr *Worker) abort(msg string) (task.Result, string) {
+	for _, rdr := range wkr.stsRdrs {
+		rdr.r.Close()
+	}
+	wkr.w.Abort() // cleanup writes to this point
+
+	return task.ErrResult, msg
+}
+
+// done assumes writing is done; will finalize
+// writes and return a task response. Will also
+// handle sending created files messages on the
+// producer.
+func (wkr *Worker) done() (task.Result, string) {
+	// close
+	for _, rdr := range wkr.stsRdrs {
+		rdr.r.Close()
+	}
+	err := wkr.w.Close()
+	if err != nil {
+		return task.ErrResult, fmt.Sprint(err.Error())
+	}
+
+	// publish files stats
+	sts := wkr.w.Stats()
+	if sts.Size > 0 { // only successful files
+		producer.Send(appOpt.FileTopic, sts.JSONBytes())
+	}
+
+	// msg
+	msg := fmt.Sprintf(`read %v lines over %v files and wrote %v deduped lines`, wkr.linesRead, len(wkr.stsRdrs), wkr.w.Stats().LineCnt)
+
+	return task.CompleteResult, msg
+}
+
+// linesRead returns total lines read across all files read.
+func (wkr *Worker) linesRead() (lnCnt int64) {
+	for _, rSts := range wkr.stsRdrs {
+		lnCnt += rSts.r.Stats().LineCnt
+	}
+
+	return lnCnt
+}
+
+// parseTmpl is a one-time tmpl parsing that supports the
+// following template tags:
+// - {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
+// - all template tags found from running tmpl.Parse() where the time passed in
+//   is the value of the discovered source ts.
+func parseTmpl(srcPth, destTmpl string) string {
+	srcDir, srcFile := filepath.Split(srcPth)
+
+	// filename regex
+	re := regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
+	srcTS := re.FindString(srcFile)
+
+	// hour slug regex
+	hSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}`)
+	hSrcTS := hSlugRe.FindString(srcDir)
+
+	// day slug regex
+	dSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}`)
+	dSrcTS := dSlugRe.FindString(srcDir)
+
+	// month slug regex
+	mSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)
+	mSrcTS := mSlugRe.FindString(srcDir)
+
+	// {SRC_FILE}
+	if srcFile != "" {
+		destTmpl = strings.Replace(destTmpl, "{SRC_FILE}", srcFile, -1)
+	}
+
+	// discover the source path timestamp from the following
+	// supported formats.
+	var t time.Time
+	if srcTS != "" {
+		// src ts in filename
+		tsFmt := "20060102T150405" // output format
+		t, _ = time.Parse(tsFmt, hSrcTS)
+	} else if hSrcTS != "" {
+		// src ts in hour slug
+		hFmt := "2006/01/02/15"
+		t, _ = time.Parse(hFmt, hSrcTS)
+	} else if dSrcTS != "" {
+		// src ts in day slug
+		dFmt := "2006/01/02"
+		t, _ = time.Parse(dFmt, dSrcTS)
+	} else if mSrcTS != "" {
+		// src ts in month slug
+		mFmt := "2006/01"
+		t, _ = time.Parse(mFmt, mSrcTS)
+	}
+
+	return tmpl.Parse(destTmpl, t)
 }
