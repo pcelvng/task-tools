@@ -61,7 +61,7 @@ func MySQL(un, pass, host, dbName string) (*sql.DB, error) {
 
 // Postgres is a convenience initializer to obtain a Postgres DB connection.
 func Postgres(un, pass, host, dbName string) (*sql.DB, error) {
-	connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=enable", un, pass, host, dbName)
+	connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=disable", un, pass, host, dbName)
 	return sql.Open("postgres", connStr)
 }
 
