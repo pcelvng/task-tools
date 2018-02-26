@@ -20,7 +20,7 @@ var (
 	sigChan       = make(chan os.Signal, 1)
 	fileBufPrefix = "deduper_" // tmp file prefix
 	appOpt        *options
-	producer      bus.Producer // special producer instance
+	producer      bus.Producer // special producer instance for file stats
 )
 
 func main() {

@@ -1,7 +1,6 @@
 package dedup
 
 import (
-	"bytes"
 	"strings"
 	"sync"
 
@@ -55,9 +54,8 @@ func KeyFromJSON(b []byte, fields []string) string {
 	var key string
 	for _, field := range fields {
 		s := json.Get(b, field).ToString()
-		key += s + "|"
+		key += s
 	}
-	key = strings.TrimRight(key, "|")
 	return key
 }
 
@@ -68,12 +66,12 @@ func KeyFromJSON(b []byte, fields []string) string {
 //
 // If a fields index value is out of range then that field is ignored
 // and not included in the key.
-func KeyFromCSV(b []byte, fields []int, sep []byte) string {
-	pieces := bytes.Split(b, sep)
+func KeyFromCSV(b []byte, fields []int, sep string) string {
+	pieces := strings.Split(string(b), sep)
 	key := ""
 	for _, fieldIndex := range fields {
 		if fieldIndex < len(pieces) {
-			key = key + string(pieces[fieldIndex])
+			key = key + pieces[fieldIndex]
 		}
 	}
 

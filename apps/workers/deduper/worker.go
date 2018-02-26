@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"log"
+
 	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/dedup"
@@ -34,9 +36,6 @@ type infoOptions struct {
 	Fields        []string `uri:"fields"`          // json fields list, unless sep is provided, then expecting field index values
 	Sep           string   `uri:"sep"`             // csv separator - must be provided if expecting csv style records
 	UseFileBuffer bool     `uri:"use-file-buffer"` // directs the writer to use a file buffer instead of in-memory when writing final deduped records
-
-	indexFields []int  // csv index fields (set during validation)
-	sep         []byte // byte version of Sep (set during validation)
 }
 
 // validate populated info options
@@ -49,10 +48,9 @@ func (i *infoOptions) validate() error {
 	// fields must convert to index value ints if sep is present
 	if len(i.Sep) > 0 {
 		var err error
-		i.indexFields = make([]int, len(i.Fields))
 
-		for n, indexField := range i.Fields {
-			i.indexFields[n], err = strconv.Atoi(indexField)
+		for _, indexField := range i.Fields {
+			_, err = strconv.Atoi(indexField)
 			if err != nil {
 				return errors.New(`fields must be integers when using a csv field separator`)
 			}
@@ -63,9 +61,6 @@ func (i *infoOptions) validate() error {
 	if i.DestTemplate == "" {
 		return errors.New(`dest-template required`)
 	}
-
-	// set bytes sep
-	i.sep = []byte(i.Sep)
 
 	return nil
 }
@@ -131,11 +126,25 @@ func NewWorker(info string) task.Worker {
 		return task.InvalidWorker(err.Error())
 	}
 
+	// csv index fields
+	indexFields := make([]int, len(iOpt.Fields))
+	if len(iOpt.Sep) > 0 {
+		for n, indexField := range iOpt.Fields {
+			indexFields[n], err = strconv.Atoi(indexField)
+			if err != nil {
+				err = errors.New(`fields must be integers when using a csv field separator`)
+				return task.InvalidWorker(err.Error())
+			}
+		}
+	}
+
 	return &Worker{
 		iOpt:    *iOpt,
 		stsRdrs: stsRdrs,
 		dedup:   dedup,
 		w:       w,
+
+		indexFields: indexFields,
 	}
 }
 
@@ -144,6 +153,9 @@ type Worker struct {
 	stsRdrs []*StatsReader
 	dedup   *dedup.Dedup
 	w       file.Writer
+
+	// csv
+	indexFields []int // csv index fields (set during validation)
 }
 
 func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
@@ -191,7 +203,7 @@ func (wkr *Worker) addLine(ln []byte) {
 	// make key
 	var key string
 	if len(wkr.iOpt.Sep) > 0 {
-		key = dedup.KeyFromCSV(ln, wkr.iOpt.indexFields, wkr.iOpt.sep)
+		key = dedup.KeyFromCSV(ln, wkr.indexFields, wkr.iOpt.Sep)
 	} else {
 		key = dedup.KeyFromJSON(ln, wkr.iOpt.Fields)
 	}
@@ -228,6 +240,9 @@ func (wkr *Worker) done() (task.Result, string) {
 	// publish files stats
 	sts := wkr.w.Stats()
 	if sts.Size > 0 { // only successful files
+		if producer == nil {
+			log.Println("is nil")
+		}
 		producer.Send(appOpt.FileTopic, sts.JSONBytes())
 	}
 

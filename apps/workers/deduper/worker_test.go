@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"os"
+	"sort"
+	"strings"
 	"testing"
 	"time"
-
-	"sort"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
@@ -16,10 +16,11 @@ import (
 
 func TestNewWorker(t *testing.T) {
 	// setup
+	os.Mkdir("./test", 0700)
 	nopProducer, _ := bus.NewProducer(bus.NewOptions("nop"))
-	//bOpt := bus.NewOptions("file")
-	//bOpt.OutFile = "./test/files_stats.json"
-	//fileProducer, _ := bus.NewProducer(bOpt)
+	bOpt := bus.NewOptions("file")
+	bOpt.OutFile = "./test/files_stats.json"
+	fileProducer, _ := bus.NewProducer(bOpt)
 
 	pths := []string{
 		"./test/1/dups.json",
@@ -35,6 +36,12 @@ func TestNewWorker(t *testing.T) {
 		"./test/4/file1.json",
 		"./test/4/file2.json",
 		"./test/4/file3.json",
+
+		"./test/5/dups-20160101T000000.csv",
+
+		"./test/6/file-20160101T000000.csv",
+		"./test/6/file-20170101T000000.csv",
+		"./test/6/file-20180101T000000.csv",
 	}
 
 	createdDates := []time.Time{
@@ -88,15 +95,36 @@ func TestNewWorker(t *testing.T) {
 			`{"f1":"v1","f2":"v1","f3":"v3"}`,
 		},
 
-		//// set 3 - no dups in set (across two field keys)
-		//{
-		//	`{"f1":"v1","f2":"v1","f3":"v7"}`,
-		//	`{"f1":"v2","f2":"v1","f3":"v8"}`,
-		//	`{"f1":"v3","f2":"v1","f3":"v9"}`,
-		//	`{"f1":"v1","f2":"v2","f3":"v10"}`,
-		//	`{"f1":"v2","f2":"v2","f3":"v11"}`,
-		//	`{"f1":"v3","f2":"v2","f3":"v12"}`,
-		//},
+		// set 4 - dups in set (csv - tab separated)
+		{
+			"f1v1	f2v1	f3v1",
+			`f1v2	f2v1	f3v2`,
+			`f1v3	f2v1	f3v3`,
+			`f1v1	f2v1	f3v4`,
+			`f1v2	f2v2	f3v5`,
+			`f1v2	f2v2	f3v6`,
+		},
+
+		// set 5a - (csv - comma separated)
+		{
+			`f1v1,f2v1`,
+			`f1v2,f2v2`,
+			`f1v3,f2v3`,
+		},
+
+		// set 5b - (csv - comma separated)
+		{
+			`f1v1,f2v4`,
+			`f1v4,f2v5`,
+			`f1v5,f2v6`,
+		},
+
+		// set 5c - (csv - comma separated)
+		{
+			`f1v1,f2v7`,
+			`f1v4,f2v8`,
+			`f1v6,f2v9`,
+		},
 	}
 
 	// scenario 1 file
@@ -117,6 +145,14 @@ func TestNewWorker(t *testing.T) {
 	createFile(lineSets[5], pths[8], createdDates[0])
 	createFile(lineSets[6], pths[9], createdDates[1])
 
+	// scenario 5 file - csv
+	createFile(lineSets[7], pths[10], createdDates[0])
+
+	// scenario 6 files - csv
+	createFile(lineSets[8], pths[11], createdDates[0])
+	createFile(lineSets[9], pths[12], createdDates[0])
+	createFile(lineSets[10], pths[13], createdDates[0])
+
 	// case1: single file with duplicates
 	type scenario struct {
 		appOpt         *options
@@ -130,7 +166,7 @@ func TestNewWorker(t *testing.T) {
 		{
 			appOpt:         newOptions(),
 			producer:       nopProducer,
-			info:           `./test/1/dups.json?dest-template=./test/1/deduped.json&fields=f1,f2`,
+			info:           `./test/1/dups.json?dest-template=./test/1/dedup.json&fields=f1,f2`,
 			expectedResult: task.CompleteResult,
 			expectedMsg:    `read 6 lines from 1 files and wrote 4 lines`,
 		},
@@ -156,10 +192,28 @@ func TestNewWorker(t *testing.T) {
 		// scenario 4: lines over-writing in the correct file order - by file created date
 		{
 			appOpt:         newOptions(),
-			producer:       nopProducer,
+			producer:       fileProducer,
 			info:           `./test/4?dest-template=./test/4/dedup/dedup.json&fields=f1,f2`,
 			expectedResult: task.CompleteResult,
 			expectedMsg:    `read 3 lines from 3 files and wrote 1 lines`,
+		},
+
+		// scenario 5: csv - tab separated
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           "./test/5/dups-20160101T000000.csv?dest-template=./test/5/dedup/dedup.csv&sep=\t&fields=0,1",
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 6 lines from 1 files and wrote 4 lines`,
+		},
+
+		// scenario 6: csv -multiple input files deduping across files
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           "./test/6?dest-template=./test/6/dedup/dedup.csv&fields=0&sep=,",
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 9 lines from 3 files and wrote 6 lines`,
 		},
 	}
 
@@ -202,9 +256,19 @@ func TestNewWorker(t *testing.T) {
 		t.Errorf("got '%v' from file but expected '%v'", got, expected)
 	}
 
+	// scenario 4 special check
+	// verify file producer output
+	expected = `dedup.json` // contains
+	b = make([]byte, len(expected))
+	r, _ := file.NewReader("./test/files_stats.json", nil)
+	ln, _ := r.ReadLine()
+	gotPth := stat.NewFromBytes(ln).Path
+	if !strings.HasSuffix(gotPth, expected) {
+		t.Errorf("got '%v' from stats file but expected '%v'", gotPth, expected)
+	}
+
 	// cleanup
 	os.RemoveAll("./test/")
-
 }
 
 func TestStatsReaders_Sort(t *testing.T) {
