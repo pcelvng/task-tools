@@ -42,6 +42,12 @@ func TestNewWorker(t *testing.T) {
 		"./test/6/file-20160101T000000.csv",
 		"./test/6/file-20170101T000000.csv",
 		"./test/6/file-20180101T000000.csv",
+
+		"./test/7/2017/01/02/03/test.json",
+
+		"./test/8/2017/01/02/test.json",
+
+		"./test/9/2017/01/test.json",
 	}
 
 	createdDates := []time.Time{
@@ -153,6 +159,15 @@ func TestNewWorker(t *testing.T) {
 	createFile(lineSets[9], pths[12], createdDates[0])
 	createFile(lineSets[10], pths[13], createdDates[0])
 
+	// scenario 7 file
+	createFile(lineSets[0], pths[14], createdDates[0])
+
+	// scenario 8 file
+	createFile(lineSets[0], pths[15], createdDates[0])
+
+	// scenario 9 file
+	createFile(lineSets[0], pths[16], createdDates[0])
+
 	// case1: single file with duplicates
 	type scenario struct {
 		appOpt         *options
@@ -215,6 +230,33 @@ func TestNewWorker(t *testing.T) {
 			expectedResult: task.CompleteResult,
 			expectedMsg:    `read 9 lines from 3 files and wrote 6 lines`,
 		},
+
+		// scenario 7: ts from hour slug in src dir
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           "./test/7/2017/01/02/03/test.json?dest-template=./test/7/{HOUR_SLUG}/{TS}.json&fields=f1&",
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 6 lines from 1 files and wrote 3 lines`,
+		},
+
+		// scenario 8: ts from day slug in src dir
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           "./test/8/2017/01/02/test.json?dest-template=./test/8/{DAY_SLUG}/{TS}.json&fields=f1&",
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 6 lines from 1 files and wrote 3 lines`,
+		},
+
+		// scenario 9: ts from month slug in src dir
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			info:           "./test/9/2017/01/test.json?dest-template=./test/9/{MONTH_SLUG}/{TS}.json&fields=f1&",
+			expectedResult: task.CompleteResult,
+			expectedMsg:    `read 6 lines from 1 files and wrote 3 lines`,
+		},
 	}
 
 	for sNum, s := range scenarios {
@@ -265,6 +307,154 @@ func TestNewWorker(t *testing.T) {
 	gotPth := stat.NewFromBytes(ln).Path
 	if !strings.HasSuffix(gotPth, expected) {
 		t.Errorf("got '%v' from stats file but expected '%v'", gotPth, expected)
+	}
+
+	// cleanup
+	os.RemoveAll("./test/")
+}
+
+func TestNewWorker_Err(t *testing.T) {
+	// setup
+	nopProducer, _ := bus.NewProducer(bus.NewOptions("nop"))
+	cnclCtx, cncl := context.WithCancel(context.Background())
+	cncl()
+
+	pths := []string{
+		"./test/test.json",
+	}
+
+	createdDates := []time.Time{
+		time.Date(2016, 01, 01, 00, 00, 00, 00, time.UTC),
+		time.Date(2017, 01, 01, 00, 00, 00, 00, time.UTC),
+		time.Date(2018, 01, 01, 00, 00, 00, 00, time.UTC),
+	}
+	// line sets
+	lineSets := [][]string{
+		{
+			`{"f1":"v1","f2":"v1","f3":"v1"}`,
+			`{"f1":"v2","f2":"v1","f3":"v2"}`,
+		},
+	}
+
+	// scenario 1 file
+	createFile(lineSets[0], pths[0], createdDates[0])
+
+	// case1: single file with duplicates
+	type scenario struct {
+		appOpt         *options
+		producer       bus.Producer
+		ctx            context.Context
+		info           string
+		expectedResult task.Result
+		expectedMsg    string
+	}
+	scenarios := []scenario{
+		// scenario 1: bad info (no fields)
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           ``,
+			expectedResult: task.ErrResult,
+			expectedMsg:    `fields required`,
+		},
+
+		// scenario 2: bad info (no dest-template)
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           `?fields=f1`,
+			expectedResult: task.ErrResult,
+			expectedMsg:    `dest-template required`,
+		},
+
+		// scenario 3: bad info (bad sep fields)
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           `?fields=f1&dest-template=./test/test.json&sep=,`,
+			expectedResult: task.ErrResult,
+			expectedMsg:    `fields must be integers when using a csv field separator`,
+		},
+
+		// scenario 4: empty src dir
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           "./test/empty_dir/?fields=0&dest-template=./test/test.json&sep=,",
+			expectedResult: task.ErrResult,
+			expectedMsg:    `no such file or directory`,
+		},
+
+		// scenario 5: file does not exist
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           "./test/doesnotexist.json?fields=0&dest-template=./test/test.json&sep=,",
+			expectedResult: task.ErrResult,
+			expectedMsg:    `no such file or directory`,
+		},
+
+		// scenario 6: trouble reading file
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           "nop://readline_err/test.json?fields=f1&dest-template=./test/test.json",
+			expectedResult: task.ErrResult,
+			expectedMsg:    `issue at line 1: readline_err (nop://readline_err/test.json)`,
+		},
+
+		// scenario 7: cancelled by context
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            cnclCtx, // already cancelled
+			info:           "./test/test.json?fields=f1&dest-template=./test/output.json",
+			expectedResult: task.ErrResult,
+			expectedMsg:    `task interrupted`,
+		},
+
+		// scenario 8: err closing writer
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           "./test/test.json?fields=f1&dest-template=nop://close_err/test.json",
+			expectedResult: task.ErrResult,
+			expectedMsg:    `close_err`,
+		},
+
+		// scenario 9: err writer init
+		{
+			appOpt:         newOptions(),
+			producer:       nopProducer,
+			ctx:            context.Background(),
+			info:           "./test/test.json?fields=f1&dest-template=nop://init_err/test.json",
+			expectedResult: task.ErrResult,
+			expectedMsg:    `init_err`,
+		},
+	}
+
+	for sNum, s := range scenarios {
+		appOpt = s.appOpt
+		producer = s.producer
+		wkr := NewWorker(s.info)
+		gotRslt, gotMsg := wkr.DoTask(s.ctx)
+
+		// check result
+		if gotRslt != s.expectedResult {
+			t.Errorf("scenario %v expected result '%v' but got '%v'", sNum+1, s.expectedResult, gotRslt)
+		}
+
+		// check msg
+		if !strings.Contains(gotMsg, s.expectedMsg) {
+			t.Errorf("scenario %v expected msg '%v' but got '%v'", sNum+1, s.expectedMsg, gotMsg)
+		}
 	}
 
 	// cleanup

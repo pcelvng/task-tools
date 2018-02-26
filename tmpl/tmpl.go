@@ -74,7 +74,8 @@ func Parse(s string, t time.Time) string {
 	day := fmt.Sprintf("%02d", d)
 	s = regDay.ReplaceAllString(s, day)
 
-	s = regHour.ReplaceAllString(s, strconv.Itoa(t.Hour()))
+	hour := fmt.Sprintf("%02d", t.Hour())
+	s = regHour.ReplaceAllString(s, hour)
 
 	return s
 }

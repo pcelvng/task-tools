@@ -14,6 +14,7 @@ import (
 
 var (
 	defaultFileTopic = "files"
+	defaultTaskType  = "deduper" // also default consumer topic and channel
 
 	confPth = flag.String("config", "config.toml", "file path for toml config file")
 
@@ -72,10 +73,10 @@ func newOptions() *options {
 }
 
 type options struct {
-	Bus      *bus.Options
-	Launcher *task.LauncherOptions
+	Bus      *bus.Options          `toml:"bus"`
+	Launcher *task.LauncherOptions `toml:"launcher"`
 
-	FileTopic     string // topic with file stats (default=files but can be turned off by setting it to "-")
+	FileTopic     string `toml:"file_topic"`      // topic with file stats (default=files but can be turned off by setting it to "-")
 	FileBufferDir string `toml:"file_buffer_dir"` // if using a file buffer, use this base directory
 	AWSAccessKey  string `toml:"aws_access_key"`  // required for s3 usage
 	AWSSecretKey  string `toml:"aws_secret_key"`  // required for s3 usage
@@ -86,6 +87,9 @@ func loadOptions() error {
 
 	appOpt = newOptions()
 	appOpt.FileTopic = defaultFileTopic
+	appOpt.Bus.Topic = defaultTaskType
+	appOpt.Bus.Channel = defaultTaskType
+	appOpt.Launcher.TaskType = defaultTaskType
 
 	_, err := toml.DecodeFile(*confPth, appOpt)
 

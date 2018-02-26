@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"log"
-
 	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/dedup"
@@ -130,11 +128,7 @@ func NewWorker(info string) task.Worker {
 	indexFields := make([]int, len(iOpt.Fields))
 	if len(iOpt.Sep) > 0 {
 		for n, indexField := range iOpt.Fields {
-			indexFields[n], err = strconv.Atoi(indexField)
-			if err != nil {
-				err = errors.New(`fields must be integers when using a csv field separator`)
-				return task.InvalidWorker(err.Error())
-			}
+			indexFields[n], _ = strconv.Atoi(indexField)
 		}
 	}
 
@@ -164,7 +158,12 @@ func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
 		sts := rdr.sts
 		r := rdr.r
 
-		for ctx.Err() == nil {
+		for {
+			if ctx.Err() != nil {
+				wkr.abort("")
+				return task.Interrupted()
+			}
+
 			ln, err := r.ReadLine()
 			if err != nil && err != io.EOF {
 				return wkr.abort(fmt.Sprintf("issue at line %v: %v (%v)", r.Stats().LineCnt+1, err.Error(), sts.Path))
@@ -192,7 +191,7 @@ func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
 	return wkr.done()
 }
 
-// writeLine
+// addLine
 // -extracts key from ln
 // -adds line and key to deduper
 func (wkr *Worker) addLine(ln []byte) {
@@ -240,9 +239,6 @@ func (wkr *Worker) done() (task.Result, string) {
 	// publish files stats
 	sts := wkr.w.Stats()
 	if sts.Size > 0 { // only successful files
-		if producer == nil {
-			log.Println("is nil")
-		}
 		producer.Send(appOpt.FileTopic, sts.JSONBytes())
 	}
 
