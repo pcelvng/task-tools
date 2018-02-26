@@ -17,6 +17,23 @@ type = "sample-type"
 # see: http://tldp.org/LDP/GNU-Linux-Tools-Summary/html/x11655.htm
 src_pattern = "s3://sample/pattern/*.json"
 
+# info_template is not required but allows the user to customize the
+# task info string.
+#
+# supported template tags are (for rules without cron or count checks):
+#  - {STATS}   source file full stats like linecnt
+#                   {STATS} presented as querystring parameters and is shorhand for:
+#                   "linecnt={LINECNT}&bytecnt={BYTECNT}&size={SIZE}&checksum={CHECKSUM}&created={CREATED}"
+#  - {LINECNT}     file line count
+#  - {BYTECNT}     file count of written (uncompressed) bytes
+#  - {SIZE}        file size (actual size of the file)
+#  - {CHECKSUM}    file checksum
+#  - {CREATED}     file created date
+#
+# template tag with or without cron or count checks:
+#  - {SRC_PATH}    file path (path directory for cron or count checks)
+info_template = "{SRC_PATH}?{STATS}"
+
 # default topic is the task type but that
 # can be changed by specifying a topic.
 topic = "sample-topic"

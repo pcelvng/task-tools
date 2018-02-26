@@ -1,128 +1,79 @@
 package dedup
 
 import (
-	"context"
-	"fmt"
-	"io"
 	"strings"
-	"time"
+	"sync"
 
-	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/json-iterator/go"
-	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/file"
 )
 
-type Worker struct {
-	Key       []string
-	TimeField string
-	Keep      string
-	data      map[string]string
-	ReadPath  string `uri:"origin"`
-	WritePath string
-	writer    file.Writer
-	reader    file.Reader
+var json = jsoniter.ConfigFastest
+
+func New() *Dedup {
+	return &Dedup{
+		linesMp: make(map[string][]byte),
+	}
 }
 
-type Config struct {
-	file.Options
+// Dedup will dedup lines added to AddLine by the provided key.
+// Newer lines replace older lines. If order is important then consider
+// sorting all the lines first.
+type Dedup struct {
+	linesMp map[string][]byte // unique list of linesMp by key
+
+	mu sync.Mutex
 }
 
-const (
-	Newest = "newest"
-	Oldest = "oldest"
-	First  = "first"
-	Last   = "last"
-)
+// AddLine will add the bytes record b to the pool of deduped linesMp.
+// As a help, basic csv and json key generators are provided as standalone
+// functions in this package.
+func (w *Dedup) Add(key string, b []byte) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-func (c *Config) NewWorker(info string) task.Worker {
-	w := &Worker{
-		Keep: Newest,
-		data: make(map[string]string),
-	}
-
-	var err error
-	if err := uri.Unmarshal(w, info); err != nil {
-		return task.InvalidWorker("error parsing info: %s", err)
-	}
-
-	if w.writer, err = file.NewWriter(w.WritePath, &c.Options); err != nil {
-		return task.InvalidWorker("invalid write path '%s'", w.WritePath)
-	}
-
-	if w.reader, err = file.NewReader(w.ReadPath, &c.Options); err != nil {
-		return task.InvalidWorker("invalid read path '%s'", w.ReadPath)
-	}
-	return w
+	w.linesMp[key] = b
 }
 
-func (w *Worker) DoTask(ctx context.Context) (task.Result, string) {
-
-	// read
-	//reader := bufio.NewScanner(w.reader)
-
-	for ln, err := w.reader.ReadLine(); err != io.EOF; ln, err = w.reader.ReadLine() {
-		if err != nil {
-			return task.Failed(err)
-		}
-		if task.IsDone(ctx) {
-			return task.Interrupted()
-		}
-		if err := w.dedup(ln); err != nil {
-			return task.Failed(err)
-		}
+// Lines returns the deduped lines.
+func (w *Dedup) Lines() [][]byte {
+	lines := make([][]byte, len(w.linesMp))
+	i := 0
+	for _, ln := range w.linesMp {
+		lines[i] = ln
+		i++
 	}
-	w.reader.Close()
 
-	// write
-	defer w.writer.Close()
-	for _, b := range w.data {
-		if task.IsDone(ctx) {
-			return task.Interrupted()
-		}
-		err := w.writer.WriteLine([]byte(b))
-		if err != nil {
-			return task.Failed(err)
-		}
-	}
-	return task.Completed("lines written: %d", w.writer.Stats().LineCnt)
+	return lines
 }
 
-func (w *Worker) dedup(b []byte) error {
+// KeyFromJSON generates a 'key' of fields values by concatenating
+// the field values in the order received in fields.
+//
+// If returned string is empty then the fields were not found.
+func KeyFromJSON(b []byte, fields []string) string {
 	var key string
-	for _, k := range w.Key {
-		s := jsoniter.Get(b, k).ToString()
-		key += s + "|"
+	for _, field := range fields {
+		s := json.Get(b, field).ToString()
+		key += s
 	}
-	key = strings.TrimRight(key, "|")
+	return key
+}
 
-	if w.Keep == Last {
-		w.data[key] = string(b)
-		return nil
-	}
-
-	data, found := w.data[key]
-
-	// always keep first occurrence
-	if !found && w.Keep == First {
-		w.data[key] = string(b)
-		return nil
-	}
-
-	newTime, err := time.Parse(time.RFC3339, jsoniter.Get(b, w.TimeField).ToString())
-	if err != nil {
-		return fmt.Errorf("%s:%s is not a valid RFC3339 time", jsoniter.Get(b, w.TimeField).ToString(), w.TimeField)
-	}
-
-	if !found {
-		w.data[key] = string(b)
-		return nil
+// KeyFromCSV generates a 'key' of fields values by concatenating
+// the field values in the order received in fields.
+//
+// If returned string is empty then the fields were not found.
+//
+// If a fields index value is out of range then that field is ignored
+// and not included in the key.
+func KeyFromCSV(b []byte, fields []int, sep string) string {
+	pieces := strings.Split(string(b), sep)
+	key := ""
+	for _, fieldIndex := range fields {
+		if fieldIndex < len(pieces) {
+			key = key + pieces[fieldIndex]
+		}
 	}
 
-	oldTime, _ := time.Parse(time.RFC3339, jsoniter.Get([]byte(data), w.TimeField).ToString())
-
-	if (w.Keep == Newest && newTime.After(oldTime)) || (w.Keep == Oldest && newTime.Before(oldTime)) {
-		w.data[key] = string(b)
-	}
-	return nil
+	return key
 }

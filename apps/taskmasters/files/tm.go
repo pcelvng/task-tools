@@ -8,6 +8,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -252,7 +254,8 @@ func (tm *tskMaster) match(sts *stat.Stats, rule *Rule) {
 	} else {
 		// does not go to a rule bucket so
 		// create task and send immediately
-		tsk := task.New(rule.TaskType, sts.InfoString())
+		info := genInfo(rule.InfoTemplate, sts)
+		tsk := task.New(rule.TaskType, info)
 		tm.sendTsk(tsk, rule)
 	}
 }
@@ -327,7 +330,8 @@ func (tm *tskMaster) sendDirTsks(rule *Rule) {
 
 	// create and send tasks
 	for _, pthDir := range pthDirs {
-		tsk := task.New(rule.TaskType, pthDir) // pthDir == info
+		info := genDirInfo(rule.InfoTemplate, pthDir)
+		tsk := task.New(rule.TaskType, info)
 		tm.sendTsk(tsk, rule)
 	}
 }
@@ -380,4 +384,67 @@ type job struct {
 
 func (j *job) Run() {
 	j.tm.sendDirTsks(j.rule)
+}
+
+// genInfo will generate the info string from the tmpl
+// (info template) and the file stats. Info templating allows
+// the user to 'inject' more information in the info value or changing
+// the basic format to suit the needs of the particular worker.
+//
+// Supports the following template tags:
+// - {SRC_PATH}    file path (for cron and count check rules this is the file directory)
+//
+// Template options available when rule is not cron or count check:
+// - {STATS}   source file full stats like linecnt
+//                 {STATS} presented as querystring parameters and is shorhand for:
+//                 "linecnt={LINECNT}&bytecnt={BYTECNT}&size={SIZE}&checksum={CHECKSUM}&created={CREATED}"
+// - {LINECNT}     file line count
+// - {BYTECNT}     file count of written (uncompressed) bytes
+// - {SIZE}        file size (actual size of the file)
+// - {CHECKSUM}    file checksum
+// - {CREATED}     file created date
+//
+// Default Template (if non provided)
+// "{SRC_PATH}?{SRC_STATS}"
+func genInfo(tmpl string, sts *stat.Stats) string {
+	info := sts.InfoString()
+
+	// default info string
+	if tmpl == "" {
+		return info
+	}
+
+	// {SRC_PATH}
+	tmpl = strings.Replace(tmpl, "{SRC_PATH}", sts.Path, -1)
+
+	// {STATS} expanded
+	expand := `linecnt={LINECNT}&bytecnt={BYTECNT}&size={SIZE}&checksum={CHECKSUM}&created={CREATED}`
+	tmpl = strings.Replace(tmpl, "{STATS}", expand, -1)
+
+	// {LINECNT}
+	tmpl = strings.Replace(tmpl, "{LINECNT}", strconv.FormatInt(sts.LineCnt, 10), -1)
+
+	// {BYTECNT}
+	tmpl = strings.Replace(tmpl, "{BYTECNT}", strconv.FormatInt(sts.ByteCnt, 10), -1)
+
+	// {SIZE}
+	tmpl = strings.Replace(tmpl, "{SIZE}", strconv.FormatInt(sts.Size, 10), -1)
+
+	// {CHECKSUM}
+	tmpl = strings.Replace(tmpl, "{CHECKSUM}", sts.Checksum, -1)
+
+	// {CREATED}
+	tmpl = strings.Replace(tmpl, "{CREATED}", sts.Created, -1)
+
+	return tmpl
+}
+
+// genDirInfo is like genInfo but only supports the {SRC_PATH}
+// template tag and {SRC_PATH} is expected to be a directory.
+func genDirInfo(tmpl, dirPth string) string {
+	if tmpl == "" {
+		return dirPth
+	}
+
+	return strings.Replace(tmpl, "{SRC_PATH}", dirPth, -1)
 }

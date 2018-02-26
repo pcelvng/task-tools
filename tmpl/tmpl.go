@@ -26,8 +26,10 @@ var (
 // {DD}   (day - two digits: ie 13)
 // {HH}   (hour - two digits: ie 00)
 // {TS}   (timestamp in the format 20060102T150405)
-// {SLUG} (date hour slug, shorthand for {YYYY}/{MM}/{DD}/{HH})
+// {SLUG} (alias of HOUR_SLUG)
+// {HOUR_SLUG} (date hour slug, shorthand for {YYYY}/{MM}/{DD}/{HH})
 // {DAY_SLUG} (date day slug, shorthand for {YYYY}/{MM}/{DD})
+// {MONTH_SLUG} (date month slug, shorthand for {YYYY}/{MM})
 //
 // Template values are case sensitive.
 //
@@ -41,11 +43,21 @@ var (
 // template: "base/path/{SLUG}/records-{TS}.json.gz"
 // could return: "base/path/2017/01/01/23/records-20170101T230101.json.gz"
 func Parse(s string, t time.Time) string {
+	if t.IsZero() {
+		return s
+	}
+
+	// {SLUG}
+	s = strings.Replace(s, "{SLUG}", "{HOUR_SLUG}", -1)
+
+	// {HOUR_SLUG}
+	s = strings.Replace(s, "{HOUR_SLUG}", "{YYYY}/{MM}/{DD}/{HH}", -1)
+
 	// {DAY_SLUG}
 	s = strings.Replace(s, "{DAY_SLUG}", "{YYYY}/{MM}/{DD}", -1)
 
-	// {SLUG}
-	s = strings.Replace(s, "{SLUG}", "{YYYY}/{MM}/{DD}/{HH}", -1)
+	// {MONTH_SLUG}
+	s = strings.Replace(s, "{MONTH_SLUG}", "{YYYY}/{MM}", -1)
 
 	// {TS}
 	ts := t.Format("20060102T150405")
@@ -62,40 +74,8 @@ func Parse(s string, t time.Time) string {
 	day := fmt.Sprintf("%02d", d)
 	s = regDay.ReplaceAllString(s, day)
 
-	s = regHour.ReplaceAllString(s, strconv.Itoa(t.Hour()))
+	hour := fmt.Sprintf("%02d", t.Hour())
+	s = regHour.ReplaceAllString(s, hour)
 
 	return s
 }
-
-/*func Parse(s string, t time.Time) (result string) {
-	// {DAY_SLUG}
-	s = strings.Replace(s, "{DAY_SLUG}", "{YYYY}/{MM}/{DD}", -1)
-
-	// {SLUG}
-	s = strings.Replace(s, "{SLUG}", "{YYYY}/{MM}/{DD}/{HH}", -1)
-
-	// {TS}
-	ts := t.Format("20060102T150405")
-	result = strings.Replace(s, "{TS}", ts, -1)
-
-	// {YYYY}
-	y := strconv.Itoa(t.Year())
-	result = strings.Replace(s, "{YYYY}", y, -1)
-
-	// {YY}
-	result = strings.Replace(result, "{YY}", y[2:], -1)
-
-	// {MM}
-	m := fmt.Sprintf("%02d", int(t.Month()))
-	result = strings.Replace(result, "{MM}", m, -1)
-
-	// {DD}
-	d := fmt.Sprintf("%02d", t.Day())
-	result = strings.Replace(result, "{DD}", d, -1)
-
-	// {HH}
-	h := fmt.Sprintf("%02d", t.Hour())
-	result = strings.Replace(result, "{HH}", h, -1)
-
-	return result
-}*/
