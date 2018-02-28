@@ -16,7 +16,7 @@ import (
 
 var (
 	defaultFileTopic = "files"
-	defaultTaskType  = "sort_to_file"
+	defaultTaskType  = "sort-to-file"
 	fileBufPrefix    = "sorttofile_"           // tmp file prefix
 	sigChan          = make(chan os.Signal, 1) // app signal handling
 	appOpt           options                   // app options
