@@ -15,10 +15,12 @@ import (
 )
 
 var (
-	fileBufPrefix = "sortbyhour_"           // tmp file prefix
-	sigChan       = make(chan os.Signal, 1) // app signal handling
-	appOpt        options                   // app options
-	producer      bus.Producer              // special producer instance
+	defaultFileTopic = "files"
+	defaultTaskType  = "sort_to_file"
+	fileBufPrefix    = "sorttofile_"           // tmp file prefix
+	sigChan          = make(chan os.Signal, 1) // app signal handling
+	appOpt           options                   // app options
+	producer         bus.Producer              // special producer instance
 )
 
 func main() {
@@ -64,8 +66,8 @@ func run() (err error) {
 
 var (
 	confPth            = flag.String("config", "", "toml config file path; over-written by flag values")
-	tskType            = flag.String("type", "sortbyhour", "task type; also is the default topic value")
-	tskBus             = flag.String("bus", "stdio", "'stdio', 'file', 'nsq'")
+	tskType            = flag.String("type", "", "task type; also is the default topic value")
+	tskBus             = flag.String("bus", "", "'stdio', 'file', 'nsq'")
 	inBus              = flag.String("in-bus", "", "one of 'stdin', 'file', 'nsq'; useful if you want the in and out bus to be different types")
 	outBus             = flag.String("out-bus", "", "one of 'stdout', 'file', 'nsq'; useful if you want the in and out bus to be different types")
 	inFile             = flag.String("in-file", "./in.tsks.json", "file bus path and name when 'file' task-bus specified")
@@ -78,8 +80,8 @@ var (
 	fileTopic          = flag.String("file-topic", "files", "topic to publish file stats of written files; use '-' to disable")
 	awsAccessKey       = flag.String("aws-access-key", "", "required for s3 usage")
 	awsSecretKey       = flag.String("aws-secret-key", "", "required for s3 usage")
-	maxInProgress      = flag.Uint("max-in-progress", 1, "maximum number of workers running at one time; a value of 0 is set to 1")
-	workerTimeout      = flag.Duration("worker-timeout", time.Second*10, "time duration to wait for a worker to finish under forced application shutdown")
+	maxInProgress      = flag.Uint("max-in-progress", 0, "maximum number of workers running at one time; a value of 0 is set to 1")
+	workerTimeout      = flag.Duration("worker-timeout", 0, "time duration to wait for a worker to finish under forced application shutdown default: 10s")
 	lifetimeMaxWorkers = flag.Uint("lifetime-max-workers", 0, "maximum number of tasks that will be completed before the application will shutdown; a negative value sets no limit")
 )
 
@@ -96,6 +98,7 @@ type options struct {
 	Launcher *task.LauncherOptions `toml:"launcher"` // launcher options
 	Bus      *bus.Options          `toml:"bus"`      // bus options
 
+	TaskType      string `toml:"task_type"`
 	FileTopic     string `toml:"file_topic"`      // topic to publish information about written files
 	FileBufferDir string `toml:"file_buffer_dir"` // if using a file buffer, use this base directory
 	AWSAccessKey  string `toml:"aws_access_key"`  // required for s3 usage
@@ -114,6 +117,8 @@ func (opt *options) nsqdHostsString(hosts string) {
 func loadAppOptions() error {
 	flag.Parse()
 	opt := newOptions()
+	opt.TaskType = defaultTaskType
+	opt.FileTopic = defaultFileTopic
 
 	// parse toml first - override with flag values
 	if *confPth != "" {
@@ -139,20 +144,26 @@ func loadAppOptions() error {
 	if *outFile != "" {
 		opt.Bus.OutFile = *outFile
 	}
-	if opt.Bus.Topic == "" {
+	if len(opt.Bus.Topic) == 0 {
+		opt.Bus.Topic = opt.TaskType
+	}
+	if *tskType != "" {
 		opt.Bus.Topic = *tskType // default consumer topic
 	}
 	if *topic != "" {
 		opt.Bus.Topic = *topic
 	}
 	if opt.Bus.Channel == "" {
-		opt.Bus.Channel = *tskType // default consumer channel
+		opt.Bus.Channel = opt.Bus.Topic // default consumer channel
 	}
 	if *channel != "" {
 		opt.Bus.Channel = *channel
 	}
-	if opt.Launcher.TaskType == "" {
+	if opt.Launcher.TaskType == "" && len(*tskType) > 0 {
 		opt.Launcher.TaskType = *tskType
+	}
+	if opt.Launcher.TaskType == "" {
+		opt.Launcher.TaskType = defaultTaskType
 	}
 	if *doneTopic != "done" {
 		opt.Launcher.DoneTopic = *doneTopic
@@ -166,7 +177,9 @@ func loadAppOptions() error {
 	if *lifetimeMaxWorkers != 0 {
 		opt.Launcher.LifetimeMaxWorkers = *lifetimeMaxWorkers
 	}
-	opt.nsqdHostsString(*nsqdHosts)
+	if len(*nsqdHosts) > 0 {
+		opt.nsqdHostsString(*nsqdHosts)
+	}
 
 	appOpt = opt
 	return nil
