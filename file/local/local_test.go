@@ -3,6 +3,7 @@ package local
 import (
 	"fmt"
 	"os"
+	"testing"
 	"time"
 
 	"github.com/pcelvng/task-tools/file/util"
@@ -81,4 +82,28 @@ func ExampleFileCreatedErr() {
 
 	// Output:
 	// true
+}
+
+func TestRmLocalPrefix(t *testing.T) {
+	type scenario struct {
+		pth      string
+		expected string // expected pth
+	}
+	scenarios := []scenario{
+		{pth: "./pth/to/file.txt", expected: "./pth/to/file.txt"},
+		{pth: "/pth/to/file.txt", expected: "/pth/to/file.txt"},
+		{pth: "file.txt", expected: "file.txt"},
+		{pth: "./file.txt", expected: "./file.txt"},
+		{pth: "local://pth/to/file.txt", expected: "/pth/to/file.txt"},
+		{pth: "local://./pth/to/file.txt", expected: "./pth/to/file.txt"},
+		{pth: "local:///pth/to/file.txt", expected: "/pth/to/file.txt"},
+		{pth: "local://file.txt", expected: "/file.txt"},
+	}
+
+	for _, sc := range scenarios {
+		actual := rmLocalPrefix(sc.pth)
+		if actual != sc.expected {
+			t.Errorf("got '%v' but expected '%v'", actual, sc.expected)
+		}
+	}
 }

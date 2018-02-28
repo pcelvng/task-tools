@@ -4,6 +4,8 @@ import (
 	"os"
 	"time"
 
+	"strings"
+
 	"github.com/pcelvng/task-tools/file/buf"
 )
 
@@ -39,4 +41,19 @@ func fileCreated(pth string) time.Time {
 		return fInfo.ModTime()
 	}
 	return time.Time{}
+}
+
+func rmLocalPrefix(pth string) string {
+	if strings.HasPrefix(pth, "local://./") {
+		// replace for relative path
+		pth = strings.Replace(pth, "local://./", "./", 1)
+	} else if strings.HasPrefix(pth, "local:///") {
+		// can specify "///" to indicate absolute path
+		pth = strings.Replace(pth, "local:///", "/", 1)
+	} else if strings.HasPrefix(pth, "local://") {
+		// if not using "./" then pth is treated as abs path.
+		pth = strings.Replace(pth, "local://", "/", 1)
+	}
+
+	return pth
 }
