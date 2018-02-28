@@ -16,6 +16,9 @@ import (
 )
 
 func NewReader(pth string) (*Reader, error) {
+	// remove local:// prefix if exists
+	pth = rmLocalPrefix(pth)
+
 	pth, _ = filepath.Abs(pth)
 
 	// open
@@ -131,6 +134,9 @@ func (r *hashReader) Read(p []byte) (n int, err error) {
 // Will not list recursively and does not return directories.
 // Checksums are not returned.
 func ListFiles(pth string) ([]stat.Stats, error) {
+	// remove local:// prefix if exists
+	pth = rmLocalPrefix(pth)
+
 	pth, _ = filepath.Abs(pth)
 	filesInfo, err := ioutil.ReadDir(pth)
 	if err != nil {

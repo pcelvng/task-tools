@@ -1,6 +1,6 @@
-# SortByHour Worker
+# sorttofile Worker
 
-The sortbyhour worker reads from a source file and sorts its records into 'hourly'
+The sorttofile worker reads from a source file and sorts its records into 'hourly'
 destination files.
 
 The worker assumes the source file contains json records. 
@@ -9,7 +9,7 @@ The worker assumes the source file contains json records.
 
 ```
 # task type
-sortbyhour
+sorttofile
 ```
 
 ## task info

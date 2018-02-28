@@ -21,7 +21,7 @@ Listens on a message bus for file stats json objects.
 bus = "" #
 
 [[rule]]
-type = "sortbyhour"
+type = "sorttofile"
 src_pattern = "s3://rmd-partners/facebook/raw-hourly/*/*/*/*/"
 
 # if cron_check is specified, then files that match src_pattern are sequestered until
@@ -29,7 +29,7 @@ src_pattern = "s3://rmd-partners/facebook/raw-hourly/*/*/*/*/"
 cron_check = "* * * * *"
 
 [[rule]]
-type = "sortbyhour"
+type = "sorttofile"
 src_pattern = "s3://rmd-partners/facebook/raw-hourly/{yyyy}/{mm}/{dd}/{hh}/"
 
 # If count_check is specified then task creation will occur after
