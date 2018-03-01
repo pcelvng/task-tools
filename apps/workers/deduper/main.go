@@ -39,7 +39,7 @@ func run() (err error) {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
 	// producer
-	busOpt := cloneBusOpts(*appOpt.Bus)
+	busOpt := cloneBusOpts(*appOpt.Options)
 	if appOpt.FileTopic == "" || appOpt.FileTopic == "-" {
 		busOpt.Bus = "nop" // disable producing
 	}
@@ -48,7 +48,7 @@ func run() (err error) {
 	}
 
 	// launcher
-	l, err := task.NewLauncher(NewWorker, appOpt.Launcher, appOpt.Bus)
+	l, err := task.NewLauncher(NewWorker, appOpt.LauncherOptions, appOpt.Options)
 	if err != nil {
 		return err
 	}
@@ -67,14 +67,14 @@ func cloneBusOpts(opt bus.Options) bus.Options { return opt }
 
 func newOptions() *options {
 	return &options{
-		Bus:      bus.NewOptions(""),
-		Launcher: task.NewLauncherOptions(),
+		Options:         bus.NewOptions(""),
+		LauncherOptions: task.NewLauncherOptions(),
 	}
 }
 
 type options struct {
-	Bus      *bus.Options          `toml:"bus"`
-	Launcher *task.LauncherOptions `toml:"launcher"`
+	*bus.Options
+	*task.LauncherOptions
 
 	FileTopic     string `toml:"file_topic"`      // topic with file stats (default=files but can be turned off by setting it to "-")
 	FileBufferDir string `toml:"file_buffer_dir"` // if using a file buffer, use this base directory
@@ -87,9 +87,9 @@ func loadOptions() error {
 
 	appOpt = newOptions()
 	appOpt.FileTopic = defaultFileTopic
-	appOpt.Bus.Topic = defaultTaskType
-	appOpt.Bus.Channel = defaultTaskType
-	appOpt.Launcher.TaskType = defaultTaskType
+	appOpt.Topic = defaultTaskType
+	appOpt.Channel = defaultTaskType
+	appOpt.TaskType = defaultTaskType
 
 	_, err := toml.DecodeFile(*confPth, appOpt)
 
