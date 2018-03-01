@@ -3,7 +3,7 @@
 #aws_access_key = ""
 #aws_secret_key = ""
 
-#[bus]
+# bus options
 #bus = "stdio" # options: stdio,file,nsq
 #in_bus = "" # options: stdin,file,nsq
 #out_bus = "" # options: stdout,file,nsq
@@ -14,7 +14,7 @@
 #topic = "deduper" # consumer topic
 #channel = "deduper" # consumer topic channel
 
-#[launcher]
+# launcher options
 #max_in_progress = 1
 #worker_timeout = "10s"
 #lifetime_max_workers = 0 # no limit if set to 0

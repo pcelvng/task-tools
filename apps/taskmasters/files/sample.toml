@@ -1,7 +1,7 @@
 bus = "stdio" # options: stdio,file,nsq
 #in_bus = "" # options: stdin,file,nsq
 #out_bus = "" # options: stdout,file,nsq
-#in_file = "./in.tsks.json"\
+#in_file = "./in.tsks.json"
 #out_file = "./out.tsks.json"
 #nsqd_hosts = ["localhost:4150"]
 #lookupd_hosts = [""]

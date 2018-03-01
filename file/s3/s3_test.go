@@ -35,27 +35,15 @@ func TestMain(m *testing.M) {
 	}
 
 	// make test bucket
-	err = createBucket(testBucket)
-	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
-	}
+	createBucket(testBucket)
 
 	// create two test files for reading
 	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	err = createTestFile(pth)
-	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
-	}
+	createTestFile(pth)
 
 	// compressed read test file
 	gzPth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
-	err = createTestFile(gzPth)
-	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
-	}
+	createTestFile(gzPth)
 
 	// run
 	runRslt := m.Run()
@@ -65,10 +53,7 @@ func TestMain(m *testing.M) {
 	rmTestFile(gzPth)
 
 	// remove test bucket
-	err = rmBucket(testBucket)
-	if err != nil {
-		log.Println(err.Error())
-	}
+	rmBucket(testBucket)
 
 	os.Exit(runRslt)
 }

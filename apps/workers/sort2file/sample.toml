@@ -1,0 +1,20 @@
+bus = "stdio" # options: stdio,file,nsq
+#in_bus = "" # options: stdin,file,nsq
+#out_bus = "" # options: stdout,file,nsq
+#in_file = "./in.tsks.json"
+#out_file = "./out.tsks.json"
+#nsqd_hosts = ["localhost:4150"]
+#lookupd_hosts = [""]
+#topic = "deduper" # consumer topic
+#channel = "deduper" # consumer topic channel
+
+#max_in_progress = 1
+#worker_timeout = "10s"
+#lifetime_max_workers = 0
+#done_topic = "done"
+#task_type = "deduper"
+
+#file_topic = "files"
+#file_buffer_dir = "" # temp directory for writing large temp files
+#aws_access_key = ""
+#aws_secret_key = ""
