@@ -12,7 +12,7 @@ bus = "stdio" # options: stdio,file,nsq
 #worker_timeout = "10s"
 #lifetime_max_workers = 0
 #done_topic = "done"
-#task_type = "deduper"
+#task_type = "sort2file"
 
 #file_topic = "files"
 #file_buffer_dir = "" # temp directory for writing large temp files

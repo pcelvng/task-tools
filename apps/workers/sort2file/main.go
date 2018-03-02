@@ -108,6 +108,14 @@ func loadAppOptions() error {
 		return err
 	}
 
+	if opt.Topic == "" {
+		opt.Topic = opt.TaskType
+	}
+
+	if opt.Channel == "" {
+		opt.Channel = opt.TaskType
+	}
+
 	appOpt = opt
 	return nil
 }
