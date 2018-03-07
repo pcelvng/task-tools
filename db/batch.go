@@ -8,7 +8,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
-
 	"github.com/pcelvng/task-tools/db/batch"
 	"github.com/pcelvng/task-tools/db/nop"
 	"github.com/pcelvng/task-tools/db/stat"
