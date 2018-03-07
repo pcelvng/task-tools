@@ -3,10 +3,8 @@ package file
 import (
 	"io"
 	"net/url"
-
-	"path/filepath"
-
 	"path"
+	"path/filepath"
 
 	"github.com/pcelvng/task-tools/file/local"
 	"github.com/pcelvng/task-tools/file/nop"
