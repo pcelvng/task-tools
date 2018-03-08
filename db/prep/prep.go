@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/pkg/errors"
 )
 
 var knownStructs map[reflect.Type]*Prepare
@@ -14,10 +15,17 @@ func init() {
 	knownStructs = make(map[reflect.Type]*Prepare)
 }
 
+// Prepare a custom struct for insertion into a database using the batchloader.
+// Prepare using the 'db' struct tags to correctly identify which field to use.
+// If the 'db' tag is absent the 'json' tag will then be used. If neither tag is provided
+// or if 'db' is set to "-" that field is ignored
 type Prepare struct {
 	lookup map[string]int
 }
 
+// New prepares a struct for database insertion. Will return nil if a non-struct is received
+// This is optimised to return a cached Prepare object if
+// the custom struct has already been prepared.
 func New(v interface{}) *Prepare {
 	p := &Prepare{
 		lookup: make(map[string]int),
@@ -27,7 +35,7 @@ func New(v interface{}) *Prepare {
 		vStruct = vStruct.Elem()
 	}
 	if vStruct.Kind() != reflect.Struct {
-		return nil //, fmt.Errorf("Must pass a struct not %v", vStruct.Kind())
+		return nil
 	}
 
 	if p, found := knownStructs[vStruct.Type()]; found {
@@ -52,6 +60,7 @@ func New(v interface{}) *Prepare {
 	return p
 }
 
+// Check if the given column names are in the prepared struct
 func (p *Prepare) Check(columns ...string) error {
 	errs := appenderr.New()
 	for _, c := range columns {
@@ -59,9 +68,21 @@ func (p *Prepare) Check(columns ...string) error {
 			errs.Add(fmt.Errorf("%v", c))
 		}
 	}
+	if errs.ErrOrNil() != nil {
+		return errors.Wrap(errs, "columns not found")
+	}
 	return errs.ErrOrNil()
 }
 
+// Columns found in the prepared struct
+func (p *Prepare) Columns() (cols []string) {
+	for name := range p.lookup {
+		cols = append(cols, name)
+	}
+	return cols
+}
+
+// Row prepares a row insert for struct v for the provided columns.
 func (p *Prepare) Row(v interface{}, cols ...string) (args []interface{}) {
 	vStruct := reflect.ValueOf(v)
 	if vStruct.Kind() == reflect.Ptr {
@@ -76,7 +97,7 @@ func (p *Prepare) Row(v interface{}, cols ...string) (args []interface{}) {
 	return args
 }
 
+// Row prepares a row insert for struct v for the provided columns.
 func Row(v interface{}, cols ...string) (row []interface{}) {
-	p := New(v)
-	return p.Row(v, cols...)
+	return New(v).Row(v, cols...)
 }
