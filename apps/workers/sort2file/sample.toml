@@ -1,18 +1,16 @@
 bus = "stdio" # options: stdio,file,nsq
 #in_bus = "" # options: stdin,file,nsq
 #out_bus = "" # options: stdout,file,nsq
-#in_file = "./in.tsks.json"
-#out_file = "./out.tsks.json"
 #nsqd_hosts = ["localhost:4150"]
 #lookupd_hosts = [""]
-#topic = "deduper" # consumer topic
-#channel = "deduper" # consumer topic channel
+#topic = "sort2file" # consumer topic
+#channel = "sort2file" # consumer topic channel
 
 #max_in_progress = 1
-#worker_timeout = "10s"
-#lifetime_max_workers = 0
+#worker_kill_time = "10s"
+#lifetime_workers = 0
 #done_topic = "done"
-#task_type = "sort2file"
+#enforced_task_type = "" # if provided, incoming tasks are rejected if they don't match this type
 
 #file_topic = "files"
 #file_buffer_dir = "" # temp directory for writing large temp files

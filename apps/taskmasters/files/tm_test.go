@@ -174,8 +174,8 @@ func TestTskMaster(t *testing.T) {
 	// test: typical lifecycle
 	appOpt := newOptions()
 	appOpt.Bus = "file"
-	appOpt.InFile = pth
-	appOpt.OutFile = "./test/out.tsks.json"
+	appOpt.InTopic = pth
+	outTopic := "./test/out.tsks.json"
 	appOpt.Rules = []*Rule{
 		{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt", Topic: "test-topic"},  // send immediately
 		{TaskType: "test-type", SrcPattern: "/test/file*.gz"},                               // send immediately
@@ -186,7 +186,7 @@ func TestTskMaster(t *testing.T) {
 	doneCtx := tm.DoFileWatch(context.Background())
 
 	<-doneCtx.Done() // wait until done processing
-	r, _ := file.NewReader(appOpt.OutFile, nil)
+	r, _ := file.NewReader(outTopic, nil)
 
 	tsks := make(map[string]*task.Task)
 	for {
@@ -252,7 +252,7 @@ func TestTskMaster(t *testing.T) {
 
 	// cleanup
 	os.Remove(pth)
-	os.Remove(appOpt.OutFile)
+	os.Remove(outTopic)
 	os.Remove("./test")
 }
 

@@ -89,8 +89,8 @@ type Rule struct {
 func loadAppOptions() (*options, error) {
 	flag.Parse()
 	opt := newOptions()
-	opt.Topic = defaultTopic
-	opt.Channel = defaultChannel
+	opt.InTopic = defaultTopic
+	opt.InChannel = defaultChannel
 
 	// parse toml first - override with flag values
 	_, err := toml.DecodeFile(*configPth, opt)

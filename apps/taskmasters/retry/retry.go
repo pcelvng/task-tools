@@ -10,14 +10,14 @@ import (
 	"github.com/pcelvng/task/bus"
 )
 
-func NewRetry(conf *Config) (*Retryer, error) {
+func newRetryer(conf *options) (*retryer, error) {
 	if len(conf.RetryRules) == 0 {
 		return nil, errors.New("no retry rules specified")
 	}
 
 	// map over done topic and channel for consumer
-	conf.Options.Topic = conf.DoneTopic
-	conf.Options.Channel = conf.DoneChannel
+	conf.Options.InTopic = conf.DoneTopic
+	conf.Options.InChannel = conf.DoneChannel
 
 	// make consumer
 	c, err := bus.NewConsumer(conf.Options)
@@ -31,7 +31,7 @@ func NewRetry(conf *Config) (*Retryer, error) {
 		return nil, err
 	}
 
-	r := &Retryer{
+	r := &retryer{
 		conf:       conf,
 		consumer:   c,
 		producer:   p,
@@ -48,8 +48,8 @@ func NewRetry(conf *Config) (*Retryer, error) {
 	return r, nil
 }
 
-type Retryer struct {
-	conf       *Config
+type retryer struct {
+	conf       *options
 	consumer   bus.Consumer
 	producer   bus.Producer
 	rules      []*RetryRule
@@ -64,7 +64,7 @@ type Retryer struct {
 // - connect the consumer
 // - connect the producer
 // - begin listening for error tasks
-func (r *Retryer) start() error {
+func (r *retryer) start() error {
 	if r.consumer == nil {
 		return errors.New("unable to start - no consumer")
 	}
@@ -87,7 +87,7 @@ func (r *Retryer) start() error {
 
 // loadRules will load all the retry rules into
 // a local map for easier access.
-func (r *Retryer) loadRules() {
+func (r *retryer) loadRules() {
 	for _, rule := range r.rules {
 		key := rule.TaskType
 		r.rulesMap[key] = rule
@@ -97,11 +97,11 @@ func (r *Retryer) loadRules() {
 // listen will start the listen loop to listen
 // for failed tasks and then handle those failed
 // tasks.
-func (r *Retryer) listen() {
+func (r *retryer) listen() {
 	go r.doListen()
 }
 
-func (r *Retryer) doListen() {
+func (r *retryer) doListen() {
 	for {
 		// give the closeChan a change
 		// to break the loop.
@@ -148,7 +148,7 @@ func (r *Retryer) doListen() {
 // - look for a retry rule to apply
 // - if the task needs to be retried then it is returned
 // - if the task does not need to be retried the nil is returned
-func (r *Retryer) applyRule(tsk *task.Task) {
+func (r *retryer) applyRule(tsk *task.Task) {
 	rule, ok := r.rulesMap[tsk.Type]
 	if !ok {
 		return
@@ -171,7 +171,7 @@ func (r *Retryer) applyRule(tsk *task.Task) {
 
 // doRetry will wait (if requested by the rule)
 // and then send the task to the outgoing channel
-func (r *Retryer) doRetry(tsk *task.Task, rule *RetryRule) {
+func (r *retryer) doRetry(tsk *task.Task, rule *RetryRule) {
 	time.Sleep(rule.Wait.Duration)
 
 	// create a new task just like the old one
@@ -189,7 +189,7 @@ func (r *Retryer) doRetry(tsk *task.Task, rule *RetryRule) {
 	}
 }
 
-func (r *Retryer) Close() error {
+func (r *retryer) close() error {
 	// send close signal
 	close(r.closeChan)
 

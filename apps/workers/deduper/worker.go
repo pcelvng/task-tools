@@ -62,7 +62,7 @@ func (i *infoOptions) validate() error {
 	return nil
 }
 
-func NewWorker(info string) task.Worker {
+func newWorker(info string) task.Worker {
 	// parse info
 	iOpt, _ := newInfoOptions(info)
 
@@ -131,7 +131,7 @@ func NewWorker(info string) task.Worker {
 		}
 	}
 
-	return &Worker{
+	return &worker{
 		iOpt:    *iOpt,
 		stsRdrs: stsRdrs,
 		dedup:   dedup,
@@ -141,7 +141,7 @@ func NewWorker(info string) task.Worker {
 	}
 }
 
-type Worker struct {
+type worker struct {
 	iOpt    infoOptions
 	stsRdrs []*StatsReader
 	dedup   *dedup.Dedup
@@ -151,7 +151,7 @@ type Worker struct {
 	indexFields []int // csv index fields (set during validation)
 }
 
-func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
+func (wkr *worker) DoTask(ctx context.Context) (task.Result, string) {
 	// read/write loop
 	for _, rdr := range wkr.stsRdrs { // loop through all readers
 		sts := rdr.sts
@@ -193,7 +193,7 @@ func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
 // addLine
 // -extracts key from ln
 // -adds line and key to deduper
-func (wkr *Worker) addLine(ln []byte) {
+func (wkr *worker) addLine(ln []byte) {
 	if len(ln) == 0 {
 		return
 	}
@@ -212,7 +212,7 @@ func (wkr *Worker) addLine(ln []byte) {
 
 // abort will abort processing by closing the
 // reading and then cleaning up written records.
-func (wkr *Worker) abort(msg string) (task.Result, string) {
+func (wkr *worker) abort(msg string) (task.Result, string) {
 	for _, rdr := range wkr.stsRdrs {
 		rdr.r.Close()
 	}
@@ -225,7 +225,7 @@ func (wkr *Worker) abort(msg string) (task.Result, string) {
 // writes and return a task response. Will also
 // handle sending created files messages on the
 // producer.
-func (wkr *Worker) done() (task.Result, string) {
+func (wkr *worker) done() (task.Result, string) {
 	// close
 	for _, rdr := range wkr.stsRdrs {
 		rdr.r.Close()
@@ -248,7 +248,7 @@ func (wkr *Worker) done() (task.Result, string) {
 }
 
 // linesRead returns total lines read across all files read.
-func (wkr *Worker) linesRead() (lnCnt int64) {
+func (wkr *worker) linesRead() (lnCnt int64) {
 	for _, rSts := range wkr.stsRdrs {
 		lnCnt += rSts.r.Stats().LineCnt
 	}
