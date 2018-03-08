@@ -2,11 +2,11 @@ package tmpl
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"path/filepath"
 )
 
 var (
@@ -82,7 +82,11 @@ func Parse(s string, t time.Time) string {
 }
 
 // PathTime will attempt to extract a time value from the path
-// by first looking at the file name then the directory structure.
+// by the following formats
+// filename - /path/{20060102T150405}.txt
+// hour slug - /path/2006/01/02/15/file.txt
+// day slug - /path/2006/01/02/file.txt
+// month slug - /path/2006/01/file.txt
 func PathTime(pth string) time.Time {
 	srcDir, srcFile := filepath.Split(pth)
 
@@ -108,7 +112,7 @@ func PathTime(pth string) time.Time {
 	if srcTS != "" {
 		// src ts in filename
 		tsFmt := "20060102T150405" // output format
-		t, _ = time.Parse(tsFmt, hSrcTS)
+		t, _ = time.Parse(tsFmt, srcTS)
 	} else if hSrcTS != "" {
 		// src ts in hour slug
 		hFmt := "2006/01/02/15"
