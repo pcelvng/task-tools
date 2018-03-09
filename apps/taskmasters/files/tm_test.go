@@ -159,6 +159,8 @@ func TestNewTskMaster_Errs(t *testing.T) {
 }
 
 func TestTskMaster(t *testing.T) {
+	os.Mkdir("./test", 0766)
+
 	// setup
 	// write file stats to a file
 	pth := "./test/files.json"
@@ -174,19 +176,19 @@ func TestTskMaster(t *testing.T) {
 	// test: typical lifecycle
 	appOpt := newOptions()
 	appOpt.Bus = "file"
-	appOpt.InFile = pth
-	appOpt.OutFile = "./test/out.tsks.json"
+	appOpt.InTopic = pth
+	outTopic := "./test/out.tsks.json"
 	appOpt.Rules = []*Rule{
-		{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt", Topic: "test-topic"},  // send immediately
-		{TaskType: "test-type", SrcPattern: "/test/file*.gz"},                               // send immediately
-		{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3},         // send when count is reached
-		{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *"}, // send when count is reached
+		{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt", Topic: "./test/out.tsks.json"},                       // send immediately
+		{TaskType: "test-type", SrcPattern: "/test/file*.gz", Topic: "./test/out.tsks.json"},                               // send immediately
+		{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3, Topic: "./test/out.tsks.json"},         // send when count is reached
+		{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *", Topic: "./test/out.tsks.json"}, // send when count is reached
 	}
 	tm, _ := newTskMaster(appOpt)
 	doneCtx := tm.DoFileWatch(context.Background())
 
 	<-doneCtx.Done() // wait until done processing
-	r, _ := file.NewReader(appOpt.OutFile, nil)
+	r, _ := file.NewReader(outTopic, nil)
 
 	tsks := make(map[string]*task.Task)
 	for {
@@ -252,7 +254,7 @@ func TestTskMaster(t *testing.T) {
 
 	// cleanup
 	os.Remove(pth)
-	os.Remove(appOpt.OutFile)
+	os.Remove(outTopic)
 	os.Remove("./test")
 }
 
@@ -308,8 +310,7 @@ func TestTskMaster_ClearFiles(t *testing.T) {
 	// test: typical lifecycle
 	appOpt := newOptions()
 	appOpt.InBus = "stdin"
-	appOpt.OutBus = "file"
-	appOpt.OutFile = "/dev/null"
+	appOpt.OutBus = "null"
 	appOpt.Rules = []*Rule{
 		{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt"},                       // send immediately
 		{TaskType: "test-type", SrcPattern: "/test/file*.gz"},                               // send immediately
@@ -327,7 +328,6 @@ func TestTskMaster_ClearFiles(t *testing.T) {
 	if !tm.isFilesEmpty() {
 		t.Error("files is not empty")
 	}
-
 }
 
 func writeStats(pth string, stats []*stat.Stats) {

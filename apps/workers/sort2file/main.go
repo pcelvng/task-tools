@@ -108,12 +108,12 @@ func loadAppOptions() error {
 		return err
 	}
 
-	if opt.Topic == "" {
-		opt.Topic = opt.TaskType
+	if opt.InTopic == "" {
+		opt.InTopic = opt.TaskType
 	}
 
-	if opt.Channel == "" {
-		opt.Channel = opt.TaskType
+	if opt.InChannel == "" {
+		opt.InChannel = opt.TaskType
 	}
 
 	appOpt = opt

@@ -19,7 +19,7 @@ func TestNewWorker(t *testing.T) {
 	os.Mkdir("./test", 0700)
 	nopProducer, _ := bus.NewProducer(bus.NewOptions("nop"))
 	bOpt := bus.NewOptions("file")
-	bOpt.OutFile = "./test/files_stats.json"
+	fileTopic := "./test/files_stats.json"
 	fileProducer, _ := bus.NewProducer(bOpt)
 
 	pths := []string{
@@ -261,8 +261,9 @@ func TestNewWorker(t *testing.T) {
 
 	for sNum, s := range scenarios {
 		appOpt = s.appOpt
+		appOpt.FileTopic = fileTopic
 		producer = s.producer
-		wkr := NewWorker(s.info)
+		wkr := newWorker(s.info)
 		gotRslt, gotMsg := wkr.DoTask(context.Background())
 
 		// check result
@@ -443,7 +444,7 @@ func TestNewWorker_Err(t *testing.T) {
 	for sNum, s := range scenarios {
 		appOpt = s.appOpt
 		producer = s.producer
-		wkr := NewWorker(s.info)
+		wkr := newWorker(s.info)
 		gotRslt, gotMsg := wkr.DoTask(s.ctx)
 
 		// check result

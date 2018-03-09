@@ -8,11 +8,11 @@ import (
 	"github.com/pcelvng/task/bus"
 )
 
-// NewBackloader will validate the config, create and connect the
+// newBackloader will validate the config, create and connect the
 // bus producer.
-func NewBackloader(conf *Config) (*Backloader, error) {
+func newBackloader(conf *options) (*backloader, error) {
 	// validate config
-	if err := conf.Validate(); err != nil {
+	if err := conf.validate(); err != nil {
 		return nil, err
 	}
 
@@ -22,21 +22,21 @@ func NewBackloader(conf *Config) (*Backloader, error) {
 		return nil, err
 	}
 
-	return &Backloader{
+	return &backloader{
 		busProducer: p,
 		config:      conf,
 	}, nil
 }
 
-type Backloader struct {
-	config      *Config
+type backloader struct {
+	config      *options
 	busProducer bus.Producer
 }
 
-// Backload returns 'int' which represents the number of
+// backload returns 'int' which represents the number of
 // tasks sent to the task bus. If start == end then one
 // task will be sent.
-func (bl *Backloader) Backload() (int, error) {
+func (bl *backloader) backload() (int, error) {
 	// backload loop
 	startHour := bl.config.Start
 	atHour := bl.config.Start
@@ -147,7 +147,7 @@ func makeOnHrs(onHrs, offHrs []bool) []bool {
 	return finalHrs
 }
 
-func (bl *Backloader) Stop() error {
+func (bl *backloader) stop() error {
 	if bl.busProducer != nil {
 		err := bl.busProducer.Stop()
 		if err != nil {
