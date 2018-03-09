@@ -165,7 +165,7 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 
 		sts := stat.New()
 		sts.SetCreated(objInfo.LastModified)
-		sts.Checksum = objInfo.ETag
+		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
 		sts.SetPath(fmt.Sprintf("s3://%s/%s", bucket, objInfo.Key))
 		sts.SetSize(objInfo.Size)
 

@@ -335,6 +335,10 @@ func TestListFiles(t *testing.T) {
 			f1Txt = strings.Contains(allSts[1].Path, "f1.txt")
 		}
 
+		if strings.Contains(allSts[0].Checksum, `"`) {
+			t.Errorf("checksum '%v' contains quotes", allSts[0].Checksum)
+		}
+
 		f2Txt := strings.Contains(allSts[0].Path, "f2.txt")
 		if !f2Txt {
 			f2Txt = strings.Contains(allSts[1].Path, "f2.txt")
