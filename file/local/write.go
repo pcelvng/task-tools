@@ -32,6 +32,9 @@ import (
 // The writer will use the temp file option if tmpDir and/or tmpPrefix is
 // provided. The writer will remove a temp file with a call to Close.
 func NewWriter(pth string, opt *Options) (*Writer, error) {
+	// remove local:// prefix if exists
+	pth = rmLocalPrefix(pth)
+
 	if opt == nil {
 		opt = NewOptions()
 	}

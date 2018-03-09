@@ -93,8 +93,13 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 		// accounted for.
 		r.sts.AddBytes(int64(len(ln)))
 
+		// drop newline characters
 		if ln[len(ln)-1] == '\n' {
-			return ln[:len(ln)-1], err
+			drop := 1
+			if len(ln) > 1 && ln[len(ln)-2] == '\r' { // windows newline
+				drop = 2
+			}
+			ln = ln[:len(ln)-drop]
 		}
 	}
 	return ln, err

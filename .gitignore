@@ -10,6 +10,6 @@ apps/taskmasters/retry/retry
 apps/taskmasters/files/files
 apps/workers/nop/nop
 apps/workers/deduper/deduper
-apps/workers/sortbyhour/sortbyhour
+apps/workers/sorttofile/sorttofile
 
 coverage

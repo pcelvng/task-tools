@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,7 +103,7 @@ func NewWorker(info string) task.Worker {
 		// stats reader
 		stsRdrs[i] = &StatsReader{
 			sts:     sts,
-			pthTime: parsePthTS(sts.Path),
+			pthTime: tmpl.PathTime(sts.Path),
 			r:       r,
 		}
 	}
@@ -260,8 +259,9 @@ func (wkr *Worker) linesRead() (lnCnt int64) {
 // parseTmpl is a one-time tmpl parsing that supports the
 // following template tags:
 // - {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
-// - all template tags found from running tmpl.Parse() where the time passed in
-//   is the value of the discovered source ts.
+//
+// note that all template tags found from running tmpl.Parse() where the time passed in
+// is the value of the discovered source ts.
 func parseTmpl(srcPth, destTmpl string) string {
 	_, srcFile := filepath.Split(srcPth)
 
@@ -270,54 +270,8 @@ func parseTmpl(srcPth, destTmpl string) string {
 		destTmpl = strings.Replace(destTmpl, "{SRC_FILE}", srcFile, -1)
 	}
 
-	t := parsePthTS(srcPth)
-
+	t := tmpl.PathTime(srcPth)
 	return tmpl.Parse(destTmpl, t)
-}
-
-// parsePthTS will attempt to extract a time value from the path
-// by first looking at the file name then the directory structure.
-func parsePthTS(pth string) time.Time {
-	srcDir, srcFile := filepath.Split(pth)
-
-	// filename regex
-	re := regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
-	srcTS := re.FindString(srcFile)
-
-	// hour slug regex
-	hSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}`)
-	hSrcTS := hSlugRe.FindString(srcDir)
-
-	// day slug regex
-	dSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}`)
-	dSrcTS := dSlugRe.FindString(srcDir)
-
-	// month slug regex
-	mSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)
-	mSrcTS := mSlugRe.FindString(srcDir)
-
-	// discover the source path timestamp from the following
-	// supported formats.
-	var t time.Time
-	if srcTS != "" {
-		// src ts in filename
-		tsFmt := "20060102T150405" // output format
-		t, _ = time.Parse(tsFmt, hSrcTS)
-	} else if hSrcTS != "" {
-		// src ts in hour slug
-		hFmt := "2006/01/02/15"
-		t, _ = time.Parse(hFmt, hSrcTS)
-	} else if dSrcTS != "" {
-		// src ts in day slug
-		dFmt := "2006/01/02"
-		t, _ = time.Parse(dFmt, dSrcTS)
-	} else if mSrcTS != "" {
-		// src ts in month slug
-		mFmt := "2006/01"
-		t, _ = time.Parse(mFmt, mSrcTS)
-	}
-
-	return t
 }
 
 type StatsReader struct {

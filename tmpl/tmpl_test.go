@@ -86,3 +86,48 @@ func TestParse(t *testing.T) {
 	}
 
 }
+
+func TestPathTime(t *testing.T) {
+	cases := []struct {
+		msg     string
+		path    string
+		expTime time.Time
+	}{
+		{
+			msg:     "filename parsing",
+			path:    "/path/to/file/20180214T140000.txt",
+			expTime: mustParse("2018-02-14T14:00:00Z"),
+		},
+		{
+			msg:     "hour slug matching",
+			path:    "/path/to/file/2018/02/14/14/file.txt",
+			expTime: mustParse("2018-02-14T14:00:00Z"),
+		},
+		{
+			msg:     "day slug matching",
+			path:    "/path/to/file/2018/01/07/file.txt",
+			expTime: mustParse("2018-01-07T00:00:00Z"),
+		},
+		{
+			msg:     "month slug matching",
+			path:    "/path/to/file/2017/12/file.txt",
+			expTime: mustParse("2017-12-01T00:00:00Z"),
+		},
+	}
+	for _, test := range cases {
+		tm := PathTime(test.path)
+		if !cmp.Equal(tm, test.expTime) {
+			t.Errorf("FAIL: %q %s", test.msg, cmp.Diff(tm, test.expTime))
+		} else {
+			t.Logf("PASS: %q", test.msg)
+		}
+	}
+}
+
+func mustParse(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}

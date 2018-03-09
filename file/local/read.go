@@ -8,14 +8,16 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
-
 	"path"
+	"path/filepath"
 
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
 func NewReader(pth string) (*Reader, error) {
+	// remove local:// prefix if exists
+	pth = rmLocalPrefix(pth)
+
 	pth, _ = filepath.Abs(pth)
 
 	// open
@@ -76,8 +78,13 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 		// accounted for.
 		r.sts.AddBytes(int64(len(ln)))
 
+		// drop newline characters
 		if ln[len(ln)-1] == '\n' {
-			return ln[:len(ln)-1], err
+			drop := 1
+			if len(ln) > 1 && ln[len(ln)-2] == '\r' { // windows newline
+				drop = 2
+			}
+			ln = ln[:len(ln)-drop]
 		}
 	}
 	return ln, err
@@ -131,6 +138,9 @@ func (r *hashReader) Read(p []byte) (n int, err error) {
 // Will not list recursively and does not return directories.
 // Checksums are not returned.
 func ListFiles(pth string) ([]stat.Stats, error) {
+	// remove local:// prefix if exists
+	pth = rmLocalPrefix(pth)
+
 	pth, _ = filepath.Abs(pth)
 	filesInfo, err := ioutil.ReadDir(pth)
 	if err != nil {

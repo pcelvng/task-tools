@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
-
 	"github.com/pcelvng/task-tools/db/batch"
+	"github.com/pcelvng/task-tools/db/nop"
 	"github.com/pcelvng/task-tools/db/stat"
 )
 
@@ -89,10 +90,18 @@ func Postgres(un, pass, host, dbName string) (*sql.DB, error) {
 // dbType should be:
 // * "postgres" for Postgres loading
 // * "mysql" for MySQL loading
+// * "nop" for using the nop batch loader "nop://", "nop://commit_err"
 //
 // Other adapters have not been tested but will likely work
 // if they support transactions and the '?' execution placeholder
 // value.
 func NewBatchLoader(dbType string, sqlDB *sql.DB) BatchLoader {
+	u, _ := url.Parse(dbType)
+	scheme := u.Scheme
+	if scheme == "nop" || dbType == "nop" {
+		host := u.Host
+		return nop.NewBatchLoader(host)
+	}
+
 	return batch.NewBatchLoader(dbType, sqlDB)
 }
