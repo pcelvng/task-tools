@@ -1,0 +1,14 @@
+bus = "stdio" # options: stdio,file,nsq
+# in_bus = "" # options: stdin,file,nsq
+# out_bus = "" # options: stdout,file,nsq
+# in_file = "./in.tsks.json"
+# out_file = "./out.tsks.json"
+# nsqd_hosts = ["localhost:4150"]
+# lookupd_hosts = [""]
+# topic = "files"
+# channel = "watch-files"
+
+[[rule]]
+  path_template = "s3://rmd-partners/partner-name/raw-hourly/{YYYY}/{MM}/{DD}/{HH}/"
+# lookback = 24    # the number of hours to lookback and check for files default is 24 hours
+# frequency = "1h" # the time between checking the folder for new files default is 1h

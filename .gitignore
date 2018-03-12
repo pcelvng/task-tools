@@ -11,5 +11,6 @@ apps/taskmasters/files/files
 apps/workers/nop/nop
 apps/workers/deduper/deduper
 apps/workers/sorttofile/sorttofile
+apps/utils/watcher/watcher
 
 coverage
