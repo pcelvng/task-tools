@@ -48,7 +48,7 @@ func run() (err error) {
 	}
 
 	// launcher
-	l, err := task.NewLauncher(NewWorker, appOpt.LauncherOptions, appOpt.Options)
+	l, err := task.NewLauncher(newWorker, appOpt.LauncherOptions, appOpt.Options)
 	if err != nil {
 		return err
 	}
@@ -87,9 +87,8 @@ func loadOptions() error {
 
 	appOpt = newOptions()
 	appOpt.FileTopic = defaultFileTopic
-	appOpt.Topic = defaultTaskType
-	appOpt.Channel = defaultTaskType
-	appOpt.TaskType = defaultTaskType
+	appOpt.InTopic = defaultTaskType
+	appOpt.InChannel = defaultTaskType
 
 	_, err := toml.DecodeFile(*confPth, appOpt)
 
