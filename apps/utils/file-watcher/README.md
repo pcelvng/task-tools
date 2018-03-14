@@ -1,6 +1,6 @@
 ### File Watcher
    
-- The watcher creates a file on the bus when a new file has been detected in the templated path
+- The file-watcher creates a file on the bus when a new file has been detected in the templated path
 - by default the check happens for the past 24 hours each hour
 
 ##### Option Params:
