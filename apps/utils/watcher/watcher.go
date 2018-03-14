@@ -117,8 +117,8 @@ func (w *watcher) process(currentCache fileList, path ...string) (currentFiles f
 		log.Println("can not watch:", err)
 		return
 	}
-	newTasks := CompareFileList(currentCache, currentFiles)
-	w.SendFiles(newTasks)
+	newFiles := CompareFileList(currentCache, currentFiles)
+	w.SendFiles(newFiles)
 
 	return currentFiles
 }
