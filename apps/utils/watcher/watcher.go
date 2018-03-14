@@ -158,11 +158,6 @@ func (w *watcher) addFiles(paths ...string) error {
 
 // SetNewCache will reset the watcher cache to the current watcher files
 func (w *watcher) SetNewCache() {
-	w.files.mu.Lock()
-	w.cache.mu.Lock()
-	defer w.files.mu.Unlock()
-	defer w.cache.mu.Unlock()
-
 	w.cache = NewFilesList()
 	for k, v := range w.files.filesMap {
 		w.cache.Add(k, v)
@@ -207,11 +202,6 @@ func (w *FileList) Remove(filePath string, stats *stat.Stats) {
 // if any entries are not listed in the cache a new list will
 // be returned with the missing entries
 func CompareFileList(cache *FileList, files *FileList) *FileList {
-	files.mu.RLock()
-	cache.mu.RLock()
-	defer files.mu.RUnlock()
-	defer cache.mu.RUnlock()
-
 	newList := NewFilesList()
 	for k, v := range files.filesMap {
 		if _, ok := cache.filesMap[k]; !ok {
