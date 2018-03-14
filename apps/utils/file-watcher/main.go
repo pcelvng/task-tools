@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -19,7 +17,7 @@ type options struct {
 
 	AWSAccessKey string  `toml:"aws_access_key" desc:"aws secret token for S3 access "`
 	AWSSecretKey string  `toml:"aws_secret_key" desc:"aws secret key for S3 access "`
-	FilesTopic   string  `toml:"topic" desc:"topic override (default is files)"`
+	FilesTopic   string  `toml:"files_topic" desc:"topic override (default is files)"`
 	Rules        []*Rule `toml:"rule"`
 }
 
@@ -30,28 +28,29 @@ type Rule struct {
 }
 
 var (
-	configPth = flag.String("config", "config.toml", "relative or absolute file path")
-	sigChan   = make(chan os.Signal, 1) // app signal handling
-
+	configPth    = flag.String("config", "config.toml", "relative or absolute file path")
+	sigChan      = make(chan os.Signal, 1) // app signal handling
+	appOpt       = newOptions()
 	defaultTopic = "files"
 )
 
 func main() {
+	var err error
+	// signal handling - be ready to capture signal early.
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+	// app options
+	appOpt, err = loadAppOptions()
+	if err != nil {
+		log.Fatalf("config: '%v'\n", err.Error())
+	}
+
 	if err := run(); err != nil {
 		log.Fatalln(err)
 	}
 }
 
 func run() (err error) {
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// app options
-	appOpt, err := loadAppOptions()
-	if err != nil {
-		return errors.New(fmt.Sprintf("config: '%v'\n", err.Error()))
-	}
-
 	watchers, err := newWatchers(appOpt)
 	if err != nil {
 		return err

@@ -61,7 +61,7 @@ func newWatchers(appOpt *options) (watchers []*watcher, err error) {
 }
 
 // Close closes the producer and sends sends a close signal
-func (w *watcher) Close() error {
+func (w *watcher) close() error {
 	// close the producer
 	if err := w.producer.Stop(); err != nil {
 		return err
@@ -73,7 +73,7 @@ func (w *watcher) Close() error {
 // closeWatchers closes all the current watchers (rules)
 func closeWatchers(list []*watcher) error {
 	for i, _ := range list {
-		err := list[i].Close()
+		err := list[i].close()
 		if err != nil {
 			return err
 		}
@@ -113,8 +113,8 @@ func (w *watcher) runWatch() (err error) {
 // for each of the new files
 func (w *watcher) process(currentCache fileList, path ...string) (currentFiles fileList) {
 	currentFiles = w.currentFiles(path...)
-	newFiles := CompareFileList(currentCache, currentFiles)
-	w.SendFiles(newFiles)
+	newFiles := compareFileList(currentCache, currentFiles)
+	w.sendFiles(newFiles)
 
 	return currentFiles
 }
@@ -171,7 +171,7 @@ func buildNewCache(fileLists ...fileList) (newCache fileList) {
 
 // SendFiles uses the watcher producer to send to the current Bus
 // using the options topic (default if not set)
-func (w *watcher) SendFiles(files fileList) {
+func (w *watcher) sendFiles(files fileList) {
 	json := jsoniter.ConfigFastest
 
 	for _, f := range files {
@@ -183,7 +183,7 @@ func (w *watcher) SendFiles(files fileList) {
 // CompareFileList will check the keys of each of the FileList maps
 // if any entries are not listed in the cache a new list will
 // be returned with the missing entries
-func CompareFileList(cache, current fileList) (newFiles fileList) {
+func compareFileList(cache, current fileList) (newFiles fileList) {
 	newFiles = make(fileList)
 	for k, v := range current {
 		if _, found := cache[k]; !found {
