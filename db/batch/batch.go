@@ -146,13 +146,14 @@ func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, 
 	numVals := batchSize * numCols // number of values in a standard batch
 	for b := 0; b < numBatches; b++ {
 		// handle last batch
+		end := (b + 1) * numVals
 		if b == (numBatches - 1) {
 			insStmt = lastStmt
-			numVals = lastBatchSize * numCols
+			end = b*numVals + lastBatchSize*numCols
 		}
 
 		// do insert
-		rslt, err := insStmt.ExecContext(ctx, l.fRows[b*numCols:b*numCols+numVals]...)
+		rslt, err := insStmt.ExecContext(ctx, l.fRows[b*numVals:end]...)
 		if err != nil {
 			tx.Rollback()
 			return sts, err
