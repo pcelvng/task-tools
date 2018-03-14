@@ -152,7 +152,7 @@ func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, 
 		}
 
 		// do insert
-		rslt, err := insStmt.ExecContext(ctx, l.fRows[b*numCols:b*numCols+numVals]...)
+		rslt, err := insStmt.ExecContext(ctx, l.fRows[b*numVals:(b+1)*numVals]...)
 		if err != nil {
 			tx.Rollback()
 			return sts, err
