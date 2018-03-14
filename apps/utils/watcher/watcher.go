@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"sync"
 	"time"
 
 	"github.com/dustinevan/chron"
@@ -18,6 +17,8 @@ var (
 	defaultFrequency = "1h"
 )
 
+type fileList map[string]*stat.Stats
+
 // watcher is the application runtime object for each rule
 // this will watch for files and apply the config rules.
 type watcher struct {
@@ -26,17 +27,8 @@ type watcher struct {
 	stop      chan struct{}
 	appOpt    *options
 	rule      *Rule
-	files     *FileList // stats files are the current files in the directory
-	cache     *FileList // each watcher has it's own cache to check against for changes
-	lookback  int       // the number of hours to look back in previous folders based on date
-	frequency string    // the duration between checking for new files
-}
-
-// FileList will save file stats for the files and cache that are found in each watch rule
-type FileList struct {
-	filesMap map[string]*stat.Stats // unique list of full file paths
-
-	mu sync.RWMutex
+	lookback  int    // the number of hours to look back in previous folders based on date
+	frequency string // the duration between checking for new files
 }
 
 // newWatchers creates new watchers based on the options provided in configuration files
@@ -61,8 +53,6 @@ func newWatchers(appOpt *options) (watchers []*watcher, err error) {
 			producer:  producer,
 			appOpt:    appOpt,
 			rule:      r,
-			files:     NewFilesList(),
-			cache:     NewFilesList(),
 			lookback:  r.HourLookback,
 			frequency: r.Frequency,
 		})
@@ -100,32 +90,47 @@ func (w *watcher) runWatch() (err error) {
 		return err
 	}
 
+	// new cached file list for the current watcher
+	cache := make(fileList)
+
 	for ; ; time.Sleep(d) {
 		// update the files and cache and run the watchers rules
 		today := chron.ThisHour()
 		nowPath := tmpl.Parse(w.rule.PathTemplate, today.AsTime())
 		lookbackPaths := getLookbackPaths(w.rule.PathTemplate, today, w.lookback)
 
-		w.process(nowPath)
-		w.process(lookbackPaths...)
+		nowFiles := w.process(cache, nowPath)
+		lookbackFiles := w.process(cache, lookbackPaths...)
+
+		// set the cache to the current file listings
+		cache = buildNewCache(nowFiles, lookbackFiles)
 	}
 }
 
-func (w *watcher) process(path ...string) {
-	err := w.addFiles(path...)
+// get the current files for the request path(s)
+// compare those files with the current cache for this watcher
+// find any new files not listed in the cache and send to the Bus
+// for each of the new files
+func (w *watcher) process(currentCache fileList, path ...string) (currentFiles fileList) {
+	currentFiles, err := w.currentFiles(path...)
 	if err != nil {
 		log.Println("can not watch:", err)
 		return
 	}
-	w.CreateTasks(CompareFileList(w.cache, w.files))
-	w.SetNewCache()
+	newTasks := CompareFileList(currentCache, currentFiles)
+	w.SendFiles(newTasks)
+
+	return currentFiles
 }
 
 // get the unique lookback paths to check for all paths in the lookback time frame
 func getLookbackPaths(pathTmpl string, start chron.Hour, lookback int) []string {
 	paths := make([]string, 0)
 	uniquePaths := make(map[string]interface{})
+	// iterate over each hour setting up the path for that hour
+	// this is where you could get duplicates if there isn't an hour or day granularity
 	for h := 1; h <= lookback; h++ {
+		// each hour is back in time, so h * -1 hours backward
 		path := tmpl.Parse(pathTmpl, start.AddHours(h*-1).AsTime())
 		uniquePaths[path] = nil
 	}
@@ -136,8 +141,9 @@ func getLookbackPaths(pathTmpl string, start chron.Hour, lookback int) []string 
 	return paths
 }
 
-// addFiles adds the current files from the directory listing
-func (w *watcher) addFiles(paths ...string) error {
+// currentFiles retrieves the current files from the directory path(s)
+func (w watcher) currentFiles(paths ...string) (fileList, error) {
+	fileList := make(map[string]*stat.Stats)
 	for _, p := range paths {
 		list, err := file.List(p, &file.Options{
 			AWSAccessKey: w.appOpt.AWSAccessKey,
@@ -147,67 +153,47 @@ func (w *watcher) addFiles(paths ...string) error {
 			log.Println(err)
 			continue
 		}
-
+		// iterate over the list to setup the new complete fileList
 		for i, _ := range list {
-			w.files.Add(list[i].Path, &list[i])
+			fileList[list[i].Path] = &list[i]
 		}
 	}
 
-	return nil
+	return fileList, nil
 }
 
-// SetNewCache will reset the watcher cache to the current watcher files
-func (w *watcher) SetNewCache() {
-	w.cache = NewFilesList()
-	for k, v := range w.files.filesMap {
-		w.cache.Add(k, v)
+// buildNewCache takes all the file lists and combines them into one new cache
+func buildNewCache(fileLists ...fileList) (newCache fileList) {
+	newCache = make(fileList)
+	for _, list := range fileLists {
+		for f, s := range list {
+			newCache[f] = s
+		}
 	}
+	return newCache
 }
 
-// CreateTasks uses the watcher producer to send to the current Bus
+// SendFiles uses the watcher producer to send to the current Bus
 // using the options topic (default if not set)
-func (w *watcher) CreateTasks(fileList *FileList) {
+func (w *watcher) SendFiles(files fileList) {
 	json := jsoniter.ConfigFastest
-	fileList.mu.RLock()
-	defer fileList.mu.RUnlock()
 
-	for _, fileStats := range fileList.filesMap {
-		b, _ := json.Marshal(fileStats)
+	for _, f := range files {
+		b, _ := json.Marshal(f)
 		w.producer.Send(w.appOpt.Topic, b)
 	}
-}
-
-// Create a new FileList struct with a filesMap
-func NewFilesList() *FileList {
-	return &FileList{
-		filesMap: make(map[string]*stat.Stats),
-	}
-}
-
-// Add will add the file stats to the cached list of files (already accounted for)
-func (w *FileList) Add(filePath string, stats *stat.Stats) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.filesMap[filePath] = stats
-}
-
-// Remove will delete the file stats from the cached list of files
-func (w *FileList) Remove(filePath string, stats *stat.Stats) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	delete(w.filesMap, filePath)
 }
 
 // CompareFileList will check the keys of each of the FileList maps
 // if any entries are not listed in the cache a new list will
 // be returned with the missing entries
-func CompareFileList(cache *FileList, files *FileList) *FileList {
-	newList := NewFilesList()
-	for k, v := range files.filesMap {
-		if _, ok := cache.filesMap[k]; !ok {
-			newList.Add(k, v)
+func CompareFileList(cache, current fileList) (newFiles fileList) {
+	newFiles = make(fileList)
+	for k, v := range current {
+		if _, found := cache[k]; !found {
+			newFiles[k] = v
 		}
 	}
 
-	return newList
+	return newFiles
 }

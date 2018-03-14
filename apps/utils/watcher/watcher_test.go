@@ -35,9 +35,10 @@ func TestRun(t *testing.T) {
 		t.Errorf("error should not have been returned %v", err)
 	}
 	defer os.Remove("test.toml")
-	defer os.Remove("out.tsks.json")
+	defer os.Remove("out.tsks.json") // default tasks out file
 	defer os.Remove("test.file.txt")
 	defer os.Remove(path + "test.file.txt")
+	defer os.Remove("files") // default topic for the files bus
 	defer os.RemoveAll(path[:4])
 }
 
