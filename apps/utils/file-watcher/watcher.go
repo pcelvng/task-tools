@@ -112,11 +112,7 @@ func (w *watcher) runWatch() (err error) {
 // find any new files not listed in the cache and send to the Bus
 // for each of the new files
 func (w *watcher) process(currentCache fileList, path ...string) (currentFiles fileList) {
-	currentFiles, err := w.currentFiles(path...)
-	if err != nil {
-		log.Println("can not watch:", err)
-		return
-	}
+	currentFiles = w.currentFiles(path...)
 	newFiles := CompareFileList(currentCache, currentFiles)
 	w.SendFiles(newFiles)
 
@@ -142,7 +138,7 @@ func getLookbackPaths(pathTmpl string, start chron.Hour, lookback int) []string 
 }
 
 // currentFiles retrieves the current files from the directory path(s)
-func (w watcher) currentFiles(paths ...string) (fileList, error) {
+func (w watcher) currentFiles(paths ...string) fileList {
 	fileList := make(map[string]*stat.Stats)
 	for _, p := range paths {
 		list, err := file.List(p, &file.Options{
@@ -159,7 +155,7 @@ func (w watcher) currentFiles(paths ...string) (fileList, error) {
 		}
 	}
 
-	return fileList, nil
+	return fileList
 }
 
 // buildNewCache takes all the file lists and combines them into one new cache
@@ -180,7 +176,7 @@ func (w *watcher) SendFiles(files fileList) {
 
 	for _, f := range files {
 		b, _ := json.Marshal(f)
-		w.producer.Send(w.appOpt.Topic, b)
+		w.producer.Send(w.appOpt.FilesTopic, b)
 	}
 }
 

@@ -19,12 +19,12 @@ type options struct {
 
 	AWSAccessKey string  `toml:"aws_access_key" desc:"aws secret token for S3 access "`
 	AWSSecretKey string  `toml:"aws_secret_key" desc:"aws secret key for S3 access "`
-	Topic        string  `toml:"topic" desc:"topic override (default is files)"`
+	FilesTopic   string  `toml:"topic" desc:"topic override (default is files)"`
 	Rules        []*Rule `toml:"rule"`
 }
 
 type Rule struct {
-	HourLookback int    `toml:"lookback" desc:"the number of hours for looking back for files in previous directorys defulat: 24"`
+	HourLookback int    `toml:"lookback" desc:"the number of hours for looking back for files in previous directory default: 24"`
 	PathTemplate string `toml:"path_template" desc:"source file path pattern to match (supports glob style matching)"`
 	Frequency    string `toml:"frequency" desc:"the wait time between checking for new files in the path_template"`
 }
@@ -88,7 +88,7 @@ func newOptions() *options {
 func loadAppOptions() (*options, error) {
 	flag.Parse()
 	opt := newOptions()
-	opt.Topic = defaultTopic
+	opt.FilesTopic = defaultTopic
 
 	// parse toml first - override with flag values
 	_, err := toml.DecodeFile(*configPth, opt)

@@ -4,6 +4,8 @@
 - by default the check happens for the past 24 hours each hour
 
 ##### Option Params:
+- topic
+  - default files topic is 'files' but can be over written
 - lookback
   - the amount of time to check back for file changes (for each directory)
 - path_template
