@@ -68,7 +68,7 @@ func prep(v interface{}) *prepare {
 	// reflect on public field tags to discover column name.
 	// 1. Use 'db' tag value if exists
 	// 2. Ignore if 'db' tag == "-"
-	// 2. Use '
+	// 2. Use 'json' tag value (if exists) as column name
 	for i := 0; i < vStruct.NumField(); i++ {
 		tag := vStruct.Type().Field(i).Tag.Get("db")
 		if tag == "-" {
