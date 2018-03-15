@@ -14,7 +14,7 @@ import (
 )
 
 // BatchLoader implementations should have an initializer that
-// also pings the db to missingColumns the connection.
+// also pings the db to check the connection.
 type BatchLoader interface {
 	// Delete takes a delete query string with optional vals values
 	// and will be executed in the transaction before bulk inserts.
