@@ -1,29 +1,40 @@
 package db
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 
-	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pkg/errors"
 )
 
 var knownStructs = make(map[reflect.Type]*prepare)
 
+// CheckColumns will return a non-nil error if one or more
+// columns from cols is missing from the underlying struct.
+func CheckColumns(v interface{}, cols ...string) error {
+	missing := MissingColumns(v, cols...)
+	if len(missing) > 0 {
+		return errors.Errorf("columns not found: %s", strings.Join(missing, ", "))
+	}
 
-func Check(v interface{}, cols ...string) error {
-	return prep(v).check(cols...)
+	return nil
 }
 
-// values prepares a row insert for struct v for the provided columns.
-func Values(v interface{}, cols ...string) (row []interface{}) {
-	return prep(v).values(v, cols...)
+// MissingColumns returns a list of columns from cols that were not found
+// in the provided struct.
+func MissingColumns(v interface{}, cols ...string) (missing []string) {
+	return prep(v).missingColumns(cols...)
 }
 
-// columns returns all the struct table columns.
+// Columns returns all the struct table columns according
+// to the 'db' and 'json' meta tag values.
 func Columns(v interface{}) (cols []string) {
 	return prep(v).columns()
+}
+
+// Values prepares a row insert for struct v for the provided columns.
+func Values(v interface{}, cols ...string) (row []interface{}) {
+	return prep(v).values(v, cols...)
 }
 
 // prepare a custom struct for insertion into a database using the batchloader.
@@ -31,6 +42,7 @@ func Columns(v interface{}) (cols []string) {
 // If the 'db' tag is absent the 'json' tag will then be used. If neither tag is provided
 // or if 'db' is set to "-" that field is ignored
 type prepare struct {
+	// lookup is a cache of reflected column names (key) and it's corresponding cardinality - order (value)
 	lookup map[string]int
 }
 
@@ -53,6 +65,10 @@ func prep(v interface{}) *prepare {
 		return p
 	}
 
+	// reflect on public field tags to discover column name.
+	// 1. Use 'db' tag value if exists
+	// 2. Ignore if 'db' tag == "-"
+	// 2. Use '
 	for i := 0; i < vStruct.NumField(); i++ {
 		tag := vStruct.Type().Field(i).Tag.Get("db")
 		if tag == "-" {
@@ -71,21 +87,20 @@ func prep(v interface{}) *prepare {
 	return p
 }
 
-// check if the given column names are in the prepared struct
-func (p *prepare) check(columns ...string) error {
-	errs := appenderr.New()
+// missingColumns returns a list of columns from cols that were not found
+// in the provided struct.
+func (p *prepare) missingColumns(columns ...string) (missing []string) {
 	for _, c := range columns {
 		if _, found := p.lookup[c]; !found {
-			errs.Add(fmt.Errorf("%v", c))
+			missing = append(missing, c)
 		}
 	}
-	if errs.ErrOrNil() != nil {
-		return errors.Wrap(errs, "columns not found")
-	}
-	return errs.ErrOrNil()
+
+	return missing
 }
 
-// columns found in the prepared struct
+// columns returns a list of all columns specified in the underlying
+// struct 'db' and 'json' tags.
 func (p *prepare) columns() (cols []string) {
 	for name := range p.lookup {
 		cols = append(cols, name)
@@ -93,7 +108,7 @@ func (p *prepare) columns() (cols []string) {
 	return cols
 }
 
-// values prepares a row insert for struct v for the provided columns.
+// values returns the corresponding row values in same order as cols.
 func (p *prepare) values(v interface{}, cols ...string) (args []interface{}) {
 	vStruct := reflect.ValueOf(v)
 	if vStruct.Kind() == reflect.Ptr {
@@ -107,4 +122,3 @@ func (p *prepare) values(v interface{}, cols ...string) (args []interface{}) {
 	}
 	return args
 }
-

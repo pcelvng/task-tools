@@ -44,7 +44,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestPrepare_Check(t *testing.T) {
+func TestPrepare_CheckColumns(t *testing.T) {
 	cases := []struct {
 		msg       string
 		v         interface{}
@@ -72,7 +72,7 @@ func TestPrepare_Check(t *testing.T) {
 	}
 	for _, test := range cases {
 		p := prep(test.v)
-		err := p.check(test.cols...)
+		err := p.missingColumns(test.cols...)
 		if test.shouldErr != (err != nil) {
 			t.Errorf("FAIL: %q", test.msg)
 		} else {

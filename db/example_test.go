@@ -14,16 +14,17 @@ func ExampleValues() {
 	}
 	fmt.Println(Values(s, "id", "age", "name"))
 
-	// Output: [1 42 Albert]
+	// Output:
+	// [1 42 Albert]
 }
 
-func ExampleCheck() {
+func ExampleCheckColumns() {
 	s := struct {
-		ID          int    `json:"id" db:"-"`
-		Name        string `json:"name"`
-		Age         int    `json:"age"`
-		Address     string `json:"address"`
-		PhoneNumber string `json:"phone_number" db:"number"`
+		ID          int    `json:"id" db:"-"`                // omit
+		Name        string `json:"name"`                     // column: name
+		Age         int    `json:"age"`                      // column: age
+		Address     string `json:"address"`                  // column: address
+		PhoneNumber string `json:"phone_number" db:"number"` // column: number
 	}{
 		10,
 		"Susan",
@@ -32,16 +33,16 @@ func ExampleCheck() {
 		"111-222-4567",
 	}
 
-	err := Check(s, "name", "age", "address", "number")
+	err := CheckColumns(s, "name", "age", "address", "number")
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	err = Check(s, "id", "phone_number")
+	err = CheckColumns(s, "id", "phone_number")
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	// Output: columns not found: id
-	// phone_number
+	// Output:
+	// columns not found: id, phone_number
 }
