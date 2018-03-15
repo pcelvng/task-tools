@@ -1,8 +1,8 @@
-package prep
+package db
 
 import "fmt"
 
-func ExampleRow() {
+func ExampleValues() {
 	s := struct {
 		ID   int    `db:"id"`
 		Name string `db:"name"`
@@ -12,13 +12,12 @@ func ExampleRow() {
 		"Albert",
 		42,
 	}
-	fmt.Println(Row(s, "id", "age", "name"))
+	fmt.Println(Values(s, "id", "age", "name"))
 
 	// Output: [1 42 Albert]
-
 }
 
-func ExamplePrepare_Check() {
+func ExampleCheck() {
 	s := struct {
 		ID          int    `json:"id" db:"-"`
 		Name        string `json:"name"`
@@ -33,13 +32,12 @@ func ExamplePrepare_Check() {
 		"111-222-4567",
 	}
 
-	p := New(s)
-	err := p.Check("name", "age", "address", "number")
+	err := Check(s, "name", "age", "address", "number")
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	err = p.Check("id", "phone_number")
+	err = Check(s, "id", "phone_number")
 	if err != nil {
 		fmt.Println(err)
 	}

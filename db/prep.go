@@ -1,4 +1,4 @@
-package prep
+package db
 
 import (
 	"fmt"
@@ -9,25 +9,36 @@ import (
 	"github.com/pkg/errors"
 )
 
-var knownStructs map[reflect.Type]*Prepare
+var knownStructs = make(map[reflect.Type]*prepare)
 
-func init() {
-	knownStructs = make(map[reflect.Type]*Prepare)
+
+func Check(v interface{}, cols ...string) error {
+	return prep(v).check(cols...)
 }
 
-// Prepare a custom struct for insertion into a database using the batchloader.
-// Prepare using the 'db' struct tags to correctly identify which field to use.
+// values prepares a row insert for struct v for the provided columns.
+func Values(v interface{}, cols ...string) (row []interface{}) {
+	return prep(v).values(v, cols...)
+}
+
+// columns returns all the struct table columns.
+func Columns(v interface{}) (cols []string) {
+	return prep(v).columns()
+}
+
+// prepare a custom struct for insertion into a database using the batchloader.
+// prepare using the 'db' struct tags to correctly identify which field to use.
 // If the 'db' tag is absent the 'json' tag will then be used. If neither tag is provided
 // or if 'db' is set to "-" that field is ignored
-type Prepare struct {
+type prepare struct {
 	lookup map[string]int
 }
 
-// New prepares a struct for database insertion. Will return nil if a non-struct is received
-// This is optimised to return a cached Prepare object if
+// prep prepares a struct for database insertion. Will return nil if a non-struct is received
+// This is optimised to return a cached prepare object if
 // the custom struct has already been prepared.
-func New(v interface{}) *Prepare {
-	p := &Prepare{
+func prep(v interface{}) *prepare {
+	p := &prepare{
 		lookup: make(map[string]int),
 	}
 	vStruct := reflect.ValueOf(v)
@@ -60,8 +71,8 @@ func New(v interface{}) *Prepare {
 	return p
 }
 
-// Check if the given column names are in the prepared struct
-func (p *Prepare) Check(columns ...string) error {
+// check if the given column names are in the prepared struct
+func (p *prepare) check(columns ...string) error {
 	errs := appenderr.New()
 	for _, c := range columns {
 		if _, found := p.lookup[c]; !found {
@@ -74,16 +85,16 @@ func (p *Prepare) Check(columns ...string) error {
 	return errs.ErrOrNil()
 }
 
-// Columns found in the prepared struct
-func (p *Prepare) Columns() (cols []string) {
+// columns found in the prepared struct
+func (p *prepare) columns() (cols []string) {
 	for name := range p.lookup {
 		cols = append(cols, name)
 	}
 	return cols
 }
 
-// Row prepares a row insert for struct v for the provided columns.
-func (p *Prepare) Row(v interface{}, cols ...string) (args []interface{}) {
+// values prepares a row insert for struct v for the provided columns.
+func (p *prepare) values(v interface{}, cols ...string) (args []interface{}) {
 	vStruct := reflect.ValueOf(v)
 	if vStruct.Kind() == reflect.Ptr {
 		vStruct = vStruct.Elem()
@@ -97,7 +108,3 @@ func (p *Prepare) Row(v interface{}, cols ...string) (args []interface{}) {
 	return args
 }
 
-// Row prepares a row insert for struct v for the provided columns.
-func Row(v interface{}, cols ...string) (row []interface{}) {
-	return New(v).Row(v, cols...)
-}
