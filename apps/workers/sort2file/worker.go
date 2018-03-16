@@ -20,7 +20,7 @@ import (
 
 func newInfoOptions(info string) (*infoOptions, error) {
 	iOpt := &infoOptions{}
-	err := uri.Unmarshal(iOpt, info)
+	err := uri.Unmarshal(info, iOpt)
 	return iOpt, err
 }
 

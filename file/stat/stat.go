@@ -32,7 +32,7 @@ func NewFromBytes(b []byte) Stats {
 // uri formatted info string.
 func NewFromInfo(info string) Stats {
 	sts := &Stats{}
-	uri.Unmarshal(sts, info)
+	uri.Unmarshal(info, sts)
 
 	return *sts
 }
