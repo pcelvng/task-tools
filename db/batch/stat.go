@@ -1,4 +1,4 @@
-package stat
+package batch
 
 import (
 	"encoding/json"
@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-func New() Stats {
+func NewStats() Stats {
 	return Stats{}
 }
 
 // NewFromBytes creates Stats from
 // json bytes.
-func NewFromBytes(b []byte) Stats {
-	sts := New()
+func NewStatsFromBytes(b []byte) Stats {
+	sts := NewStats()
 	json.Unmarshal(b, &sts)
 	return sts
 }
