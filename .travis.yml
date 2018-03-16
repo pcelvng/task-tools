@@ -12,3 +12,5 @@ addons:
 
 script:
   - go test -cover -v ./...
+
+install: true
