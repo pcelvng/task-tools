@@ -9,13 +9,11 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/pcelvng/task-tools/db/stat"
 )
 
 var maxBatchSize = 200 // max number of rows in a single insert statement
 
-// NewBatchLoader will return an instance of a BatchLoader that is
+// NewBatchLoader will return an instance of a NopBatchLoader that is
 // tested to work with MySQL and Postgres. It will likely work with
 // most other sql adapters that support the same standard insert syntax
 // used in MySQL and Postgres and use '?' as the value placeholder.
@@ -29,7 +27,7 @@ func NewBatchLoader(dbType string, sqlDB *sql.DB) *BatchLoader {
 	}
 }
 
-// BatchLoader will:
+// NopBatchLoader will:
 // - accept records row-by-row to insert as a batch
 // - remove records to be replaced or updated.
 // - get a count of removed records
@@ -73,11 +71,11 @@ func (l *BatchLoader) AddRow(row []interface{}) {
 	l.fRows = append(l.fRows, row...)
 }
 
-func (l *BatchLoader) Commit(ctx context.Context, tableName string, cols ...string) (stat.Stats, error) {
+func (l *BatchLoader) Commit(ctx context.Context, tableName string, cols ...string) (Stats, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	sts := stat.New()
+	sts := NewStats()
 	l.cols = cols
 
 	// must have cols defined
@@ -96,8 +94,8 @@ func (l *BatchLoader) Commit(ctx context.Context, tableName string, cols ...stri
 }
 
 // doTx will execute the transaction.
-func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, lastBatchSize int, tableName string) (stat.Stats, error) {
-	sts := stat.New()
+func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, lastBatchSize int, tableName string) (Stats, error) {
+	sts := NewStats()
 
 	// standard batch bulk insert
 	insQ := l.genInsert(l.cols, batchSize, tableName)
@@ -168,7 +166,7 @@ func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, 
 
 	// more stats
 	sts.SetStarted(started)
-	sts.Dur = stat.Duration{ended.Sub(started)}
+	sts.Dur = Duration{ended.Sub(started)}
 	sts.Table = tableName
 	sts.Rows = int64(numRows)
 	sts.Cols = numCols

@@ -9,8 +9,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	"github.com/pcelvng/task-tools/db/batch"
-	"github.com/pcelvng/task-tools/db/nop"
-	"github.com/pcelvng/task-tools/db/stat"
 )
 
 // BatchLoader implementations should have an initializer that
@@ -51,7 +49,7 @@ type BatchLoader interface {
 	//
 	// The order of cols is important and must match the order of row values when
 	// calling AddRow.
-	Commit(ctx context.Context, tableName string, cols ...string) (stat.Stats, error)
+	Commit(ctx context.Context, tableName string, cols ...string) (batch.Stats, error)
 }
 
 // MySQL is a convenience initializer to obtain a MySQL DB connection.
@@ -100,7 +98,7 @@ func NewBatchLoader(dbType string, sqlDB *sql.DB) BatchLoader {
 	scheme := u.Scheme
 	if scheme == "nop" || dbType == "nop" {
 		host := u.Host
-		return nop.NewBatchLoader(host)
+		return batch.NewNopBatchLoader(host)
 	}
 
 	return batch.NewBatchLoader(dbType, sqlDB)

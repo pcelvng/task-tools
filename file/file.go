@@ -1,6 +1,7 @@
 package file
 
 import (
+	"context"
 	"io"
 	"net/url"
 	"path"
@@ -231,4 +232,35 @@ func parseScheme(pth string) string {
 	}
 
 	return u.Scheme
+}
+
+// ReadLines is a high-level utility that will read all the lines of a reader and call
+// f when the number of bytes is > 0. err will never be EOF and if cncl == true
+// then err will be nil.
+func ReadLines(ctx context.Context, r Reader, f func(ln []byte) error) (err error, cncl bool) {
+	for ctx.Err() == nil {
+		// read
+		ln, err := r.ReadLine()
+		if err != nil && err != io.EOF {
+			return err, false
+		}
+
+		// add record
+		if len(ln) > 0 {
+			if err = f(ln); err != nil {
+				return err, false
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+	}
+
+	// check ctx
+	if ctx.Err() != nil {
+		return nil, true
+	}
+
+	return nil, false
 }

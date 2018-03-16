@@ -1,4 +1,4 @@
-package stat
+package batch
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 )
 
 func ExampleNewFromBytes() {
-	sts := NewFromBytes([]byte(`{"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5}`))
+	sts := NewStatsFromBytes([]byte(`{"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5}`))
 	fmt.Println(sts.Started)      // output: teststarted
 	fmt.Println(sts.Dur.String()) // output: 1s
 	fmt.Println(sts.Table)        // output: test.table
@@ -26,7 +26,7 @@ func ExampleNewFromBytes() {
 }
 
 func ExampleStat_AddRow() {
-	sts := New()
+	sts := NewStats()
 
 	sts.AddRow()
 	sts.AddRow()
@@ -39,7 +39,7 @@ func ExampleStat_AddRow() {
 }
 
 func ExampleStat_SetStarted() {
-	sts := New()
+	sts := NewStats()
 
 	created := "2017-01-02T03:04:05Z"
 	t, _ := time.Parse(time.RFC3339, created)
@@ -52,7 +52,7 @@ func ExampleStat_SetStarted() {
 }
 
 func ExampleStat_ParseStarted() {
-	sts := New()
+	sts := NewStats()
 
 	sts.Started = "2017-01-02T03:04:05Z"
 
@@ -64,7 +64,7 @@ func ExampleStat_ParseStarted() {
 }
 
 func ExampleStat_Clone() {
-	sts := New()
+	sts := NewStats()
 	sts.Started = "teststarted"
 	sts.Dur = Duration{time.Second}
 	sts.Table = "test.table"
@@ -90,7 +90,7 @@ func ExampleStat_Clone() {
 }
 
 func ExampleStat_JSONBytes() {
-	sts := New()
+	sts := NewStats()
 	sts.Started = "teststarted"
 	sts.Dur = Duration{time.Second}
 	sts.Table = "test.table"
@@ -98,7 +98,7 @@ func ExampleStat_JSONBytes() {
 	sts.Rows = 100
 	sts.Inserted = 100
 	sts.Cols = 5
-	sts.BatchHour = "testbatchhour"
+	sts.BatchDate = "testbatchhour"
 
 	b := sts.JSONBytes()
 	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
@@ -108,7 +108,7 @@ func ExampleStat_JSONBytes() {
 }
 
 func ExampleStat_JSONString() {
-	sts := New()
+	sts := NewStats()
 	sts.Started = "teststarted"
 	sts.Dur = Duration{time.Second}
 	sts.Table = "test.table"
@@ -116,7 +116,7 @@ func ExampleStat_JSONString() {
 	sts.Rows = 100
 	sts.Inserted = 100
 	sts.Cols = 5
-	sts.BatchHour = "testbatchhour"
+	sts.BatchDate = "testbatchhour"
 
 	b := sts.JSONString()
 	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
@@ -124,38 +124,3 @@ func ExampleStat_JSONString() {
 	// Output:
 	// {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
 }
-
-//func BenchmarkAddLine(b *testing.B) {
-//	sts := New()
-//
-//	for i := 0; i < b.N; i++ {
-//		sts.AddLine()
-//	}
-//}
-//
-//func BenchmarkAddBytes(b *testing.B) {
-//	sts := New()
-//
-//	for i := 0; i < b.N; i++ {
-//		sts.AddBytes(200)
-//	}
-//}
-//
-//func BenchmarkTemplateParallel(b *testing.B) {
-//	sts := New()
-//	hsh := md5.New()
-//	hsh.Write([]byte("test message"))
-//
-//	// run test with '-race' flag to find race conditions
-//	b.RunParallel(func(pb *testing.PB) {
-//		for pb.Next() {
-//			sts.AddLine()
-//			sts.AddBytes(100)
-//			sts.SetSize(50)
-//			sts.SetChecksum(hsh)
-//			sts.SetPath("./test/path.txt")
-//			sts.SetPath("./tests/path.txt")
-//			_ = sts.Clone()
-//		}
-//	})
-//}
