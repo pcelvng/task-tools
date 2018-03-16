@@ -98,7 +98,7 @@ func ExampleStat_JSONBytes() {
 	sts.Rows = 100
 	sts.Inserted = 100
 	sts.Cols = 5
-	sts.BatchHour = "testbatchhour"
+	sts.BatchDate = "testbatchhour"
 
 	b := sts.JSONBytes()
 	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
@@ -116,7 +116,7 @@ func ExampleStat_JSONString() {
 	sts.Rows = 100
 	sts.Inserted = 100
 	sts.Cols = 5
-	sts.BatchHour = "testbatchhour"
+	sts.BatchDate = "testbatchhour"
 
 	b := sts.JSONString()
 	fmt.Println(string(b)) // output: {"started":"teststarted","dur":"1s","table":"test.table","removed":10,"rows":100,"inserted":100,"cols":5,"batch_hour":"testbatchhour"}
