@@ -142,15 +142,19 @@ type options struct {
 
 func (o *options) Validate() (err error) {
 	// dur
-	o.dur, err = time.ParseDuration(o.Dur)
-	if err != nil {
-		return err
+	if o.Dur != "" {
+		o.dur, err = time.ParseDuration(o.Dur)
+		if err != nil {
+			return err
+		}
 	}
 
 	// durVariance
-	o.durVariance, err = time.ParseDuration(o.DurVariance)
-	if err != nil {
-		return err
+	if o.DurVariance != "" {
+		o.durVariance, err = time.ParseDuration(o.DurVariance)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
 	"gopkg.in/BurntSushi/toml.v0"
-	"gopkg.in/pcelvng/task.v0"
-	"gopkg.in/pcelvng/task.v0/bus"
 )
 
 var (
@@ -68,7 +68,7 @@ func cloneBusOpts(opt bus.Options) bus.Options { return opt }
 func newOptions() *options {
 	return &options{
 		Options:         bus.NewOptions(""),
-		LauncherOptions: task.NewLauncherOptions(),
+		LauncherOptions: task.NewLauncherOptions(defaultTaskType),
 	}
 }
 

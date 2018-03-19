@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
 	btoml "gopkg.in/BurntSushi/toml.v0"
@@ -177,6 +178,7 @@ func (a *app) handleFlags() {
 		// postgres options
 		if a.pgOpts != nil {
 			pgOptB, err = ptoml.Marshal(*a.pgOpts)
+
 		}
 
 		// mysql options
@@ -234,14 +236,30 @@ func (a *app) loadOptions() error {
 
 	// postgres options (if requested)
 	if a.pgOpts != nil {
-		if _, err := btoml.DecodeFile(cpth, a.pgOpts); err != nil {
+		_, err := btoml.DecodeFile(cpth, a.pgOpts)
+		if err != nil {
+			return err
+		}
+
+		// connect
+		pg := a.pgOpts.Postgres
+		a.postgres, err = db.Postgres(pg.Username, pg.Password, pg.Host, pg.DBName)
+		if err != nil {
 			return err
 		}
 	}
 
 	// mysql options (if requested)
 	if a.mysqlOpts != nil {
-		if _, err := btoml.DecodeFile(cpth, a.mysqlOpts); err != nil {
+		_, err := btoml.DecodeFile(cpth, a.mysqlOpts)
+		if err != nil {
+			return err
+		}
+
+		// connect
+		mysql := a.mysqlOpts.MySQL
+		a.mysql, err = db.MySQL(mysql.Username, mysql.Password, mysql.Host, mysql.DBName)
+		if err != nil {
 			return err
 		}
 	}
@@ -301,8 +319,8 @@ func (a *app) Description(description string) *app {
 // initialization. Note that the DBOptions struct is available
 // to use in this way.
 func (a *app) MySQLOpts() *app {
-	if a.pgOpts != nil {
-		a.pgOpts = &pgOptions{}
+	if a.mysqlOpts == nil {
+		a.mysqlOpts = &mysqlOptions{}
 	}
 	return a
 }
@@ -321,7 +339,7 @@ func (a *app) MySQLOpts() *app {
 // initialization. Note that the DBOptions struct is available
 // to use in this way.
 func (a *app) PostgresOpts() *app {
-	if a.pgOpts != nil {
+	if a.pgOpts == nil {
 		a.pgOpts = &pgOptions{}
 	}
 	return a
@@ -364,6 +382,42 @@ func (a *app) PostgresDB() *sql.DB {
 // Logger returns a reference to the application logger.
 func (a *app) Logger() *log.Logger {
 	return a.lgr
+}
+
+// NewConsumer is a convenience method that will use
+// the bus config information to create a new consumer
+// instance. Can optionally provide a topic and channel
+// on which to consume. All other bus options are the same.
+func (a *app) NewConsumer(topic, channel string) bus.Consumer {
+	busOpt := bus.NewOptions(a.wkrOpt.BusOpt.Bus)
+	busOpt.InBus = a.wkrOpt.BusOpt.InBus
+	busOpt.InTopic = a.wkrOpt.BusOpt.InTopic
+	busOpt.InChannel = a.wkrOpt.BusOpt.InChannel
+	busOpt.LookupdHosts = a.wkrOpt.BusOpt.LookupdHosts
+	busOpt.NSQdHosts = a.wkrOpt.BusOpt.NSQdHosts
+
+	if topic != "" {
+		busOpt.InTopic = topic
+	}
+
+	if channel != "" {
+		busOpt.InChannel = channel
+	}
+
+	consumer, _ := bus.NewConsumer(busOpt)
+	return consumer
+}
+
+// NewProducer will use the bus config information
+// to create a new producer instance.
+func (a *app) NewProducer() bus.Producer {
+	busOpt := bus.NewOptions(a.wkrOpt.BusOpt.Bus)
+	busOpt.OutBus = a.wkrOpt.BusOpt.OutBus
+	busOpt.LookupdHosts = a.wkrOpt.BusOpt.LookupdHosts
+	busOpt.NSQdHosts = a.wkrOpt.BusOpt.NSQdHosts
+
+	producer, _ := bus.NewProducer(a.wkrOpt.BusOpt)
+	return producer
 }
 
 // Log is a wrapper around the application logger Printf method.
@@ -409,28 +463,28 @@ type wkrOptions struct {
 // If added they are made available with the application file
 // options object which can be accessed from the app object.
 type fileOptions struct {
-	FileOpt *file.Options `toml:"file"`
+	FileOpt file.Options `toml:"file"`
 }
 
 // mysqlOptions are only added at the request of the user.
 // If they are added then the bootstrap App will automatically
 // attempt to connect to mysql.
 type mysqlOptions struct {
-	MySQL *DBOptions `toml:"mysql"`
+	MySQL DBOptions `toml:"mysql"`
 }
 
 // postgresOptions are only added at the request of the user.
 // If they are added then the bootstrap App will automatically
 // attempt to connect to postgres.
 type pgOptions struct {
-	Postgres *DBOptions `toml:"postgres"`
+	Postgres DBOptions `toml:"postgres"`
 }
 
 type DBOptions struct {
-	Username string `toml:"username"`
-	Password string `toml:"password"`
-	Host     string `toml:"host" comment:"can be 'host:port', 'host', 'host:' or ':port'"`
-	Name     string `toml:"database name"`
+	Username string `toml:"username" commented:"true"`
+	Password string `toml:"password" commented:"true"`
+	Host     string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
+	DBName   string `toml:"dbname"`
 }
 
 // Duration is a wrapper around time.Duration
