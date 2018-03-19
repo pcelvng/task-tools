@@ -12,15 +12,20 @@ type writer struct {
 	WriteDelay time.Duration
 }
 
-func NewWriter(pth string, delay time.Duration) *writer {
+func NewWriter(pth string) *writer {
 	w, err := nop.NewWriter(pth)
 	if err != nil {
 		panic(errors.Wrap(err, "invalid mock writer"))
 	}
 	return &writer{
 		Writer:     w,
-		WriteDelay: delay,
+		WriteDelay: 0,
 	}
+}
+
+func (w *writer) AddDelay(d time.Duration) *writer {
+	w.WriteDelay = d
+	return w
 }
 
 func (w *writer) Write(p []byte) (n int, err error) {
