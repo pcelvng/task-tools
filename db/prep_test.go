@@ -1,4 +1,4 @@
-package prep
+package db
 
 import (
 	"testing"
@@ -31,7 +31,7 @@ func TestNew(t *testing.T) {
 		},
 	}
 	for _, test := range cases {
-		p := New(test.v)
+		p := prep(test.v)
 		if test.shouldErr && p != nil {
 			t.Errorf("FAIL: %q expected error not found", test.msg)
 		} else if !test.shouldErr && p == nil {
@@ -44,7 +44,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestPrepare_Check(t *testing.T) {
+func TestPrepare_CheckColumns(t *testing.T) {
 	cases := []struct {
 		msg       string
 		v         interface{}
@@ -71,8 +71,8 @@ func TestPrepare_Check(t *testing.T) {
 		},
 	}
 	for _, test := range cases {
-		p := New(test.v)
-		err := p.Check(test.cols...)
+		p := prep(test.v)
+		err := p.missingColumns(test.cols...)
 		if test.shouldErr != (err != nil) {
 			t.Errorf("FAIL: %q", test.msg)
 		} else {
@@ -81,13 +81,13 @@ func TestPrepare_Check(t *testing.T) {
 	}
 }
 func TestPrepare_Row(t *testing.T) {
-	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Row(testStruct{
+	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Values(testStruct{
 		Name: "Hello world",
 		Int1: 10,
 		Int4: 42,
 	}, "Name", "count", "Int1"))
 
-	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Row(&testStruct{
+	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Values(&testStruct{
 		Name: "Hello world",
 		Int1: 10,
 		Int4: 42,
@@ -95,9 +95,9 @@ func TestPrepare_Row(t *testing.T) {
 }
 
 func BenchmarkPrepare_RowSmall(b *testing.B) {
-	p := New(testStruct{})
+	p := prep(testStruct{})
 	for i := 0; i < b.N; i++ {
-		p.Row(testStruct{
+		p.values(testStruct{
 			Name: "Hello world",
 			Int1: 10,
 			Int4: 42,
@@ -107,7 +107,7 @@ func BenchmarkPrepare_RowSmall(b *testing.B) {
 
 func BenchmarkPrepRowSmall(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Row(testStruct{
+		Values(testStruct{
 			Name: "Hello world",
 			Int1: 10,
 			Int4: 42,
@@ -116,9 +116,9 @@ func BenchmarkPrepRowSmall(b *testing.B) {
 }
 
 func BenchmarkPrepare_RowLarge(b *testing.B) {
-	p := New(large{})
+	p := prep(large{})
 	for i := 0; i < b.N; i++ {
-		p.Row(large{
+		p.values(large{
 			String1:  "hello",
 			String10: "world",
 			Int30:    30,
@@ -131,7 +131,7 @@ func BenchmarkPrepare_RowLarge(b *testing.B) {
 
 func BenchmarkPrepRowLarge(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Row(large{
+		Values(large{
 			String1:  "hello",
 			String10: "world",
 			Int30:    30,

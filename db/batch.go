@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"os/user"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	"github.com/pcelvng/task-tools/db/batch"
-	"github.com/pcelvng/task-tools/db/nop"
-	"github.com/pcelvng/task-tools/db/stat"
+	"github.com/pkg/errors"
 )
 
 // BatchLoader implementations should have an initializer that
@@ -51,7 +51,7 @@ type BatchLoader interface {
 	//
 	// The order of cols is important and must match the order of row values when
 	// calling AddRow.
-	Commit(ctx context.Context, tableName string, cols ...string) (stat.Stats, error)
+	Commit(ctx context.Context, tableName string, cols ...string) (batch.Stats, error)
 }
 
 // MySQL is a convenience initializer to obtain a MySQL DB connection.
@@ -72,7 +72,18 @@ func MySQL(un, pass, host, dbName string) (*sql.DB, error) {
 
 // Postgres is a convenience initializer to obtain a Postgres DB connection.
 func Postgres(un, pass, host, dbName string) (*sql.DB, error) {
-	connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=disable", un, pass, host, dbName)
+	if dbName == "" {
+		return nil, errors.New("postgres dbname is required")
+	}
+
+	if un == "" {
+		// postgres user (default is current user)
+		usr, _ := user.Current()
+		un = usr.Username
+	}
+
+	//connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=disable", un, pass, host, dbName)
+	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", un, pass, host, dbName)
 	dbConn, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
@@ -100,7 +111,7 @@ func NewBatchLoader(dbType string, sqlDB *sql.DB) BatchLoader {
 	scheme := u.Scheme
 	if scheme == "nop" || dbType == "nop" {
 		host := u.Host
-		return nop.NewBatchLoader(host)
+		return batch.NewNopBatchLoader(host)
 	}
 
 	return batch.NewBatchLoader(dbType, sqlDB)

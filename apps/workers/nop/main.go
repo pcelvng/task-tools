@@ -1,164 +1,161 @@
 package main
 
 import (
+	"context"
 	"errors"
-	"flag"
-	"log"
-	"os"
-	"os/signal"
-	"strings"
-	"syscall"
+	"math/rand"
 	"time"
 
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus"
+	"github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/bootstrap"
 )
 
+func newWorker(_ string) task.Worker {
+	return &worker{}
+}
+
+type worker struct{}
+
+func (w *worker) DoTask(ctx context.Context) (result task.Result, msg string) {
+	doneChan := make(chan interface{})
+	go func() {
+		result, msg = w.doTask()
+		close(doneChan)
+	}()
+
+	select {
+	case <-doneChan:
+	case <-ctx.Done():
+		return task.Interrupted()
+	}
+
+	return result, msg
+}
+
+func (w *worker) doTask() (task.Result, string) {
+	// calc if failure
+	isFail := checkFail(appOpt.FailRate)
+
+	var dur time.Duration
+	if isFail { // calc failDuration
+		dur = failDuration(appOpt.dur, appOpt.durVariance)
+	} else {
+		dur = successDuration(appOpt.dur, appOpt.durVariance)
+	}
+
+	// wait for duration
+	time.Sleep(dur)
+
+	// complete task and return
+	if isFail {
+		return task.Failed(errors.New("failed"))
+	} else {
+		return task.Completed("finished")
+	}
+}
+
+// successDuration will calculate how long the task
+// will take to complete based on up to a random
+// amount of variance.
+//
+// NOTE: the variance always adds to the base duration.
+func successDuration(dur, durV time.Duration) time.Duration {
+	// no variance so it's just the duration
+	if durV == 0 {
+		return dur
+	}
+
+	// generate a random variance
+	seed := int64(time.Now().Nanosecond())
+	randomizer := rand.New(rand.NewSource(seed))
+	v := randomizer.Int63n(int64(durV))
+	return dur + time.Duration(v)
+}
+
+// failDuration is any value up to the successDuration
+// because it can fail at any time.
+func failDuration(dur, durV time.Duration) time.Duration {
+	maxDur := successDuration(dur, durV)
+	if maxDur == 0 {
+		return maxDur
+	}
+
+	// generate a random variance
+	seed := int64(time.Now().Nanosecond())
+	randomizer := rand.New(rand.NewSource(seed))
+	v := randomizer.Int63n(int64(maxDur))
+	return time.Duration(v)
+}
+
+// checkFail will return true if the task should
+// be completed as an error and false otherwise.
+// rate is assumed to be a value between 0-100.
+// A value of 100 or more will always return true and
+// a value of 0 or less will always return false.
+func checkFail(rate int) bool {
+	if rate <= 0 {
+		return false
+	}
+
+	seed := int64(time.Now().Nanosecond())
+	randomizer := rand.New(rand.NewSource(seed))
+	if randomizer.Intn(100) <= rate {
+		return true
+	}
+
+	return false
+}
+
 var (
-	sigChan = make(chan os.Signal, 1) // signal handling
-	appOpt  options                   // application options
+	taskType    = "nop"
+	description = `The nop worker does nothing except listen for tasks and mark the task
+as a success or failure at random. The failure rate can be set at runtime. The
+nop worker can simulate working on the task for a period of time by setting a 
+task completion length or length range.
+
+The nop worker is meant for staging task ecosystem interactions
+and will ignore the "info" string.
+
+Example task:
+{"type":"does-not-matter" info":"it does not matter"}`
+
+	appOpt = &options{}
+	app    = bootstrap.WorkerApp(taskType, newWorker, appOpt).
+		Version(tools.String()).
+		Description(description)
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatalln(err)
-	}
-}
-
-func run() error {
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// set appOpt
-	loadAppOptions()
-	if err := appOpt.validate(); err != nil {
-		return err
-	}
-
-	// launcher
-	l, err := task.NewLauncher(MakeWorker, appOpt.LauncherOptions, appOpt.Options)
-	if err != nil {
-		return err
-	}
-	done, cncl := l.DoTasks()
-
-	select {
-	case <-sigChan:
-		cncl()
-		<-done.Done()
-	case <-done.Done():
-	}
-
-	return nil
-}
-
-var (
-	tskType         = flag.String("type", "", "REQUIRED the task type; default topic")
-	tskBus          = flag.String("bus", "stdio", "'stdio', 'file', 'nsq'")
-	inBus           = flag.String("in-bus", "", "one of 'stdin', 'file', 'nsq'; useful if you want the in and out bus to be different types.")
-	outBus          = flag.String("out-bus", "", "one of 'stdout', 'file', 'nsq'; useful if you want the in and out bus to be different types.")
-	nsqdHosts       = flag.String("nsqd-hosts", "localhost:4150", "comma-separated list of nsqd hosts with tcp port")
-	lookupdHosts    = flag.String("lookupd-hosts", "localhost:4161", "comma-separated list of lookupd hosts with http port")
-	topic           = flag.String("topic", "", "override task type as topic")
-	channel         = flag.String("channel", "", "override task type as channel")
-	doneTopic       = flag.String("done-topic", "done", "topic to return the task after completion")
-	failRate        = flag.Int("fail-rate", 0, "choose 0-100; the rate at which tasks will be marked with an error; does not support fractions of a percentage.")
-	dur             = flag.String("duration", "1s", "'1s' = 1 second, '1m' = 1 minute, '1h' = 1 hour")
-	durVariance     = flag.String("variance", "", "+ evenly distributed variation when a task completes; 1s = 1 second, 1m = 1 minute, 1h = 1 hour")
-	maxInProgress   = flag.Uint("max-in-progress", 1, "maximum number of workers running at one time; workers cannot be less than 1.")
-	workerKillTime  = flag.Duration("worker-kill-time", time.Second*10, "time to wait for a worker to finish when being asked to shut down.")
-	lifetimeWorkers = flag.Uint("lifetime-workers", 0, "maximum number of tasks that will be completed before the application will shut down. A value less than one sets no limit.")
-)
-
-func newOptions() options {
-	return options{
-		LauncherOptions: task.NewLauncherOptions(),
-		Options:         task.NewBusOptions(""),
-	}
+	app.Initialize()
+	app.Run()
 }
 
 type options struct {
-	*task.LauncherOptions // launcher options
-	*bus.Options          // task message bus options
+	FailRate    int    `toml:"fail_rate" comment:"int between 0-100 representing a percent"`
+	Dur         string `toml:"dur" comment:"how long the task will take to finish successfully as a time.Duration parseable string"`
+	DurVariance string `toml:"dur_variance" comment:"random adjustment to the 'dur' value as a time.Duration parseable string"`
 
-	TaskType    string        // will be used as the default topic and channel
-	Topic       string        // topic override (uses 'TaskType' if not provided)
-	Channel     string        // channel to listen for tasks of type TaskType
-	DoneTopic   string        // topic to return a done task
-	FailRate    int           // int between 0-100 representing a percent
-	Dur         time.Duration // how long the task will take to finish successfully
-	DurVariance time.Duration // random adjustment to the Dur value
+	dur         time.Duration // set during validation
+	durVariance time.Duration // set during validation
 }
 
-// nsqdHostsString will set Options.NsqdHosts from a comma
-// separated string of hosts.
-func (c *options) nsqdHostsString(hosts string) {
-	c.NSQdHosts = strings.Split(hosts, ",")
-}
-
-// durString will parse the 'dur' string and attempt to
-// convert it to a duration using time.ParseDuration and assign
-// that value to c.Dur.
-func (c *options) durString(dur string) error {
-	d, err := time.ParseDuration(dur)
-	if err != nil {
-		return err
+func (o *options) Validate() (err error) {
+	// dur
+	if o.Dur != "" {
+		o.dur, err = time.ParseDuration(o.Dur)
+		if err != nil {
+			return err
+		}
 	}
-	c.Dur = d
 
-	return nil
-}
-
-func (c *options) validate() error {
-	// must have a task type
-	if c.TaskType == "" {
-		return errors.New("required: type flag")
+	// durVariance
+	if o.DurVariance != "" {
+		o.durVariance, err = time.ParseDuration(o.DurVariance)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
-}
-
-// durVarianceString will parse the 'dur' string and attempt to
-// convert it to a duration using time.ParseDuration and assign
-// that value to c.DurVariance.
-func (c *options) durVarianceString(dur string) error {
-	d, err := time.ParseDuration(dur)
-	if err != nil {
-		return err
-	}
-	c.DurVariance = d
-
-	return nil
-}
-
-// loadAppOptions loads the applications
-// options and sets those options to the
-// global appOpt variable.
-func loadAppOptions() {
-	flag.Parse()
-
-	// load config
-	opt := newOptions()
-	opt.Bus = *tskBus
-	opt.InBus = *inBus
-	opt.OutBus = *outBus
-	opt.TaskType = *tskType
-	opt.Topic = *tskType // default topic
-	if *topic != "" {
-		opt.Topic = *topic
-	}
-	opt.Channel = *tskType // default channel
-	if *channel != "" {
-		opt.Channel = *channel
-	}
-	opt.DoneTopic = *doneTopic
-	opt.FailRate = *failRate
-	opt.nsqdHostsString(*nsqdHosts)
-	opt.durString(*dur)
-	opt.durVarianceString(*durVariance)
-	opt.MaxInProgress = *maxInProgress
-	opt.WorkerKillTime = *workerKillTime
-	opt.LifetimeWorkers = *lifetimeWorkers
-
-	appOpt = opt
 }

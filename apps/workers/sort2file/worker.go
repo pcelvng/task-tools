@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jbsmith7741/go-tools/uri"
-
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
@@ -20,7 +19,7 @@ import (
 
 func newInfoOptions(info string) (*infoOptions, error) {
 	iOpt := &infoOptions{}
-	err := uri.Unmarshal(iOpt, info)
+	err := uri.Unmarshal(info, iOpt)
 	return iOpt, err
 }
 

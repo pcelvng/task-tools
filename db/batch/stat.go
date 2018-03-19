@@ -1,4 +1,4 @@
-package stat
+package batch
 
 import (
 	"encoding/json"
@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-func New() Stats {
+func NewStats() Stats {
 	return Stats{}
 }
 
 // NewFromBytes creates Stats from
 // json bytes.
-func NewFromBytes(b []byte) Stats {
-	sts := New()
+func NewStatsFromBytes(b []byte) Stats {
+	sts := NewStats()
 	json.Unmarshal(b, &sts)
 	return sts
 }
@@ -45,10 +45,10 @@ type Stats struct {
 	// Cols is the number of columns of each row inserted.
 	Cols int `json:"cols"`
 
-	// BatchHour is the hour of data for which the
+	// BatchDate is the hour of data for which the
 	// batch data belongs. Not populated by bulk
 	// inserter.
-	BatchHour string `json:"batch_hour"`
+	BatchDate string `json:"batch_hour"`
 
 	mu sync.Mutex
 }
@@ -67,6 +67,15 @@ func (s *Stats) SetStarted(t time.Time) {
 	s.Started = t.Format(time.RFC3339)
 }
 
+// SetBatchDate will set the Created field in the
+// format time.RFC3339.
+func (s *Stats) SetBatchDate(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.BatchDate = t.Format(time.RFC3339)
+}
+
 // ParseStarted will attempt to parse the Created
 // field to a time.Time object.
 // ParseCreated expects the Created time string is in
@@ -74,6 +83,16 @@ func (s *Stats) SetStarted(t time.Time) {
 // then the time.Time zero value is returned.
 func (s *Stats) ParseStarted() time.Time {
 	t, _ := time.Parse(time.RFC3339, s.Started)
+	return t
+}
+
+// ParseBatchDate will attempt to parse the Created
+// field to a time.Time object.
+// ParseCreated expects the Created time string is in
+// time.RFC3339. If there is a parse error
+// then the time.Time zero value is returned.
+func (s *Stats) ParseBatchDate() time.Time {
+	t, _ := time.Parse(time.RFC3339, s.BatchDate)
 	return t
 }
 

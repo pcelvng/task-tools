@@ -6,14 +6,13 @@ import (
 	"hash"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"strings"
-
-	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task-tools/file/util"
+	"gopkg.in/jbsmith7741/go-tools.v0/uri"
 )
 
 func New() Stats {
@@ -32,7 +31,7 @@ func NewFromBytes(b []byte) Stats {
 // uri formatted info string.
 func NewFromInfo(info string) Stats {
 	sts := &Stats{}
-	uri.Unmarshal(sts, info)
+	uri.Unmarshal(info, sts)
 
 	return *sts
 }
