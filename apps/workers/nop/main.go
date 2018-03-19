@@ -118,7 +118,7 @@ The nop worker is meant for staging task ecosystem interactions
 and will ignore the "info" string.
 
 Example task:
-{"type":"does-not-matter" info":"it does not matter"}`
+{"type":"does-not-matter" "info":"it does not matter"}`
 
 	appOpt = &options{}
 )

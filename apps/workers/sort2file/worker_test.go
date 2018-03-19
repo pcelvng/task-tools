@@ -11,8 +11,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	appOpt = newOptions()
-
+	appOpt = &options{}
+	fOpt = file.NewOptions()
 	os.Exit(m.Run())
 }
 
@@ -82,7 +82,7 @@ func ExampleNewInfoOptionsCSV() {
 }
 
 func ExampleNewInfoOptionsFieldMatching() {
-	info := `nop://source/file.csv?Record-Type=csv`
+	info := `nop://source/file.csv`
 	iOpt, err := newInfoOptions(info)
 
 	fmt.Println(err)          // output: <nil>
@@ -94,7 +94,7 @@ func ExampleNewInfoOptionsFieldMatching() {
 }
 
 func ExampleNewInfoOptions_ValidateJSON() {
-	info := `nop://source/file.json?record-type=json&date-field=testDateField&dest-template=testTemplate`
+	info := `nop://source/file.json?date-field=datefield&dest-template=template`
 	iOpt, _ := newInfoOptions(info)
 	err := iOpt.validate()
 
@@ -116,7 +116,7 @@ func ExampleNewInfoOptions_ValidateJSONErr() {
 }
 
 func ExampleNewInfoOptions_ValidateDestTemplateErr() {
-	info := `nop://source/file.json?record-type=json&date-field=testDateField`
+	info := `nop://source/file.json?date-field=testDateField`
 	iOpt, _ := newInfoOptions(info)
 	err := iOpt.validate()
 
@@ -127,7 +127,7 @@ func ExampleNewInfoOptions_ValidateDestTemplateErr() {
 }
 
 func ExampleNewInfoOptions_ValidateCSV() {
-	info := `nop://source/file.json?date-field=dateField&record-type=csv&dest-template=testTemplate`
+	info := `nop://source/file.json?date-field=dateField&dest-template=testTemplate`
 	iOpt, _ := newInfoOptions(info)
 	err := iOpt.validate()
 
@@ -140,8 +140,8 @@ func ExampleNewInfoOptions_ValidateCSV() {
 func ExampleMakeWorkerJSON() {
 	ctx, cncl := context.WithCancel(context.Background())
 	cncl()
-	info := `nop://source/file.json?record-type=json&date-field=testDateField&dest-template=testTemplate`
-	wkr := MakeWorker(info)
+	info := `nop://source/file.json?date-field=dateField&dest-template=template`
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -155,8 +155,8 @@ func ExampleMakeWorkerJSON() {
 func ExampleMakeWorkerValidateErr() {
 	ctx, cncl := context.WithCancel(context.Background())
 	cncl()
-	info := `nop://source/file.json?record-type=json&dest-template=testTemplate`
-	wkr := MakeWorker(info)
+	info := `nop://source/file.json?dest-template=template`
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -170,8 +170,8 @@ func ExampleMakeWorkerValidateErr() {
 func ExampleMakeWorkerReaderErr() {
 	ctx, cncl := context.WithCancel(context.Background())
 	cncl()
-	info := `nop://init_err/file.json?date-field=testDateField&dest-template=testTemplate`
-	wkr := MakeWorker(info)
+	info := `nop://init_err/file.json?date-field=dateField&dest-template=template`
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -186,7 +186,7 @@ func ExampleMakeWorkerCSV() {
 	ctx, cncl := context.WithCancel(context.Background())
 	cncl()
 	info := `nop://source/file.csv?date-field=1&date-format=testFormat&sep=testSep&dest-template=testTemplate&discard=true&use-file-buffer=true`
-	wkr := MakeWorker(info)
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -213,8 +213,8 @@ func ExampleDoTaskJSON() {
 	w.Close()
 
 	ctx, _ := context.WithCancel(context.Background())
-	info := `./test/test-20050405T201112.json?record-type=json&date-field=dateField&dest-template=./test/{HH}-{SRC_TS}.json`
-	wkr := MakeWorker(info)
+	info := `./test/test-20050405T201112.json?date-field=dateField&dest-template=./test/{HH}-{SRC_TS}.json`
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete
@@ -249,8 +249,8 @@ func ExampleDoTaskJSONBadRecord() {
 	w.Close()
 
 	ctx, _ := context.WithCancel(context.Background())
-	info := `./test/test.json?record-type=json&date-field=dateField&dest-template=./test/{HH}.json`
-	wkr := MakeWorker(info)
+	info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json`
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -286,8 +286,8 @@ func ExampleDoTaskJSONBadRecordDiscard() {
 	w.Close()
 
 	ctx, _ := context.WithCancel(context.Background())
-	info := `./test/test.json?record-type=json&date-field=dateField&dest-template=./test/{HH}.json&discard=true`
-	wkr := MakeWorker(info)
+	info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json&discard=true`
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete
@@ -322,7 +322,7 @@ func ExampleDoTaskCSV() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := "./test/test.csv?date-field=0&dest-template=./test/{HH}.csv&sep=,"
-	wkr := MakeWorker(info)
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete
@@ -351,7 +351,7 @@ func ExampleDoTaskWCloseErr() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := "./test/test.csv?date-field=0&dest-template=nop://close_err/{HH}.csv&sep=,"
-	wkr := MakeWorker(info)
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -373,7 +373,7 @@ func ExampleDoTaskReadLineErr() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := `nop://readline_err/?date-field=0&dest-template=nop://{HH}.csv&sep=,`
-	wkr := MakeWorker(info)
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -417,7 +417,7 @@ func ExampleWorker_DoTaskDirSrc() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := "./test/dir?date-field=0&dest-template=./test/{HH}.csv&sep=,"
-	wkr := MakeWorker(info)
+	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete

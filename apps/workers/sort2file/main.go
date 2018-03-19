@@ -1,121 +1,169 @@
 package main
 
 import (
-	"flag"
-	"log"
-	"os"
-	"os/signal"
-	"strings"
-	"syscall"
-
-	"github.com/BurntSushi/toml"
-	"github.com/pcelvng/task"
+	tools "github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
 )
 
 var (
-	defaultFileTopic = "files"
-	defaultTaskType  = "sort2file"
-	fileBufPrefix    = "sort2file_"            // tmp file prefix
-	sigChan          = make(chan os.Signal, 1) // app signal handling
-	appOpt           *options                  // app options
-	producer         bus.Producer              // special producer instance
+	taskType    = "sort2file"
+	description = `The sort2file worker reads from a source file 
+and sorts its records into 'hourly' destination files.
+
+The worker assumes the source file contains json records. 
+
+Info Format:
+"{source-file-path}?{querystring-params}" # for sorting a single file
+"{source-dir-path}?{querystring-params}" # for sorting all files in a dir
+
+Querystring Params:
+* date-field (required: field name containing the date; for csv this is a field index
+* date-format (go style date format)
+* sep (csv separator; also indicates it is a csv type format)
+* dest-template (required: destination template for sorted files)
+* discard (true if should discard records that do not parse)
+* use-file-buffer (true if files are too big to fig in memory and need to be buffered to file)
+
+'dest-template' parameter:
+
+Represents the full destination path and file name. Supports the following
+template parameters:
+
+- {YYYY}     four digit year ie 2007
+- {YY}       two digit year ie 07
+- {MM}       two digit month ie 01
+- {DD}       two digit day ie 29
+- {HH}       two digit hour ie 00
+- {TS}       current timestamp (when processing starts) in following format: 20060102T150405
+- {DAY_SLUG} shorthand for {YYYY}/{MM}/{DD}
+- {SLUG}     shorthand for {YYYY}/{MM}/{DD}/{HH}
+- {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
+- {SRC_TS}   source file timestamp (if available) in following format: 20060102T150405
+
+A template '.gz' file extension will result in compressed destination files.
+
+dest-template examples:
+
+# gzipped output
+?dest_template=s3://bucket-name/path/{YYYY}/{MM}/{DD}/{HH}/{HH}-{SRC_TS}.json.gz
+
+# non-gzipped output
+?dest_template=s3://bucket-name/path/{YYYY}/{MM}/{DD}/{HH}/{HH}-{TS}.json 
+
+# local file output (gzipped)
+?dest_template=/local/path/{YYYY}/{MM}/{DD}/{HH}-{TS}.json.gz 
+
+'sep' parameter:
+
+Common field separation values:
+
+# comma (default)
+?sep=,
+
+# tab
+?sep=\t
+
+# pipe
+?sep=|
+
+'discard' parameter:
+
+When true records that are missing the date field or do not parse correctly are
+discarded. 
+
+When false, task processing will fail on the first record where:
+
+- Record does not parse
+- Number of fields is less than the date field index
+- Date field does not parse
+
+# discard turned off (default)
+?discard=false
+
+# discard turned on
+?discard=true
+
+result messages:
+
+* 'complete' result
+
+The task msg provides human readable statistics.
+
+# typical
+wrote 1000 lines over 3 files
+
+# with discard option
+wrote 900 lines over 3 files (100 discarded)
+
+* 'error' result
+
+Will provide approximately how many lines were processed 
+before the error and the error.
+
+examples:
+"issue at line 10: 'json parse error'"
+"path 's3://bucket/path/to/file.txt' not found"
+
+Example Tasks:
+# json info
+{
+	"type":"sort2file" 
+	"info":"s3://bucket/file.json.gz?date-field=date&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/sorted-{SRC_TS}.json.gz&discard=true"
+}
+
+# csv info
+{
+	"type":"sort2file" 
+	"info":"s3://bucket/file.csv.gz?date-field=1&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv.gz&sep=,&discard=true"
+}
+
+# info from directory source path
+{
+	"type":"sort2file" 
+	"info":"s3://bucket/path/?date-field=1&date-format=2006-01-02T15:04:05Z07:00&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv.gz&sep=,&discard=true"
+}
+
+# minimal csv info
+{
+	"type":"sort2file" 
+	"info":"s3://bucket/path/file.csv?date-field=1&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.csv&sep=,"
+}
+
+# minimal json info
+{
+	"type":"sort2file" 
+	"info":"s3://bucket/path/file.json?date-field=date&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.json"
+}
+
+# minimal json info from directory source path
+{
+	"type":"sort2file" 
+	"info":"s3://bucket/path/?date-field=date&dest-template=s3://bucket/dir/{YYYY}/{MM}/{DD}/{HH}/{SRC_TS}.json"
+}`
+
+	appOpt = &options{
+		FileTopic: "files", // default
+	}
+	fOpt        *file.Options
+	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 )
 
 func main() {
-	flag.Parse()
-	// set appOpt
-	if err := loadAppOptions(); err != nil {
-		log.Fatalln(err)
+	app := bootstrap.NewWorkerApp(taskType, newWorker, appOpt).
+		Version(tools.String()).
+		Description(description)
+	app.Initialize()
+	if appOpt.FileTopic != "-" {
+		producer = app.NewProducer()
 	}
-
-	if err := run(); err != nil {
-		log.Fatalln(err)
-	}
+	fOpt = app.GetFileOpts()
+	app.Run()
 }
-
-func run() (err error) {
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// producer
-	busOpt := cloneBusOpts(*appOpt.Options)
-	if appOpt.FileTopic == "" || appOpt.FileTopic == "-" {
-		busOpt.Bus = "nop" // disable producing
-	}
-	if producer, err = bus.NewProducer(&busOpt); err != nil {
-		return err
-	}
-
-	// launcher
-	l, err := task.NewLauncher(MakeWorker, appOpt.LauncherOptions, appOpt.Options)
-	if err != nil {
-		return err
-	}
-	done, cncl := l.DoTasks()
-
-	select {
-	case <-sigChan:
-		cncl() // cancel launcher
-		<-done.Done()
-	case <-done.Done():
-	}
-
-	return err
-}
-
-var (
-	confPth = flag.String("config", "config.toml", "toml config file path; over-written by flag values")
-)
-
-func newOptions() *options {
-	return &options{
-		LauncherOptions: task.NewLauncherOptions(defaultTaskType),
-		Options:         task.NewBusOptions(""),
-	}
-}
-
-func cloneBusOpts(opt bus.Options) bus.Options { return opt }
 
 type options struct {
-	*task.LauncherOptions // launcher options
-	*bus.Options          // bus options
-
-	TaskType      string `toml:"task_type"`
-	FileTopic     string `toml:"file_topic"`      // topic to publish information about written files
-	FileBufferDir string `toml:"file_buffer_dir"` // if using a file buffer, use this base directory
-	AWSAccessKey  string `toml:"aws_access_key"`  // required for s3 usage
-	AWSSecretKey  string `toml:"aws_secret_key"`  // required for s3 usage
+	FileTopic string `toml:"file_topic" commented:"true" comment:"topic to publish written file stats"` // topic to publish information about written files
 }
 
-// nsqdHostsString will set Options.NSQdHosts from a
-// comma-separated string of hosts.
-func (opt *options) nsqdHostsString(hosts string) {
-	opt.NSQdHosts = strings.Split(hosts, ",")
-}
-
-// loadAppOptions loads the applications
-// options and sets those options to the
-// global appOpt variable.
-func loadAppOptions() error {
-	opt := newOptions()
-	opt.TaskType = defaultTaskType
-	opt.FileTopic = defaultFileTopic
-
-	// parse toml first - override with flag values
-	_, err := toml.DecodeFile(*confPth, &opt)
-	if err != nil {
-		return err
-	}
-
-	if opt.InTopic == "" {
-		opt.InTopic = opt.TaskType
-	}
-
-	if opt.InChannel == "" {
-		opt.InChannel = opt.TaskType
-	}
-
-	appOpt = opt
-	return nil
-}
+func (o *options) Validate() error { return nil }
