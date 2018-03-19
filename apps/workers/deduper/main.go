@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/BurntSushi/toml"
-	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus"
+	"gopkg.in/BurntSushi/toml.v0"
+	"gopkg.in/pcelvng/task.v0"
+	"gopkg.in/pcelvng/task.v0/bus"
 )
 
 var (

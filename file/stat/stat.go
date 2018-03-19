@@ -6,14 +6,13 @@ import (
 	"hash"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"strings"
-
-	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task-tools/file/util"
+	"gopkg.in/jbsmith7741/go-tools.v0/uri"
 )
 
 func New() Stats {
