@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/dustinevan/chron"
 	"github.com/json-iterator/go"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
+	"gopkg.in/dustinevan/chron.v0"
 )
 
 var (

@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jbsmith7741/go-tools/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/dedup"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
+	"gopkg.in/jbsmith7741/go-tools.v0/uri"
 )
 
 func newInfoOptions(info string) (*infoOptions, error) {

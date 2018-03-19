@@ -77,23 +77,30 @@ func NewOptions() *Options {
 // Options presents general options across all stats readers and
 // writers.
 type Options struct {
-	AWSAccessKey string
-	AWSSecretKey string
+	AWSAccessKey string `toml:"aws_access_key"`
+	AWSSecretKey string `toml:"aws_secret_key"`
 
 	// UseFileBuf specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name
 	// prefix.
-	UseFileBuf bool
+	UseFileBuf bool `toml:"use_file_buf" commented:"true" comment:"set as 'true' if files are too big to buffer in memory"`
 
 	// FileBufDir optionally specifies the temp directory. If not specified then
 	// the os default temp dir is used.
-	FileBufDir string
+	FileBufDir string `toml:"file_buf_dir" commented:"true" comment:"temp file directory if buffering files to disk (default is the os temp directory)"`
 
 	// FileBufPrefix optionally specifies the temp file prefix.
 	// The full tmp file name is randomly generated and guaranteed
 	// not to conflict with existing files. A prefix can help one find
 	// the tmp file.
-	FileBufPrefix string
+	//
+	// In an effort to encourage fewer application configuration options
+	// this value not made available to a toml config file and the default
+	// is set to 'task-type_' by the application bootstrapper.
+	//
+	// If no prefix is provided then the temp file name is just a random
+	// unique number.
+	FileBufPrefix string `toml:"-"` // default is 'task-type_'
 }
 
 func s3Options(opt Options) s3.Options {

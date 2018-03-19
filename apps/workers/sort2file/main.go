@@ -70,7 +70,7 @@ var (
 
 func newOptions() *options {
 	return &options{
-		LauncherOptions: task.NewLauncherOptions(),
+		LauncherOptions: task.NewLauncherOptions(defaultTaskType),
 		Options:         task.NewBusOptions(""),
 	}
 }

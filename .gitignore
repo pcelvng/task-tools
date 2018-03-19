@@ -1,5 +1,5 @@
 .idea/
-config.toml
+*.toml
 *.json
 
 apps/taskmasters/backloader/backloader
@@ -12,5 +12,6 @@ apps/workers/nop/nop
 apps/workers/deduper/deduper
 apps/workers/sort2file/sort2file
 apps/utils/file-watcher/file-watcher
+build
 
 coverage
