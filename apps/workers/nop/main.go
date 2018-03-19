@@ -121,12 +121,12 @@ Example task:
 {"type":"does-not-matter" info":"it does not matter"}`
 
 	appOpt = &options{}
-	app    = bootstrap.WorkerApp(taskType, newWorker, appOpt).
-		Version(tools.String()).
-		Description(description)
 )
 
 func main() {
+	app := bootstrap.NewWorkerApp(taskType, newWorker, appOpt).
+		Version(tools.String()).
+		Description(description)
 	app.Initialize()
 	app.Run()
 }

@@ -23,28 +23,26 @@ var (
 	sigChan      = make(chan os.Signal, 1) // signal handling
 	configPth    = flag.String("config", "", "application config toml file")
 	c            = flag.String("c", "", "alias to -config")
-	showVersion  = flag.Bool("version", false, "show app version and build info")
+	showVersion  = flag.Bool("version", false, "show WorkerApp version and build info")
 	v            = flag.Bool("v", false, "alias to -version")
 	genConfig    = flag.Bool("gen-config", false, "generate a config toml file to stdout")
 	g            = flag.Bool("g", false, "alias to -gen-config")
 	showTaskType = flag.Bool("show-task-type", false, "show task type")
 	t            = flag.Bool("t", false, "alias to -show-task-type")
-	showTaskInfo = flag.Bool("show-task-info", false, "show what the worker expects from the task info string")
-	i            = flag.Bool("i", false, "alias to -task-info")
 )
 
-// WorkerApp will create a new worker bootstrap application.
+// NewWorkerApp will create a new worker bootstrap application.
 // *tskType: defines the worker type; the type of tasks the worker is expecting. Also acts as a name for identification (required)
 // *mkr: MakeWorker function that the launcher will call to create a new worker.
 // *options: a struct pointer to additional specific application config options. Note that
 //          the bootstrapped WorkerApp already provides bus and launcher config options and the user
 //          can request to add postgres and mysql config options.
-func WorkerApp(tskType string, newWkr task.NewWorker, options Validator) *app {
+func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *WorkerApp {
 	if options == nil {
 		options = &NilValidator{}
 	}
 
-	return &app{
+	return &WorkerApp{
 		tskType: tskType,
 		newWkr:  newWkr,
 		wkrOpt:  newWkrOptions(tskType),
@@ -53,7 +51,7 @@ func WorkerApp(tskType string, newWkr task.NewWorker, options Validator) *app {
 	}
 }
 
-type app struct {
+type WorkerApp struct {
 	tskType     string         // application task type
 	version     string         // application version
 	description string         // info help string that show expected info format
@@ -62,9 +60,10 @@ type app struct {
 
 	// options
 	wkrOpt    *wkrOptions   // standard worker options (bus and launcher)
-	appOpt    Validator     // extra app options; should be pointer to a Validator struct
+	appOpt    Validator     // extra WorkerApp options; should be pointer to a Validator struct
 	pgOpts    *pgOptions    // postgres config options
 	mysqlOpts *mysqlOptions // mysql config options
+	fileOpts  *fileOptions
 
 	lgr      *log.Logger // application logger instance
 	mysql    *sql.DB     // mysql connection
@@ -82,7 +81,10 @@ type app struct {
 // that asked the application to show the version, for example.
 // So, if start is able to finish by returning, the user knows
 // it is safe to move on.
-func (a *app) Initialize() {
+func (a *WorkerApp) Initialize() {
+	// signal handling - be ready to capture signal early.
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
 	// custom help screen
 	flag.Usage = func() {
 		if a.TaskType() != "" {
@@ -114,7 +116,7 @@ func (a *app) Initialize() {
 		a.lgr.Fatalln(err.Error())
 	}
 
-	// validate app options
+	// validate WorkerApp options
 	err = a.appOpt.Validate()
 	if err != nil {
 		a.lgr.SetFlags(0)
@@ -139,7 +141,7 @@ func (a *app) Initialize() {
 	}
 }
 
-func (a *app) handleFlags() {
+func (a *WorkerApp) handleFlags() {
 	// version
 	if *showVersion || *v {
 		prefix := ""
@@ -166,19 +168,59 @@ func (a *app) handleFlags() {
 
 	// gen config (sent to stdout)
 	if *genConfig || *g {
-		var appOptB, wkrOptB, pgOptB, mysqlOptB []byte
+		var appOptB, wkrOptB, fileOptB, pgOptB, mysqlOptB []byte
 		var err error
 
-		// app options
+		// WorkerApp options
 		appOptB, err = ptoml.Marshal(reflect.Indirect(reflect.ValueOf(a.appOpt)).Interface())
+		if err != nil {
+			a.lgr.SetFlags(0)
+			if a.TaskType() != "" {
+				a.lgr.SetPrefix(a.TaskType() + ": ")
+			} else {
+				a.lgr.SetPrefix("")
+			}
+			a.lgr.Fatalln(err.Error())
+		}
 
 		// worker options
 		wkrOptB, err = ptoml.Marshal(*a.wkrOpt)
+		if err != nil {
+			a.lgr.SetFlags(0)
+			if a.TaskType() != "" {
+				a.lgr.SetPrefix(a.TaskType() + ": ")
+			} else {
+				a.lgr.SetPrefix("")
+			}
+			a.lgr.Fatalln(err.Error())
+		}
+
+		// file options
+		if a.fileOpts != nil {
+			fileOptB, err = ptoml.Marshal(*a.fileOpts)
+		}
+		if err != nil {
+			a.lgr.SetFlags(0)
+			if a.TaskType() != "" {
+				a.lgr.SetPrefix(a.TaskType() + ": ")
+			} else {
+				a.lgr.SetPrefix("")
+			}
+			a.lgr.Fatalln(err.Error())
+		}
 
 		// postgres options
 		if a.pgOpts != nil {
 			pgOptB, err = ptoml.Marshal(*a.pgOpts)
-
+		}
+		if err != nil {
+			a.lgr.SetFlags(0)
+			if a.TaskType() != "" {
+				a.lgr.SetPrefix(a.TaskType() + ": ")
+			} else {
+				a.lgr.SetPrefix("")
+			}
+			a.lgr.Fatalln(err.Error())
 		}
 
 		// mysql options
@@ -200,6 +242,7 @@ func (a *app) handleFlags() {
 		fmt.Printf("# '%v' worker options\n", a.TaskType())
 		fmt.Print(string(appOptB))
 		fmt.Print(string(wkrOptB))
+		fmt.Print(string(fileOptB))
 		fmt.Print(string(pgOptB))
 		fmt.Print(string(mysqlOptB))
 
@@ -218,13 +261,13 @@ func (a *app) handleFlags() {
 	}
 }
 
-func (a *app) loadOptions() error {
+func (a *WorkerApp) loadOptions() error {
 	cpth := *configPth
 	if *c != "" {
 		cpth = *c
 	}
 
-	// app options
+	// WorkerApp options
 	if _, err := btoml.DecodeFile(cpth, a.appOpt); err != nil {
 		return err
 	}
@@ -232,6 +275,14 @@ func (a *app) loadOptions() error {
 	// worker options
 	if _, err := btoml.DecodeFile(cpth, a.wkrOpt); err != nil {
 		return err
+	}
+
+	// file options
+	if a.fileOpts != nil {
+		_, err := btoml.DecodeFile(cpth, a.fileOpts)
+		if err != nil {
+			return err
+		}
 	}
 
 	// postgres options (if requested)
@@ -269,10 +320,7 @@ func (a *app) loadOptions() error {
 
 // Run will run until the application is complete
 // and then exit.
-func (a *app) Run() {
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
+func (a *WorkerApp) Run() {
 	// do tasks
 	done, cncl := a.l.DoTasks()
 	a.Log("listening for %s tasks on '%s'", a.wkrOpt.BusOpt.Bus, a.wkrOpt.BusOpt.InTopic)
@@ -289,8 +337,8 @@ func (a *app) Run() {
 
 // Version sets the application version. The version
 // is what is shown if the '-version' flag is specified
-// when running the app.
-func (a *app) Version(version string) *app {
+// when running the WorkerApp.
+func (a *WorkerApp) Version(version string) *WorkerApp {
 	a.version = version
 	return a
 }
@@ -300,8 +348,16 @@ func (a *app) Version(version string) *app {
 //
 // The description should also include information about
 // what the worker expects from the NewWorker 'info' string.
-func (a *app) Description(description string) *app {
+func (a *WorkerApp) Description(description string) *WorkerApp {
 	a.description = description
+	return a
+}
+
+// FileOpts provides file options such as aws connection info.
+func (a *WorkerApp) FileOpts() *WorkerApp {
+	if a.fileOpts == nil {
+		a.fileOpts = &fileOptions{}
+	}
 	return a
 }
 
@@ -315,10 +371,10 @@ func (a *app) Description(description string) *app {
 // MySQLOpts needs to be called before Start() to be effective.
 //
 // If the user needs more than one db connection then those
-// connection options need to be made available with the App
+// connection options need to be made available with the WorkerApp
 // initialization. Note that the DBOptions struct is available
 // to use in this way.
-func (a *app) MySQLOpts() *app {
+func (a *WorkerApp) MySQLOpts() *WorkerApp {
 	if a.mysqlOpts == nil {
 		a.mysqlOpts = &mysqlOptions{}
 	}
@@ -335,14 +391,18 @@ func (a *app) MySQLOpts() *app {
 // PostgresOpts needs to be called before Start() to be effective.
 //
 // If the user needs more than one db connection then those
-// connection options need to be made available with the App
+// connection options need to be made available with the WorkerApp
 // initialization. Note that the DBOptions struct is available
 // to use in this way.
-func (a *app) PostgresOpts() *app {
+func (a *WorkerApp) PostgresOpts() *WorkerApp {
 	if a.pgOpts == nil {
 		a.pgOpts = &pgOptions{}
 	}
 	return a
+}
+
+func (a *WorkerApp) GetFileOpts() *file.Options {
+	return &a.fileOpts.FileOpt
 }
 
 // SetLogger allows the user to override the default
@@ -351,7 +411,7 @@ func (a *app) PostgresOpts() *app {
 // If the provided logger is nil the logger output is discarded.
 //
 // SetLogger should be called before initializing the application.
-func (a *app) SetLogger(lgr *log.Logger) *app {
+func (a *WorkerApp) SetLogger(lgr *log.Logger) *WorkerApp {
 	if lgr != nil {
 		a.lgr = lgr
 	}
@@ -360,27 +420,27 @@ func (a *app) SetLogger(lgr *log.Logger) *app {
 }
 
 // TaskType returns the TaskType initialized with
-// the app.
-func (a *app) TaskType() string {
+// the WorkerApp.
+func (a *WorkerApp) TaskType() string {
 	return a.tskType
 }
 
 // MySQLDB returns the MySQL sql.DB application connection.
 // Will be nil if called before Start() or MySQLOpts() was
 // not called.
-func (a *app) MySQLDB() *sql.DB {
+func (a *WorkerApp) MySQLDB() *sql.DB {
 	return a.mysql
 }
 
 // PostgresDB returns the Postgres sql.DB application connection.
 // Will be nil if called before Start() or PostgresOpts() was
 // not called.
-func (a *app) PostgresDB() *sql.DB {
+func (a *WorkerApp) PostgresDB() *sql.DB {
 	return a.postgres
 }
 
 // Logger returns a reference to the application logger.
-func (a *app) Logger() *log.Logger {
+func (a *WorkerApp) Logger() *log.Logger {
 	return a.lgr
 }
 
@@ -388,7 +448,7 @@ func (a *app) Logger() *log.Logger {
 // the bus config information to create a new consumer
 // instance. Can optionally provide a topic and channel
 // on which to consume. All other bus options are the same.
-func (a *app) NewConsumer(topic, channel string) bus.Consumer {
+func (a *WorkerApp) NewConsumer(topic, channel string) bus.Consumer {
 	busOpt := bus.NewOptions(a.wkrOpt.BusOpt.Bus)
 	busOpt.InBus = a.wkrOpt.BusOpt.InBus
 	busOpt.InTopic = a.wkrOpt.BusOpt.InTopic
@@ -410,7 +470,7 @@ func (a *app) NewConsumer(topic, channel string) bus.Consumer {
 
 // NewProducer will use the bus config information
 // to create a new producer instance.
-func (a *app) NewProducer() bus.Producer {
+func (a *WorkerApp) NewProducer() bus.Producer {
 	busOpt := bus.NewOptions(a.wkrOpt.BusOpt.Bus)
 	busOpt.OutBus = a.wkrOpt.BusOpt.OutBus
 	busOpt.LookupdHosts = a.wkrOpt.BusOpt.LookupdHosts
@@ -421,7 +481,7 @@ func (a *app) NewProducer() bus.Producer {
 }
 
 // Log is a wrapper around the application logger Printf method.
-func (a *app) Log(format string, v ...interface{}) {
+func (a *WorkerApp) Log(format string, v ...interface{}) {
 	a.lgr.Printf(format, v...)
 }
 
@@ -461,20 +521,20 @@ type wkrOptions struct {
 
 // fileOptions are only included at the request of the user.
 // If added they are made available with the application file
-// options object which can be accessed from the app object.
+// options object which can be accessed from the WorkerApp object.
 type fileOptions struct {
 	FileOpt file.Options `toml:"file"`
 }
 
 // mysqlOptions are only added at the request of the user.
-// If they are added then the bootstrap App will automatically
+// If they are added then the bootstrap WorkerApp will automatically
 // attempt to connect to mysql.
 type mysqlOptions struct {
 	MySQL DBOptions `toml:"mysql"`
 }
 
 // postgresOptions are only added at the request of the user.
-// If they are added then the bootstrap App will automatically
+// If they are added then the bootstrap WorkerApp will automatically
 // attempt to connect to postgres.
 type pgOptions struct {
 	Postgres DBOptions `toml:"postgres"`
