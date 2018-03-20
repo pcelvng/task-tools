@@ -1,7 +1,7 @@
 package main
 
 import (
-	tools "github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
@@ -153,7 +153,8 @@ Example Tasks:
 func main() {
 	app := bootstrap.NewWorkerApp(taskType, newWorker, appOpt).
 		Version(tools.String()).
-		Description(description)
+		Description(description).
+		FileOpts()
 	app.Initialize()
 	if appOpt.FileTopic != "-" {
 		producer = app.NewProducer()
