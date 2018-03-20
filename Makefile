@@ -10,10 +10,12 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = nop
+APPS = nop sort2file deduper
 all: $(APPS)
 
-$(BLDDIR)/nop:        $(wildcard apps/workers/nop/*.go)
+$(BLDDIR)/nop:         $(wildcard apps/workers/nop/*.go)
+$(BLDDIR)/sort2file:   $(wildcard apps/workers/sort2file/*.go)
+$(BLDDIR)/deduper:     $(wildcard apps/workers/deduper/*.go)
 
 $(BLDDIR)/%:
 	@mkdir -p $(dir $@)
