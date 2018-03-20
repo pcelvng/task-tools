@@ -104,13 +104,28 @@ func TestPathTime(t *testing.T) {
 			expTime: mustParse("2018-02-14T14:00:00Z"),
 		},
 		{
+			msg:     "hour slug file match",
+			path:    "/path/to/file/2018/02/14/14.txt",
+			expTime: mustParse("2018-02-14T14:00:00Z"),
+		},
+		{
 			msg:     "day slug matching",
 			path:    "/path/to/file/2018/01/07/file.txt",
 			expTime: mustParse("2018-01-07T00:00:00Z"),
 		},
 		{
+			msg:     "day file matching",
+			path:    "/path/to/file/2018/01/07.txt",
+			expTime: mustParse("2018-01-07T00:00:00Z"),
+		},
+		{
 			msg:     "month slug matching",
 			path:    "/path/to/file/2017/12/file.txt",
+			expTime: mustParse("2017-12-01T00:00:00Z"),
+		},
+		{
+			msg:     "month file matching",
+			path:    "/path/to/file/2017/12.txt",
 			expTime: mustParse("2017-12-01T00:00:00Z"),
 		},
 	}

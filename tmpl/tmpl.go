@@ -81,6 +81,13 @@ func Parse(s string, t time.Time) string {
 	return s
 }
 
+var (
+	hFileRe = regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
+	hSlugRe = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}`)
+	dSlugRe = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}`)
+	mSlugRe = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)
+)
+
 // PathTime will attempt to extract a time value from the path
 // by the following formats
 // filename - /path/{20060102T150405}.txt
@@ -88,44 +95,34 @@ func Parse(s string, t time.Time) string {
 // day slug - /path/2006/01/02/file.txt
 // month slug - /path/2006/01/file.txt
 func PathTime(pth string) time.Time {
-	srcDir, srcFile := filepath.Split(pth)
+	_, srcFile := filepath.Split(pth)
 
 	// filename regex
-	re := regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
-	srcTS := re.FindString(srcFile)
-
-	// hour slug regex
-	hSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}`)
-	hSrcTS := hSlugRe.FindString(srcDir)
-
-	// day slug regex
-	dSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}`)
-	dSrcTS := dSlugRe.FindString(srcDir)
-
-	// month slug regex
-	mSlugRe := regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)
-	mSrcTS := mSlugRe.FindString(srcDir)
-
-	// discover the source path timestamp from the following
-	// supported formats.
-	var t time.Time
-	if srcTS != "" {
-		// src ts in filename
-		tsFmt := "20060102T150405" // output format
-		t, _ = time.Parse(tsFmt, srcTS)
-	} else if hSrcTS != "" {
-		// src ts in hour slug
-		hFmt := "2006/01/02/15"
-		t, _ = time.Parse(hFmt, hSrcTS)
-	} else if dSrcTS != "" {
-		// src ts in day slug
-		dFmt := "2006/01/02"
-		t, _ = time.Parse(dFmt, dSrcTS)
-	} else if mSrcTS != "" {
-		// src ts in month slug
-		mFmt := "2006/01"
-		t, _ = time.Parse(mFmt, mSrcTS)
+	if hFileRe.MatchString(srcFile) {
+		s := hFileRe.FindString(srcFile)
+		t, _ := time.Parse("20060102T150405", s)
+		return t
 	}
 
-	return t
+	// hour slug regex
+	if hSlugRe.MatchString(pth) {
+		s := hSlugRe.FindString(pth)
+		t, _ := time.Parse("2006/01/02/15", s)
+		return t
+	}
+
+	// day slug regex
+	if dSlugRe.MatchString(pth) {
+		s := dSlugRe.FindString(pth)
+		t, _ := time.Parse("2006/01/02", s)
+		return t
+	}
+	// month slug regex
+	if mSlugRe.MatchString(pth) {
+		s := mSlugRe.FindString(pth)
+		t, _ := time.Parse("2006/01", s)
+		return t
+	}
+
+	return time.Time{}
 }
