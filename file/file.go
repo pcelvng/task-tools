@@ -100,7 +100,7 @@ type Options struct {
 	//
 	// If no prefix is provided then the temp file name is just a random
 	// unique number.
-	FileBufPrefix string `toml:"-"` // default is 'task-type_'
+	FileBufPrefix string `toml:"-"` // default is usually 'task-type_'
 }
 
 func s3Options(opt Options) s3.Options {

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -20,15 +21,13 @@ import (
 )
 
 var (
-	sigChan      = make(chan os.Signal, 1) // signal handling
-	configPth    = flag.String("config", "", "application config toml file")
-	c            = flag.String("c", "", "alias to -config")
-	showVersion  = flag.Bool("version", false, "show WorkerApp version and build info")
-	v            = flag.Bool("v", false, "alias to -version")
-	genConfig    = flag.Bool("gen-config", false, "generate a config toml file to stdout")
-	g            = flag.Bool("g", false, "alias to -gen-config")
-	showTaskType = flag.Bool("show-task-type", false, "show task type")
-	t            = flag.Bool("t", false, "alias to -show-task-type")
+	sigChan     = make(chan os.Signal, 1) // signal handling
+	configPth   = flag.String("config", "", "application config toml file")
+	c           = flag.String("c", "", "alias to -config")
+	showVersion = flag.Bool("version", false, "show WorkerApp version and build info")
+	v           = flag.Bool("v", false, "alias to -version")
+	genConfig   = flag.Bool("gen-config", false, "generate a config toml file to stdout")
+	g           = flag.Bool("g", false, "alias to -gen-config")
 )
 
 // NewWorkerApp will create a new worker bootstrap application.
@@ -38,6 +37,9 @@ var (
 //          the bootstrapped WorkerApp already provides bus and launcher config options and the user
 //          can request to add postgres and mysql config options.
 func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *WorkerApp {
+	// signal handling - be ready to capture signal early.
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
 	if options == nil {
 		options = &NilValidator{}
 	}
@@ -82,21 +84,7 @@ type WorkerApp struct {
 // So, if start is able to finish by returning, the user knows
 // it is safe to move on.
 func (a *WorkerApp) Initialize() {
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// custom help screen
-	flag.Usage = func() {
-		if a.TaskType() != "" {
-			fmt.Fprintln(os.Stderr, a.TaskType()+" worker")
-			fmt.Fprintln(os.Stderr, "")
-		}
-		if a.description != "" {
-			fmt.Fprintln(os.Stderr, a.description)
-			fmt.Fprintln(os.Stderr, "")
-		}
-		flag.PrintDefaults()
-	}
+	a.setHelpOutput() // add description to help
 
 	// flags
 	if !flag.Parsed() {
@@ -107,29 +95,84 @@ func (a *WorkerApp) Initialize() {
 	// options
 	err := a.loadOptions()
 	if err != nil {
-		a.lgr.SetFlags(0)
-		if a.TaskType() != "" {
-			a.lgr.SetPrefix(a.TaskType() + ": ")
-		} else {
-			a.lgr.SetPrefix("")
-		}
-		a.lgr.Fatalln(err.Error())
+		a.logFatal(err)
 	}
 
 	// validate WorkerApp options
 	err = a.appOpt.Validate()
 	if err != nil {
-		a.lgr.SetFlags(0)
-		if a.TaskType() != "" {
-			a.lgr.SetPrefix(a.TaskType() + ": ")
-		} else {
-			a.lgr.SetPrefix("")
-		}
-		a.lgr.Fatalln(err.Error())
+		a.logFatal(err)
 	}
 
 	// launcher
 	a.l, err = task.NewLauncher(a.newWkr, a.wkrOpt.LauncherOpt, a.wkrOpt.BusOpt)
+	if err != nil {
+		a.logFatal(err)
+	}
+}
+
+func (a *WorkerApp) setHelpOutput() {
+	// custom help screen
+	flag.Usage = func() {
+		if a.TaskType() != "" {
+			fmt.Fprintln(os.Stderr, a.TaskType()+" worker")
+			fmt.Fprintln(os.Stderr, "")
+		}
+		if a.description != "" {
+			fmt.Fprintln(os.Stderr, a.description)
+			fmt.Fprintln(os.Stderr, "")
+		}
+		fmt.Fprintln(os.Stderr, "Flag options:")
+		flag.PrintDefaults()
+	}
+}
+
+func (a *WorkerApp) logFatal(err error) {
+	a.lgr.SetFlags(0)
+	if a.TaskType() != "" {
+		a.lgr.SetPrefix(a.TaskType() + ": ")
+	} else {
+		a.lgr.SetPrefix("")
+	}
+	a.lgr.Fatalln(err.Error())
+}
+
+func (a *WorkerApp) handleFlags() {
+	// version
+	if *showVersion || *v {
+		a.showVersion()
+	}
+
+	// gen config (sent to stdout)
+	if *genConfig || *g {
+		a.genConfig()
+	}
+
+	// configPth required
+	if *configPth == "" && *c == "" {
+		a.logFatal(errors.New("-config (-c) config file path required"))
+	}
+}
+
+func (a *WorkerApp) showVersion() {
+	prefix := ""
+	if a.TaskType() != "" {
+		prefix = a.TaskType() + " "
+	}
+	if a.version == "" {
+		fmt.Println(prefix + "version not specified")
+	} else {
+		fmt.Println(prefix + a.version)
+	}
+	os.Exit(0)
+}
+
+func (a *WorkerApp) genConfig() {
+	var appOptB, wkrOptB, fileOptB, pgOptB, mysqlOptB []byte
+	var err error
+
+	// WorkerApp options
+	appOptB, err = ptoml.Marshal(reflect.Indirect(reflect.ValueOf(a.appOpt)).Interface())
 	if err != nil {
 		a.lgr.SetFlags(0)
 		if a.TaskType() != "" {
@@ -139,126 +182,71 @@ func (a *WorkerApp) Initialize() {
 		}
 		a.lgr.Fatalln(err.Error())
 	}
-}
 
-func (a *WorkerApp) handleFlags() {
-	// version
-	if *showVersion || *v {
-		prefix := ""
-		if a.TaskType() != "" {
-			prefix = a.TaskType() + ": "
-		}
-		if a.version == "" {
-			fmt.Println(prefix + "version not specified")
-		} else {
-			fmt.Println(prefix + a.version)
-		}
-		os.Exit(0)
-	}
-
-	// task type
-	if *showTaskType || *t {
-		if a.TaskType() == "" {
-			fmt.Println("worker task type: none")
-		} else {
-			fmt.Printf("worker task type: '%v'\n", a.TaskType())
-		}
-		os.Exit(0)
-	}
-
-	// gen config (sent to stdout)
-	if *genConfig || *g {
-		var appOptB, wkrOptB, fileOptB, pgOptB, mysqlOptB []byte
-		var err error
-
-		// WorkerApp options
-		appOptB, err = ptoml.Marshal(reflect.Indirect(reflect.ValueOf(a.appOpt)).Interface())
-		if err != nil {
-			a.lgr.SetFlags(0)
-			if a.TaskType() != "" {
-				a.lgr.SetPrefix(a.TaskType() + ": ")
-			} else {
-				a.lgr.SetPrefix("")
-			}
-			a.lgr.Fatalln(err.Error())
-		}
-
-		// worker options
-		wkrOptB, err = ptoml.Marshal(*a.wkrOpt)
-		if err != nil {
-			a.lgr.SetFlags(0)
-			if a.TaskType() != "" {
-				a.lgr.SetPrefix(a.TaskType() + ": ")
-			} else {
-				a.lgr.SetPrefix("")
-			}
-			a.lgr.Fatalln(err.Error())
-		}
-
-		// file options
-		if a.fileOpts != nil {
-			fileOptB, err = ptoml.Marshal(*a.fileOpts)
-		}
-		if err != nil {
-			a.lgr.SetFlags(0)
-			if a.TaskType() != "" {
-				a.lgr.SetPrefix(a.TaskType() + ": ")
-			} else {
-				a.lgr.SetPrefix("")
-			}
-			a.lgr.Fatalln(err.Error())
-		}
-
-		// postgres options
-		if a.pgOpts != nil {
-			pgOptB, err = ptoml.Marshal(*a.pgOpts)
-		}
-		if err != nil {
-			a.lgr.SetFlags(0)
-			if a.TaskType() != "" {
-				a.lgr.SetPrefix(a.TaskType() + ": ")
-			} else {
-				a.lgr.SetPrefix("")
-			}
-			a.lgr.Fatalln(err.Error())
-		}
-
-		// mysql options
-		if a.mysqlOpts != nil {
-			mysqlOptB, err = ptoml.Marshal(*a.mysqlOpts)
-		}
-
-		// err
-		if err != nil {
-			a.lgr.SetFlags(0)
-			if a.TaskType() != "" {
-				a.lgr.SetPrefix(a.TaskType() + ": ")
-			} else {
-				a.lgr.SetPrefix("")
-			}
-			a.lgr.Fatalln(err.Error())
-		}
-
-		fmt.Printf("# '%v' worker options\n", a.TaskType())
-		fmt.Print(string(appOptB))
-		fmt.Print(string(wkrOptB))
-		fmt.Print(string(fileOptB))
-		fmt.Print(string(pgOptB))
-		fmt.Print(string(mysqlOptB))
-
-		os.Exit(0)
-	}
-
-	// configPth required
-	if *configPth == "" && *c == "" {
+	// worker options
+	wkrOptB, err = ptoml.Marshal(*a.wkrOpt)
+	if err != nil {
 		a.lgr.SetFlags(0)
 		if a.TaskType() != "" {
 			a.lgr.SetPrefix(a.TaskType() + ": ")
 		} else {
 			a.lgr.SetPrefix("")
 		}
-		a.lgr.Fatalln("-config (-c) config file path required")
+		a.lgr.Fatalln(err.Error())
 	}
+
+	// file options
+	if a.fileOpts != nil {
+		fileOptB, err = ptoml.Marshal(*a.fileOpts)
+	}
+	if err != nil {
+		a.lgr.SetFlags(0)
+		if a.TaskType() != "" {
+			a.lgr.SetPrefix(a.TaskType() + ": ")
+		} else {
+			a.lgr.SetPrefix("")
+		}
+		a.lgr.Fatalln(err.Error())
+	}
+
+	// postgres options
+	if a.pgOpts != nil {
+		pgOptB, err = ptoml.Marshal(*a.pgOpts)
+	}
+	if err != nil {
+		a.lgr.SetFlags(0)
+		if a.TaskType() != "" {
+			a.lgr.SetPrefix(a.TaskType() + ": ")
+		} else {
+			a.lgr.SetPrefix("")
+		}
+		a.lgr.Fatalln(err.Error())
+	}
+
+	// mysql options
+	if a.mysqlOpts != nil {
+		mysqlOptB, err = ptoml.Marshal(*a.mysqlOpts)
+	}
+
+	// err
+	if err != nil {
+		a.lgr.SetFlags(0)
+		if a.TaskType() != "" {
+			a.lgr.SetPrefix(a.TaskType() + ": ")
+		} else {
+			a.lgr.SetPrefix("")
+		}
+		a.lgr.Fatalln(err.Error())
+	}
+
+	fmt.Printf("# '%v' worker options\n", a.TaskType())
+	fmt.Print(string(appOptB))
+	fmt.Print(string(wkrOptB))
+	fmt.Print(string(fileOptB))
+	fmt.Print(string(pgOptB))
+	fmt.Print(string(mysqlOptB))
+
+	os.Exit(0)
 }
 
 func (a *WorkerApp) loadOptions() error {
@@ -357,6 +345,7 @@ func (a *WorkerApp) Description(description string) *WorkerApp {
 func (a *WorkerApp) FileOpts() *WorkerApp {
 	if a.fileOpts == nil {
 		a.fileOpts = &fileOptions{}
+		a.fileOpts.FileOpt.FileBufPrefix = a.TaskType()
 	}
 	return a
 }
@@ -402,6 +391,9 @@ func (a *WorkerApp) PostgresOpts() *WorkerApp {
 }
 
 func (a *WorkerApp) GetFileOpts() *file.Options {
+	if a.fileOpts == nil {
+		return nil
+	}
 	return &a.fileOpts.FileOpt
 }
 

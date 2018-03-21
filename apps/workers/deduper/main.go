@@ -1,96 +1,79 @@
 package main
 
 import (
-	"flag"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
-	"gopkg.in/BurntSushi/toml.v0"
 )
 
 var (
-	defaultFileTopic = "files"
-	defaultTaskType  = "deduper" // also default consumer topic and channel
+	taskType    = "deduper"
+	description = `Deduper uniques lines of a JSON file based on a set of unique fields. Can read all files from a directory (not recursive)
+and dedup to a single output file.
 
-	confPth = flag.String("config", "config.toml", "file path for toml config file")
+## Info Definition
+worker info string uses a url type format:
 
-	sigChan       = make(chan os.Signal, 1)
-	fileBufPrefix = "deduper_" // tmp file prefix
-	appOpt        *options
-	producer      bus.Producer // special producer instance for file stats
+"{src-path}?{querystring-params}"
+
+Where:
+  * src-path - is a directory or file path of file(s) to dedup.
+  
+  * querystring-params can be:
+    - dest-template - deduped file destination and supports the following template tags:
+        {SRC_FILE} (only available if deduping from a single file)
+        {YYYY} (year - four digits: ie 2017)
+        {YY}   (year - two digits: ie 17)
+        {MM}   (month - two digits: ie 12)
+        {DD}   (day - two digits: ie 13)
+        {HH}   (hour - two digits: ie 00)
+        {TS}   (timestamp in the format 20060102T150405)
+        {SLUG} (alias of HOUR_SLUG)
+        {HOUR_SLUG} (date hour slug, shorthand for {YYYY}/{MM}/{DD}/{HH})
+        {DAY_SLUG} (date day slug, shorthand for {YYYY}/{MM}/{DD})
+        {MONTH_SLUG} (date month slug, shorthand for {YYYY}/{MM})
+        
+    - fields - json or csv comma-separated field keys
+    - sep - indicate CSV type file separator. If Sep is not provided then records are assumed to be json.
+	- use-file-buffer - set to 'true' if file processing should use a file buffer instead of memory
+
+Example:
+
+ // json example
+ s3://bucket/path/to/file.json?fields=f1,f2&dest-template=/usr/bin/output.json
+
+ // csv example
+ s3://bucket/path/to/file.json?fields=f1,f2&dest-template=/usr/bin/output.json&sep=,
+ 
+ Query string params:
+ - fields (field combination that makes a record unique)
+ - dest-template
+ - sep (optional - csv separator for csv files) 
+`
+
+	appOpt = &options{
+		FileTopic: "files", // default
+	}
+	fOpt        *file.Options
+	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 )
 
 func main() {
-	if err := loadOptions(); err != nil {
-		log.Fatal(err)
+	app := bootstrap.NewWorkerApp(taskType, newWorker, appOpt).
+		Version(tools.String()).
+		Description(description).
+		FileOpts()
+	app.Initialize()
+	if appOpt.FileTopic != "-" {
+		producer = app.NewProducer()
 	}
-
-	if err := run(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func run() (err error) {
-	// signal handling - capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// producer
-	busOpt := cloneBusOpts(*appOpt.Options)
-	if appOpt.FileTopic == "" || appOpt.FileTopic == "-" {
-		busOpt.Bus = "nop" // disable producing
-	}
-	if producer, err = bus.NewProducer(&busOpt); err != nil {
-		return err
-	}
-
-	// launcher
-	l, err := task.NewLauncher(newWorker, appOpt.LauncherOptions, appOpt.Options)
-	if err != nil {
-		return err
-	}
-	done, cncl := l.DoTasks()
-
-	select {
-	case <-sigChan:
-		cncl() // cancel launcher
-		<-done.Done()
-	case <-done.Done():
-	}
-	return nil
-}
-
-func cloneBusOpts(opt bus.Options) bus.Options { return opt }
-
-func newOptions() *options {
-	return &options{
-		Options:         bus.NewOptions(""),
-		LauncherOptions: task.NewLauncherOptions(defaultTaskType),
-	}
+	fOpt = app.GetFileOpts()
+	app.Run()
 }
 
 type options struct {
-	*bus.Options
-	*task.LauncherOptions
-
-	FileTopic     string `toml:"file_topic"`      // topic with file stats (default=files but can be turned off by setting it to "-")
-	FileBufferDir string `toml:"file_buffer_dir"` // if using a file buffer, use this base directory
-	AWSAccessKey  string `toml:"aws_access_key"`  // required for s3 usage
-	AWSSecretKey  string `toml:"aws_secret_key"`  // required for s3 usage
+	FileTopic string `toml:"file_topic" commented:"true" comment:"topic to publish written file stats"` // topic to publish information about written files
 }
 
-func loadOptions() error {
-	flag.Parse()
-
-	appOpt = newOptions()
-	appOpt.FileTopic = defaultFileTopic
-	appOpt.InTopic = defaultTaskType
-	appOpt.InChannel = defaultTaskType
-
-	_, err := toml.DecodeFile(*confPth, appOpt)
-
-	return err
-}
+func (o *options) Validate() error { return nil }

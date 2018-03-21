@@ -73,12 +73,12 @@ func newWorker(info string) task.Worker {
 	}
 
 	// file opts
-	fOpt := file.NewOptions()
-	fOpt.UseFileBuf = iOpt.UseFileBuffer
-	fOpt.FileBufDir = appOpt.FileBufferDir
-	fOpt.FileBufPrefix = fileBufPrefix
-	fOpt.AWSAccessKey = appOpt.AWSAccessKey
-	fOpt.AWSSecretKey = appOpt.AWSSecretKey
+	wfOpt := file.NewOptions()
+	wfOpt.UseFileBuf = iOpt.UseFileBuffer
+	wfOpt.FileBufDir = fOpt.FileBufDir
+	wfOpt.FileBufPrefix = fOpt.FileBufPrefix
+	wfOpt.AWSAccessKey = fOpt.AWSAccessKey
+	wfOpt.AWSSecretKey = fOpt.AWSSecretKey
 
 	// all paths (if pth is directory)
 	fSts, _ := file.List(iOpt.SrcPath, fOpt)

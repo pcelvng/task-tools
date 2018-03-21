@@ -60,7 +60,7 @@ func (i *infoOptions) validate() error {
 	return nil
 }
 
-func MakeWorker(info string) task.Worker {
+func newWorker(info string) task.Worker {
 	iOpt, _ := newInfoOptions(info)
 
 	// validate
@@ -87,15 +87,15 @@ func MakeWorker(info string) task.Worker {
 	}
 
 	// file opts
-	fOpt := file.NewOptions()
-	fOpt.UseFileBuf = iOpt.UseFileBuffer
-	fOpt.FileBufDir = appOpt.FileBufferDir
-	fOpt.FileBufPrefix = fileBufPrefix
-	fOpt.AWSAccessKey = appOpt.AWSAccessKey
-	fOpt.AWSSecretKey = appOpt.AWSSecretKey
+	wfOpt := file.NewOptions()
+	wfOpt.UseFileBuf = iOpt.UseFileBuffer
+	wfOpt.FileBufDir = fOpt.FileBufDir
+	wfOpt.FileBufPrefix = fOpt.FileBufPrefix
+	wfOpt.AWSAccessKey = fOpt.AWSAccessKey
+	wfOpt.AWSSecretKey = fOpt.AWSSecretKey
 
 	// all paths (if pth is directory)
-	fSts, _ := file.List(iOpt.SrcPath, fOpt)
+	fSts, _ := file.List(iOpt.SrcPath, wfOpt)
 
 	// path not directory - assume just one file
 	if len(fSts) == 0 {
@@ -105,10 +105,10 @@ func MakeWorker(info string) task.Worker {
 	}
 
 	// reader(s)
-	stsRdrs := make([]*StatsReader, 0)
+	stsRdrs := make([]*statsReader, 0)
 	for _, sts := range fSts {
-		sr := &StatsReader{sts: &sts}
-		sr.r, err = file.NewReader(sts.Path, fOpt)
+		sr := &statsReader{sts: &sts}
+		sr.r, err = file.NewReader(sts.Path, wfOpt)
 		if err != nil {
 			return task.InvalidWorker(err.Error())
 		}
@@ -119,32 +119,32 @@ func MakeWorker(info string) task.Worker {
 	destTempl := parseTmpl(iOpt.SrcPath, iOpt.DestTemplate)
 
 	// writer
-	w := file.NewWriteByHour(destTempl, fOpt)
+	w := file.NewWriteByHour(destTempl, wfOpt)
 
-	return &Worker{
+	return &worker{
 		iOpt:        *iOpt,
-		fOpt:        *fOpt,
+		fOpt:        *wfOpt,
 		stsRdrs:     stsRdrs,
 		w:           w,
 		extractDate: extractor,
 	}
 }
 
-type StatsReader struct {
+type statsReader struct {
 	sts *stat.Stats
 	r   file.Reader
 }
 
-type Worker struct {
+type worker struct {
 	iOpt         infoOptions
 	fOpt         file.Options
-	stsRdrs      []*StatsReader
+	stsRdrs      []*statsReader
 	w            *file.WriteByHour
 	extractDate  file.DateExtractor
 	discardedCnt int64 // number of records discarded
 }
 
-func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
+func (wkr *worker) DoTask(ctx context.Context) (task.Result, string) {
 	// read/write loop
 	for _, rdr := range wkr.stsRdrs { // loop through all readers
 		sts := rdr.sts
@@ -178,7 +178,7 @@ func (wkr *Worker) DoTask(ctx context.Context) (task.Result, string) {
 // -extracts date from ln
 // -handles discarding
 // -does WriteByHour write
-func (wkr *Worker) writeLine(ln []byte) error {
+func (wkr *worker) writeLine(ln []byte) error {
 	if len(ln) == 0 {
 		return nil
 	}
@@ -205,7 +205,7 @@ func (wkr *Worker) writeLine(ln []byte) error {
 
 // abort will abort processing by closing the
 // reading and then cleaning up written records.
-func (wkr *Worker) abort(msg string) (task.Result, string) {
+func (wkr *worker) abort(msg string) (task.Result, string) {
 	for _, rdr := range wkr.stsRdrs {
 		rdr.r.Close()
 	}
@@ -218,7 +218,7 @@ func (wkr *Worker) abort(msg string) (task.Result, string) {
 // writes and return a task response. Will also
 // handle sending created files messages on the
 // producer.
-func (wkr *Worker) done(ctx context.Context) (task.Result, string) {
+func (wkr *worker) done(ctx context.Context) (task.Result, string) {
 	// close
 	for _, rdr := range wkr.stsRdrs {
 		rdr.r.Close()

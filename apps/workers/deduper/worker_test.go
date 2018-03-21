@@ -14,6 +14,12 @@ import (
 	"github.com/pcelvng/task/bus"
 )
 
+func TestMain(m *testing.M) {
+	appOpt = &options{}
+	fOpt = file.NewOptions()
+	os.Exit(m.Run())
+}
+
 func TestNewWorker(t *testing.T) {
 	// setup
 	os.Mkdir("./test", 0700)
@@ -179,7 +185,7 @@ func TestNewWorker(t *testing.T) {
 	scenarios := []scenario{
 		// scenario 1: single file input deduping file lines
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           `./test/1/dups.json?dest-template=./test/1/dedup.json&fields=f1,f2`,
 			expectedResult: task.CompleteResult,
@@ -188,7 +194,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 2: multiple input files deduping across files
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           `./test/2?dest-template=./test/2/dedup/dedup.json&fields=f1`,
 			expectedResult: task.CompleteResult,
@@ -197,7 +203,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 3: lines over-writing in the correct file order - by file ts date
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           `./test/3/?dest-template=./test/3/dedup/dedup.json&fields=f1,f2`,
 			expectedResult: task.CompleteResult,
@@ -206,7 +212,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 4: lines over-writing in the correct file order - by file created date
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       fileProducer,
 			info:           `./test/4?dest-template=./test/4/dedup/dedup.json&fields=f1,f2`,
 			expectedResult: task.CompleteResult,
@@ -215,7 +221,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 5: csv - tab separated
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           "./test/5/dups-20160101T000000.csv?dest-template=./test/5/dedup/dedup.csv&sep=\t&fields=0,1",
 			expectedResult: task.CompleteResult,
@@ -224,7 +230,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 6: csv -multiple input files deduping across files
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           "./test/6?dest-template=./test/6/dedup/dedup.csv&fields=0&sep=,",
 			expectedResult: task.CompleteResult,
@@ -233,7 +239,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 7: ts from hour slug in src dir
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           "./test/7/2017/01/02/03/test.json?dest-template=./test/7/{HOUR_SLUG}/{TS}.json&fields=f1&",
 			expectedResult: task.CompleteResult,
@@ -242,7 +248,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 8: ts from day slug in src dir
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           "./test/8/2017/01/02/test.json?dest-template=./test/8/{DAY_SLUG}/{TS}.json&fields=f1&",
 			expectedResult: task.CompleteResult,
@@ -251,7 +257,7 @@ func TestNewWorker(t *testing.T) {
 
 		// scenario 9: ts from month slug in src dir
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			info:           "./test/9/2017/01/test.json?dest-template=./test/9/{MONTH_SLUG}/{TS}.json&fields=f1&",
 			expectedResult: task.CompleteResult,
@@ -352,7 +358,7 @@ func TestNewWorker_Err(t *testing.T) {
 	scenarios := []scenario{
 		// scenario 1: bad info (no fields)
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           ``,
@@ -362,7 +368,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 2: bad info (no dest-template)
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           `?fields=f1`,
@@ -372,7 +378,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 3: bad info (bad sep fields)
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           `?fields=f1&dest-template=./test/test.json&sep=,`,
@@ -382,7 +388,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 4: empty src dir
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           "./test/empty_dir/?fields=0&dest-template=./test/test.json&sep=,",
@@ -392,7 +398,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 5: file does not exist
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           "./test/doesnotexist.json?fields=0&dest-template=./test/test.json&sep=,",
@@ -402,7 +408,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 6: trouble reading file
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           "nop://readline_err/test.json?fields=f1&dest-template=./test/test.json",
@@ -412,7 +418,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 7: cancelled by context
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            cnclCtx, // already cancelled
 			info:           "./test/test.json?fields=f1&dest-template=./test/output.json",
@@ -422,7 +428,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 8: err closing writer
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           "./test/test.json?fields=f1&dest-template=nop://close_err/test.json",
@@ -432,7 +438,7 @@ func TestNewWorker_Err(t *testing.T) {
 
 		// scenario 9: err writer init
 		{
-			appOpt:         newOptions(),
+			appOpt:         &options{},
 			producer:       nopProducer,
 			ctx:            context.Background(),
 			info:           "./test/test.json?fields=f1&dest-template=nop://init_err/test.json",
