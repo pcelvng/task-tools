@@ -10,21 +10,28 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = nop sort2file deduper
+APPS = backloader crontask files retry file-watcher nop sort2file deduper
 all: $(APPS)
 
-$(BLDDIR)/nop:         $(wildcard apps/workers/nop/*.go)
-$(BLDDIR)/sort2file:   $(wildcard apps/workers/sort2file/*.go)
-$(BLDDIR)/deduper:     $(wildcard apps/workers/deduper/*.go)
+$(BLDDIR)/backloader:     $(wildcard apps/taskmasters/backloader/*.go)
+$(BLDDIR)/crontask:       $(wildcard apps/taskmasters/crontask/*.go)
+$(BLDDIR)/files:          $(wildcard apps/taskmasters/files/*.go)
+$(BLDDIR)/retry:          $(wildcard apps/taskmasters/retry/*.go)
 
-$(BLDDIR)/%:
+$(BLDDIR)/file-watcher:   $(wildcard apps/utils/file-watcher/*.go)
+
+$(BLDDIR)/nop:            $(wildcard apps/workers/nop/*.go)
+$(BLDDIR)/sort2file:      $(wildcard apps/workers/sort2file/*.go)
+$(BLDDIR)/deduper:        $(wildcard apps/workers/deduper/*.go)
+
+$(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
 	go build ${GOFLAGS} -o $@ ./apps/*/$*
 
 $(APPS): %: $(BLDDIR)/%
 
 clean:
-	rm -fr $(BLDDIR)
+	rm -rf $(BLDDIR)
 
 .PHONY: install clean all
 .PHONY: $(APPS)
