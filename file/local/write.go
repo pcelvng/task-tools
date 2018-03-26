@@ -96,6 +96,14 @@ func (w *Writer) Stats() stat.Stats {
 // - clear and close buffer
 // - prevent further writing
 func (w *Writer) Abort() error {
+	// remove the destination path if
+	// zero bytes.
+	fInfo, _ := os.Lstat(w.Stats().Path)
+	if fInfo != nil {
+		if fInfo.Size() == 0 {
+			os.Remove(w.Stats().Path)
+		}
+	}
 	return w.bfr.Abort()
 }
 
