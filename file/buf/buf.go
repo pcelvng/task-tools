@@ -239,6 +239,13 @@ func (bfr *Buffer) Cleanup() (err error) {
 func (bfr *Buffer) Close() (err error) {
 	// flush gzip writer (if exists)
 	if bfr.wGzip != nil {
+		// if zero bytes written then add an empty line
+		// so that a header is created. This behavior
+		// matches gzipping a blank file from the command
+		// line.
+		if bfr.Stats().ByteCnt == 0 {
+			bfr.Write([]byte("\n"))
+		}
 		err = bfr.wGzip.Close()
 	}
 
