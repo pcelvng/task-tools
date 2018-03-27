@@ -108,7 +108,9 @@ func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, 
 
 	// begin
 	started := time.Now()
-	tx, err := l.sqlDB.BeginTx(ctx, nil)
+
+	// Serializable transaction level is required for idempotent batch loading.
+	tx, err := l.sqlDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return sts, err
 	}
