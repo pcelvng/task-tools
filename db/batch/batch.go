@@ -115,10 +115,6 @@ func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, 
 		return sts, err
 	}
 
-	// set serializable: the postgres driver does not support the standard
-	// sql.LevelSerializable config
-	tx.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;")
-
 	// prepare ins stmt
 	insStmt, err := tx.PrepareContext(ctx, insQ)
 	if err != nil {
