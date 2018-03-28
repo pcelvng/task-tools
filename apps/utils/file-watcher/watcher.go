@@ -95,22 +95,17 @@ func (w *watcher) runWatch() (err error) {
 
 	for ; ; time.Sleep(d) {
 		// update the files and cache and run the watchers rules
-		today := chron.ThisHour()
-		nowPath := tmpl.Parse(w.rule.PathTemplate, today.AsTime())
-		lookbackPaths := getLookbackPaths(w.rule.PathTemplate, today, w.lookback)
+		currentHour := chron.ThisHour()
+		lookbackFiles := getPaths(w.rule.PathTemplate, currentHour, w.lookback)
 
-		nowFiles := w.process(cache, nowPath)
-		lookbackFiles := w.process(cache, lookbackPaths...)
-
-		// set the cache to the current file listings
-		cache = buildNewCache(nowFiles, lookbackFiles)
+		// send the new files, re cache those new files
+		cache = w.process(cache, lookbackFiles...)
 	}
 }
 
 // get the current files for the request path(s)
 // compare those files with the current cache for this watcher
 // find any new files not listed in the cache and send to the Bus
-// for each of the new files
 func (w *watcher) process(currentCache fileList, path ...string) (currentFiles fileList) {
 	currentFiles = w.currentFiles(path...)
 	newFiles := compareFileList(currentCache, currentFiles)
@@ -119,15 +114,16 @@ func (w *watcher) process(currentCache fileList, path ...string) (currentFiles f
 	return currentFiles
 }
 
-// get the unique lookback paths to check for all paths in the lookback time frame
-func getLookbackPaths(pathTmpl string, start chron.Hour, lookback int) []string {
+// get the unique paths, check for all paths for each of the lookback hours
+func getPaths(pathTmpl string, start chron.Hour, lookback int) []string {
 	paths := make([]string, 0)
 	uniquePaths := make(map[string]interface{})
 	// iterate over each hour setting up the path for that hour
 	// this is where you could get duplicates if there isn't an hour or day granularity
-	for h := 1; h <= lookback; h++ {
+	for h := 0; h <= lookback; h++ {
 		// each hour is back in time, so h * -1 hours backward
-		path := tmpl.Parse(pathTmpl, start.AddHours(h*-1).AsTime())
+		hourCheck := start.AddHours(h * -1).AsTime()
+		path := tmpl.Parse(pathTmpl, hourCheck)
 		uniquePaths[path] = nil
 	}
 
@@ -156,17 +152,6 @@ func (w watcher) currentFiles(paths ...string) fileList {
 	}
 
 	return fileList
-}
-
-// buildNewCache takes all the file lists and combines them into one new cache
-func buildNewCache(fileLists ...fileList) (newCache fileList) {
-	newCache = make(fileList)
-	for _, list := range fileLists {
-		for f, s := range list {
-			newCache[f] = s
-		}
-	}
-	return newCache
 }
 
 // SendFiles uses the watcher producer to send to the current Bus
