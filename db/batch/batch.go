@@ -110,10 +110,14 @@ func (l *BatchLoader) doTx(ctx context.Context, numRows, numBatches, batchSize, 
 	started := time.Now()
 
 	// Serializable transaction level is required for idempotent batch loading.
-	tx, err := l.sqlDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	tx, err := l.sqlDB.BeginTx(ctx, nil)
 	if err != nil {
 		return sts, err
 	}
+
+	// set serializable: the postgres driver does not support the standard
+	// sql.LevelSerializable config
+	tx.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;")
 
 	// prepare ins stmt
 	insStmt, err := tx.PrepareContext(ctx, insQ)
