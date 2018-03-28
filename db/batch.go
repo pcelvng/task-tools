@@ -55,8 +55,11 @@ type BatchLoader interface {
 }
 
 // MySQL is a convenience initializer to obtain a MySQL DB connection.
+//
+// Note that this connection will set the default transaction isolation level to
+// 'serializable' to enforce more true atomic batch loading.
 func MySQL(un, pass, host, dbName string) (*sql.DB, error) {
-	connStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", un, pass, host, dbName)
+	connStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&tx_isolation=serializable", un, pass, host, dbName)
 	dbConn, err := sql.Open("mysql", connStr)
 	if err != nil {
 		return nil, err
@@ -71,6 +74,9 @@ func MySQL(un, pass, host, dbName string) (*sql.DB, error) {
 }
 
 // Postgres is a convenience initializer to obtain a Postgres DB connection.
+//
+// Note that this connection will set the default transaction isolation level to
+// 'serializable' to enforce more true atomic batch loading.
 func Postgres(un, pass, host, dbName string) (*sql.DB, error) {
 	if dbName == "" {
 		return nil, errors.New("postgres dbname is required")
@@ -83,7 +89,7 @@ func Postgres(un, pass, host, dbName string) (*sql.DB, error) {
 	}
 
 	//connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=disable", un, pass, host, dbName)
-	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", un, pass, host, dbName)
+	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable&default_transaction_isolation=serializable", un, pass, host, dbName)
 	dbConn, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
