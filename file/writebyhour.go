@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
-
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -69,7 +68,7 @@ func (w *WriteByHour) WriteLine(ln []byte, t time.Time) (err error) {
 	if !found {
 		// create
 		var err error
-		writer, err = NewWriter(pth, nil)
+		writer, err = NewWriter(pth, w.opt)
 		if err != nil {
 			return err
 		}
