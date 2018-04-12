@@ -135,7 +135,7 @@ func getPaths(pathTmpl string, start chron.Hour, lookback int) []string {
 
 // currentFiles retrieves the current files from the directory path(s)
 func (w watcher) currentFiles(paths ...string) fileList {
-	fileList := make(map[string]*stat.Stats)
+	fileList := make(fileList)
 	for _, p := range paths {
 		list, err := file.List(p, &file.Options{
 			AWSAccessKey: w.appOpt.AWSAccessKey,
@@ -167,14 +167,21 @@ func (w *watcher) sendFiles(files fileList) {
 
 // CompareFileList will check the keys of each of the FileList maps
 // if any entries are not listed in the cache a new list will
-// be returned with the missing entries
-func compareFileList(cache, current fileList) (newFiles fileList) {
+// be returned with the missing or changed entries
+func compareFileList(cache, new fileList) (newFiles fileList) {
 	newFiles = make(fileList)
-	for k, v := range current {
-		if _, found := cache[k]; !found {
-			newFiles[k] = v
+	for n, v := range new {
+		// if the file was not found in the cache, and the size is not zero
+		// add it to the list of new files
+		c, found := cache[n]
+		if !found && (v.Size > 0 || len(v.Created) > 0) {
+			newFiles[n] = v
+		}
+		// if the file was found in the cache, but the created date is different
+		// or the size is different add it to the list of new files
+		if found && (c.Created != v.Created || c.Size != v.Size) {
+			newFiles[n] = v
 		}
 	}
-
 	return newFiles
 }

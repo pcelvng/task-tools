@@ -35,22 +35,21 @@ var (
 )
 
 func main() {
-	var err error
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// app options
-	appOpt, err = loadAppOptions()
-	if err != nil {
-		log.Fatalf("config: '%v'\n", err.Error())
-	}
-
 	if err := run(); err != nil {
 		log.Fatalln(err)
 	}
 }
 
 func run() (err error) {
+	// signal handling - be ready to capture signal early.
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+	// app options
+	appOpt, err = loadAppOptions()
+	if err != nil {
+		return err
+	}
+
 	watchers, err := newWatchers(appOpt)
 	if err != nil {
 		return err
