@@ -88,7 +88,7 @@ type options struct {
 	Start time.Time // start of backload
 	End   time.Time // end of backload
 
-	Topic        string // topic override (uses 'TaskType' if not provided)
+	Topic        string // topic override (uses 'AppName' if not provided)
 	TaskType     string
 	TaskTemplate string
 
@@ -186,7 +186,7 @@ func (c *options) dateRangeStrings(start, end string) error {
 }
 
 func (c *options) validate() error {
-	// TaskType is required
+	// AppName is required
 	if c.TaskType == "" {
 		return errors.New("flag '-type' or '-t' required")
 	}

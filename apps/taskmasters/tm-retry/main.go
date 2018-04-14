@@ -82,7 +82,7 @@ type RetryRule struct {
 	TaskType string   `toml:"type"`
 	Retries  int      `toml:"retry"`
 	Wait     duration `toml:"wait"`  // duration to wait before creating and sending new task
-	Topic    string   `toml:"topic"` // topic override (default is TaskType value)
+	Topic    string   `toml:"topic"` // topic override (default is AppName value)
 }
 
 type duration struct {

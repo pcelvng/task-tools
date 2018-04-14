@@ -10,13 +10,14 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = backloader crontask files retry filewatcher nop sort2file deduper
+APPS = tm-backloader tm-crontask tm-files tm-http tm-retry filewatcher nop sort2file deduper
 all: $(APPS)
 
-$(BLDDIR)/backloader:     $(wildcard apps/taskmasters/backloader/*.go)
-$(BLDDIR)/crontask:       $(wildcard apps/taskmasters/crontask/*.go)
-$(BLDDIR)/files:          $(wildcard apps/taskmasters/files/*.go)
-$(BLDDIR)/retry:          $(wildcard apps/taskmasters/retry/*.go)
+$(BLDDIR)/tm-backloader:     $(wildcard apps/taskmasters/tm-backloader/*.go)
+$(BLDDIR)/tm-crontask:       $(wildcard apps/taskmasters/tm-crontask/*.go)
+$(BLDDIR)/tm-files:          $(wildcard apps/taskmasters/tm-files/*.go)
+$(BLDDIR)/tm-http:          $(wildcard apps/taskmasters/tm-http/*.go)
+$(BLDDIR)/tm-retry:          $(wildcard apps/taskmasters/tm-retry/*.go)
 
 $(BLDDIR)/filewatcher:   $(wildcard apps/utils/filewatcher/*.go)
 
