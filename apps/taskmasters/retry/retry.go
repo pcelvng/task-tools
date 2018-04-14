@@ -163,8 +163,17 @@ func (r *retryer) applyRule(tsk *task.Task) {
 		if cnt < rule.Retries {
 			r.retryCache[key] = cnt + 1
 			go r.doRetry(tsk, rule)
+		} else {
+			// produce to 'retry-failed' topic (optional but 'retry-failed' by default)
+			if r.conf.RetryFailedTopic != "-" {
+				err := r.producer.Send(r.conf.RetryFailedTopic, tsk.JSONBytes())
+				if err != nil {
+					log.Println(err.Error())
+				}
+			}
 		}
 	} else if cnt > 0 {
+		// retry successful - now remove the cache
 		delete(r.retryCache, key)
 	}
 }
@@ -183,9 +192,18 @@ func (r *retryer) doRetry(tsk *task.Task, rule *RetryRule) {
 		topic = rule.Topic
 	}
 
+	// produce to task topic
 	err := r.producer.Send(topic, nTsk.JSONBytes())
 	if err != nil {
 		log.Println(err.Error())
+	}
+
+	// produce to 'retried' topic (optional but 'retried' by default
+	if r.conf.RetriedTopic != "-" {
+		err = r.producer.Send(r.conf.RetriedTopic, nTsk.JSONBytes())
+		if err != nil {
+			log.Println(err.Error())
+		}
 	}
 }
 
