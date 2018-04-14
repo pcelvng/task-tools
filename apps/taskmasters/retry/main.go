@@ -56,9 +56,11 @@ var (
 
 func newOptions() *options {
 	return &options{
-		Options:     bus.NewOptions(""),
-		DoneTopic:   defaultDoneTopic,
-		DoneChannel: defaultDoneChannel,
+		Options:          bus.NewOptions(""),
+		DoneTopic:        defaultDoneTopic,
+		DoneChannel:      defaultDoneChannel,
+		RetriedTopic:     "retried",
+		RetryFailedTopic: "retry-failed",
 	}
 }
 
@@ -67,8 +69,10 @@ type options struct {
 
 	// topic and channel to listen to
 	// done tasks for retry review.
-	DoneTopic   string `toml:"done_topic"`
-	DoneChannel string `toml:"done_channel"`
+	DoneTopic        string `toml:"done_topic"`
+	DoneChannel      string `toml:"done_channel"`
+	RetriedTopic     string `toml:"retried_topic"`      // all retries published to this topic (disable with "-" value)
+	RetryFailedTopic string `toml:"retry_failed_topic"` // all failures (retried and failed) published to this topic
 
 	// retry rules
 	RetryRules []*RetryRule `toml:"rule"`

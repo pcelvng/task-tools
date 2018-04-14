@@ -1,8 +1,8 @@
 bus = "" # "" (stdio), "stdio", "file", "nsq"
 done_topic = "done"
 done_channel = "retry"
-#in_file = "./in.tsks.json" # file bus
-#out_file = "./out.tsks.json" # file bus
+retried_topic = "retried" # publishes all retry tasks (disable with "-")
+retry_failed_topic = "retry-failed" # publishes tasks that ultimately exceeded the retry count (disable with "-")
 #nsqd_hosts = ["localhost:4150"] # nsq bus; tcp port
 #lookupd_hosts = ["localhost:4161"] # nsq bus; http port
 
