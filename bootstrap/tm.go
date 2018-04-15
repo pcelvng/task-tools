@@ -1,8 +1,8 @@
 package bootstrap
 
 import (
+	"context"
 	"database/sql"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"reflect"
 	"syscall"
+	"time"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
@@ -20,7 +21,7 @@ import (
 )
 
 type Runner interface {
-	Run() error
+	Run(context.Context) error
 }
 
 // NewTMApp will create a new taskmaster bootstrap application.
@@ -85,16 +86,16 @@ func (a *TMApp) Initialize() {
 	a.handleFlags()
 
 	// options
-	err := a.loadOptions()
-	if err != nil {
-		a.logFatal(err)
-	}
+	//err := a.loadOptions()
+	//if err != nil {
+	//	a.logFatal(err)
+	//}
 
 	// validate WorkerApp options
-	err = a.appOpt.Validate()
-	if err != nil {
-		a.logFatal(err)
-	}
+	//err = a.appOpt.Validate()
+	//if err != nil {
+	//	a.logFatal(err)
+	//}
 }
 
 func (a *TMApp) setHelpOutput() {
@@ -135,9 +136,9 @@ func (a *TMApp) handleFlags() {
 	}
 
 	// configPth required
-	if *configPth == "" && *c == "" {
-		a.logFatal(errors.New("-config (-c) config file path required"))
-	}
+	//if *configPth == "" && *c == "" {
+	//	a.logFatal(errors.New("-config (-c) config file path required"))
+	//}
 }
 
 func (a *TMApp) showVersion() {
@@ -295,9 +296,29 @@ func (a *TMApp) loadOptions() error {
 // Run will run until the application is complete
 // and then exit.
 func (a *TMApp) Run() {
-	if err := a.runner.Run(); err != nil {
-		a.logFatal(err)
+	ctx, cncl := context.WithCancel(context.Background())
+	a.Log("taskmaster running")
+	done := make(chan error)
+	go func() {
+		done <- a.runner.Run(ctx)
+	}()
+
+	select {
+	case <-sigChan:
+		cncl()
+
+		// wait up to x seconds and close
+		tckr := time.NewTicker(time.Second * 2)
+		select {
+		case <-tckr.C:
+		case <-done:
+		}
+	case err := <-done:
+		if err != nil {
+			a.logFatal(err)
+		}
 	}
+
 	os.Exit(0)
 }
 

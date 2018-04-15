@@ -8,8 +8,7 @@ import (
 
 var (
 	appName     = "tm-http"
-	description = `The http taskmaster creates tasks in response to http REST requests that describe the 
-task that needs to be created.
+	description = `The http taskmaster creates tasks in response to http REST requests.
 
 Useful for launching one-off and batches of tasks over http.
 `
