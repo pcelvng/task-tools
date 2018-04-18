@@ -47,8 +47,8 @@ type prepare struct {
 }
 
 type data struct {
-	index    int
-	nullable bool
+	Index    int
+	Nullable bool
 }
 
 // prep prepares a struct for database insertion. Will return nil if a non-struct is received
@@ -125,8 +125,8 @@ func (p *prepare) values(i interface{}, cols ...string) (args []interface{}) {
 	for _, col := range cols {
 		d, found := p.lookup[col]
 		if found {
-			v := vStruct.Field(d.index).Interface()
-			if d.nullable && isZero(v) {
+			v := vStruct.Field(d.Index).Interface()
+			if d.Nullable && isZero(v) {
 				v = nil
 			}
 			args = append(args, v)

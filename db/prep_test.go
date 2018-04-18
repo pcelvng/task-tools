@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 		msg       string
 		v         interface{}
 		shouldErr bool
-		expected  map[string]int
+		expected  map[string]data
 	}{
 		{
 			msg:       "no struct",
@@ -22,12 +22,12 @@ func TestNew(t *testing.T) {
 		{
 			msg:      "pointer struct",
 			v:        &testStruct{},
-			expected: map[string]int{"Name": 0, "Int1": 1, "count": 4},
+			expected: map[string]data{"Name": data{Index: 0}, "Int1": data{Index: 1}, "count": data{Index: 4}},
 		},
 		{
 			msg:      "normal struct",
 			v:        &testStruct{},
-			expected: map[string]int{"Name": 0, "Int1": 1, "count": 4},
+			expected: map[string]data{"Name": data{Index: 0}, "Int1": data{Index: 1}, "count": data{Index: 4}},
 		},
 	}
 	for _, test := range cases {
