@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 		msg       string
 		v         interface{}
 		shouldErr bool
-		expected  map[string]int
+		expected  map[string]data
 	}{
 		{
 			msg:       "no struct",
@@ -22,12 +22,12 @@ func TestNew(t *testing.T) {
 		{
 			msg:      "pointer struct",
 			v:        &testStruct{},
-			expected: map[string]int{"Name": 0, "Int1": 1, "count": 4},
+			expected: map[string]data{"Name": data{Index: 0}, "Int1": data{Index: 1}, "count": data{Index: 4}},
 		},
 		{
 			msg:      "normal struct",
 			v:        &testStruct{},
-			expected: map[string]int{"Name": 0, "Int1": 1, "count": 4},
+			expected: map[string]data{"Name": data{Index: 0}, "Int1": data{Index: 1}, "count": data{Index: 4}},
 		},
 	}
 	for _, test := range cases {
@@ -80,6 +80,7 @@ func TestPrepare_CheckColumns(t *testing.T) {
 		}
 	}
 }
+
 func TestPrepare_Row(t *testing.T) {
 	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Values(testStruct{
 		Name: "Hello world",
@@ -92,6 +93,19 @@ func TestPrepare_Row(t *testing.T) {
 		Int1: 10,
 		Int4: 42,
 	}, "Name", "count", "Int1"))
+
+	assert.Equal(t, []interface{}{nil, "hello"}, Values(struct {
+		Int    int    `db:"int,nullzero"`
+		String string `db:"string,nullzero"`
+	}{
+		Int:    0,
+		String: "hello",
+	}, "int", "string"))
+
+	assert.Equal(t, []interface{}{nil}, Values(struct {
+		String string `db:"string,nullzero"`
+	}{}, "string"))
+
 }
 
 func BenchmarkPrepare_RowSmall(b *testing.B) {
