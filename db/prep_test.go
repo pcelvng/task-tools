@@ -80,6 +80,7 @@ func TestPrepare_CheckColumns(t *testing.T) {
 		}
 	}
 }
+
 func TestPrepare_Row(t *testing.T) {
 	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Values(testStruct{
 		Name: "Hello world",
@@ -92,6 +93,19 @@ func TestPrepare_Row(t *testing.T) {
 		Int1: 10,
 		Int4: 42,
 	}, "Name", "count", "Int1"))
+
+	assert.Equal(t, []interface{}{nil, "hello"}, Values(struct {
+		Int    int    `db:"int,nullzero"`
+		String string `db:"string,nullzero"`
+	}{
+		Int:    0,
+		String: "hello",
+	}, "int", "string"))
+
+	assert.Equal(t, []interface{}{nil}, Values(struct {
+		String string `db:"string,nullzero"`
+	}{}, "string"))
+
 }
 
 func BenchmarkPrepare_RowSmall(b *testing.B) {

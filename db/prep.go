@@ -43,7 +43,12 @@ func Values(v interface{}, cols ...string) (row []interface{}) {
 // or if 'db' is set to "-" that field is ignored
 type prepare struct {
 	// lookup is a cache of reflected column names (key) and it's corresponding cardinality - order (value)
-	lookup map[string]int
+	lookup map[string]data
+}
+
+type data struct {
+	index    int
+	nullable bool
 }
 
 // prep prepares a struct for database insertion. Will return nil if a non-struct is received
@@ -51,7 +56,7 @@ type prepare struct {
 // the custom struct has already been prepared.
 func prep(v interface{}) *prepare {
 	p := &prepare{
-		lookup: make(map[string]int),
+		lookup: make(map[string]data),
 	}
 	vStruct := reflect.ValueOf(v)
 	if vStruct.Kind() == reflect.Ptr {
@@ -70,7 +75,10 @@ func prep(v interface{}) *prepare {
 	// 2. Ignore if 'db' tag == "-"
 	// 2. Use 'json' tag value (if exists) as column name
 	for i := 0; i < vStruct.NumField(); i++ {
-		tag := vStruct.Type().Field(i).Tag.Get("db")
+		s := strings.Split(vStruct.Type().Field(i).Tag.Get("db"), ",")
+		tag := s[0]
+		nullzero := len(s) > 1 && s[1] == "nullzero"
+
 		if tag == "-" {
 			continue
 		}
@@ -81,7 +89,7 @@ func prep(v interface{}) *prepare {
 			}
 			tag = strings.Split(tag, ",")[0]
 		}
-		p.lookup[tag] = i
+		p.lookup[tag] = data{i, nullzero}
 	}
 	knownStructs[vStruct.Type()] = p
 	return p
@@ -109,16 +117,25 @@ func (p *prepare) columns() (cols []string) {
 }
 
 // values returns the corresponding row values in same order as cols.
-func (p *prepare) values(v interface{}, cols ...string) (args []interface{}) {
-	vStruct := reflect.ValueOf(v)
+func (p *prepare) values(i interface{}, cols ...string) (args []interface{}) {
+	vStruct := reflect.ValueOf(i)
 	if vStruct.Kind() == reflect.Ptr {
 		vStruct = vStruct.Elem()
 	}
-	for _, v := range cols {
-		i, found := p.lookup[v]
+	for _, col := range cols {
+		d, found := p.lookup[col]
 		if found {
-			args = append(args, vStruct.Field(i).Interface())
+			v := vStruct.Field(d.index).Interface()
+			if d.nullable && isZero(v) {
+				v = nil
+			}
+			args = append(args, v)
 		}
 	}
 	return args
+}
+
+func isZero(i interface{}) bool {
+	z := reflect.Zero(reflect.TypeOf(i))
+	return i == z.Interface()
 }
