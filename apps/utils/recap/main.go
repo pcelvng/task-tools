@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	files   = flag.Bool("files", false, "parse task files stats")
+	files   = flag.Bool("files", false, "parse task files")
 	path    = flag.Bool("path", false, "include file path in breakdown")
 	version = flag.Bool("v", false, "show version")
 )

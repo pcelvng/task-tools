@@ -51,10 +51,16 @@ func (s *durStats) Add(d time.Duration) {
 }
 
 func (s *durStats) Average() time.Duration {
+	if s.count == 0 {
+		return 0
+	}
 	return time.Duration(s.sum/s.count) * percision
 }
 
 func (s durStats) String() string {
+	if s.count == 0 {
+		return ""
+	}
 	return fmt.Sprintf("\tmin: %v max %v avg:%v", s.Min, s.Max, s.Average())
 }
 
@@ -75,6 +81,12 @@ func (stats *taskStats) Add(tsk task.Task) {
 }
 
 func taskTime(tsk task.Task) time.Time {
+	type getTime struct {
+		PathTime pathTime  `uri:"path"`
+		Day      time.Time `uri:"day"`
+		Date     day       `uri:"date"`
+		Hour     time.Time `uri:"hour"`
+	}
 	var t getTime
 	uri.Unmarshal(tsk.Info, &t)
 
@@ -98,12 +110,6 @@ func (p *pathTime) UnmarshalText(b []byte) error {
 	return nil
 }
 
-type getTime struct {
-	PathTime pathTime  `uri:"path"`
-	Day      time.Time `uri:"day"`
-	Date     day       `uri:"date"`
-	Hour     time.Time `uri:"hour"`
-}
 type day time.Time
 
 func (d *day) UnmarshalText(b []byte) error {
@@ -116,6 +122,8 @@ func (d *day) UnmarshalText(b []byte) error {
 
 var regWord = regexp.MustCompile(`^[A-z]*$`)
 
+// rootPath returns the file path without any timestamp data.
+// this can be used to find unique base paths for data organized by date.
 func rootPath(path string, tm time.Time) string {
 	dir, file := filepath.Split(path)
 	slugFound := false
@@ -142,6 +150,7 @@ func rootPath(path string, tm time.Time) string {
 	return path
 }
 
+// printDates takes a slice of times and displays the range of times in a more friendly format.
 func printDates(dates []time.Time) string {
 	tFormat := "2006/01/02T15"
 	if len(dates) == 0 {
