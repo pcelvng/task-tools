@@ -59,7 +59,7 @@ func ExampleNewReaderErrBadObject() {
 
 func ExampleNewReaderErrObjStat() {
 	pth := "s3://does-not/exist.txt"
-	r, err := NewReader(pth, "", "")
+	r, err := NewReader(pth, testAccessKey, testSecretKey)
 
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: The specified bucket does not exist.

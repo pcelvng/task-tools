@@ -19,12 +19,12 @@ func (tf TimeFrame) Validate() error {
 	errs := appenderr.New()
 	for _, v := range tf.OnHours {
 		if v < 0 || v > 23 {
-			errs.Add(fmt.Errorf("on hours %tf invalid", v))
+			errs.Add(fmt.Errorf("on hours %d invalid", v))
 		}
 	}
 	for _, v := range tf.OffHours {
 		if v < 0 || v > 23 {
-			errs.Add(fmt.Errorf("off hours %tf invalid", v))
+			errs.Add(fmt.Errorf("off hours %d invalid", v))
 		}
 	}
 	if tf.Start.IsZero() || tf.End.IsZero() {
@@ -33,19 +33,29 @@ func (tf TimeFrame) Validate() error {
 	return errs.ErrOrNil()
 }
 
-func (tf *TimeFrame) Generate() []time.Time {
+func (tf TimeFrame) Generate() []time.Time {
 	times := make([]time.Time, 0)
 	dur := time.Hour
-	if tf.EveryXHours != 0 {
+	if tf.EveryXHours > 0 {
 		dur = time.Hour * time.Duration(tf.EveryXHours)
 	}
 
 	hours := makeOnHrs(tf.OnHours, tf.OffHours)
-	for t := tf.Start; t.Before(tf.End) || t.Equal(tf.End); t = t.Add(dur) {
+	check := func(t time.Time) bool {
+		return t.Before(tf.End) || t.Equal(tf.End)
+	}
+	if tf.End.Before(tf.Start) {
+		check = func(t time.Time) bool {
+			return t.After(tf.End) || t.Equal(tf.End)
+		}
+		dur *= -1
+	}
+	for t := tf.Start; check(t); t = t.Add(dur) {
 		if hours[t.Hour()] {
 			times = append(times, t)
 		}
 	}
+
 	return times
 }
 
