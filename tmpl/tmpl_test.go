@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/jbsmith7741/go-tools/trial"
 )
 
 func TestParse(t *testing.T) {
@@ -74,6 +75,11 @@ func TestParse(t *testing.T) {
 			template: "./file.txt",
 			time:     tmZero,
 			expected: "./file.txt",
+		},
+		{
+			template: "path/{yyyy}/{mm}/{dd}#{yyyy}/{mm}",
+			time:     trial.Time("2006-01-02", "2018-05-10"),
+			expected: "path/2018/05/10#{yyyy}/{mm}",
 		},
 	}
 	for _, test := range cases {

@@ -34,6 +34,9 @@ var (
 //
 // Template values are case sensitive.
 //
+// Items can be commented out by a hash sign #
+// anything after the # will be ignored
+//
 // Examples:
 // template: "{YYYY}-{MM}-{DD}T{HH}:00"
 // could return: "2017-01-01T23:00"
@@ -46,6 +49,12 @@ var (
 func Parse(s string, t time.Time) string {
 	if t.IsZero() {
 		return s
+	}
+	var end string
+	// ignore values after hash
+	if i := strings.Index(s, "#"); i > 0 {
+		end = s[i:]
+		s = s[:i]
 	}
 
 	// {SLUG}
@@ -78,7 +87,7 @@ func Parse(s string, t time.Time) string {
 	hour := fmt.Sprintf("%02d", t.Hour())
 	s = regHour.ReplaceAllString(s, hour)
 
-	return s
+	return s + end
 }
 
 var (
