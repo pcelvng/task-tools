@@ -81,7 +81,7 @@ func (tm *taskMaster) read() {
 }
 
 type infoOpts struct {
-	Type     string   `uri:"type" required:"true"`
+	TaskType string   `uri:"task-type" required:"true"`
 	Topic    string   `uri:"topic"`
 	For      duration `uri:"for"`
 	Template string   `uri:"fragment" required:"true"`
@@ -100,7 +100,7 @@ func (tm *taskMaster) generate(info string) error {
 		iOpts.End = iOpts.Start.Add(iOpts.For.Duration())
 	}
 	if iOpts.Topic == "" {
-		iOpts.Topic = iOpts.Type
+		iOpts.Topic = iOpts.TaskType
 	}
 	if err := iOpts.Validate(); err != nil {
 		return err
@@ -108,7 +108,7 @@ func (tm *taskMaster) generate(info string) error {
 
 	for _, t := range iOpts.Generate() {
 		tsk := task.Task{
-			Type:    iOpts.Type,
+			Type:    iOpts.TaskType,
 			Created: time.Now().UTC().Format(time.RFC3339),
 			Info:    tmpl.Parse(iOpts.Template, t),
 		}
