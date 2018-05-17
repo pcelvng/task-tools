@@ -17,8 +17,9 @@ go build
   - task_type  - batcher
   - http_port  - 8080
 
-#### http request variables 
+
 #### ‼(PLEASE NOTE ~ underscores for json body request, dashes for uri query params)‼ 💣
+#### http request variables
 - from - the start time of the first task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (REQUIRED)
 - *** pick a duration modifier ***
   - to - the end time of the last task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (takes presidence over for value)
