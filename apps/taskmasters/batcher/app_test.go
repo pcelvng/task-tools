@@ -37,7 +37,7 @@ func TestTaskMaster_generate(t *testing.T) {
 	trial.New(fn, map[string]trial.Case{
 		"batch 2 hours task": {
 			Input: testOpts{
-				info:  "?type=test&from=2018-05-10T00:00:00Z&for=2h#?date={yyyy}-{mm}-{dd}T{hh}",
+				info:  "?task-type=test&from=2018-05-10T00:00:00Z&for=2h#?date={yyyy}-{mm}-{dd}T{hh}",
 				topic: "test",
 			},
 			Expected: producerResponse(`{"type":"test","info":"?date=2018-05-10T00"`, `{"type":"test","info":"?date=2018-05-10T01"`, `{"type":"test","info":"?date=2018-05-10T02"`),
@@ -47,23 +47,23 @@ func TestTaskMaster_generate(t *testing.T) {
 			ExpectedErr: errors.New("type is required"),
 		},
 		"missing from": {
-			Input:       testOpts{info: "?type=test&for=2h#?date={yyyy}-{mm}-{dd}T{hh}"},
+			Input:       testOpts{info: "?task-type=test&for=2h#?date={yyyy}-{mm}-{dd}T{hh}"},
 			ExpectedErr: errors.New("from is required"),
 		},
 		"for or to is required": {
-			Input:       testOpts{info: "?type=test&from=2018-05-10T00:00:00Z#?date={yyyy}-{mm}-{dd}T{hh}"},
+			Input:       testOpts{info: "?task-type=test&from=2018-05-10T00:00:00Z#?date={yyyy}-{mm}-{dd}T{hh}"},
 			ExpectedErr: errors.New("end date required"),
 		},
 		"batch 2 hours override topic": {
 			Input: testOpts{
-				info:  "?type=test&topic=topic&from=2018-05-10T00:00:00Z&for=2h#?date={yyyy}-{mm}-{dd}T{hh}",
+				info:  "?task-type=test&topic=topic&from=2018-05-10T00:00:00Z&for=2h#?date={yyyy}-{mm}-{dd}T{hh}",
 				topic: "topic",
 			},
 			Expected: producerResponse(`{"type":"test","info":"?date=2018-05-10T00"`, `{"type":"test","info":"?date=2018-05-10T01"`, `{"type":"test","info":"?date=2018-05-10T02"`),
 		},
 		"producer failed": {
 			Input: testOpts{
-				info:         "?type=test&from=2018-05-10T00:00:00Z&for=2h#?date={yyyy}-{mm}-{dd}T{hh}",
+				info:         "?task-type=test&from=2018-05-10T00:00:00Z&for=2h#?date={yyyy}-{mm}-{dd}T{hh}",
 				topic:        "test",
 				producerMock: "send_err",
 			},
