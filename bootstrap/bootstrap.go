@@ -25,7 +25,7 @@ var (
 	configPth   = flag.String("config", "", "application config toml file")
 	c           = flag.String("c", "", "alias to -config")
 	showVersion = flag.Bool("version", false, "show WorkerApp version and build info")
-	v           = flag.Bool("v", false, "alias to -version")
+	ver         = flag.Bool("v", false, "alias to -version")
 	genConfig   = flag.Bool("gen-config", false, "generate a config toml file to stdout")
 	g           = flag.Bool("g", false, "alias to -gen-config")
 )
@@ -87,19 +87,10 @@ func (a *WorkerApp) Initialize() {
 	a.setHelpOutput() // add description to help
 
 	// flags
-	if !flag.Parsed() {
-		flag.Parse()
-	}
 	a.handleFlags()
 
-	// options
-	err := a.loadOptions()
-	if err != nil {
-		a.logFatal(err)
-	}
-
 	// validate WorkerApp options
-	err = a.appOpt.Validate()
+	err := a.appOpt.Validate()
 	if err != nil {
 		a.logFatal(err)
 	}
@@ -138,8 +129,12 @@ func (a *WorkerApp) logFatal(err error) {
 }
 
 func (a *WorkerApp) handleFlags() {
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+
 	// version
-	if *showVersion || *v {
+	if *showVersion || *ver {
 		a.showVersion()
 	}
 
@@ -148,9 +143,21 @@ func (a *WorkerApp) handleFlags() {
 		a.genConfig()
 	}
 
+	var path string
 	// configPth required
 	if *configPth == "" && *c == "" {
 		a.logFatal(errors.New("-config (-c) config file path required"))
+	} else if *configPth != "" {
+		path = *configPth
+	} else {
+		path = *c
+	}
+
+	// options
+
+	err := a.loadOptions(path)
+	if err != nil {
+		a.logFatal(err)
 	}
 }
 
@@ -249,11 +256,7 @@ func (a *WorkerApp) genConfig() {
 	os.Exit(0)
 }
 
-func (a *WorkerApp) loadOptions() error {
-	cpth := *configPth
-	if *c != "" {
-		cpth = *c
-	}
+func (a *WorkerApp) loadOptions(cpth string) error {
 
 	// WorkerApp options
 	if _, err := btoml.DecodeFile(cpth, a.appOpt); err != nil {
