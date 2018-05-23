@@ -49,8 +49,8 @@ func TestHandleBodyRequestValues(t *testing.T) {
 	w := httptest.NewRecorder()
 	opts := newOptions()
 
-	if opts.Bus != "-" {
-		opts.producer, _ = bus.NewProducer(opts.Options)
+	if opts.Bus.Bus != "-" {
+		opts.producer, _ = bus.NewProducer(opts.Bus)
 	}
 
 	opts.handleRequest(w, req)
@@ -70,7 +70,7 @@ func TestQueryParamsReqeust(t *testing.T) {
 	w := httptest.NewRecorder()
 	opts := newOptions()
 
-	opts.producer, _ = bus.NewProducer(opts.Options)
+	opts.producer, _ = bus.NewProducer(opts.Bus)
 
 	opts.handleRequest(w, req)
 	resp := w.Result()
@@ -115,8 +115,8 @@ func TestHandleBadSendTask(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	opts := newOptions()
-	opts.Options.NopMock = "send_err"
-	opts.producer, _ = bus.NewProducer(opts.Options)
+	opts.Bus.NopMock = "send_err"
+	opts.producer, _ = bus.NewProducer(opts.Bus)
 
 	opts.handleRequest(w, req)
 

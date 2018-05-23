@@ -12,18 +12,18 @@ import (
 )
 
 type TaskRequest struct {
-	TaskType    string    `json:"task_type" uri:"task-type"`         // the task type for the batcher to use (should not be batcher)
-	For         string    `json:"for" uri:"for"`                     // go duration to create the tasks (used by batcher)
-	From        time.Time `json:"from" uri:"from"`                   // start time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
-	To          time.Time `json:"to" uri:"to"`                       // end time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
-	Fragment    string    `json:"fragment" uri:"fragment"`           // task destination template (uri fragment)
-	Topic       string    `json:"topic" uri:"topic"`                 // overrides task type as the default topic)
-	EveryXHours int       `json:"every_x_hours" uri:"every-x-hours"` // will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' options.)
-	OnHours     []int     `json:"on_hours" uri:"on-hours"`           // comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15)
-	OffHours    []int     `json:"off_hours" uri:"off-hours"`         // comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.)
+	TaskType     string    `json:"task_type" uri:"task-type"`         // the task type for the batcher to use (should not be batcher)
+	For          string    `json:"for" uri:"for"`                     // go duration to create the tasks (used by batcher)
+	From         time.Time `json:"from" uri:"from"`                   // start time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
+	To           time.Time `json:"to" uri:"to"`                       // end time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
+	DestTemplate string    `json:"dest_template" uri:"fragment"`      // task destination template (uri fragment)
+	Topic        string    `json:"topic" uri:"topic"`                 // overrides task type as the default topic)
+	EveryXHours  int       `json:"every_x_hours" uri:"every-x-hours"` // will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' options.)
+	OnHours      []int     `json:"on_hours" uri:"on-hours"`           // comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15)
+	OffHours     []int     `json:"off_hours" uri:"off-hours"`         // comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.)
 }
 
-func (opt *options) handleRequest(w http.ResponseWriter, r *http.Request) {
+func (opt *httpMaster) handleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
 	// read the http request body
