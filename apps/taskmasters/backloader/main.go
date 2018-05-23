@@ -61,7 +61,7 @@ func run() error {
 var (
 	tskType     = flag.String("type", "", "REQUIRED; the task type")
 	t           = flag.String("t", "", "alias of 'type'")
-	at          = flag.String("at", "", "alias of 'from' flag")
+	at          = flag.String("at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
 	from        = flag.String("from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
 	to          = flag.String("to", "", "same format as 'from'; if not specified, will run the one hour specified by from. Allows special keyword 'now'.")
 	outBus      = flag.String("bus", "stdout", "one of 'stdout', 'file', 'nsq'")
