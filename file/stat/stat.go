@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task-tools/file/util"
-	"gopkg.in/jbsmith7741/go-tools.v0/uri"
+	"gopkg.in/jbsmith7741/uri.v0"
 )
 
 func New() Stats {
