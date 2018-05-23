@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -181,7 +182,8 @@ func (r *retryer) applyRule(tsk *task.Task) {
 // doRetry will wait (if requested by the rule)
 // and then send the task to the outgoing channel
 func (r *retryer) doRetry(tsk *task.Task, rule *RetryRule) {
-	time.Sleep(rule.Wait.Duration)
+	// will also add some built in jitter based on a percent of the wait time.
+	time.Sleep(rule.Wait.Duration + jitterPercent(rule.Wait.Duration, 20))
 
 	// create a new task just like the old one
 	// and send it out.
@@ -205,6 +207,26 @@ func (r *retryer) doRetry(tsk *task.Task, rule *RetryRule) {
 			log.Println(err.Error())
 		}
 	}
+}
+
+// genJitter will return a time.Duration representing extra
+// 'jitter' to be added to the wait time. Jitter is important
+// in retry events since the original cause of failure can be
+// due to too many jobs being processed at a time.
+//
+// By adding some jitter the retry events won't all happen
+// at once but will get staggered to prevent the problem
+// from happening again.
+//
+// 'p' is a percentage of the wait time. Duration returned
+// is a random duration between 0 and p. 'p' should be a value
+// between 0-100.
+func jitterPercent(wait time.Duration, p int64) time.Duration {
+	// p == 40
+	maxJitter := (int64(wait) * p) / 100
+
+	rand.Seed(time.Now().UnixNano())
+	return time.Duration(rand.Int63n(maxJitter))
 }
 
 func (r *retryer) close() error {
