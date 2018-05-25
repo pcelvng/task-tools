@@ -24,7 +24,7 @@ var (
 	sigChan     = make(chan os.Signal, 1) // signal handling
 	configPth   = flag.String("config", "", "application config toml file")
 	c           = flag.String("c", "", "alias to -config")
-	showVersion = flag.Bool("version", false, "show WorkerApp version and build info")
+	showVersion = flag.Bool("version", false, "show app version and build info")
 	ver         = flag.Bool("v", false, "alias to -version")
 	genConfig   = flag.Bool("gen-config", false, "generate a config toml file to stdout")
 	g           = flag.Bool("g", false, "alias to -gen-config")
