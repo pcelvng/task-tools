@@ -16,23 +16,23 @@ import (
 
 func TestNew(t *testing.T) {
 	fn := func(args ...interface{}) (interface{}, error) {
-		_, err := New(args[0].(*options))
+		_, err := New(args[0].(*Options))
 		return nil, err
 	}
 	trial.New(fn, trial.Cases{
 		"No rules": {
-			Input:       &options{},
+			Input:       &Options{},
 			ExpectedErr: errors.New("no retry rules specified"),
 		},
 		"invalid consumer": {
-			Input: &options{
+			Input: &Options{
 				RetryRules: []*RetryRule{{"test", 1, 0, ""}},
 				Options:    bus.Options{Bus: "nop://init_err"},
 			},
 			ShouldErr: true,
 		},
 		"good path": {
-			Input: &options{
+			Input: &Options{
 				RetryRules: []*RetryRule{{"test", 1, 0, ""}},
 				Options:    bus.Options{Bus: "nop"},
 			},
@@ -42,7 +42,7 @@ func TestNew(t *testing.T) {
 
 func TestApplyRule(t *testing.T) {
 	fn := func(args ...interface{}) (expected interface{}, err error) {
-		r, err := New(&options{
+		r, err := New(&Options{
 			Options: bus.Options{
 				Bus: "nop",
 			},

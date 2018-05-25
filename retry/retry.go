@@ -3,6 +3,7 @@ package retry
 import (
 	"errors"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"sync"
@@ -21,8 +22,8 @@ func defaultCheck(tsk *task.Task) bool {
 	return tsk.Result == task.ErrResult
 }
 
-type retryer struct {
-	conf       *options
+type Retryer struct {
+	conf       *Options
 	consumer   bus.Consumer
 	producer   bus.Producer
 	rulesMap   map[string]*RetryRule // key is the task type
@@ -32,7 +33,8 @@ type retryer struct {
 	checkFunc  CheckFunc
 }
 
-func New(conf *options) (*retryer, error) {
+func New(conf *Options) (*Retryer, error) {
+	rand.Seed(time.Now().UnixNano())
 	if len(conf.RetryRules) == 0 {
 		return nil, errors.New("no retry rules specified")
 	}
@@ -53,7 +55,7 @@ func New(conf *options) (*retryer, error) {
 		return nil, err
 	}
 
-	r := &retryer{
+	r := &Retryer{
 		conf:       conf,
 		consumer:   c,
 		producer:   p,
@@ -76,7 +78,7 @@ func New(conf *options) (*retryer, error) {
 }
 
 // SetCheckFunc overrides the default checkFunc
-func (r *retryer) SetCheckFunc(fn CheckFunc) *retryer {
+func (r *Retryer) SetCheckFunc(fn CheckFunc) *Retryer {
 	r.checkFunc = fn
 	return r
 }
@@ -86,7 +88,7 @@ func (r *retryer) SetCheckFunc(fn CheckFunc) *retryer {
 // - connect the consumer
 // - connect the producer
 // - begin listening for error tasks
-func (r *retryer) Start() error {
+func (r *Retryer) Start() error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
@@ -101,7 +103,7 @@ func (r *retryer) Start() error {
 }
 
 // listen for and handle failed tasks.
-func (r *retryer) listen() {
+func (r *Retryer) listen() {
 	for {
 		// give the closeChan a change
 		// to break the loop.
@@ -148,7 +150,7 @@ func (r *retryer) listen() {
 // - look for a retry rule to apply
 // - if the task needs to be retried then it is returned
 // - if the task does not need to be retried the nil is returned
-func (r *retryer) applyRule(tsk *task.Task) {
+func (r *Retryer) applyRule(tsk *task.Task) {
 	rule, ok := r.rulesMap[tsk.Type]
 	if !ok {
 		return
@@ -181,8 +183,10 @@ func (r *retryer) applyRule(tsk *task.Task) {
 
 // doRetry will wait (if requested by the rule)
 // and then send the task to the outgoing channel
-func (r *retryer) doRetry(tsk *task.Task, rule *RetryRule) {
-	time.Sleep(rule.Wait.Duration())
+func (r *Retryer) doRetry(tsk *task.Task, rule *RetryRule) {
+	// will also add some built in jitter based on a percent of the wait time.
+	d := rule.Wait.Duration() + jitterPercent(rule.Wait.Duration(), 20)
+	time.Sleep(d)
 
 	// create a new task just like the old one
 	// and send it out.
@@ -208,7 +212,7 @@ func (r *retryer) doRetry(tsk *task.Task, rule *RetryRule) {
 	}
 }
 
-func (r *retryer) close() error {
+func (r *Retryer) close() error {
 	// send close signal
 	close(r.closeChan)
 
@@ -223,6 +227,28 @@ func (r *retryer) close() error {
 	}
 
 	return nil
+}
+
+// genJitter will return a time.Duration representing extra
+// 'jitter' to be added to the wait time. Jitter is important
+// in retry events since the original cause of failure can be
+// due to too many jobs being processed at a time.
+//
+// By adding some jitter the retry events won't all happen
+// at once but will get staggered to prevent the problem
+// from happening again.
+//
+// 'p' is a percentage of the wait time. Duration returned
+// is a random duration between 0 and p. 'p' should be a value
+// between 0-100.
+func jitterPercent(wait time.Duration, p int64) time.Duration {
+	// p == 40
+	if wait == 0 {
+		return 0
+	}
+	maxJitter := (int64(wait) * p) / 100
+
+	return time.Duration(rand.Int63n(maxJitter))
 }
 
 // makeCacheKey will make a key string of the format:
