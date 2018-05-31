@@ -2,49 +2,54 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
-	"github.com/BurntSushi/toml"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task/bus"
 )
 
-var (
-	configPth = flag.String("config", "config.toml", "relative or absolute file path")
-	sigChan   = make(chan os.Signal, 1) // app signal handling
+const (
+	name        = "crontask"
+	description = `crontask task master creates tasks based on cron expression. 
+
+A cron expression represents a set of times, using 6 space-separated fields.
+Field | Field name   | Allowed values  | Allowed special characters
+----- | ----------   | --------------  | --------------------------
+ 1    | Seconds      | 0-59            | * / , -
+ 2    | Minutes      | 0-59            | * / , -
+ 3    | Hours        | 0-23            | * / , -
+ 4    | Day of month | 1-31            | * / , - ?
+ 5    | Month        | 1-12 or JAN-DEC | * / , -
+ 6    | Day of week  | 0-6 or SUN-SAT  | * / , - ?`
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatalln(err)
+	opts := &options{
+		Options: bus.NewOptions(""),
 	}
-}
-
-func run() (err error) {
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// app options
-	appOpt, err := loadAppOptions()
-	if err != nil {
-		return errors.New(fmt.Sprintf("config: '%v'\n", err.Error()))
-	}
+	bootstrap.NewHelper(name, opts).Version(tools.String()).Description(description).Initialize()
 
 	// producer
-	p, err := bus.NewProducer(appOpt.Options)
+	p, err := bus.NewProducer(opts.Options)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 
 	// cron
-	c, err := makeCron(appOpt.Rules, p)
+	c, err := makeCron(opts.Rules, p)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
+	sigChan := make(chan os.Signal, 1) // app signal handling
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	c.Start()
 
 	// wait for shutdown signal
@@ -54,17 +59,10 @@ func run() (err error) {
 	c.Stop()
 	p.Stop()
 
-	return err
-}
-
-func newOptions() *options {
-	return &options{
-		Options: bus.NewOptions(""),
-	}
 }
 
 type options struct {
-	*bus.Options
+	*bus.Options `toml:"bus"`
 
 	// rules
 	Rules []Rule `toml:"rule"`
@@ -78,12 +76,19 @@ type Rule struct {
 	Topic        string `toml:"topic"` // topic override
 }
 
-func loadAppOptions() (*options, error) {
-	flag.Parse()
-	c := newOptions()
-
-	if _, err := toml.DecodeFile(*configPth, c); err != nil {
-		return nil, err
+func (o options) Validate() error {
+	errs := appenderr.New()
+	if len(o.Rules) == 0 {
+		return errors.New("at least one rule is required")
 	}
-	return c, nil
+	for i, r := range o.Rules {
+		if r.Topic == "" && r.TaskType == "" {
+			errs.Add(fmt.Errorf("topic is required: [%d]\n%s", i, spew.Sdump(r)))
+		}
+
+		if strings.Count(strings.Trim(r.CronRule, " "), " ") < 5 {
+			errs.Add(fmt.Errorf("invalid cron rule: [%d]\n%s", i, spew.Sdump(r)))
+		}
+	}
+	return errs.ErrOrNil()
 }
