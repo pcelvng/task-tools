@@ -496,17 +496,17 @@ func TestStatsReaders_Sort(t *testing.T) {
 	pthTime3 := time.Date(2018, 01, 01, 00, 00, 00, 00, time.UTC)
 
 	type scenario struct {
-		stsRdrs       StatsReaders
+		stsRdrs       StatsFiles
 		expectedOrder []string
 	}
 
 	scenarios := []scenario{
 		// scenario 1: pthTime is the same, sts.Created are different
 		{
-			stsRdrs: StatsReaders{
-				&StatsReader{sts: sts3, pthTime: pthTime1},
-				&StatsReader{sts: sts1, pthTime: pthTime1},
-				&StatsReader{sts: sts2, pthTime: pthTime1},
+			stsRdrs: StatsFiles{
+				StatsFile{Stats: sts3, pthTime: pthTime1},
+				StatsFile{Stats: sts1, pthTime: pthTime1},
+				StatsFile{Stats: sts2, pthTime: pthTime1},
 			},
 			expectedOrder: []string{
 				"sts1",
@@ -517,10 +517,10 @@ func TestStatsReaders_Sort(t *testing.T) {
 
 		// scenario 2: pthTime is different, sts.Created are same
 		{
-			stsRdrs: StatsReaders{
-				&StatsReader{sts: sts6, pthTime: pthTime3},
-				&StatsReader{sts: sts4, pthTime: pthTime1},
-				&StatsReader{sts: sts5, pthTime: pthTime2},
+			stsRdrs: StatsFiles{
+				StatsFile{Stats: sts6, pthTime: pthTime3},
+				StatsFile{Stats: sts4, pthTime: pthTime1},
+				StatsFile{Stats: sts5, pthTime: pthTime2},
 			},
 			expectedOrder: []string{
 				"sts4",
@@ -533,7 +533,7 @@ func TestStatsReaders_Sort(t *testing.T) {
 	for sNum, s := range scenarios {
 		sort.Sort(s.stsRdrs)
 		for i, expected := range s.expectedOrder {
-			got := s.stsRdrs[i].sts.Path
+			got := s.stsRdrs[i].Path
 			if expected != got {
 				t.Errorf("scenario %v expected %v but got %v", sNum, expected, got)
 			}
