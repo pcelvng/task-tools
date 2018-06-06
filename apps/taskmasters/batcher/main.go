@@ -20,7 +20,7 @@ const (
 		for - the duration that should be run 
 
 Example:
-{"type":"batcher","info":"?task=topic&from=2006-01-02T15&for=-24h#s3://path/{yyyy}/{mm}/{dd}/{hh}.json.gz?options"}
+{"type":"batcher","info":"?task-type=topic&from=2006-01-02T15:00:00Z&for=-24h#s3://path/{yyyy}/{mm}/{dd}/{hh}.json.gz?options"}
 `
 )
 
