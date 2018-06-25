@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"reflect"
@@ -70,6 +71,8 @@ type WorkerApp struct {
 	lgr      *log.Logger // application logger instance
 	mysql    *sql.DB     // mysql connection
 	postgres *sql.DB     // postgres connection
+
+	statusPort *statsOptions // health status options (currently http port for requests)
 }
 
 // Start is non-blocking and will perform application startup
@@ -84,6 +87,7 @@ type WorkerApp struct {
 // So, if start is able to finish by returning, the user knows
 // it is safe to move on.
 func (a *WorkerApp) Initialize() {
+	a.statusPort = &statsOptions{}
 	a.setHelpOutput() // add description to help
 
 	// flags
@@ -175,7 +179,7 @@ func (a *WorkerApp) showVersion() {
 }
 
 func (a *WorkerApp) genConfig() {
-	var appOptB, wkrOptB, fileOptB, pgOptB, mysqlOptB []byte
+	var appOptB, wkrOptB, fileOptB, pgOptB, mysqlOptB, statsOptB []byte
 	var err error
 
 	// WorkerApp options
@@ -235,6 +239,10 @@ func (a *WorkerApp) genConfig() {
 		mysqlOptB, err = ptoml.Marshal(*a.mysqlOpts)
 	}
 
+	if a.statusPort != nil {
+		statsOptB, _ = ptoml.Marshal(*a.statusPort)
+	}
+
 	// err
 	if err != nil {
 		a.lgr.SetFlags(0)
@@ -247,6 +255,7 @@ func (a *WorkerApp) genConfig() {
 	}
 
 	fmt.Printf("# '%v' worker options\n", a.TaskType())
+	fmt.Print(string(statsOptB))
 	fmt.Print(string(appOptB))
 	fmt.Print(string(wkrOptB))
 	fmt.Print(string(fileOptB))
@@ -257,6 +266,10 @@ func (a *WorkerApp) genConfig() {
 }
 
 func (a *WorkerApp) loadOptions(cpth string) error {
+	// status options
+	if _, err := btoml.DecodeFile(cpth, a.statusPort); err != nil {
+		return err
+	}
 
 	// WorkerApp options
 	if _, err := btoml.DecodeFile(cpth, a.appOpt); err != nil {
@@ -312,6 +325,12 @@ func (a *WorkerApp) loadOptions(cpth string) error {
 // Run will run until the application is complete
 // and then exit.
 func (a *WorkerApp) Run() {
+	port := fmt.Sprintf(":%d", a.HttpPort())
+
+	http.HandleFunc("/", a.handleRequest)
+	log.Println("starting http status server on port", port)
+	go http.ListenAndServe(port, nil)
+
 	// do tasks
 	done, cncl := a.l.DoTasks()
 	a.Log("listening for %s tasks on '%s'", a.wkrOpt.BusOpt.Bus, a.wkrOpt.BusOpt.InTopic)
@@ -324,6 +343,13 @@ func (a *WorkerApp) Run() {
 	}
 
 	os.Exit(0)
+}
+
+// HttpPort gets the application http port for requesting
+// a heath check on the application itself. If the port is not provided
+// the next available system port will be used. ie ':0'
+func (a *WorkerApp) HttpPort() int {
+	return a.statusPort.HttpPort
 }
 
 // Version sets the application version. The version
@@ -505,6 +531,11 @@ func newWkrOptions(tskType string) *wkrOptions {
 		BusOpt:      bOpt,
 		LauncherOpt: task.NewLauncherOptions(tskType),
 	}
+}
+
+// general options for http-status health checks
+type statsOptions struct {
+	HttpPort int `toml:"status_port" default:"0" comment:"http service port for request health status"`
 }
 
 // appOptions provides general options available to
