@@ -16,6 +16,7 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/status"
 	"github.com/pcelvng/task/bus"
 	btoml "gopkg.in/BurntSushi/toml.v0"
 	ptoml "gopkg.in/pelletier/go-toml.v1"
@@ -46,15 +47,17 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 	}
 
 	return &WorkerApp{
-		tskType: tskType,
-		newWkr:  newWkr,
-		wkrOpt:  newWkrOptions(tskType),
-		appOpt:  options,
-		lgr:     log.New(os.Stderr, "", log.LstdFlags),
+		httpHandler: status.New(),
+		tskType:     tskType,
+		newWkr:      newWkr,
+		wkrOpt:      newWkrOptions(tskType),
+		appOpt:      options,
+		lgr:         log.New(os.Stderr, "", log.LstdFlags),
 	}
 }
 
 type WorkerApp struct {
+	httpHandler *status.Handler
 	tskType     string         // application task type
 	version     string         // application version
 	description string         // info help string that show expected info format
@@ -104,6 +107,8 @@ func (a *WorkerApp) Initialize() {
 	if err != nil {
 		a.logFatal(err)
 	}
+
+	a.httpHandler.AddFunc(a.l.Stats)
 }
 
 func (a *WorkerApp) setHelpOutput() {
@@ -327,7 +332,7 @@ func (a *WorkerApp) loadOptions(cpth string) error {
 func (a *WorkerApp) Run() {
 	port := fmt.Sprintf(":%d", a.HttpPort())
 
-	http.HandleFunc("/", a.handleRequest)
+	http.HandleFunc("/", a.httpHandler.HandleRequest)
 	log.Println("starting http status server on port", port)
 	go http.ListenAndServe(port, nil)
 
@@ -485,7 +490,11 @@ func (a *WorkerApp) NewConsumer(topic, channel string) bus.Consumer {
 		busOpt.InChannel = channel
 	}
 
-	consumer, _ := bus.NewConsumer(busOpt)
+	consumer, err := bus.NewConsumer(busOpt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	a.httpHandler.AddFunc(consumer.Info)
 	return consumer
 }
 
@@ -497,7 +506,11 @@ func (a *WorkerApp) NewProducer() bus.Producer {
 	busOpt.LookupdHosts = a.wkrOpt.BusOpt.LookupdHosts
 	busOpt.NSQdHosts = a.wkrOpt.BusOpt.NSQdHosts
 
-	producer, _ := bus.NewProducer(a.wkrOpt.BusOpt)
+	producer, err := bus.NewProducer(a.wkrOpt.BusOpt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	a.httpHandler.AddFunc(producer.Info)
 	return producer
 }
 
