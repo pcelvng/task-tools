@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"reflect"
@@ -47,12 +46,12 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 	}
 
 	return &WorkerApp{
-		httpHandler: status.New(),
-		tskType:     tskType,
-		newWkr:      newWkr,
-		wkrOpt:      newWkrOptions(tskType),
-		appOpt:      options,
-		lgr:         log.New(os.Stderr, "", log.LstdFlags),
+		tskType:    tskType,
+		newWkr:     newWkr,
+		wkrOpt:     newWkrOptions(tskType),
+		appOpt:     options,
+		lgr:        log.New(os.Stderr, "", log.LstdFlags),
+		statusPort: &statsOptions{HttpPort: 11000},
 	}
 }
 
@@ -90,7 +89,6 @@ type WorkerApp struct {
 // So, if start is able to finish by returning, the user knows
 // it is safe to move on.
 func (a *WorkerApp) Initialize() {
-	a.statusPort = &statsOptions{}
 	a.setHelpOutput() // add description to help
 
 	// flags
@@ -107,6 +105,7 @@ func (a *WorkerApp) Initialize() {
 	if err != nil {
 		a.logFatal(err)
 	}
+	a.httpHandler = status.New(a.statusPort.HttpPort)
 
 	a.httpHandler.AddFunc(a.l.Stats)
 }
@@ -330,11 +329,8 @@ func (a *WorkerApp) loadOptions(cpth string) error {
 // Run will run until the application is complete
 // and then exit.
 func (a *WorkerApp) Run() {
-	port := fmt.Sprintf(":%d", a.HttpPort())
 
-	http.HandleFunc("/", a.httpHandler.HandleRequest)
-	log.Println("starting http status server on port", port)
-	go http.ListenAndServe(port, nil)
+	a.httpHandler.Start()
 
 	// do tasks
 	done, cncl := a.l.DoTasks()
@@ -548,7 +544,7 @@ func newWkrOptions(tskType string) *wkrOptions {
 
 // general options for http-status health checks
 type statsOptions struct {
-	HttpPort int `toml:"status_port" default:"0" comment:"http service port for request health status"`
+	HttpPort int `toml:"status_port" comment:"http service port for request health status"`
 }
 
 // appOptions provides general options available to

@@ -11,10 +11,6 @@ import (
 	"gopkg.in/jbsmith7741/uri.v0"
 )
 
-type httpMaster struct {
-	HttpPort string `toml:"http_port"`
-}
-
 type TaskRequest struct {
 	TaskType     string    `json:"task_type" uri:"task-type"`         // the task type for the batcher to use (should not be batcher)
 	For          string    `json:"for" uri:"for"`                     // go duration to create the tasks (used by batcher)
