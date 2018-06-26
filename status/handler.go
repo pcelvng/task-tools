@@ -19,16 +19,14 @@ type Handler struct {
 	genericFn []statusFunc
 }
 
+// HandleRequest is a simple http handler function that takes the compiled status functions
+// that are called and the results marshaled to return as the body of the response
 func (h *Handler) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
-	data := h.Compile()
+	data := h.AssembleStats()
 	b, _ := json.Marshal(data)
-	/*if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
 
-		fmt.Fprintf(w, `{"err":"%s"}`, err)
-	}*/
 	w.Write(b)
 }
 
@@ -39,6 +37,9 @@ func New(port int) *Handler {
 	}
 }
 
+// AdFunc takes a function interface and appends that to the
+// slice of status functions that can be used to return a health
+// check status type on a specific application.
 func (h *Handler) AddFunc(fn interface{}) error {
 	var newFunc statusFunc
 	switch statsFn := fn.(type) {
@@ -57,7 +58,8 @@ func (h *Handler) AddFunc(fn interface{}) error {
 	return nil
 }
 
-func (h *Handler) Compile() interface{} {
+// AssembleStats will take an interface function call it and map the result to a map[string]interface{}
+func (h *Handler) AssembleStats() interface{} {
 	data := make(map[string]interface{})
 	for _, fn := range h.genericFn {
 		v := fn()
@@ -78,6 +80,7 @@ func (h *Handler) Compile() interface{} {
 	return data
 }
 
+// Start will run the http server on the provided handler port
 func (h *Handler) Start() {
 	log.Printf("starting http status server on port %d", h.port)
 

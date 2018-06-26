@@ -43,7 +43,7 @@ func TestHandler_Compile(t *testing.T) {
 	fn := func(args ...interface{}) (interface{}, error) {
 		h := New(0)
 		err := h.AddFunc(args[0])
-		return h.Compile(), err
+		return h.AssembleStats(), err
 	}
 	trial.New(fn, trial.Cases{
 		"consumer data": {
