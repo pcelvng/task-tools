@@ -66,11 +66,8 @@ type Info struct {
 	ConsumerStats *info.Consumer     `json:"consumer,omitempty"`
 }
 
-// HandleRequest is a simple http handler function that takes the compiled status functions
-// that are called and the results marshaled to return as the body of the response
-func (app *Worker) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
+// Get the Info Stats based on the Worker
+func (app *Worker) InfoStats() Info {
 	if app.c != nil {
 		cs := app.c.Info()
 		app.ConsumerStats = &cs
@@ -85,13 +82,21 @@ func (app *Worker) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		app.ProducerStats = &ps
 	}
 
-	b, _ := json.Marshal(&app.Info)
+	return app.Info
+}
+
+// HandleRequest is a simple http handler function that takes the compiled status functions
+// that are called and the results marshaled to return as the body of the response
+func (app *Worker) HandleRequest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	info := app.InfoStats()
+	b, _ := json.Marshal(&info)
 
 	w.Write(b)
 }
 
 // Start will run the http server on the provided handler port
-func (w *Worker) Start() {
+func (w *Worker) start() {
 	log.Printf("starting http status server on port %d", w.HttpPort())
 
 	http.HandleFunc("/", w.HandleRequest)
@@ -376,7 +381,7 @@ func (a *Worker) loadOptions(cpth string) error {
 // and then exit.
 func (w *Worker) Run() {
 	// Start the http health status service
-	w.Start()
+	w.start()
 
 	// do tasks
 	done, cncl := w.l.DoTasks()
