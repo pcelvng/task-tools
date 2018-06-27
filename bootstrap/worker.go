@@ -61,9 +61,9 @@ type Worker struct {
 }
 
 type Info struct {
-	LauncherStats task.LauncherStats `json:"launcher"`
-	ProducerStats info.Producer      `json:"producer"`
-	ConsumerStats info.Consumer      `json:"consumer"`
+	LauncherStats task.LauncherStats `json:"launcher,omitempty"`
+	ProducerStats *info.Producer     `json:"producer,omitempty"`
+	ConsumerStats *info.Consumer     `json:"consumer,omitempty"`
 }
 
 // HandleRequest is a simple http handler function that takes the compiled status functions
@@ -72,13 +72,17 @@ func (app *Worker) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
 	if app.c != nil {
-		app.ConsumerStats = app.c.Info()
+		cs := app.c.Info()
+		app.ConsumerStats = &cs
 	}
+
 	if app.l != nil {
 		app.LauncherStats = app.l.Stats()
 	}
+
 	if app.p != nil {
-		app.ProducerStats = app.p.Info()
+		ps := app.p.Info()
+		app.ProducerStats = &ps
 	}
 
 	b, _ := json.Marshal(&app.Info)
