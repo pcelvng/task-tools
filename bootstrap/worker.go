@@ -104,7 +104,6 @@ func (w *Worker) start() {
 		err := http.ListenAndServe(":"+strconv.Itoa(w.HttpPort()), nil)
 		log.Fatal("http health service failed", err)
 	}()
-
 }
 
 // NewWorker will create a new worker bootstrap application.
@@ -131,16 +130,16 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 	}
 }
 
-// Start is non-blocking and will perform application startup
+// Initialize is non-blocking and will perform application startup
 // tasks such as:
 // *Parsing and handling flags
 // *Parsing and validating the config file
 // *Setting config defaults
 //
-// Note that start will handle application closure if there
+// Note that Initialize will handle application closure if there
 // was an error during startup or a flag option was provided
 // that asked the application to show the version, for example.
-// So, if start is able to finish by returning, the user knows
+// So, if Initialize is able to finish by returning, the user knows
 // it is safe to move on.
 func (w *Worker) Initialize() {
 	w.setHelpOutput() // add description to help
@@ -399,7 +398,7 @@ func (w *Worker) Run() {
 
 // HttpPort gets the application http port for requesting
 // a heath check on the application itself. If the port is not provided
-// the next available system port will be used. ie ':0'
+// The port should alwasy be provided
 func (w *Worker) HttpPort() int {
 	return w.statusPort.HttpPort
 }
