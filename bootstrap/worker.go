@@ -81,7 +81,7 @@ func (app *Worker) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		app.ProducerStats = app.p.Info()
 	}
 
-	b, _ := json.MarshalIndent(&app.Info, "", "  ")
+	b, _ := json.Marshal(&app.Info)
 
 	w.Write(b)
 }
