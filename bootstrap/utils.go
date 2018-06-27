@@ -87,6 +87,9 @@ func (h *Helper) checkFlags() {
 		path = *c
 	}
 
-	btoml.DecodeFile(path, h.config)
+	_, err := btoml.DecodeFile(path, h.config)
+	if err != nil {
+		log.Fatal("Error parsing config file", err)
+	}
 
 }

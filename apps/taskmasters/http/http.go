@@ -94,7 +94,7 @@ func (tr TaskRequest) validate() error {
 	if len(tr.For) > 0 {
 		_, err := time.ParseDuration(tr.For)
 		if err != nil {
-			return fmt.Errorf("cannot parse for value %v", err)
+			return fmt.Errorf("cannot parse for value %v - %v", tr.For, err)
 		}
 	}
 
