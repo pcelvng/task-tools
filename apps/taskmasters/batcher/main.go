@@ -1,11 +1,8 @@
 package main
 
 import (
-	"log"
-
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
-	"github.com/pcelvng/task/bus"
 )
 
 const (
@@ -24,23 +21,10 @@ Example:
 `
 )
 
-type options struct {
-	Bus bus.Options `toml:"bus"`
-}
-
 func main() {
-	opt := &options{
-		Bus: *bus.NewOptions(""),
-	}
-
-	bootstrap.NewHelper(taskType, opt).
+	app := bootstrap.NewTaskMaster(taskType, New, nil).
 		Version(tools.String()).
-		Description(description).
-		Initialize()
-
-	tm, err := New(opt.Bus)
-	if err != nil {
-		log.Fatal(err)
-	}
-	tm.Start()
+		Description(description)
+	app.Initialize()
+	app.Run()
 }

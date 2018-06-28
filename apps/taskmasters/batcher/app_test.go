@@ -20,6 +20,7 @@ func TestTaskMaster_generate(t *testing.T) {
 		p, _ := nop.NewProducer(tOpts.producerMock)
 		tm := &taskMaster{
 			producer: p,
+			stats:    stats{Requests: make(map[string]int)},
 		}
 		err := tm.generate(tOpts.info)
 		return p.Messages[tOpts.topic], err

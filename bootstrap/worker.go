@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
@@ -22,16 +21,6 @@ import (
 	"github.com/pcelvng/task/bus/info"
 	btoml "gopkg.in/BurntSushi/toml.v0"
 	ptoml "gopkg.in/pelletier/go-toml.v1"
-)
-
-var (
-	sigChan     = make(chan os.Signal, 1) // signal handling
-	configPth   = flag.String("config", "", "application config toml file")
-	c           = flag.String("c", "", "alias to -config")
-	showVersion = flag.Bool("version", false, "show app version and build info")
-	ver         = flag.Bool("v", false, "alias to -version")
-	genConfig   = flag.Bool("gen-config", false, "generate a config toml file to stdout")
-	g           = flag.Bool("g", false, "alias to -gen-config")
 )
 
 type Worker struct {
@@ -66,33 +55,32 @@ type Info struct {
 	ConsumerStats *info.Consumer     `json:"consumer,omitempty"`
 }
 
-// Get the Info Stats based on the Worker
-func (app *Worker) InfoStats() Info {
-	if app.c != nil {
-		cs := app.c.Info()
-		app.ConsumerStats = &cs
+// InfoStats for the Worker app
+func (w *Worker) InfoStats() Info {
+	if w.c != nil {
+		cs := w.c.Info()
+		w.ConsumerStats = &cs
 	}
 
-	if app.l != nil {
-		app.LauncherStats = app.l.Stats()
+	if w.l != nil {
+		w.LauncherStats = w.l.Stats()
 	}
 
-	if app.p != nil {
-		ps := app.p.Info()
-		app.ProducerStats = &ps
+	if w.p != nil {
+		ps := w.p.Info()
+		w.ProducerStats = &ps
 	}
 
-	return app.Info
+	return w.Info
 }
 
 // HandleRequest is a simple http handler function that takes the compiled status functions
 // that are called and the results marshaled to return as the body of the response
-func (app *Worker) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-	info := app.InfoStats()
-	b, _ := json.Marshal(&info)
+func (w *Worker) HandleRequest(wr http.ResponseWriter, r *http.Request) {
+	wr.Header().Add("Content-Type", "application/json")
+	b, _ := json.Marshal(w.InfoStats())
 
-	w.Write(b)
+	wr.Write(b)
 }
 
 // Start will run the http server on the provided handler port
@@ -106,7 +94,7 @@ func (w *Worker) start() {
 	}()
 }
 
-// NewWorker will create a new worker bootstrap application.
+// NewWorkerApp will create a new worker bootstrap application.
 // *tskType: defines the worker type; the type of tasks the worker is expecting. Also acts as a name for identification (required)
 // *mkr: MakeWorker function that the launcher will call to create a new worker.
 // *options: a struct pointer to additional specific application config options. Note that
@@ -160,15 +148,15 @@ func (w *Worker) Initialize() {
 	}
 }
 
-func (a *Worker) setHelpOutput() {
+func (w *Worker) setHelpOutput() {
 	// custom help screen
 	flag.Usage = func() {
-		if a.TaskType() != "" {
-			fmt.Fprintln(os.Stderr, a.TaskType()+" worker")
+		if w.TaskType() != "" {
+			fmt.Fprintln(os.Stderr, w.TaskType()+" worker")
 			fmt.Fprintln(os.Stderr, "")
 		}
-		if a.description != "" {
-			fmt.Fprintln(os.Stderr, a.description)
+		if w.description != "" {
+			fmt.Fprintln(os.Stderr, w.description)
 			fmt.Fprintln(os.Stderr, "")
 		}
 		fmt.Fprintln(os.Stderr, "Flag options:")
@@ -176,35 +164,35 @@ func (a *Worker) setHelpOutput() {
 	}
 }
 
-func (a *Worker) logFatal(err error) {
-	a.lgr.SetFlags(0)
-	if a.TaskType() != "" {
-		a.lgr.SetPrefix(a.TaskType() + ": ")
+func (w *Worker) logFatal(err error) {
+	w.lgr.SetFlags(0)
+	if w.TaskType() != "" {
+		w.lgr.SetPrefix(w.TaskType() + ": ")
 	} else {
-		a.lgr.SetPrefix("")
+		w.lgr.SetPrefix("")
 	}
-	a.lgr.Fatalln(err.Error())
+	w.lgr.Fatalln(err.Error())
 }
 
-func (a *Worker) handleFlags() {
+func (w *Worker) handleFlags() {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
 
 	// version
 	if *showVersion || *ver {
-		a.showVersion()
+		w.showVersion()
 	}
 
 	// gen config (sent to stdout)
 	if *genConfig || *g {
-		a.genConfig()
+		w.genConfig()
 	}
 
 	var path string
 	// configPth required
 	if *configPth == "" && *c == "" {
-		a.logFatal(errors.New("-config (-c) config file path required"))
+		w.logFatal(errors.New("-config (-c) config file path required"))
 	} else if *configPth != "" {
 		path = *configPth
 	} else {
@@ -213,104 +201,104 @@ func (a *Worker) handleFlags() {
 
 	// options
 
-	err := a.loadOptions(path)
+	err := w.loadOptions(path)
 	if err != nil {
-		a.logFatal(err)
+		w.logFatal(err)
 	}
 }
 
-func (a *Worker) showVersion() {
+func (w *Worker) showVersion() {
 	prefix := ""
-	if a.TaskType() != "" {
-		prefix = a.TaskType() + " "
+	if w.TaskType() != "" {
+		prefix = w.TaskType() + " "
 	}
-	if a.version == "" {
+	if w.version == "" {
 		fmt.Println(prefix + "version not specified")
 	} else {
-		fmt.Println(prefix + a.version)
+		fmt.Println(prefix + w.version)
 	}
 	os.Exit(0)
 }
 
-func (a *Worker) genConfig() {
+func (w *Worker) genConfig() {
 	var appOptB, wkrOptB, fileOptB, pgOptB, mysqlOptB, statsOptB []byte
 	var err error
 
 	// Worker options
-	appOptB, err = ptoml.Marshal(reflect.Indirect(reflect.ValueOf(a.appOpt)).Interface())
+	appOptB, err = ptoml.Marshal(reflect.Indirect(reflect.ValueOf(w.appOpt)).Interface())
 	if err != nil {
-		a.lgr.SetFlags(0)
-		if a.TaskType() != "" {
-			a.lgr.SetPrefix(a.TaskType() + ": ")
+		w.lgr.SetFlags(0)
+		if w.TaskType() != "" {
+			w.lgr.SetPrefix(w.TaskType() + ": ")
 		} else {
-			a.lgr.SetPrefix("")
+			w.lgr.SetPrefix("")
 		}
-		a.lgr.Fatalln(err.Error())
+		w.lgr.Fatalln(err.Error())
 	}
 
 	// worker options
-	wkrOptB, err = ptoml.Marshal(*a.wkrOpt)
+	wkrOptB, err = ptoml.Marshal(*w.wkrOpt)
 	if err != nil {
-		a.lgr.SetFlags(0)
-		if a.TaskType() != "" {
-			a.lgr.SetPrefix(a.TaskType() + ": ")
+		w.lgr.SetFlags(0)
+		if w.TaskType() != "" {
+			w.lgr.SetPrefix(w.TaskType() + ": ")
 		} else {
-			a.lgr.SetPrefix("")
+			w.lgr.SetPrefix("")
 		}
-		a.lgr.Fatalln(err.Error())
+		w.lgr.Fatalln(err.Error())
 	}
 
 	// file options
-	if a.fileOpts != nil {
-		fileOptB, err = ptoml.Marshal(*a.fileOpts)
+	if w.fileOpts != nil {
+		fileOptB, err = ptoml.Marshal(*w.fileOpts)
 	}
 	if err != nil {
-		a.lgr.SetFlags(0)
-		if a.TaskType() != "" {
-			a.lgr.SetPrefix(a.TaskType() + ": ")
+		w.lgr.SetFlags(0)
+		if w.TaskType() != "" {
+			w.lgr.SetPrefix(w.TaskType() + ": ")
 		} else {
-			a.lgr.SetPrefix("")
+			w.lgr.SetPrefix("")
 		}
-		a.lgr.Fatalln(err.Error())
+		w.lgr.Fatalln(err.Error())
 	}
 
 	// postgres options
-	if a.pgOpts != nil {
-		pgOptB, err = ptoml.Marshal(*a.pgOpts)
+	if w.pgOpts != nil {
+		pgOptB, err = ptoml.Marshal(*w.pgOpts)
 	}
 	if err != nil {
-		a.lgr.SetFlags(0)
-		if a.TaskType() != "" {
-			a.lgr.SetPrefix(a.TaskType() + ": ")
+		w.lgr.SetFlags(0)
+		if w.TaskType() != "" {
+			w.lgr.SetPrefix(w.TaskType() + ": ")
 		} else {
-			a.lgr.SetPrefix("")
+			w.lgr.SetPrefix("")
 		}
-		a.lgr.Fatalln(err.Error())
+		w.lgr.Fatalln(err.Error())
 	}
 
 	// mysql options
-	if a.mysqlOpts != nil {
-		mysqlOptB, err = ptoml.Marshal(*a.mysqlOpts)
+	if w.mysqlOpts != nil {
+		mysqlOptB, err = ptoml.Marshal(*w.mysqlOpts)
 	}
 
-	if a.statusPort != nil {
-		statsOptB, _ = ptoml.Marshal(*a.statusPort)
+	if w.statusPort != nil {
+		statsOptB, _ = ptoml.Marshal(*w.statusPort)
 	}
 
 	// err
 	if err != nil {
-		a.lgr.SetFlags(0)
-		if a.TaskType() != "" {
-			a.lgr.SetPrefix(a.TaskType() + ": ")
+		w.lgr.SetFlags(0)
+		if w.TaskType() != "" {
+			w.lgr.SetPrefix(w.TaskType() + ": ")
 		} else {
-			a.lgr.SetPrefix("")
+			w.lgr.SetPrefix("")
 		}
-		a.lgr.Fatalln(err.Error())
+		w.lgr.Fatalln(err.Error())
 	}
 
-	fmt.Printf("# '%v' worker options\n", a.TaskType())
-	fmt.Print(string(statsOptB))
+	fmt.Printf("# '%v' worker options\n", w.TaskType())
 	fmt.Print(string(appOptB))
+	fmt.Print(string(statsOptB))
 	fmt.Print(string(wkrOptB))
 	fmt.Print(string(fileOptB))
 	fmt.Print(string(pgOptB))
@@ -319,55 +307,55 @@ func (a *Worker) genConfig() {
 	os.Exit(0)
 }
 
-func (a *Worker) loadOptions(cpth string) error {
+func (w *Worker) loadOptions(cpth string) error {
 	// status options
-	if _, err := btoml.DecodeFile(cpth, a.statusPort); err != nil {
+	if _, err := btoml.DecodeFile(cpth, w.statusPort); err != nil {
 		return err
 	}
 
 	// Worker options
-	if _, err := btoml.DecodeFile(cpth, a.appOpt); err != nil {
+	if _, err := btoml.DecodeFile(cpth, w.appOpt); err != nil {
 		return err
 	}
 
 	// worker options
-	if _, err := btoml.DecodeFile(cpth, a.wkrOpt); err != nil {
+	if _, err := btoml.DecodeFile(cpth, w.wkrOpt); err != nil {
 		return err
 	}
 
 	// file options
-	if a.fileOpts != nil {
-		_, err := btoml.DecodeFile(cpth, a.fileOpts)
+	if w.fileOpts != nil {
+		_, err := btoml.DecodeFile(cpth, w.fileOpts)
 		if err != nil {
 			return err
 		}
 	}
 
 	// postgres options (if requested)
-	if a.pgOpts != nil {
-		_, err := btoml.DecodeFile(cpth, a.pgOpts)
+	if w.pgOpts != nil {
+		_, err := btoml.DecodeFile(cpth, w.pgOpts)
 		if err != nil {
 			return err
 		}
 
 		// connect
-		pg := a.pgOpts.Postgres
-		a.postgres, err = db.Postgres(pg.Username, pg.Password, pg.Host, pg.DBName)
+		pg := w.pgOpts.Postgres
+		w.postgres, err = db.Postgres(pg.Username, pg.Password, pg.Host, pg.DBName)
 		if err != nil {
 			return err
 		}
 	}
 
 	// mysql options (if requested)
-	if a.mysqlOpts != nil {
-		_, err := btoml.DecodeFile(cpth, a.mysqlOpts)
+	if w.mysqlOpts != nil {
+		_, err := btoml.DecodeFile(cpth, w.mysqlOpts)
 		if err != nil {
 			return err
 		}
 
 		// connect
-		mysql := a.mysqlOpts.MySQL
-		a.mysql, err = db.MySQL(mysql.Username, mysql.Password, mysql.Host, mysql.DBName)
+		mysql := w.mysqlOpts.MySQL
+		w.mysql, err = db.MySQL(mysql.Username, mysql.Password, mysql.Host, mysql.DBName)
 		if err != nil {
 			return err
 		}
@@ -416,18 +404,18 @@ func (w *Worker) Version(version string) *Worker {
 //
 // The description should also include information about
 // what the worker expects from the NewWorker 'info' string.
-func (a *Worker) Description(description string) *Worker {
-	a.description = description
-	return a
+func (w *Worker) Description(description string) *Worker {
+	w.description = description
+	return w
 }
 
 // FileOpts provides file options such as aws connection info.
-func (a *Worker) FileOpts() *Worker {
-	if a.fileOpts == nil {
-		a.fileOpts = &fileOptions{}
-		a.fileOpts.FileOpt.FileBufPrefix = a.TaskType()
+func (w *Worker) FileOpts() *Worker {
+	if w.fileOpts == nil {
+		w.fileOpts = &fileOptions{}
+		w.fileOpts.FileOpt.FileBufPrefix = w.TaskType()
 	}
-	return a
+	return w
 }
 
 // MySQLOpts will parse mysql db connection
@@ -443,11 +431,11 @@ func (a *Worker) FileOpts() *Worker {
 // connection options need to be made available with the Worker
 // initialization. Note that the DBOptions struct is available
 // to use in this way.
-func (a *Worker) MySQLOpts() *Worker {
-	if a.mysqlOpts == nil {
-		a.mysqlOpts = &mysqlOptions{}
+func (w *Worker) MySQLOpts() *Worker {
+	if w.mysqlOpts == nil {
+		w.mysqlOpts = &mysqlOptions{}
 	}
-	return a
+	return w
 }
 
 // PostgresOpts will parse postgres db connection
@@ -463,18 +451,18 @@ func (a *Worker) MySQLOpts() *Worker {
 // connection options need to be made available with the Worker
 // initialization. Note that the DBOptions struct is available
 // to use in this way.
-func (a *Worker) PostgresOpts() *Worker {
-	if a.pgOpts == nil {
-		a.pgOpts = &pgOptions{}
+func (w *Worker) PostgresOpts() *Worker {
+	if w.pgOpts == nil {
+		w.pgOpts = &pgOptions{}
 	}
-	return a
+	return w
 }
 
-func (a *Worker) GetFileOpts() *file.Options {
-	if a.fileOpts == nil {
+func (w *Worker) GetFileOpts() *file.Options {
+	if w.fileOpts == nil {
 		return nil
 	}
-	return &a.fileOpts.FileOpt
+	return &w.fileOpts.FileOpt
 }
 
 // SetLogger allows the user to override the default
@@ -483,37 +471,37 @@ func (a *Worker) GetFileOpts() *file.Options {
 // If the provided logger is nil the logger output is discarded.
 //
 // SetLogger should be called before initializing the application.
-func (a *Worker) SetLogger(lgr *log.Logger) *Worker {
+func (w *Worker) SetLogger(lgr *log.Logger) *Worker {
 	if lgr != nil {
-		a.lgr = lgr
+		w.lgr = lgr
 	}
 
-	return a
+	return w
 }
 
 // TaskType returns the TaskType initialized with
 // the Worker.
-func (a *Worker) TaskType() string {
-	return a.tskType
+func (w *Worker) TaskType() string {
+	return w.tskType
 }
 
 // MySQLDB returns the MySQL sql.DB application connection.
 // Will be nil if called before Start() or MySQLOpts() was
 // not called.
-func (a *Worker) MySQLDB() *sql.DB {
-	return a.mysql
+func (w *Worker) MySQLDB() *sql.DB {
+	return w.mysql
 }
 
 // PostgresDB returns the Postgres sql.DB application connection.
 // Will be nil if called before Start() or PostgresOpts() was
 // not called.
-func (a *Worker) PostgresDB() *sql.DB {
-	return a.postgres
+func (w *Worker) PostgresDB() *sql.DB {
+	return w.postgres
 }
 
 // Logger returns a reference to the application logger.
-func (a *Worker) Logger() *log.Logger {
-	return a.lgr
+func (w *Worker) Logger() *log.Logger {
+	return w.lgr
 }
 
 // NewConsumer is a convenience method that will use
@@ -547,40 +535,24 @@ func (w *Worker) NewConsumer(topic, channel string) bus.Consumer {
 
 // NewProducer will use the bus config information
 // to create a new producer instance.
-func (a *Worker) NewProducer() bus.Producer {
+func (w *Worker) NewProducer() bus.Producer {
 	var err error
-	busOpt := bus.NewOptions(a.wkrOpt.BusOpt.Bus)
-	busOpt.OutBus = a.wkrOpt.BusOpt.OutBus
-	busOpt.LookupdHosts = a.wkrOpt.BusOpt.LookupdHosts
-	busOpt.NSQdHosts = a.wkrOpt.BusOpt.NSQdHosts
+	busOpt := bus.NewOptions(w.wkrOpt.BusOpt.Bus)
+	busOpt.OutBus = w.wkrOpt.BusOpt.OutBus
+	busOpt.LookupdHosts = w.wkrOpt.BusOpt.LookupdHosts
+	busOpt.NSQdHosts = w.wkrOpt.BusOpt.NSQdHosts
 
-	a.p, err = bus.NewProducer(a.wkrOpt.BusOpt)
+	w.p, err = bus.NewProducer(w.wkrOpt.BusOpt)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return a.p
+	return w.p
 }
 
 // Log is a wrapper around the application logger Printf method.
-func (a *Worker) Log(format string, v ...interface{}) {
-	a.lgr.Printf(format, v...)
-}
-
-// Validator provides a standard
-// method for running underlying validation
-// for underlying object values.
-type Validator interface {
-	Validate() error
-}
-
-// NilValidator satisfies the
-// Validator interface but does
-// nothing.
-type NilValidator struct{}
-
-func (v *NilValidator) Validate() error {
-	return nil
+func (w *Worker) Log(format string, v ...interface{}) {
+	w.lgr.Printf(format, v...)
 }
 
 func newWkrOptions(tskType string) *wkrOptions {
@@ -594,61 +566,9 @@ func newWkrOptions(tskType string) *wkrOptions {
 	}
 }
 
-// general options for http-status health checks
-type statsOptions struct {
-	HttpPort int `toml:"status_port" comment:"http service port for request health status"`
-}
-
 // appOptions provides general options available to
 // all workers.
 type wkrOptions struct {
 	BusOpt      *bus.Options          `toml:"bus"`
 	LauncherOpt *task.LauncherOptions `toml:"launcher"`
-}
-
-// fileOptions are only included at the request of the user.
-// If added they are made available with the application file
-// options object which can be accessed from the Worker object.
-type fileOptions struct {
-	FileOpt file.Options `toml:"file"`
-}
-
-// mysqlOptions are only added at the request of the user.
-// If they are added then the bootstrap Worker will automatically
-// attempt to connect to mysql.
-type mysqlOptions struct {
-	MySQL DBOptions `toml:"mysql"`
-}
-
-// postgresOptions are only added at the request of the user.
-// If they are added then the bootstrap Worker will automatically
-// attempt to connect to postgres.
-type pgOptions struct {
-	Postgres DBOptions `toml:"postgres"`
-}
-
-type DBOptions struct {
-	Username string `toml:"username" commented:"true"`
-	Password string `toml:"password" commented:"true"`
-	Host     string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
-	DBName   string `toml:"dbname"`
-}
-
-// Duration is a wrapper around time.Duration
-// and allows for automatic toml string parsing of
-// time.Duration values. Use this type in a
-// custom config for automatic serializing and
-// de-serializing of time.Duration.
-type Duration struct {
-	time.Duration
-}
-
-func (d *Duration) UnmarshalText(text []byte) error {
-	var err error
-	d.Duration, err = time.ParseDuration(string(text))
-	return err
-}
-
-func (d *Duration) MarshalTOML() ([]byte, error) {
-	return []byte(d.Duration.String()), nil
 }

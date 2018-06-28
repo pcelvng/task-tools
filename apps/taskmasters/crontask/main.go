@@ -35,7 +35,7 @@ func main() {
 	opts := &options{
 		Options: bus.NewOptions(""),
 	}
-	bootstrap.NewHelper(name, opts).Version(tools.String()).Description(description).Initialize()
+	bootstrap.NewUtility(name, opts).Version(tools.String()).Description(description).Initialize()
 
 	// producer
 	p, err := bus.NewProducer(opts.Options)

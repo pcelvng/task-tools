@@ -13,16 +13,34 @@ import (
 	"sync"
 	"time"
 
-	"github.com/robfig/cron"
-
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task/bus"
+	"github.com/robfig/cron"
 )
 
-var (
-	dumpPrefix = "tm-files_"
-)
+func (appOpt *options) new(app *bootstrap.TaskMaster) bootstrap.Runner {
+	doneCtx, doneCncl := context.WithCancel(context.Background())
+	tm := &tskMaster{
+		producer: app.NewProducer(),
+		consumer: app.NewConsumer(),
+		appOpt:   appOpt,
+		doneCtx:  doneCtx,
+		doneCncl: doneCncl,
+		files:    make(map[*Rule][]*stat.Stats),
+		msgCh:    make(chan *stat.Stats),
+		rules:    appOpt.Rules,
+		l:        log.New(os.Stderr, "", log.LstdFlags),
+	}
+	var err error
+	// make cron
+	tm.c, err = makeCron(appOpt.Rules, app)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return tm
+}
 
 func newTskMaster(appOpt *options) (*tskMaster, error) {
 	// validate
@@ -68,6 +86,22 @@ func newTskMaster(appOpt *options) (*tskMaster, error) {
 	return tm, nil
 }
 
+func (tm *tskMaster) Run(ctx context.Context) error {
+	// task master
+	tm.DoFileWatch(ctx)
+
+	select {
+	case <-tm.doneCtx.Done():
+		// done of its own accord
+		// can be done of its own accord if
+		// using a file bus.
+	}
+
+	return nil
+}
+func (tm *tskMaster) Info() interface{} {
+	return nil
+}
 func validateAppOpts(appOpt *options) error {
 	if len(appOpt.Rules) == 0 {
 		return errors.New("no rules provided")
@@ -107,7 +141,7 @@ type tskMaster struct {
 	wg sync.WaitGroup
 }
 
-// DoWatch will accept a context for knowing if/when
+// DoFileWatch will accept a context for knowing if/when
 // it should perform a shutdown. A context is returned
 // to allow the caller to know when shutdown is complete.
 func (tm *tskMaster) DoFileWatch(ctx context.Context) context.Context {
