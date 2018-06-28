@@ -486,14 +486,21 @@ func (tm *TaskMaster) Logger() *log.Logger {
 // instance. Can optionally provide a topic and channel
 // on which to consume. All other bus options are the same.
 func (tm *TaskMaster) NewConsumer() bus.Consumer {
-	busOpt := *tm.tmOpt.BusOpt
+	var busOpt bus.Options
+	if tm != nil {
+		busOpt = *tm.tmOpt.BusOpt
+	}
 	return newConsumer(busOpt, busOpt.InTopic, busOpt.InChannel)
 }
 
 // NewProducer will use the bus config information
 // to create a new producer instance.
 func (tm *TaskMaster) NewProducer() bus.Producer {
-	return newProducer(*tm.tmOpt.BusOpt)
+	var busOpt bus.Options
+	if tm != nil {
+		busOpt = *tm.tmOpt.BusOpt
+	}
+	return newProducer(busOpt)
 }
 
 // Log is a wrapper around the application logger Printf method.

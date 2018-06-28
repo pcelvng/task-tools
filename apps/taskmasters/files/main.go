@@ -30,7 +30,7 @@ type options struct {
 	Rules []*Rule `toml:"rule"`
 }
 
-func (o *options) Validate() error {
+func (o options) Validate() error {
 	if len(o.Rules) == 0 {
 		return errors.New("no rules provided")
 	}

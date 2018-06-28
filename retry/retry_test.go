@@ -8,7 +8,7 @@ import (
 
 	"time"
 
-	"github.com/jbsmith7741/go-tools/trial"
+	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	"github.com/pcelvng/task/bus/nop"
