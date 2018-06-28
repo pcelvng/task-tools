@@ -90,7 +90,7 @@ type TaskMaster struct {
 // that asked the application to show the version, for example.
 // So, if start is able to finish by returning, the user knows
 // it is safe to move on.
-func (tm *TaskMaster) Initialize() {
+func (tm *TaskMaster) Initialize() *TaskMaster {
 	tm.setHelpOutput() // add description to help
 
 	// flags
@@ -111,6 +111,7 @@ func (tm *TaskMaster) Initialize() {
 		tm.logFatal(err)
 	}
 	tm.runner = tm.newRunner(tm)
+	return tm
 }
 
 func (tm *TaskMaster) setHelpOutput() {
@@ -359,7 +360,7 @@ func (tm *TaskMaster) Run() {
 		}
 	}()
 
-	tm.Log("staring %v", tm.appName)
+	tm.Log("starting %v", tm.appName)
 	if err := tm.runner.Run(ctx); err != nil {
 		log.Fatal(err)
 	}

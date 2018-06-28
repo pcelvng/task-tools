@@ -3,72 +3,73 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
-	"fmt"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
-	"github.com/BurntSushi/toml"
-	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus"
+	"github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/pcelvng/task-tools/file/stat"
 )
 
-var (
-	configPth = flag.String("config", "config.toml", "relative or absolute file path")
-	sigChan   = make(chan os.Signal, 1) // app signal handling
-
-	defaultTopic   = "files"
-	defaultChannel = "tm-files"
+const (
+	appName     = "files"
+	description = ``
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatalln(err)
-	}
-}
+	opts := &options{}
 
-func run() (err error) {
-	// signal handling - be ready to capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	// app options
-	appOpt, err := loadAppOptions()
-	if err != nil {
-		return errors.New(fmt.Sprintf("config: '%v'\n", err.Error()))
-	}
-
-	// task master
-	ctx, cncl := context.WithCancel(context.Background())
-	tskMstr, err := newTskMaster(appOpt)
-	if err != nil {
-		return err
-	}
-	doneCtx := tskMstr.DoFileWatch(ctx)
-
-	select {
-	case <-sigChan:
-		cncl()
-		<-doneCtx.Done() // wait for taskmaster to shutdown
-	case <-doneCtx.Done():
-		// done of its own accord
-		// can be done of its own accord if
-		// using a file bus.
-	}
-
-	return err
-}
-
-func newOptions() *options {
-	return &options{
-		Options: task.NewBusOptions(""),
-	}
+	bootstrap.NewTaskMaster(appName, opts.new, opts).
+		Description(description).Version(tools.String()).
+		Initialize().
+		Run()
 }
 
 type options struct {
-	*bus.Options         // bus options
-	Rules        []*Rule `toml:"rule"`
+	Rules []*Rule `toml:"rule"`
+}
+
+func (o *options) Validate() error {
+	if len(o.Rules) == 0 {
+		return errors.New("no rules provided")
+	}
+
+	// validate each rule
+	for _, rule := range o.Rules {
+		if rule.TaskType == "" {
+			return errors.New("task type required for all rules")
+		}
+
+		if rule.SrcPattern == "" {
+			return errors.New("src_pattern required for all rules")
+		}
+	}
+
+	return nil
+}
+
+func (appOpt *options) new(app *bootstrap.TaskMaster) bootstrap.Runner {
+	doneCtx, doneCncl := context.WithCancel(context.Background())
+	tm := &tskMaster{
+		initTime: time.Now(),
+		producer: app.NewProducer(),
+		consumer: app.NewConsumer(),
+		appOpt:   appOpt,
+		doneCtx:  doneCtx,
+		doneCncl: doneCncl,
+		files:    make(map[*Rule][]*stat.Stats),
+		msgCh:    make(chan *stat.Stats),
+		rules:    appOpt.Rules,
+		l:        log.New(os.Stderr, "", log.LstdFlags),
+	}
+	var err error
+	// make cron
+	tm.c, err = makeCron(appOpt.Rules, tm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return tm
 }
 
 type Rule struct {
@@ -81,22 +82,4 @@ type Rule struct {
 	// immediately to an individual file.
 	CronCheck  string `toml:"cron_check"`  // optional cron parsable string representing when to check src pattern matching files
 	CountCheck uint   `toml:"count_check"` // optional int representing how many files matching that rule to wait for until the rule is exercised
-}
-
-// loadAppOptions loads the applications
-// options and sets those options to the
-// global appOpt variable.
-func loadAppOptions() (*options, error) {
-	flag.Parse()
-	opt := newOptions()
-	opt.InTopic = defaultTopic
-	opt.InChannel = defaultChannel
-
-	// parse toml first - override with flag values
-	_, err := toml.DecodeFile(*configPth, opt)
-	if err != nil {
-		return nil, err
-	}
-
-	return opt, nil
 }

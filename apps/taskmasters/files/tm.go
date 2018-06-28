@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -14,77 +12,11 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task/bus"
+	"github.com/pcelvng/task/bus/info"
 	"github.com/robfig/cron"
 )
-
-func (appOpt *options) new(app *bootstrap.TaskMaster) bootstrap.Runner {
-	doneCtx, doneCncl := context.WithCancel(context.Background())
-	tm := &tskMaster{
-		producer: app.NewProducer(),
-		consumer: app.NewConsumer(),
-		appOpt:   appOpt,
-		doneCtx:  doneCtx,
-		doneCncl: doneCncl,
-		files:    make(map[*Rule][]*stat.Stats),
-		msgCh:    make(chan *stat.Stats),
-		rules:    appOpt.Rules,
-		l:        log.New(os.Stderr, "", log.LstdFlags),
-	}
-	var err error
-	// make cron
-	tm.c, err = makeCron(appOpt.Rules, app)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return tm
-}
-
-func newTskMaster(appOpt *options) (*tskMaster, error) {
-	// validate
-	err := validateAppOpts(appOpt)
-	if err != nil {
-		return nil, err
-	}
-
-	// producer
-	producer, err := bus.NewProducer(appOpt.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	// consumer
-	consumer, err := bus.NewConsumer(appOpt.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	// context to indicate tskMaster is done shutting down.
-	doneCtx, doneCncl := context.WithCancel(context.Background())
-
-	// tm
-	tm := &tskMaster{
-		producer: producer,
-		consumer: consumer,
-		appOpt:   appOpt,
-		doneCtx:  doneCtx,
-		doneCncl: doneCncl,
-		files:    make(map[*Rule][]*stat.Stats),
-		msgCh:    make(chan *stat.Stats),
-		rules:    appOpt.Rules,
-		l:        log.New(os.Stderr, "", log.LstdFlags),
-	}
-
-	// make cron
-	tm.c, err = makeCron(appOpt.Rules, tm)
-	if err != nil {
-		return nil, err
-	}
-
-	return tm, nil
-}
 
 func (tm *tskMaster) Run(ctx context.Context) error {
 	// task master
@@ -99,32 +31,26 @@ func (tm *tskMaster) Run(ctx context.Context) error {
 
 	return nil
 }
-func (tm *tskMaster) Info() interface{} {
-	return nil
+
+type stats struct {
+	RunTime  string        `json:"runtime"`
+	Producer info.Producer `json:"producer"`
+	Consumer info.Consumer `json:"consumer"`
 }
-func validateAppOpts(appOpt *options) error {
-	if len(appOpt.Rules) == 0 {
-		return errors.New("no rules provided")
+
+func (tm *tskMaster) Info() interface{} {
+	return stats{
+		RunTime:  time.Now().Sub(tm.initTime).String(),
+		Producer: tm.producer.Info(),
+		Consumer: tm.consumer.Info(),
 	}
-
-	// validate each rule
-	for _, rule := range appOpt.Rules {
-		if rule.TaskType == "" {
-			return errors.New("task type required for all rules")
-		}
-
-		if rule.SrcPattern == "" {
-			return errors.New("src_pattern required for all rules")
-		}
-	}
-
-	return nil
 }
 
 // tskMaster is the main application runtime
 // object that will watch for files
 // and apply the config rules.
 type tskMaster struct {
+	initTime   time.Time
 	producer   bus.Producer
 	consumer   bus.Consumer
 	appOpt     *options

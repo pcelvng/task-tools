@@ -129,7 +129,7 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 // that asked the application to show the version, for example.
 // So, if Initialize is able to finish by returning, the user knows
 // it is safe to move on.
-func (w *Worker) Initialize() {
+func (w *Worker) Initialize() *Worker {
 	w.setHelpOutput() // add description to help
 
 	// flags
@@ -146,6 +146,7 @@ func (w *Worker) Initialize() {
 	if err != nil {
 		w.logFatal(err)
 	}
+	return w
 }
 
 func (w *Worker) setHelpOutput() {
