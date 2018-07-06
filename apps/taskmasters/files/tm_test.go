@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"log"
 	"os"
@@ -9,153 +10,50 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
+	"github.com/pcelvng/task/bus/io"
+	"github.com/pcelvng/task/bus/nop"
 )
 
-func TestNewTskMaster(t *testing.T) {
-	// test with default options
-	appOpt := newOptions()
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type", SrcPattern: "./test/*.txt"},
+func TestOptions_Validate(t *testing.T) {
+	fn := func(args ...interface{}) (interface{}, error) {
+		opt := args[0].(options)
+		return nil, opt.Validate()
 	}
-	tm, err := newTskMaster(appOpt)
-	if err != nil {
-		t.Errorf("expected nil got '%v'", err.Error())
-	}
-
-	if tm == nil {
-		t.Fatal("should not be nil")
-	}
-
-	// has producer
-	if tm.producer == nil {
-		t.Error("should not be nil")
-	}
-
-	// has consumer
-	if tm.consumer == nil {
-		t.Error("should not be nil")
-	}
-
-	// check doneCtx
-	if tm.doneCtx.Err() != nil {
-		t.Errorf("expected nil got '%v'", err.Error())
-	}
-
-	// check doneCncl plumbing
-	tm.doneCncl()
-	if tm.doneCtx.Err() == nil {
-		t.Error("should not be nil")
-	}
-
-	// check initialized
-	if tm.files == nil {
-		t.Error("should not be nil")
-	}
-
-	// check appOpt
-	if tm.appOpt == nil {
-		t.Error("should not be nil")
-	}
-
-	// check msgCh
-	if tm.msgCh == nil {
-		t.Error("should not be nil")
-	}
-
-	// check rules
-	if tm.rules == nil {
-		t.Error("should not be nil")
-	}
-
-	// check logger
-	if tm.l == nil {
-		t.Error("should not be nil")
-	}
-}
-
-func TestNewTskMaster_Errs(t *testing.T) {
-	// test: at least one rule required
-	appOpt := newOptions()
-	tm, err := newTskMaster(appOpt)
-	expected := "no rules provided"
-	if err == nil {
-		t.Error("should not be nil")
-	} else if err.Error() != expected {
-		t.Errorf("expected '%v' got '%v'\n", expected, err.Error())
-	}
-
-	if tm != nil {
-		t.Errorf("expected nil got '%v'", err.Error())
-	}
-
-	// test: rules require task type
-	appOpt.Rules = []*Rule{
-		{SrcPattern: "./test/*.txt"},
-	}
-	_, err = newTskMaster(appOpt)
-	expected = "task type required for all rules"
-	if err == nil {
-		t.Error("should not be nil")
-	} else if err.Error() != expected {
-		t.Errorf("expected '%v' got '%v'\n", expected, err.Error())
-	}
-
-	// test: rules require src pattern
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type"},
-	}
-	_, err = newTskMaster(appOpt)
-	expected = "src_pattern required for all rules"
-	if err == nil {
-		t.Error("should not be nil")
-	} else if err.Error() != expected {
-		t.Errorf("expected '%v' got '%v'\n", expected, err.Error())
-	}
-
-	// test: producer err
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type", SrcPattern: "./test/pattern.txt"},
-	}
-	appOpt.Options.OutBus = "invalid-out-bus"
-	_, err = newTskMaster(appOpt)
-	expected = `new producer:` // contains
-	if err == nil {
-		t.Error("should not be nil")
-	} else if !strings.Contains(err.Error(), expected) {
-		t.Errorf(`expected '%v' got '%v'`, expected, err.Error())
-	}
-
-	// test: consumer err
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type", SrcPattern: "./test/pattern.txt"},
-	}
-	appOpt.Options.InBus = "invalid-in-bus"
-	appOpt.Options.OutBus = ""
-	_, err = newTskMaster(appOpt)
-	expected = `new consumer:` // contains
-	if err == nil {
-		t.Error("should not be nil")
-	} else if !strings.Contains(err.Error(), expected) {
-		t.Errorf(`expected '%v' got '%v'`, expected, err.Error())
-	}
-
-	// test: cron err
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type", SrcPattern: "./test/pattern.txt", CronCheck: "invalid"},
-	}
-	appOpt.Options.InBus = ""
-	appOpt.Options.OutBus = ""
-	_, err = newTskMaster(appOpt)
-	expected = `invalid cron:` // contains
-	if err == nil {
-		t.Error("should not be nil")
-	} else if !strings.Contains(err.Error(), expected) {
-		t.Errorf(`expected '%v' got '%v'`, expected, err.Error())
-	}
+	trial.New(fn, trial.Cases{
+		"one rule required": {
+			Input:       options{},
+			ExpectedErr: errors.New("no rules provided"),
+		},
+		"rules require task type": {
+			Input: options{
+				Rules: []*Rule{
+					{SrcPattern: "./test/*.txt"},
+				},
+			},
+			ExpectedErr: errors.New("task type required for all rules"),
+		},
+		"rules require src pattern": {
+			Input: options{
+				Rules: []*Rule{
+					{TaskType: "test-type"},
+				},
+			},
+			ExpectedErr: errors.New("src_pattern required for all rules"),
+		},
+		/*"cron check": {
+			Input: options{
+				Rules: []*Rule{
+					{TaskType: "test-type", SrcPattern: "./test/pattern.txt", CronCheck: "invalid"},
+				},
+			},
+			ExpectedErr: errors.New("invalid cron"),
+		},*/
+	}).Test(t)
 }
 
 func TestTskMaster(t *testing.T) {
@@ -174,17 +72,20 @@ func TestTskMaster(t *testing.T) {
 	writeStats(pth, stats)
 
 	// test: typical lifecycle
-	appOpt := newOptions()
-	appOpt.Bus = "file"
-	appOpt.InTopic = pth
-	outTopic := "./test/out.tsks.json"
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt", Topic: "./test/out.tsks.json"},                       // send immediately
-		{TaskType: "test-type", SrcPattern: "/test/file*.gz", Topic: "./test/out.tsks.json"},                               // send immediately
-		{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3, Topic: "./test/out.tsks.json"},         // send when count is reached
-		{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *", Topic: "./test/out.tsks.json"}, // send when count is reached
+
+	opt := &options{
+		Rules: []*Rule{
+			{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt", Topic: "./test/out.tsks.json"},                       // send immediately
+			{TaskType: "test-type", SrcPattern: "/test/file*.gz", Topic: "./test/out.tsks.json"},                               // send immediately
+			{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3, Topic: "./test/out.tsks.json"},         // send when count is reached
+			{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *", Topic: "./test/out.tsks.json"}, // send when count is reached
+		},
 	}
-	tm, _ := newTskMaster(appOpt)
+	tm := opt.new(nil).(*tskMaster)
+	tm.producer = io.NewProducer()
+
+	outTopic := "./test/out.tsks.json"
+	tm.consumer, _ = io.NewConsumer(pth)
 	doneCtx := tm.DoFileWatch(context.Background())
 
 	<-doneCtx.Done() // wait until done processing
@@ -258,27 +159,28 @@ func TestTskMaster(t *testing.T) {
 	os.Remove("./test")
 }
 
-func TestTskMaster_ReadFileStatsErr(t *testing.T) {
-	appOpt := newOptions()
-	appOpt.Bus = "nop"
-	appOpt.NopMock = "msg_err"
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type", SrcPattern: "/test/file.txt"},
+func TestTskMaster_ReadFileStatsErr(_ *testing.T) {
+	appOpt := &options{
+		Rules: []*Rule{
+			{TaskType: "test-type", SrcPattern: "/test/file.txt"},
+		},
 	}
-	tm, _ := newTskMaster(appOpt)
+	tm := appOpt.new(nil).(*tskMaster)
+	tm.consumer, _ = nop.NewConsumer("msg_err")
+
 	tm.l = log.New(ioutil.Discard, "", log.LstdFlags)
 	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*1)
 	tm.readFileStats(ctx)
 }
 
 func TestTskMaster_SendTskErr(t *testing.T) {
-	appOpt := newOptions()
-	appOpt.OutBus = "nop"
-	appOpt.NopMock = "send_err"
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type", SrcPattern: "/test/file.txt"},
+	appOpt := &options{
+		Rules: []*Rule{
+			{TaskType: "test-type", SrcPattern: "/test/file.txt"},
+		},
 	}
-	tm, _ := newTskMaster(appOpt)
+	tm := appOpt.new(nil).(*tskMaster)
+	tm.producer, _ = nop.NewProducer("send_err")
 
 	bfr, _ := buf.NewBuffer(nil)
 	tm.l = log.New(bfr, "", 0)
@@ -308,16 +210,16 @@ func TestTskMaster_ClearFiles(t *testing.T) {
 	}
 
 	// test: typical lifecycle
-	appOpt := newOptions()
-	appOpt.InBus = "stdin"
-	appOpt.OutBus = "null"
-	appOpt.Rules = []*Rule{
-		{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt"},                       // send immediately
-		{TaskType: "test-type", SrcPattern: "/test/file*.gz"},                               // send immediately
-		{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3},         // send when count is reached
-		{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *"}, // send when count is reached
+	appOpt := &options{
+		Rules: []*Rule{
+			{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt"},                       // send immediately
+			{TaskType: "test-type", SrcPattern: "/test/file*.gz"},                               // send immediately
+			{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3},         // send when count is reached
+			{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *"}, // send when count is reached
+		},
 	}
-	tm, _ := newTskMaster(appOpt)
+	tm := appOpt.new(nil).(*tskMaster)
+	tm.producer = io.NewNullProducer()
 	for _, sts := range stats {
 		tm.matchAll(sts)
 	}

@@ -8,7 +8,7 @@ import (
 
 	"time"
 
-	"github.com/jbsmith7741/go-tools/trial"
+	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	"github.com/pcelvng/task/bus/nop"
@@ -100,15 +100,15 @@ func TestApplyRule(t *testing.T) {
 	}).EqualFn(equalFn).Test(t)
 }
 
-func equalFn(actual interface{}, expected interface{}) bool {
+func equalFn(actual interface{}, expected interface{}) (bool, string) {
 	p := actual.(*nop.Producer)
 
 	for topic, msgs := range expected.(map[string][]string) {
 		for _, v := range msgs {
 			if !p.Contains(topic, []byte(v)) {
-				return false
+				return false, ""
 			}
 		}
 	}
-	return true
+	return true, ""
 }

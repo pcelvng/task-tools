@@ -2,10 +2,9 @@ package main
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
-	"github.com/jbsmith7741/go-tools/trial"
+	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task/bus/nop"
 )
 
@@ -20,20 +19,12 @@ func TestTaskMaster_generate(t *testing.T) {
 		p, _ := nop.NewProducer(tOpts.producerMock)
 		tm := &taskMaster{
 			producer: p,
+			stats:    stats{Requests: make(map[string]int)},
 		}
 		err := tm.generate(tOpts.info)
 		return p.Messages[tOpts.topic], err
 	}
-	fnCmp := func(in interface{}, exp interface{}) bool {
-		actual := in.([]string)
-		expected := exp.([]string)
-		for i, v := range actual {
-			if !strings.Contains(v, expected[i]) {
-				return false
-			}
-		}
-		return true
-	}
+
 	trial.New(fn, map[string]trial.Case{
 		"batch 2 hours task": {
 			Input: testOpts{
@@ -69,7 +60,7 @@ func TestTaskMaster_generate(t *testing.T) {
 			},
 			ShouldErr: true,
 		},
-	}).EqualFn(fnCmp).Test(t)
+	}).EqualFn(trial.ContainsFn).Test(t)
 }
 
 func producerResponse(args ...string) []string {

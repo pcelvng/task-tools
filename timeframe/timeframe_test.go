@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jbsmith7741/go-tools/trial"
+	"github.com/jbsmith7741/trial"
 )
 
 func TestTimeFrame_Generate(t *testing.T) {

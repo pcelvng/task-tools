@@ -15,7 +15,7 @@ const (
 
 func main() {
 	opts := retry.NewOptions()
-	bootstrap.NewHelper(name, opts).Version(tools.String()).Description(description).Initialize()
+	bootstrap.NewUtility(name, opts).Version(tools.String()).Description(description).Initialize()
 
 	tm, err := retry.New(opts)
 	if err != nil {

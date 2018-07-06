@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -13,84 +11,46 @@ import (
 	"sync"
 	"time"
 
-	"github.com/robfig/cron"
-
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task/bus"
+	"github.com/pcelvng/task/bus/info"
+	"github.com/robfig/cron"
 )
 
-var (
-	dumpPrefix = "tm-files_"
-)
+func (tm *tskMaster) Run(ctx context.Context) error {
+	// task master
+	tm.DoFileWatch(ctx)
 
-func newTskMaster(appOpt *options) (*tskMaster, error) {
-	// validate
-	err := validateAppOpts(appOpt)
-	if err != nil {
-		return nil, err
-	}
-
-	// producer
-	producer, err := bus.NewProducer(appOpt.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	// consumer
-	consumer, err := bus.NewConsumer(appOpt.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	// context to indicate tskMaster is done shutting down.
-	doneCtx, doneCncl := context.WithCancel(context.Background())
-
-	// tm
-	tm := &tskMaster{
-		producer: producer,
-		consumer: consumer,
-		appOpt:   appOpt,
-		doneCtx:  doneCtx,
-		doneCncl: doneCncl,
-		files:    make(map[*Rule][]*stat.Stats),
-		msgCh:    make(chan *stat.Stats),
-		rules:    appOpt.Rules,
-		l:        log.New(os.Stderr, "", log.LstdFlags),
-	}
-
-	// make cron
-	tm.c, err = makeCron(appOpt.Rules, tm)
-	if err != nil {
-		return nil, err
-	}
-
-	return tm, nil
-}
-
-func validateAppOpts(appOpt *options) error {
-	if len(appOpt.Rules) == 0 {
-		return errors.New("no rules provided")
-	}
-
-	// validate each rule
-	for _, rule := range appOpt.Rules {
-		if rule.TaskType == "" {
-			return errors.New("task type required for all rules")
-		}
-
-		if rule.SrcPattern == "" {
-			return errors.New("src_pattern required for all rules")
-		}
+	select {
+	case <-tm.doneCtx.Done():
+		// done of its own accord
+		// can be done of its own accord if
+		// using a file bus.
 	}
 
 	return nil
+}
+
+type stats struct {
+	RunTime  string        `json:"runtime"`
+	Producer info.Producer `json:"producer"`
+	Consumer info.Consumer `json:"consumer"`
+}
+
+func (tm *tskMaster) Info() interface{} {
+	return stats{
+		RunTime:  time.Now().Sub(tm.initTime).String(),
+		Producer: tm.producer.Info(),
+		Consumer: tm.consumer.Info(),
+	}
 }
 
 // tskMaster is the main application runtime
 // object that will watch for files
 // and apply the config rules.
 type tskMaster struct {
+	initTime   time.Time
 	producer   bus.Producer
 	consumer   bus.Consumer
 	appOpt     *options
@@ -107,7 +67,7 @@ type tskMaster struct {
 	wg sync.WaitGroup
 }
 
-// DoWatch will accept a context for knowing if/when
+// DoFileWatch will accept a context for knowing if/when
 // it should perform a shutdown. A context is returned
 // to allow the caller to know when shutdown is complete.
 func (tm *tskMaster) DoFileWatch(ctx context.Context) context.Context {

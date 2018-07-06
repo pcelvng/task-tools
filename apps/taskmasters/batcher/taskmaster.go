@@ -1,83 +1,95 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/timeframe"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
 )
 
 type taskMaster struct {
+	initTime time.Time
 	producer bus.Producer
 	consumer bus.Consumer
-	done     chan struct{}
+	stats
+	done chan struct{}
 }
 
-func New(bus bus.Options) (*taskMaster, error) {
-	p, err := task.NewProducer(&bus)
-	if err != nil {
-		return nil, err
-	}
-	c, err := task.NewConsumer(&bus)
-	if err != nil {
-		return nil, err
-	}
+type stats struct {
+	RunTime      string         `json:"runtime"`
+	LastReceived interface{}    `json:"last_receieved"`
+	Requests     map[string]int `json:"requests"`
+}
+
+func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	return &taskMaster{
-		producer: p,
-		consumer: c,
+		initTime: time.Now(),
+		stats:    stats{Requests: make(map[string]int)},
+		producer: app.NewProducer(),
+		consumer: app.NewConsumer(),
 		done:     make(chan struct{}),
-	}, nil
-}
-
-func (tm *taskMaster) Start() {
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	go tm.read()
-
-	select {
-	case <-sigChan:
-		return
-	case <-tm.done:
-		return
 	}
-
 }
 
-func (tm *taskMaster) read() {
+func (tm *taskMaster) Info() interface{} {
+	tm.RunTime = time.Now().Sub(tm.initTime).String()
+	return tm.stats
+}
+
+func (tm *taskMaster) Run(ctx context.Context) error {
+	var waiting bool
+	go tm.read(ctx)
+	var timer = &time.Timer{}
 	for {
-		msg, done, err := tm.consumer.Msg()
+		select {
+		case <-ctx.Done():
+			if !waiting {
+				timer = time.NewTimer(5 * time.Second)
+				waiting = true
+			}
+		case <-timer.C:
+			return errors.New("force stop")
+		case <-tm.done:
+			return nil
+		}
+	}
+}
+
+func (tm *taskMaster) read(ctx context.Context) {
+	var done bool
+	var msg []byte
+	var err error
+	for !done {
+		if task.IsDone(ctx) {
+			break
+		}
+		msg, done, err = tm.consumer.Msg()
 		if err != nil {
 			log.Printf("consumer err: %s", err)
-			goto donecheck
+			continue
 		}
 
 		if msg != nil {
 			tsk := task.Task{}
 			if err := json.Unmarshal(msg, &tsk); err != nil {
 				log.Printf("json unmarshal error %s", err)
-				goto donecheck
+				continue
 			}
 			if err = tm.generate(tsk.Info); err != nil {
 				log.Println(err)
 			}
 		}
-
-	donecheck:
-		if done {
-			log.Println("done")
-			close(tm.done)
-			return
-		}
 	}
+	log.Println("done")
+	close(tm.done)
 }
 
 type infoOpts struct {
@@ -105,7 +117,8 @@ func (tm *taskMaster) generate(info string) error {
 	if err := iOpts.Validate(); err != nil {
 		return err
 	}
-
+	tm.Requests[iOpts.Topic]++
+	tm.LastReceived = info
 	for _, t := range iOpts.Generate() {
 		tsk := task.Task{
 			Type:    iOpts.TaskType,

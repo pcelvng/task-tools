@@ -51,7 +51,7 @@ type httpMaster struct {
 
 func main() {
 	tm := newOptions()
-	bootstrap.NewHelper(tasktype, tm).
+	bootstrap.NewUtility(tasktype, tm).
 		Version(tools.String()).Description(description).Initialize()
 	tm.producer, _ = bus.NewProducer(tm.Bus)
 

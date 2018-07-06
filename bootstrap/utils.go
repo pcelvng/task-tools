@@ -11,33 +11,33 @@ import (
 	ptoml "gopkg.in/pelletier/go-toml.v1"
 )
 
-type Helper struct {
+type Utility struct {
 	name        string
 	description string
 	version     string
 	config      interface{}
 }
 
-func NewHelper(name string, config interface{}) *Helper {
-	return &Helper{
+func NewUtility(name string, config interface{}) *Utility {
+	return &Utility{
 		name:   name,
 		config: config,
 	}
 }
 
-func (h *Helper) Initialize() {
-	setHelpOutput(h.name, h.description)
-	h.checkFlags()
+func (u *Utility) Initialize() {
+	setHelpOutput(u.name, u.description)
+	u.checkFlags()
 }
 
-func (h *Helper) Version(version string) *Helper {
-	h.version = version
-	return h
+func (u *Utility) Version(version string) *Utility {
+	u.version = version
+	return u
 }
 
-func (h *Helper) Description(description string) *Helper {
-	h.description = description
-	return h
+func (u *Utility) Description(description string) *Utility {
+	u.description = description
+	return u
 }
 
 func setHelpOutput(name, description string) {
@@ -56,19 +56,19 @@ func setHelpOutput(name, description string) {
 	}
 }
 
-func (h *Helper) checkFlags() {
+func (u *Utility) checkFlags() {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
 
-	if *showVersion || *ver && h.version != "" {
-		fmt.Println(h.version)
+	if *showVersion || *ver && u.version != "" {
+		fmt.Println(u.version)
 		os.Exit(0)
 	}
 
 	// gen config (sent to stdout)
 	if *genConfig || *g {
-		cfg := h.config
+		cfg := u.config
 		if v := reflect.ValueOf(cfg); v.Kind() == reflect.Ptr {
 			cfg = v.Elem().Interface()
 		}
@@ -87,7 +87,7 @@ func (h *Helper) checkFlags() {
 		path = *c
 	}
 
-	_, err := btoml.DecodeFile(path, h.config)
+	_, err := btoml.DecodeFile(path, u.config)
 	if err != nil {
 		log.Fatal("Error parsing config file", err)
 	}
