@@ -100,15 +100,15 @@ func TestApplyRule(t *testing.T) {
 	}).EqualFn(equalFn).Test(t)
 }
 
-func equalFn(actual interface{}, expected interface{}) bool {
+func equalFn(actual interface{}, expected interface{}) (bool, string) {
 	p := actual.(*nop.Producer)
 
 	for topic, msgs := range expected.(map[string][]string) {
 		for _, v := range msgs {
 			if !p.Contains(topic, []byte(v)) {
-				return false
+				return false, ""
 			}
 		}
 	}
-	return true
+	return true, ""
 }
