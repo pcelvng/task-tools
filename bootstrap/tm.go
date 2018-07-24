@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -324,7 +325,11 @@ func (tm *TaskMaster) loadOptions() error {
 func (tm *TaskMaster) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
-	b, _ := json.Marshal(tm.runner.Info())
+	b, err := json.Marshal(tm.runner.Info())
+	if b != nil && err == nil {
+		// Replace the first { in the json string with the { + application name
+		b = bytes.Replace(b, []byte(`{`), []byte(`{"app_name":"`+tm.appName+`",`), 1)
+	}
 	w.Write(b)
 }
 
