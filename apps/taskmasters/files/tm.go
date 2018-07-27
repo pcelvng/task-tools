@@ -33,16 +33,23 @@ func (tm *tskMaster) Run(ctx context.Context) error {
 }
 
 type stats struct {
-	RunTime  string        `json:"runtime"`
-	Producer info.Producer `json:"producer"`
-	Consumer info.Consumer `json:"consumer"`
+	RunTime  string         `json:"runtime"`
+	Producer info.Producer  `json:"producer"`
+	Consumer info.Consumer  `json:"consumer"`
+	Holding  map[string]int `json:"files"`
 }
 
 func (tm *tskMaster) Info() interface{} {
+	h := make(map[string]int)
+	for key, value := range tm.files {
+		h[key.TaskType+":"+key.SrcPattern] = len(value)
+	}
+
 	return stats{
 		RunTime:  time.Now().Sub(tm.initTime).String(),
 		Producer: tm.producer.Info(),
 		Consumer: tm.consumer.Info(),
+		Holding:  h,
 	}
 }
 

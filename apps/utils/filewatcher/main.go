@@ -13,7 +13,7 @@ import (
 
 const (
 	appName     = "filewatcher"
-	description = ``
+	description = `creates tasks for new files that appear in a watched folder`
 )
 
 type options struct {
