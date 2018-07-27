@@ -35,7 +35,7 @@ type watcher struct {
 // there will be a watcher for each rule provided
 func newWatchers(appOpt *options) (watchers []*watcher, err error) {
 	// producer
-	producer, err := bus.NewProducer(appOpt.Options)
+	producer, err := bus.NewProducer(appOpt.Bus)
 	if err != nil {
 		return nil, err
 	}

@@ -1,19 +1,23 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/BurntSushi/toml"
-	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task/bus"
 )
 
+const (
+	appName     = "filewatcher"
+	description = ``
+)
+
 type options struct {
-	*bus.Options // bus options
+	Bus *bus.Options `toml:"bus"`
 
 	AWSAccessKey string  `toml:"aws_access_key" desc:"aws secret token for S3 access "`
 	AWSSecretKey string  `toml:"aws_secret_key" desc:"aws secret key for S3 access "`
@@ -27,32 +31,22 @@ type Rule struct {
 	Frequency    string `toml:"frequency" desc:"the wait time between checking for new files in the path_template"`
 }
 
-var (
-	configPth    = flag.String("config", "config.toml", "relative or absolute file path")
-	sigChan      = make(chan os.Signal, 1) // app signal handling
-	appOpt       = newOptions()
-	defaultTopic = "files"
-)
-
 func main() {
-	if err := run(); err != nil {
-		log.Fatalln(err)
+	opt := &options{
+		Bus:        bus.NewOptions(""),
+		FilesTopic: "files",
 	}
-}
 
-func run() (err error) {
-	// signal handling - be ready to capture signal early.
+	bootstrap.NewUtility(appName, opt).
+		Description(description).
+		Version(tools.String()).Initialize()
+
+	sigChan := make(chan os.Signal, 1) // app signal handling
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	// app options
-	appOpt, err = loadAppOptions()
+	watchers, err := newWatchers(opt)
 	if err != nil {
-		return err
-	}
-
-	watchers, err := newWatchers(appOpt)
-	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 
 	for i, _ := range watchers {
@@ -68,31 +62,9 @@ func run() (err error) {
 	case <-sigChan:
 		log.Println("closing...")
 
-		err = closeWatchers(watchers)
-		return err
+		if err = closeWatchers(watchers); err != nil {
+			log.Fatal(err)
+		}
+
 	}
-
-}
-
-func newOptions() *options {
-	return &options{
-		Options: task.NewBusOptions(""),
-	}
-}
-
-// loadAppOptions loads the applications
-// options and sets those options to the
-// global appOpt variable.
-func loadAppOptions() (*options, error) {
-	flag.Parse()
-	opt := newOptions()
-	opt.FilesTopic = defaultTopic
-
-	// parse toml first - override with flag values
-	_, err := toml.DecodeFile(*configPth, opt)
-	if err != nil {
-		return nil, err
-	}
-
-	return opt, nil
 }
