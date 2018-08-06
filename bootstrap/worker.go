@@ -29,9 +29,9 @@ type Worker struct {
 	description string         // info help string that show expected info format
 	newWkr      task.NewWorker // application MakeWorker function
 
-	l *task.Launcher
-	c bus.Consumer
-	p bus.Producer
+	launcher *task.Launcher
+	consumer bus.Consumer
+	producer bus.Producer
 
 	// options
 	wkrOpt    *wkrOptions   // standard worker options (bus and launcher)
@@ -50,6 +50,7 @@ type Worker struct {
 }
 
 type Info struct {
+	AppName       string             `json:"app_name"`
 	LauncherStats task.LauncherStats `json:"launcher,omitempty"`
 	ProducerStats *info.Producer     `json:"producer,omitempty"`
 	ConsumerStats *info.Consumer     `json:"consumer,omitempty"`
@@ -57,17 +58,19 @@ type Info struct {
 
 // InfoStats for the Worker app
 func (w *Worker) InfoStats() Info {
-	if w.c != nil {
-		cs := w.c.Info()
+	w.Info.AppName = w.tskType
+
+	if w.consumer != nil {
+		cs := w.consumer.Info()
 		w.ConsumerStats = &cs
 	}
 
-	if w.l != nil {
-		w.LauncherStats = w.l.Stats()
+	if w.launcher != nil {
+		w.LauncherStats = w.launcher.Stats()
 	}
 
-	if w.p != nil {
-		ps := w.p.Info()
+	if w.producer != nil {
+		ps := w.producer.Info()
 		w.ProducerStats = &ps
 	}
 
@@ -142,7 +145,7 @@ func (w *Worker) Initialize() *Worker {
 	}
 
 	// launcher
-	w.l, err = task.NewLauncher(w.newWkr, w.wkrOpt.LauncherOpt, w.wkrOpt.BusOpt)
+	w.launcher, err = task.NewLauncher(w.newWkr, w.wkrOpt.LauncherOpt, w.wkrOpt.BusOpt)
 	if err != nil {
 		w.logFatal(err)
 	}
@@ -372,7 +375,7 @@ func (w *Worker) Run() {
 	w.start()
 
 	// do tasks
-	done, cncl := w.l.DoTasks()
+	done, cncl := w.launcher.DoTasks()
 	w.Log("listening for %s tasks on '%s'", w.wkrOpt.BusOpt.Bus, w.wkrOpt.BusOpt.InTopic)
 
 	select {
@@ -526,12 +529,12 @@ func (w *Worker) NewConsumer(topic, channel string) bus.Consumer {
 		busOpt.InChannel = channel
 	}
 
-	w.c, err = bus.NewConsumer(busOpt)
+	w.consumer, err = bus.NewConsumer(busOpt)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return w.c
+	return w.consumer
 }
 
 // NewProducer will use the bus config information
@@ -543,12 +546,12 @@ func (w *Worker) NewProducer() bus.Producer {
 	busOpt.LookupdHosts = w.wkrOpt.BusOpt.LookupdHosts
 	busOpt.NSQdHosts = w.wkrOpt.BusOpt.NSQdHosts
 
-	w.p, err = bus.NewProducer(w.wkrOpt.BusOpt)
+	w.producer, err = bus.NewProducer(w.wkrOpt.BusOpt)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return w.p
+	return w.producer
 }
 
 // Log is a wrapper around the application logger Printf method.
