@@ -1,9 +1,6 @@
 package main
 
 import (
-	"io/ioutil"
-	"log"
-	"os"
 	"testing"
 	"time"
 
@@ -12,18 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMain(m *testing.M) {
-	// disable app logging
-	log.SetOutput(ioutil.Discard)
-
-	os.Exit(m.Run())
-}
-
 func TestProducerErr(t *testing.T) {
 	o := &options{}
-	o.Options = &bus.Options{}
-	o.Bus = "nop"
-	o.NopMock = "init_err"
+	o.Bus = &bus.Options{
+		Bus:     "nop",
+		NopMock: "init_err",
+	}
 	o.Rules = append(o.Rules, &Rule{})
 
 	_, err := newWatchers(o)
@@ -32,9 +23,10 @@ func TestProducerErr(t *testing.T) {
 
 func TestNewWatchers(t *testing.T) {
 	o := &options{}
-	o.Options = &bus.Options{}
-	o.Bus = "nop"
-	o.NopMock = "msg_msg_done"
+	o.Bus = &bus.Options{
+		Bus:     "nop",
+		NopMock: "msg_msg_done",
+	}
 	o.Rules = append(o.Rules, &Rule{}, &Rule{})
 
 	ws, _ := newWatchers(o)
@@ -43,16 +35,17 @@ func TestNewWatchers(t *testing.T) {
 
 func TestErrOnStop(t *testing.T) {
 	o := &options{}
-	o.Options = &bus.Options{}
-	o.Bus = "nop"
-	o.NopMock = "stop_err"
+	o.Bus = &bus.Options{
+		Bus:     "nop",
+		NopMock: "stop_err",
+	}
 	o.Rules = append(o.Rules, &Rule{}, &Rule{})
 
 	ws1, _ := newWatchers(o)
 	err := closeWatchers(ws1)
 	assert.NotNil(t, err)
 
-	o.NopMock = "msg_msg_done"
+	o.Bus.NopMock = "msg_msg_done"
 	ws2, _ := newWatchers(o)
 	err = closeWatchers(ws2)
 	assert.Nil(t, err)
@@ -60,9 +53,10 @@ func TestErrOnStop(t *testing.T) {
 
 func TestBadFrequency(t *testing.T) {
 	o := &options{}
-	o.Options = &bus.Options{}
-	o.Bus = "nop"
-	o.NopMock = "msg_msg_done"
+	o.Bus = &bus.Options{
+		Bus:     "nop",
+		NopMock: "msg_msg_done",
+	}
 	o.Rules = append(o.Rules, &Rule{}, &Rule{})
 
 	ws1, _ := newWatchers(o)
@@ -75,9 +69,10 @@ func TestBadFrequency(t *testing.T) {
 func TestRunWatch(t *testing.T) {
 	var err error
 	o := &options{}
-	o.Options = &bus.Options{}
-	o.Bus = "nop"
-	o.NopMock = "msg_msg_done"
+	o.Bus = &bus.Options{
+		Bus:     "nop",
+		NopMock: "msg_msg_done",
+	}
 	o.Rules = append(o.Rules, &Rule{}, &Rule{})
 
 	ws1, _ := newWatchers(o)
@@ -93,9 +88,10 @@ func TestRunWatch(t *testing.T) {
 
 func TestCurrentFilesErr(t *testing.T) {
 	o := &options{}
-	o.Options = &bus.Options{}
-	o.Bus = "nop"
-	o.NopMock = "msg_msg_done"
+	o.Bus = &bus.Options{
+		Bus:     "nop",
+		NopMock: "msg_msg_done",
+	}
 	o.Rules = append(o.Rules, &Rule{}, &Rule{})
 
 	ws1, _ := newWatchers(o)
