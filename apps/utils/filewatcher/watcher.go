@@ -110,7 +110,7 @@ func (w *watcher) process(currentCache fileList, path ...string) (currentFiles f
 	currentFiles = w.currentFiles(path...)
 	newFiles := compareFileList(currentCache, currentFiles)
 	w.sendFiles(newFiles)
-
+	log.Printf("%v found %d files with %d new files", w.rule.PathTemplate, len(currentFiles), len(newFiles))
 	return currentFiles
 }
 
