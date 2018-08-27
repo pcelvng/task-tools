@@ -44,7 +44,11 @@ func (u *Utility) Description(description string) *Utility {
 	return u
 }
 
-func (u *Utility) AddInfo(info func() interface{}, port int) {
+func (u *Utility) AddInfo(info func() interface{}, port int) *Utility {
+	if port == 0 {
+		log.Println("http status server has been disabled")
+		return u
+	}
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 
@@ -63,7 +67,7 @@ func (u *Utility) AddInfo(info func() interface{}, port int) {
 		err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
 		log.Fatal("http health service failed", err)
 	}()
-
+	return u
 }
 
 func setHelpOutput(name, description string) {

@@ -88,6 +88,10 @@ func (w *Worker) HandleRequest(wr http.ResponseWriter, r *http.Request) {
 
 // Start will run the http server on the provided handler port
 func (w *Worker) start() {
+	if w.HttpPort() == 0 {
+		log.Printf("http status server has been disabled")
+		return
+	}
 	log.Printf("starting http status server on port %d", w.HttpPort())
 
 	http.HandleFunc("/", w.HandleRequest)
