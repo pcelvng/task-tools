@@ -3,31 +3,35 @@ package mock
 import (
 	"io"
 	"math"
+	"net/url"
 	"strings"
 
-	"github.com/pcelvng/task-tools/file/nop"
+	"github.com/pcelvng/task-tools/file"
+
+	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pkg/errors"
 )
 
+var _ file.Reader = (*reader)(nil)
+
 type reader struct {
-	*nop.Reader
-	lines     []string
-	lineCount int
-	linesRead int
-	index     int
+	sts          stat.Stats
+	MockReadMode string
+	lines        []string
+	lineCount    int
+	linesRead    int
+	index        int
 }
 
 func NewReader(pth string) *reader {
-	r, err := nop.NewReader(pth)
-	if err != nil {
-		panic(errors.Wrap(err, "invalid mock reader"))
-	}
+	// set MockReader
+	u, _ := url.Parse(pth)
 
 	return &reader{
-		Reader:    r,
-		lines:     make([]string, 0),
-		lineCount: 1,
-		linesRead: 0,
+		lines:        make([]string, 0),
+		lineCount:    1,
+		linesRead:    0,
+		MockReadMode: u.Host,
 	}
 }
 
@@ -37,6 +41,19 @@ func (r *reader) AddLines(lines ...string) *reader {
 		r.lineCount = len(r.lines)
 	}
 	return r
+}
+
+func (r *reader) Stats() stat.Stats {
+	return stat.Stats{LineCnt: int64(r.linesRead)}
+}
+
+func (r *reader) Close() error {
+	r.sts.SetSize(r.sts.ByteCnt)
+
+	if r.MockReadMode == "close_err" || r.MockReadMode == "err" {
+		return errors.New(r.MockReadMode)
+	}
+	return nil
 }
 
 func (r *reader) SetLineNumber(i int) *reader {
