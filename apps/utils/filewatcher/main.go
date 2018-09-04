@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task/bus"
@@ -31,6 +33,20 @@ type Rule struct {
 	Frequency    string `toml:"frequency" desc:"the wait time between checking for new files in the path_template"`
 }
 
+func (o options) Validate() error {
+	errs := appenderr.New()
+	if o.AWSAccessKey == "" || o.AWSSecretKey == "" {
+		log.Println("AWS Credentials are blank")
+	}
+	if len(o.Rules) == 0 {
+		errs.Add(errors.New("at least one rule is required"))
+	}
+	if o.FilesTopic == "" {
+		errs.Add(errors.New("file topic is required"))
+	}
+	return errs.ErrOrNil()
+}
+
 func main() {
 	opt := &options{
 		Bus:        bus.NewOptions(""),
@@ -41,6 +57,9 @@ func main() {
 		Description(description).
 		Version(tools.String()).Initialize()
 
+	if err := opt.Validate(); err != nil {
+		log.Fatal(err)
+	}
 	sigChan := make(chan os.Signal, 1) // app signal handling
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 

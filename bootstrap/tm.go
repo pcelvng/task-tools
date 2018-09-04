@@ -342,6 +342,10 @@ func (tm *TaskMaster) HttpPort() int {
 
 // Start will run the http server on the provided handler port
 func (tm *TaskMaster) start() {
+	if tm.HttpPort() == 0 {
+		log.Printf("http status server has been disabled")
+		return
+	}
 	log.Printf("starting http status server on port %d", tm.HttpPort())
 
 	http.HandleFunc("/", tm.HandleRequest)

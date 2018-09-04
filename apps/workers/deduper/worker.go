@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,7 +48,7 @@ func (i *infoOptions) validate() error {
 
 		for _, indexField := range i.Fields {
 			_, err = strconv.Atoi(indexField)
-			if err != nil {
+			if err != nil && !regexIndexRange.MatchString(indexField) {
 				return errors.New(`fields must be integers when using a csv field separator`)
 			}
 		}
@@ -101,9 +102,6 @@ func newWorker(info string) task.Worker {
 	// sort readers (oldest to newest)
 	sort.Sort(stsFiles) // implements sort interface
 
-	// deduper
-	dedup := dedup.New()
-
 	// parse destination template
 	destPth := parseTmpl(iOpt.SrcPath, iOpt.DestTemplate)
 
@@ -114,22 +112,37 @@ func newWorker(info string) task.Worker {
 	}
 
 	// csv index fields
-	indexFields := make([]int, len(iOpt.Fields))
+	indexFields := make([]int, 0, len(iOpt.Fields))
 	if len(iOpt.Sep) > 0 {
-		for n, indexField := range iOpt.Fields {
-			indexFields[n], _ = strconv.Atoi(indexField)
+		for _, indexField := range iOpt.Fields {
+			if v, err := strconv.Atoi(indexField); err == nil {
+				indexFields = append(indexFields, v)
+			} else if regexIndexRange.MatchString(indexField) {
+				// expand out integer ranges
+				d := strings.Split(indexField, "-")
+				start, _ := strconv.Atoi(d[0])
+				end, _ := strconv.Atoi(d[1])
+				for i := start; i <= end; i++ {
+					indexFields = append(indexFields, i)
+				}
+			} else {
+				return task.InvalidWorker("invalid index field %s", indexField)
+			}
 		}
 	}
 
 	return &worker{
 		iOpt:     *iOpt,
 		stsFiles: stsFiles,
-		dedup:    dedup,
+		dedup:    dedup.New(),
 		w:        w,
 
 		indexFields: indexFields,
 	}
 }
+
+// regexIndexRange checks if a string is a range of integers. ex 1-10
+var regexIndexRange = regexp.MustCompile(`^[0-9]*[-][0-9]*$`)
 
 type worker struct {
 	iOpt         infoOptions

@@ -1,11 +1,15 @@
 package bootstrap
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 
 	btoml "gopkg.in/BurntSushi/toml.v0"
 	ptoml "gopkg.in/pelletier/go-toml.v1"
@@ -37,6 +41,32 @@ func (u *Utility) Version(version string) *Utility {
 
 func (u *Utility) Description(description string) *Utility {
 	u.description = description
+	return u
+}
+
+func (u *Utility) AddInfo(info func() interface{}, port int) *Utility {
+	if port == 0 {
+		log.Println("http status server has been disabled")
+		return u
+	}
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+
+		b, err := json.Marshal(info())
+		if b != nil && err == nil {
+			// Replace the first { in the json string with the { + application name
+			b = bytes.Replace(b, []byte(`{`), []byte(`{"app_name":"`+u.name+`",`), 1)
+		}
+		w.Write(b)
+	}
+
+	log.Printf("starting http status server on port %d", port)
+
+	http.HandleFunc("/", fn)
+	go func() {
+		err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
+		log.Fatal("http health service failed", err)
+	}()
 	return u
 }
 
