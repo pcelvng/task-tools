@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jbsmith7741/go-tools/uri"
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/tmpl"
 )
