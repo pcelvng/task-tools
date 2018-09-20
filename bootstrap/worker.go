@@ -81,7 +81,7 @@ func (w *Worker) InfoStats() Info {
 // that are called and the results marshaled to return as the body of the response
 func (w *Worker) HandleRequest(wr http.ResponseWriter, r *http.Request) {
 	wr.Header().Add("Content-Type", "application/json")
-	b, _ := json.Marshal(w.InfoStats())
+	b, _ := json.MarshalIndent(w.InfoStats(), "", "  ")
 
 	wr.Write(b)
 }
