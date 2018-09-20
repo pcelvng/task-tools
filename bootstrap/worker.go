@@ -121,7 +121,7 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 		wkrOpt:     newWkrOptions(tskType),
 		appOpt:     options,
 		lgr:        log.New(os.Stderr, "", log.LstdFlags),
-		statusPort: &statsOptions{HttpPort: 11000},
+		statusPort: &statsOptions{HttpPort: 0},
 	}
 }
 

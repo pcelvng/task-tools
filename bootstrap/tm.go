@@ -51,7 +51,7 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMas
 		appOpt:     options,
 		newRunner:  initFn,
 		lgr:        log.New(os.Stderr, "", log.LstdFlags),
-		statusPort: &statsOptions{HttpPort: 11000},
+		statusPort: &statsOptions{HttpPort: 0},
 	}
 }
 
