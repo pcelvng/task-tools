@@ -6,14 +6,15 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task/bus"
+	"github.com/robfig/cron"
 )
 
 const (
@@ -35,7 +36,11 @@ func main() {
 	opts := &options{
 		Options: bus.NewOptions(""),
 	}
-	bootstrap.NewUtility(name, opts).Version(tools.String()).Description(description).Initialize()
+	app := bootstrap.NewUtility(name, opts).
+		Version(tools.String()).
+		Description(description)
+	app.Initialize()
+	app.AddInfo(opts.Info, opts.Port)
 
 	// producer
 	p, err := bus.NewProducer(opts.Options)
@@ -62,6 +67,7 @@ func main() {
 }
 
 type options struct {
+	Port         int `toml:"status_port"`
 	*bus.Options `toml:"bus"`
 
 	// rules
@@ -85,10 +91,33 @@ func (o options) Validate() error {
 		if r.Topic == "" && r.TaskType == "" {
 			errs.Add(fmt.Errorf("topic is required: [%d]\n%s", i, spew.Sdump(r)))
 		}
-
-		if strings.Count(strings.Trim(r.CronRule, " "), " ") < 5 {
-			errs.Add(fmt.Errorf("invalid cron rule: [%d]\n%s", i, spew.Sdump(r)))
+		if _, err := cron.Parse(r.CronRule); err != nil {
+			errs.Add(fmt.Errorf("invalid cron rule: [%d] %s\n%s", i, r.CronRule, err))
 		}
 	}
 	return errs.ErrOrNil()
+}
+
+type NextRun struct {
+	Topic string    `json:"topic"`
+	Rule  string    `json:"rule"`
+	In    string    `json:"run_in"`
+	Time  time.Time `json:"time"`
+}
+
+func (o *options) Info() interface{} {
+	info := make([]NextRun, len(o.Rules))
+	now := time.Now()
+	for i, r := range o.Rules {
+		s, _ := cron.Parse(r.CronRule)
+		info[i].Topic = r.TaskType
+		info[i].Rule = r.CronRule
+		info[i].Time = s.Next(now)
+		info[i].In = info[i].Time.Sub(now).String()
+	}
+	return struct {
+		Rules []NextRun `json:"rules"`
+	}{
+		Rules: info,
+	}
 }
