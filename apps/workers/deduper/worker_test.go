@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jbsmith7741/trial"
+
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
@@ -20,7 +22,51 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestNewWorker(t *testing.T) {
+func TestOptions_Validate(t *testing.T) {
+	fn := func(args ...interface{}) (interface{}, error) {
+		opt := args[0].(infoOptions)
+		return nil, (&opt).validate()
+	}
+	cases := trial.Cases{
+		"valid options": {
+			Input: infoOptions{
+				Fields:       []string{"apple"},
+				DestTemplate: "nop://",
+			},
+		},
+		"missing destination": {
+			Input: infoOptions{
+				Fields: []string{"apple"},
+			},
+			ShouldErr: true,
+		},
+		"integer fields": {
+			Input: infoOptions{
+				Fields:       []string{"1", "2", "3"},
+				Sep:          "\t",
+				DestTemplate: "nop://",
+			},
+		},
+		"integer range": {
+			Input: infoOptions{
+				Fields:       []string{"1-5", "7", "10-12"},
+				Sep:          "\t",
+				DestTemplate: "nop://",
+			},
+		},
+		"invalid ints": {
+			Input: infoOptions{
+				Fields:       []string{"1-a5", "7", "10-12"},
+				Sep:          "\t",
+				DestTemplate: "nop://",
+			},
+			ShouldErr: true,
+		},
+	}
+	trial.New(fn, cases).Test(t)
+}
+
+func TestWorker_DoTask(t *testing.T) {
 	// setup
 	os.Mkdir("./test", 0700)
 	nopProducer, _ := bus.NewProducer(bus.NewOptions("nop"))
@@ -320,7 +366,7 @@ func TestNewWorker(t *testing.T) {
 	os.RemoveAll("./test/")
 }
 
-func TestNewWorker_Err(t *testing.T) {
+func TestWorker_DoTask_Err(t *testing.T) {
 	// setup
 	nopProducer, _ := bus.NewProducer(bus.NewOptions("nop"))
 	cnclCtx, cncl := context.WithCancel(context.Background())
@@ -383,7 +429,7 @@ func TestNewWorker_Err(t *testing.T) {
 			ctx:            context.Background(),
 			info:           `?fields=f1&dest-template=./test/test.json&sep=,`,
 			expectedResult: task.ErrResult,
-			expectedMsg:    `fields must be integers when using a csv field separator`,
+			expectedMsg:    `invalid field f1 for csv file`,
 		},
 
 		// scenario 4: empty src dir

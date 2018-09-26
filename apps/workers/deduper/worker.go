@@ -49,7 +49,7 @@ func (i *infoOptions) validate() error {
 		for _, indexField := range i.Fields {
 			_, err = strconv.Atoi(indexField)
 			if err != nil && !regexIndexRange.MatchString(indexField) {
-				return errors.New(`fields must be integers when using a csv field separator`)
+				return fmt.Errorf("invalid field %v for csv file", indexField)
 			}
 		}
 	}

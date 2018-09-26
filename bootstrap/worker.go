@@ -81,7 +81,7 @@ func (w *Worker) InfoStats() Info {
 // that are called and the results marshaled to return as the body of the response
 func (w *Worker) HandleRequest(wr http.ResponseWriter, r *http.Request) {
 	wr.Header().Add("Content-Type", "application/json")
-	b, _ := json.Marshal(w.InfoStats())
+	b, _ := json.MarshalIndent(w.InfoStats(), "", "  ")
 
 	wr.Write(b)
 }
@@ -121,7 +121,7 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 		wkrOpt:     newWkrOptions(tskType),
 		appOpt:     options,
 		lgr:        log.New(os.Stderr, "", log.LstdFlags),
-		statusPort: &statsOptions{HttpPort: 11000},
+		statusPort: &statsOptions{HttpPort: 0},
 	}
 }
 

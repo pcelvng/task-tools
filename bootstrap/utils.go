@@ -52,10 +52,10 @@ func (u *Utility) AddInfo(info func() interface{}, port int) *Utility {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 
-		b, err := json.Marshal(info())
+		b, err := json.MarshalIndent(info(), "", "  ")
 		if b != nil && err == nil {
 			// Replace the first { in the json string with the { + application name
-			b = bytes.Replace(b, []byte(`{`), []byte(`{"app_name":"`+u.name+`",`), 1)
+			b = bytes.Replace(b, []byte(`{`), []byte(`{\n  "app_name":"`+u.name+`",`), 1)
 		}
 		w.Write(b)
 	}

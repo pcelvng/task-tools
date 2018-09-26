@@ -1,4 +1,5 @@
 # task-tools
+[![Build Status](https://travis-ci.org/pcelvng/task-tools.svg?branch=master)](https://travis-ci.org/pcelvng/task-tools)
 Tools to enhance the Task experience
 
 

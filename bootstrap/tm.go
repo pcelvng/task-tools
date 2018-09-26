@@ -51,7 +51,7 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMas
 		appOpt:     options,
 		newRunner:  initFn,
 		lgr:        log.New(os.Stderr, "", log.LstdFlags),
-		statusPort: &statsOptions{HttpPort: 11000},
+		statusPort: &statsOptions{HttpPort: 0},
 	}
 }
 
@@ -325,17 +325,16 @@ func (tm *TaskMaster) loadOptions() error {
 func (tm *TaskMaster) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
-	b, err := json.Marshal(tm.runner.Info())
+	b, err := json.MarshalIndent(tm.runner.Info(), "", "  ")
 	if b != nil && err == nil {
 		// Replace the first { in the json string with the { + application name
-		b = bytes.Replace(b, []byte(`{`), []byte(`{"app_name":"`+tm.appName+`",`), 1)
+		b = bytes.Replace(b, []byte(`{`), []byte(`{\n  "app_name":"`+tm.appName+`",`), 1)
 	}
 	w.Write(b)
 }
 
 // HttpPort gets the application http port for requesting
-// a heath check on the application itself. If the port is not provided
-// The port should alwasy be provided
+// a heath check on the application itself.
 func (tm *TaskMaster) HttpPort() int {
 	return tm.statusPort.HttpPort
 }
@@ -355,8 +354,7 @@ func (tm *TaskMaster) start() {
 	}()
 }
 
-// Run will run until the application is complete
-// and then exit.
+// Run until the application is complete and then exit.
 func (tm *TaskMaster) Run() {
 	// Start the http health status service
 	tm.start()
