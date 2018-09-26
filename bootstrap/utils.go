@@ -55,7 +55,8 @@ func (u *Utility) AddInfo(info func() interface{}, port int) *Utility {
 		b, err := json.MarshalIndent(info(), "", "  ")
 		if b != nil && err == nil {
 			// Replace the first { in the json string with the { + application name
-			b = bytes.Replace(b, []byte(`{`), []byte(`{\n  "app_name":"`+u.name+`",`), 1)
+			b = bytes.Replace(b, []byte(`{`), []byte(`{
+"app_name":"`+u.name+`",`), 1)
 		}
 		w.Write(b)
 	}
