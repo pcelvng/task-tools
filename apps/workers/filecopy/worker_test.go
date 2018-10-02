@@ -15,7 +15,6 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	fOpt = file.NewOptions()
 	os.Exit(m.Run())
 }
 

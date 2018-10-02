@@ -51,7 +51,6 @@ Example task:
  - dest-template 
 `
 
-	fOpt        *file.Options
 	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 )
 
@@ -67,7 +66,6 @@ func main() {
 	if appOpt.FileTopic != "-" {
 		producer = app.NewProducer()
 	}
-	fOpt = app.GetFileOpts()
 	app.Run()
 }
 
