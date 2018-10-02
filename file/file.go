@@ -70,6 +70,7 @@ type Writer interface {
 	Abort() error
 }
 
+// NewOptions
 func NewOptions() *Options {
 	return &Options{}
 }
@@ -87,7 +88,7 @@ type Options struct {
 
 	// FileBufDir optionally specifies the temp directory. If not specified then
 	// the os default temp dir is used.
-	FileBufDir string `toml:"file_buf_dir" commented:"true" comment:"temp file directory if buffering files to disk (default is the os temp directory)"`
+	FileBufDir string `toml:"file_buf_dir" commented:"true" comment:"temp file directory if buffering files to disk (default is the os temp directory, note: app user must have access to this directory)"`
 
 	// FileBufPrefix optionally specifies the temp file prefix.
 	// The full tmp file name is randomly generated and guaranteed

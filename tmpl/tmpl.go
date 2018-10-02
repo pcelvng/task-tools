@@ -91,17 +91,19 @@ func Parse(s string, t time.Time) string {
 }
 
 var (
-	hFileRe = regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)
-	hSlugRe = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}`)
-	dSlugRe = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}`)
-	mSlugRe = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)
+	hFileRe  = regexp.MustCompile(`[0-9]{8}T[0-9]{6}`)                      // 20060102T150405
+	hSlugRe  = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}`) // 2006/01/02/15
+	dSlugRe  = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}\/[0-9]{2}`)           // 2006/01/02
+	mSlugRe  = regexp.MustCompile(`[0-9]{4}\/[0-9]{2}`)                     // 2006/01
+	d2SlugRe = regexp.MustCompile(`[0-9]{4}-[0-9]{2}-[0-9]{2}`)             // 2006-01-02
 )
 
 // PathTime will attempt to extract a time value from the path
 // by the following formats
 // filename - /path/{20060102T150405}.txt
 // hour slug - /path/2006/01/02/15/file.txt
-// day slug - /path/2006/01/02/file.txt
+// day slash slug - /path/2006/01/02/file.txt
+// day dash slug - /path/2006-01-02.txt
 // month slug - /path/2006/01/file.txt
 func PathTime(pth string) time.Time {
 	_, srcFile := filepath.Split(pth)
@@ -120,12 +122,20 @@ func PathTime(pth string) time.Time {
 		return t
 	}
 
-	// day slug regex
+	// day slash slug regex
 	if dSlugRe.MatchString(pth) {
 		s := dSlugRe.FindString(pth)
 		t, _ := time.Parse("2006/01/02", s)
 		return t
 	}
+
+	// day dash slug regex
+	if d2SlugRe.MatchString(pth) {
+		s := dSlugRe.FindString(pth)
+		t, _ := time.Parse("2006-01-02", s)
+		return t
+	}
+
 	// month slug regex
 	if mSlugRe.MatchString(pth) {
 		s := mSlugRe.FindString(pth)
