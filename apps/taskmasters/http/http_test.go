@@ -11,11 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task/bus"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/jarcoal/httpmock.v1"
 )
-
-type mockResponseWriter struct{}
 
 func TestMain(m *testing.M) {
 	// disable app logging
@@ -150,4 +151,52 @@ func TestValidate(t *testing.T) {
 	req.For = "blahblah"
 	err = req.validate()
 	assert.NotNil(t, err) // bad for value
+}
+
+func TestHandleStatus(t *testing.T) {
+	// test setup
+	hm := &httpMaster{
+		Apps: map[string]string{
+			"valid":   "endpoint:10000",
+			"timeout": "null",
+		},
+	}
+
+	// mock status endpoints for the two dummy apps valid and timeout
+	httpmock.Activate()
+	defer httpmock.Deactivate()
+	httpmock.RegisterResponder("GET", "http://endpoint:10000",
+		httpmock.NewStringResponder(http.StatusOK, "app ok"))
+	httpmock.RegisterResponder("GET", "http://null",
+		httpmock.NewErrorResponder(errors.New("connection refused")))
+
+	fn := func(args ...interface{}) (interface{}, error) {
+		w := httptest.NewRecorder()
+		req := args[0].(*http.Request)
+		hm.handleStatus(w, req)
+
+		if w.Code != http.StatusOK {
+			return nil, errors.New(w.Body.String())
+		}
+		return w.Body.String(), nil
+	}
+	cases := trial.Cases{
+		"successful call": {
+			Input:    httptest.NewRequest("GET", "http://path/status?app=valid", nil),
+			Expected: "app ok",
+		},
+		"no response": {
+			Input:       httptest.NewRequest("GET", "http://path/status?app=timeout", nil),
+			ExpectedErr: errors.New("connection refused"),
+		},
+		"missing params": {
+			Input:       httptest.NewRequest("GET", "http://", nil),
+			ExpectedErr: errors.New("missing request values"),
+		},
+		"non-registered app": {
+			Input:       httptest.NewRequest("GET", "http://path/status?app=missing", nil),
+			ExpectedErr: errors.New("unknown app"),
+		},
+	}
+	trial.New(fn, cases).Test(t)
 }

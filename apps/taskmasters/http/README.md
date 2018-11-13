@@ -1,25 +1,22 @@
 # HTTP Taskmaster
 
-http creates a batcher task based on the http request values, query params overwrite json body values, if a body is provided it must be in json format
+http Taskmaster is used to manage tasks from the outside world using http request values. 
+
+Note: query params overwrite json body values, if a body is provided it must be in json format
+ 
+ ## Create a batch task
+ - create a batcher task based on the http request values
+ 
+ ``` curl localhost:port/batch?```
+ 
+ ``` curl localhost:port/status?app=app_name```
+ 
+ ``` curl localhost:port/job?command=fee-campaign&from=2018-10-01T00&to2018-11-01T00```
 
 info - if provided it sends this value as the info value to the bus, if not provided will send the parsed request values in a uri string
 
-simplest usage:
-
-```bash
-go build
-./http -config=/config.tom
-```
-
-### - config variables
-- *** config defaults
-  - bus        - stdio
-  - task_type  - batcher
-  - http_port  - 8080
-
-
-#### ‼(PLEASE NOTE ~ underscores for json body request, dashes for uri query params)‼ 💣
-#### http request variables
+**‼(PLEASE NOTE ~ underscores for json body request, dashes for uri query params)‼ 💣** 
+### http request variables
 - from - the start time of the first task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (REQUIRED)
 - *** pick a duration modifier ***
   - to - the end time of the last task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (takes presidence over for value)

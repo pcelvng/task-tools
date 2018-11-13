@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pcelvng/task"
 	"gopkg.in/jbsmith7741/uri.v0"
+
+	"github.com/pcelvng/task"
+	"github.com/pkg/errors"
 )
 
 type TaskRequest struct {
@@ -25,32 +27,10 @@ type TaskRequest struct {
 
 func (opt *httpMaster) handleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
-
-	// read the http request body
-	body, _ := ioutil.ReadAll(r.Body)
-
-	// there must be some kind of request body sent, or request query params
-	if len(body) == 0 && len(r.URL.Query()) == 0 {
+	req := &TaskRequest{}
+	if err := parseRequest(r, req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, `{"msg":"missing request values"}`)
-		return
-	}
-
-	req := new(TaskRequest)
-	// if a body is provided unmarshal into the TaskRequest
-	if len(body) > 0 {
-		err := json.Unmarshal(body, req)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `{"msg":"Error reading json request body","error":"%v"}`, err)
-			return
-		}
-	}
-
-	// if query params are provided, uri Unmarshal will override those values,
-	// meaning query params take precedence
-	if len(r.URL.Query()) > 0 {
-		uri.Unmarshal(r.URL.String(), req)
+		fmt.Fprintf(w, `{"msg":"%s"}`, err.Error())
 	}
 
 	// if 'for' and 'to' are not provided, run for only one time
@@ -75,6 +55,66 @@ func (opt *httpMaster) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprint(w, string(tskJson))
+}
+
+func parseRequest(r *http.Request, i interface{}) error {
+	// read the http request body
+	body, _ := ioutil.ReadAll(r.Body)
+
+	// there must be some kind of request body sent, or request query params
+	if len(body) == 0 && len(r.URL.Query()) == 0 {
+		return errors.New("missing request values")
+	}
+
+	// if a body is provided unmarshal into the TaskRequest
+	if len(body) > 0 {
+		err := json.Unmarshal(body, i)
+		if err != nil {
+			return errors.Wrapf(err, "body unmarshal")
+		}
+	}
+
+	// if query params are provided, uri Unmarshal will override those values,
+	// meaning query params take precedence
+	if len(r.URL.Query()) > 0 {
+		return uri.Unmarshal(r.URL.String(), i)
+	}
+
+	return nil
+}
+
+func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+
+	type params struct {
+		App string `uri:"app" required:"true"`
+	}
+
+	a := &params{}
+	if err := parseRequest(r, a); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"msg":"%s"}`, err.Error())
+		return
+	}
+
+	ip, found := opt.Apps[a.App]
+	if !found {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"msg":"unknown app %q"}`, a.App)
+		return
+	}
+	req, _ := http.NewRequest("GET", "http://"+ip, nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprintf(w, `{"msg":"%s}`, err)
+		return
+	}
+
+	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
 
 // returns an error if validation does not pass
