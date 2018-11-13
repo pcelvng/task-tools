@@ -25,7 +25,7 @@ type TaskRequest struct {
 	OffHours     []int     `json:"off_hours" uri:"off-hours"`         // comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.)
 }
 
-func (opt *httpMaster) handleRequest(w http.ResponseWriter, r *http.Request) {
+func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	req := &TaskRequest{}
 	if err := parseRequest(r, req); err != nil {

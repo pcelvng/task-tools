@@ -54,7 +54,7 @@ func main() {
 
 	tm.producer, _ = bus.NewProducer(tm.Bus)
 
-	http.HandleFunc("/batch", tm.handleRequest)
+	http.HandleFunc("/batch", tm.handleBatch)
 	http.HandleFunc("/status", tm.handleStatus)
 	log.Println("starting http server on port", tm.HttpPort)
 	log.Print(http.ListenAndServe(":"+tm.HttpPort, nil))

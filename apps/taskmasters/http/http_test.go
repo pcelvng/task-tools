@@ -32,7 +32,7 @@ func TestHandleNoRequestValues(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	opts := newOptions()
-	opts.handleRequest(w, req)
+	opts.handleBatch(w, req)
 
 	resp := w.Result()
 	//body, _ := ioutil.ReadAll(resp.Body)
@@ -54,7 +54,7 @@ func TestHandleBodyRequestValues(t *testing.T) {
 		opts.producer, _ = bus.NewProducer(opts.Bus)
 	}
 
-	opts.handleRequest(w, req)
+	opts.handleBatch(w, req)
 
 	resp := w.Result()
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -73,7 +73,7 @@ func TestQueryParamsReqeust(t *testing.T) {
 
 	opts.producer, _ = bus.NewProducer(opts.Bus)
 
-	opts.handleRequest(w, req)
+	opts.handleBatch(w, req)
 	resp := w.Result()
 	body, _ := ioutil.ReadAll(resp.Body)
 
@@ -86,7 +86,7 @@ func TestValidationRequestError(t *testing.T) {
 	w := httptest.NewRecorder()
 	opts := newOptions()
 
-	opts.handleRequest(w, req)
+	opts.handleBatch(w, req)
 	resp := w.Result()
 	body, _ := ioutil.ReadAll(resp.Body)
 
@@ -100,7 +100,7 @@ func TestHandleBadBodyRequest(t *testing.T) {
 	w := httptest.NewRecorder()
 	opts := newOptions()
 
-	opts.handleRequest(w, req)
+	opts.handleBatch(w, req)
 
 	resp := w.Result()
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -119,7 +119,7 @@ func TestHandleBadSendTask(t *testing.T) {
 	opts.Bus.NopMock = "send_err"
 	opts.producer, _ = bus.NewProducer(opts.Bus)
 
-	opts.handleRequest(w, req)
+	opts.handleBatch(w, req)
 
 	resp := w.Result()
 	body, _ := ioutil.ReadAll(resp.Body)
