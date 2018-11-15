@@ -25,13 +25,17 @@ type reader struct {
 
 func NewReader(pth string) *reader {
 	// set MockReader
-	u, _ := url.Parse(pth)
+	u, err := url.Parse(pth)
+	var mode = "err"
+	if err == nil {
+		mode = u.Host
+	}
 
 	return &reader{
 		lines:        make([]string, 0),
 		lineCount:    1,
 		linesRead:    0,
-		MockReadMode: u.Host,
+		MockReadMode: mode,
 	}
 }
 
