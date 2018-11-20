@@ -42,7 +42,7 @@ func (d *discover) registerConsumer(prevTopics []string) ([]string, error) {
 	for _, host := range d.lookupds {
 		topics, err := getTopics(host)
 		if err != nil {
-			return prevTopics, errors.Wrapf(err, "%s topic err %s", err)
+			return prevTopics, errors.Wrapf(err, "topic err %s", err)
 		}
 
 		for _, topic := range topics {
@@ -55,9 +55,12 @@ func (d *discover) registerConsumer(prevTopics []string) ([]string, error) {
 				topicMap[topic] = struct{}{}
 			}
 		}
-		return topics, nil
 	}
-	return nil, nil
+	topics := make([]string, 0)
+	for t := range topicMap {
+		topics = append(topics, t)
+	}
+	return topics, nil
 }
 
 // DiscoverTopics queries lookupds for any new topics, creates a consumer
@@ -76,10 +79,7 @@ func getTopics(host string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	body, _ := ioutil.ReadAll(resp.Body)
 	r := &topicResponse{}
 	err = json.Unmarshal(body, r)
 	if len(r.Topics) != 0 {
