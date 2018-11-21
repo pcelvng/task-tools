@@ -3,12 +3,9 @@ package consumer
 import (
 	"testing"
 
-	"github.com/nsqio/go-nsq"
-
-	"github.com/pkg/errors"
-
 	"github.com/jbsmith7741/trial"
-
+	"github.com/nsqio/go-nsq"
+	"github.com/pkg/errors"
 	"gopkg.in/jarcoal/httpmock.v1"
 )
 
@@ -123,6 +120,13 @@ func TestRegisterConsumer(t *testing.T) {
 				prev: []string{},
 			},
 			ExpectedErr: errors.New("consumer init err"),
+		},
+		"same topics on 2 hosts": {
+			Input: input{
+				d:    discover{lookupds: []string{"host1", "host1"}, channel: "stats"},
+				prev: []string{},
+			},
+			Expected: []string{"done", "task1", "task2"},
 		},
 	}
 	trial.New(fn, cases).Test(t)

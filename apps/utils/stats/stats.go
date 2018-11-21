@@ -75,11 +75,6 @@ func (s *stat) Details() string {
 		len(s.inProgress))
 }
 
-func (s *stat) Close() {
-	s.consumer.Stop()
-	<-s.consumer.StopChan
-}
-
 const precision = 10 * time.Millisecond
 
 type durStats struct {

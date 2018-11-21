@@ -2,7 +2,11 @@ package main
 
 import (
 	"errors"
+	"io/ioutil"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jbsmith7741/trial"
 	"github.com/nsqio/go-nsq"
@@ -113,6 +117,98 @@ func TestStat_HandleMessage(t *testing.T) {
 		},
 		"valid task": {
 			Input: `{"type":"task","info":"","created":"2018-11-10T00:00:00Z","result":"complete","started":"2018-11-10T00:00:00Z","ended":"2018-11-10T00:00:00Z"}`,
+		},
+	}
+	trial.New(fn, cases).Test(t)
+}
+
+func TestApp_HandleMessage(t *testing.T) {
+	// setup test data
+	a := &app{
+		topics: map[string]*stat{
+			"task1": {
+				inProgress: map[string]task.Task{
+					"1:2:3": {},
+					"2:2:2": {},
+				},
+				success: &durStats{
+					count: 10,
+					sum:   10,
+					Min:   0,
+					Max:   time.Second,
+				},
+				error: &durStats{},
+			},
+			"task2": {
+				inProgress: make(map[string]task.Task),
+				success: &durStats{
+					count: 3,
+					sum:   250,
+					Min:   5 * time.Millisecond,
+					Max:   10 * time.Second,
+				},
+				error: &durStats{
+					count: 1,
+					sum:   5,
+					Min:   time.Microsecond,
+					Max:   3 * time.Second,
+				},
+			},
+			"task3": {
+				inProgress: make(map[string]task.Task),
+				success:    &durStats{},
+				error: &durStats{
+					count: 7,
+					sum:   385,
+					Min:   50 * time.Millisecond,
+					Max:   100 * time.Millisecond,
+				},
+			},
+		},
+	}
+	response := []string{`task1
+Success: 1.00% 	10  min: 0s max 1s avg:10ms
+Failed: 0.00% 
+InProgress: 2`, `task2
+Success: 0.75% 	3  min: 5ms max 10s avg:830ms
+Failed: 0.25% 	1  min: 1µs max 3s avg:50ms
+InProgress: 0`, `task3
+Success: 0.00% 
+Failed: 1.00% 	7  min: 50ms max 100ms avg:550ms
+InProgress: 0`}
+	fn := func(args ...interface{}) (interface{}, error) {
+		req := httptest.NewRequest("GET", args[0].(string), nil)
+		w := httptest.NewRecorder()
+		a.handler(w, req)
+		b, err := ioutil.ReadAll(w.Body)
+		if err != nil {
+			return nil, err
+		}
+		// remove first line uptime from result
+		s := string(b)
+		s = s[strings.Index(s, "\n")+1:]
+		return s, nil
+	}
+	cases := trial.Cases{
+		"all topics": {
+			Input:    "localhost:8080?",
+			Expected: strings.Join(response, "\n\n") + "\n\n",
+		},
+		"task1": {
+			Input:    "localhost:8080?topic=task1",
+			Expected: response[0] + "\n\n",
+		},
+		"task1 & task2": {
+			Input:    "localhost:8080?topic=task1&topic=task2",
+			Expected: response[0] + "\n\n" + response[1] + "\n\n",
+		},
+		"task1,task3": {
+			Input:    "localhost:8080?topic=task1,task3",
+			Expected: response[0] + "\n\n" + response[2] + "\n\n",
+		},
+		"invalid task": {
+			Input:    "localhost:8080?topic=invalid",
+			Expected: "",
 		},
 	}
 	trial.New(fn, cases).Test(t)

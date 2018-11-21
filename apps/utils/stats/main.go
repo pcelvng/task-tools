@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jbsmith7741/uri"
 	nsq "github.com/nsqio/go-nsq"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools"
@@ -79,8 +80,11 @@ func (a *app) Start() {
 }
 
 func (a *app) handler(w http.ResponseWriter, req *http.Request) {
-	v := req.URL.Query()
-	s := a.Message(v["topic"]...)
+	v := struct {
+		Topic []string `uri:"topic"`
+	}{}
+	uri.Unmarshal(req.URL.String(), &v)
+	s := a.Message(v.Topic...)
 	w.Write([]byte(s))
 }
 
@@ -102,13 +106,17 @@ func (a *app) Stop() {
 func (a *app) Message(topics ...string) string {
 	s := fmt.Sprintf("uptime: %v\n", time.Now().Sub(a.starttime))
 	if len(topics) == 0 {
-		for name, t := range a.topics {
-			s += name + "\n" + t.Details() + "\n"
+		for name, topic := range a.topics {
+			s += name + "\n" + topic.Details() + "\n"
 		}
 		return s
 	}
 	for _, t := range topics {
-		s += t + "\n" + a.topics[t].Details() + "\n"
+		topic, found := a.topics[t]
+		if !found {
+			continue
+		}
+		s += t + "\n" + topic.Details() + "\n"
 	}
 	return s
 }
