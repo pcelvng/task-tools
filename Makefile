@@ -10,7 +10,8 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = backloader crontask files retry filewatcher nop sort2file deduper batcher http recap filecopy stats
+APPS = backloader crontask files retry filewatcher nop sort2file deduper batcher http recap filecopy logger stats
+
 all: $(APPS)
 
 $(BLDDIR)/backloader:     $(wildcard apps/taskmasters/backloader/*.go)
@@ -23,6 +24,7 @@ $(BLDDIR)/http:           $(wildcard apps/taskmasters/http/*.go)
 $(BLDDIR)/filewatcher:    $(wildcard apps/utils/filewatcher/*.go)
 $(BLDDIR)/recap:          $(wildcard apps/utils/recap/*.go)
 $(BLDDIR)/recap:          $(wildcard apps/utils/stats/*.go)
+$(BLDDIR)/logger:         $(wildcard apps/utils/logger/*.go)
 
 $(BLDDIR)/nop:            $(wildcard apps/workers/nop/*.go)
 $(BLDDIR)/sort2file:      $(wildcard apps/workers/sort2file/*.go)

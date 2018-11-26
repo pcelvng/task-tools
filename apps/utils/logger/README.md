@@ -12,5 +12,3 @@ Supported destinations include:
 - InfluxData (https://www.influxdata.com/)
 
 
-
-
