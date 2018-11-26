@@ -14,3 +14,6 @@ Supported destinations include:
 
 
 
+[write_options]
+aws_access_key = "AKIAJ454YY25RZH2PBXQ"
+aws_secret_key = "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"
