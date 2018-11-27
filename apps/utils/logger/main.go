@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/jbsmith7741/go-tools/appenderr"
 
 	"github.com/pcelvng/task-tools/tmpl"
 
@@ -48,26 +49,31 @@ func New() *app {
 	return a
 }
 
-var (
-	appName     = "logger"
+const (
 	description = `logger is a utility to log nsq messages from all found topics to all destination templates`
 )
 
 func main() {
 	app := New()
 	bootstrap.NewUtility("logger", app).
-		Description(`app that writes all topic messages to various destinations`).
+		Description(description).
 		Version(tools.String()).
+		AddInfo(app.Info, app.StatusPort).
 		Initialize()
 
 	app.Start()
 }
 
-func (a *app) Start() {
-	log.Printf("starting server on port %d", a.StatusPort)
-	http.HandleFunc("/", a.handler)
-	go http.ListenAndServe(":"+strconv.Itoa(a.StatusPort), nil)
+func (a *app) Info() interface{} {
+	data := make(map[string]int)
+	for name, topic := range a.topics {
+		data[name] = topic.Messages
+	}
+	return data
+}
 
+func (a *app) Start() {
+	go a.RotateLogs()
 	consumer.DiscoverTopics(a.newConsumer, a.Channel, a.PollPeriod, a.LookupdHosts)
 
 	sigChan := make(chan os.Signal) // app signal handling
@@ -82,6 +88,38 @@ func (a *app) Start() {
 		a.Stop()
 	}
 }
+func (a *app) RotateLogs() {
+	for ; ; time.Sleep(nextHour(time.Now())) {
+		if err := a.rotateWriters(time.Now()); err != nil {
+			log.Println(err)
+			a.Stop()
+		}
+	}
+}
+
+func nextHour(t time.Time) time.Duration {
+	h := t.Truncate(time.Hour).Add(59*time.Minute + 50*time.Second)
+	d := h.Sub(t.Round(time.Second))
+	if d <= 0 {
+		d += time.Hour
+	}
+	return d
+}
+
+func (a *app) rotateWriters(tm time.Time) error {
+	fmt.Println("files rotate", len(a.topics))
+	errs := appenderr.New()
+	for _, topic := range a.topics {
+		errs.Add(topic.CreateWriters(&a.WriteOptions, a.DestTemplates))
+	}
+	return errs.ErrOrNil()
+}
+
+func Parse(path, topic string, t time.Time) string {
+	path = strings.Replace(path, "{topic}", topic, -1)
+	path = strings.Replace(path, "{TOPIC}", topic, -1)
+	return tmpl.Parse(path, t)
+}
 
 func (a *app) newConsumer(topic string, c *nsq.Consumer) {
 	log.Printf("connecting to %s", topic)
@@ -93,27 +131,14 @@ func (a *app) newConsumer(topic string, c *nsq.Consumer) {
 	}
 	l := newlog(topic, c)
 
-	for _, t := range a.DestTemplates {
-		pth := tmpl.Parse(t, time.Now())
-		w, err := file.NewWriter(pth, &a.WriteOptions)
-		if err != nil {
-			log.Println("cannot start new writer [", pth, "] ", err)
-		}
-		l.writers = append(l.writers, w)
-	}
-
 	c.AddHandler(l)
+	if err := l.CreateWriters(&a.WriteOptions, a.DestTemplates); err != nil {
+		log.Println(err)
+	}
 	if err := c.ConnectToNSQLookupds(a.LookupdHosts); err != nil {
 		log.Println(err)
 	}
 	a.topics[topic] = l
-}
-
-func (a *app) handler(w http.ResponseWriter, req *http.Request) {
-	//v := req.URL.Query()
-	for _, lm := range a.topics {
-		w.Write(lm.Message())
-	}
 }
 
 func (a *app) Stop() {
@@ -133,11 +158,11 @@ func (a *app) Stop() {
 
 func (a *app) Validate() error {
 	if a.Bus == "nsq" && len(a.LookupdHosts) == 0 {
-		return errors.New("At least one LookupD host is needed for nsq")
+		return errors.New("at least one LookupD host is needed for nsq")
 	}
 
 	if len(a.DestTemplates) == 0 {
-		return errors.New("At least one destination template is required")
+		return errors.New("at least one destination template is required")
 	}
 
 	return nil

@@ -1,9 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"sync"
+	"time"
+
+	"github.com/jbsmith7741/go-tools/appenderr"
 
 	nsq "github.com/nsqio/go-nsq"
 	"github.com/pcelvng/task-tools/file"
@@ -14,7 +16,7 @@ type Logger struct {
 	topic    string
 	consumer *nsq.Consumer
 	writers  []file.Writer
-	messages int
+	Messages int
 }
 
 func newlog(topic string, c *nsq.Consumer) *Logger {
@@ -25,7 +27,34 @@ func newlog(topic string, c *nsq.Consumer) *Logger {
 	}
 }
 
+func (l *Logger) CreateWriters(opts *file.Options, destinations []string) error {
+	errs := appenderr.New()
+
+	// create new writers
+	writers := make([]file.Writer, 0)
+	for _, d := range destinations {
+		path := Parse(d, l.topic, time.Now())
+		w, err := file.NewWriter(path, opts)
+		if err != nil {
+			errs.Add(err)
+			continue
+		}
+		writers = append(writers, w)
+	}
+
+	// close and reset open writers
+	l.mu.Lock()
+	for _, w := range l.writers {
+		errs.Add(w.Close())
+	}
+	l.writers = writers
+	l.mu.Unlock()
+	return errs.ErrOrNil()
+}
+
 func (l *Logger) HandleMessage(msg *nsq.Message) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	for i := range l.writers {
 		// write the message to each writer
 		err := l.writers[i].WriteLine(msg.Body)
@@ -33,10 +62,6 @@ func (l *Logger) HandleMessage(msg *nsq.Message) error {
 			log.Println("error writing message", l.writers[i], msg.Body)
 		}
 	}
-	l.messages++
+	l.Messages++
 	return nil
-}
-
-func (l *Logger) Message() []byte {
-	return []byte(fmt.Sprintf(`{"topic":"%s","messages":%d}`, l.topic, l.messages))
 }
