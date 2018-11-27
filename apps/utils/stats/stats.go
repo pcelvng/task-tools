@@ -44,6 +44,9 @@ func (s *stat) HandleMessage(msg *nsq.Message) error {
 		log.Println("invalid task", err)
 		return nil
 	}
+	if task.IsZero(*t) {
+		return nil
+	}
 	s.NewTask(*t)
 	return nil
 }
@@ -68,11 +71,17 @@ func (s *stat) DoneTask(t task.Task) {
 }
 
 // Details gives the gather details on the topic being watched
-func (s *stat) Details() string {
-	successRate := float64(s.success.count) / float64(s.success.count+s.error.count)
-	return fmt.Sprintf("Success: %0.2f%% %v\nFailed: %0.2f%% %v\nInProgress: %d\n", successRate, s.success.String(),
-		(1.0 - successRate), s.error.String(),
-		len(s.inProgress))
+func (s *stat) Details() (result string) {
+	if s.success.count != 0 || s.error.count != 0 {
+		successRate := float64(s.success.count) / float64(s.success.count+s.error.count)
+		result = fmt.Sprintf("Success: %0.2f%% %v\nFailed: %0.2f%% %v\n",
+			successRate, s.success.String(),
+			1.0-successRate, s.error.String())
+	}
+	if l := len(s.inProgress); l > 0 {
+		result += fmt.Sprintf("InProgress: %d\n", len(s.inProgress))
+	}
+	return result
 }
 
 const precision = 10 * time.Millisecond

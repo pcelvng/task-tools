@@ -100,11 +100,12 @@ func TestStat_HandleMessage(t *testing.T) {
 		msg := nsq.NewMessage(dummyID, []byte(b))
 		c := trial.CaptureLog()
 
-		newStat(nil).HandleMessage(msg)
+		st := newStat(nil)
+		st.HandleMessage(msg)
 		if s := c.ReadAll(); s != "" {
 			return nil, errors.New(s)
 		}
-		return nil, nil
+		return st.inProgress, nil
 	}
 	cases := trial.Cases{
 		"Bad Json": {
@@ -117,6 +118,17 @@ func TestStat_HandleMessage(t *testing.T) {
 		},
 		"valid task": {
 			Input: `{"type":"task","info":"","created":"2018-11-10T00:00:00Z","result":"complete","started":"2018-11-10T00:00:00Z","ended":"2018-11-10T00:00:00Z"}`,
+			Expected: map[string]task.Task{"task::2018-11-10T00:00:00Z": {
+				Type:    "task",
+				Result:  "complete",
+				Created: "2018-11-10T00:00:00Z",
+				Started: "2018-11-10T00:00:00Z",
+				Ended:   "2018-11-10T00:00:00Z",
+			}},
+		},
+		"Ignore non-tasks": {
+			Input:    "{}",
+			Expected: map[string]task.Task{},
 		},
 	}
 	trial.New(fn, cases).Test(t)

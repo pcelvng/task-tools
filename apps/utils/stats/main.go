@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"sync"
 	"syscall"
@@ -21,7 +22,14 @@ import (
 )
 
 const (
-	desc = ``
+	desc = `stats connects to all nsq topics to gather statistics on each topic
+which can be queried through http get requests.
+By default all topics are shown, but can be selected using query params
+
+curl localhost:8080?topic=done
+curl localhost:8080?topic=task1,task2
+or
+curl localhost:8080?topic=task1&topic=task2`
 )
 
 type app struct {
@@ -59,6 +67,7 @@ func New() *app {
 	}
 }
 
+// Start the stats app
 func (a *app) Start() {
 	consumer.DiscoverTopics(a.newConsumer, a.Bus.InChannel, a.PollPeriod, a.Bus.LookupdHosts)
 
@@ -79,15 +88,24 @@ func (a *app) Start() {
 	}
 }
 
+// handler for http requests
 func (a *app) handler(w http.ResponseWriter, req *http.Request) {
 	v := struct {
 		Topic []string `uri:"topic"`
 	}{}
 	uri.Unmarshal(req.URL.String(), &v)
+
+	if len(v.Topic) == 0 {
+		for name := range a.topics {
+			v.Topic = append(v.Topic, name)
+		}
+		sort.Sort(sort.StringSlice(v.Topic))
+	}
 	s := a.Message(v.Topic...)
 	w.Write([]byte(s))
 }
 
+// Stop the app, disconnect all nsq connection
 func (a *app) Stop() {
 	wg := sync.WaitGroup{}
 	for i := range a.consumers {
@@ -103,6 +121,8 @@ func (a *app) Stop() {
 	wg.Wait()
 }
 
+// Message creates a string of the statistics of the selected topics.
+// no topics provided will show all topics
 func (a *app) Message(topics ...string) string {
 	s := fmt.Sprintf("uptime: %v\n", time.Now().Sub(a.starttime))
 	if len(topics) == 0 {
@@ -144,6 +164,7 @@ func (a *app) newConsumer(topic string, c *nsq.Consumer) {
 	a.topics[topic] = s
 }
 
+// HandleMessage handles nsq message as they come in
 func (a *app) HandleMessage(msg *nsq.Message) error {
 	t, err := task.NewFromBytes(msg.Body)
 	if err != nil {
