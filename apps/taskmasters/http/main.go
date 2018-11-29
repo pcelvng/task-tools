@@ -18,9 +18,10 @@ const (
 	
 # http request variables ‼(PLEASE NOTE ~ underscores for json body request, dashes for uri query params)‼ 💣
 
-task_type     - the task type for the new tasks (REQUIRED)
-topic         - overrides task-type as the default topic
-from - the start time of the first task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (REQUIRED)
+task_type	- the task type for the new tasks (REQUIRED)
+topic	    - overrides task-type as the default topic
+from 		- the start time of the first task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (REQUIRED)
+template 	- the template used to generated the batch task(s)
 
 *** pick a duration modifier *** 
 	to - the end time of the last task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (takes presidence over for value)
@@ -44,7 +45,8 @@ type httpMaster struct {
 	Bus *bus.Options `toml:"bus"`
 
 	producer bus.Producer
-	Apps     map[string]string `comment:"ip address and status ports of apps"`
+	Template map[string][]string `comment:"list of templates (name=[\"infoString\"])"`
+	Apps     map[string]string   `comment:"ip address and status ports of apps (appname=localhost:1234)"`
 }
 
 func main() {
@@ -60,11 +62,11 @@ func main() {
 	log.Print(http.ListenAndServe(":"+tm.HttpPort, nil))
 
 }
-
 func newOptions() *httpMaster {
 	return &httpMaster{
 		HttpPort: defaultPort,
 		Bus:      bus.NewOptions("nop"),
 		Apps:     make(map[string]string),
+		Template: make(map[string][]string),
 	}
 }

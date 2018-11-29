@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/pcelvng/task/bus/nop"
 
 	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task/bus"
@@ -199,4 +202,40 @@ func TestHandleStatus(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).Test(t)
+}
+
+func TestHandleBatch(t *testing.T) {
+	hm := &httpMaster{
+		Template: map[string][]string{
+			"task1": {"s3://path/to/file.gz?hour=2018-01-01T00"},
+		},
+	}
+	fn := func(args ...interface{}) (interface{}, error) {
+		w := httptest.NewRecorder()
+		p, _ := nop.NewProducer("")
+		hm.producer = p
+		req := args[0].(*http.Request)
+		hm.handleBatch(w, req)
+		if w.Code != http.StatusOK {
+			return nil, errors.New(w.Body.String())
+		}
+		type info struct {
+			Info string `json:"info"`
+		}
+		tsks := make([]string, len(p.Messages["batcher"]))
+		for i, v := range p.Messages["batcher"] {
+			in := &info{}
+			json.Unmarshal([]byte(v), in)
+			tsks[i] = in.Info
+		}
+		return tsks, nil
+	}
+	cases := trial.Cases{
+		"simple batch": {
+			Input:    httptest.NewRequest("GET", "http://localhost:8080/?task-type=task&from=2018-01-01T00:00:00Z#?s3://data.json.gz", nil),
+			Expected: []string{`?from=2018-01-01T00:00:00Z&task-type=task&to=2018-01-01T00:00:00Z#?s3://data.json.gz`},
+		},
+	}
+	trial.New(fn, cases).Test(t)
+
 }

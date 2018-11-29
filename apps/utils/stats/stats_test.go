@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/jbsmith7741/trial"
 	"github.com/nsqio/go-nsq"
 	"github.com/pcelvng/task"
@@ -94,6 +97,11 @@ func testStat(tasks ...task.Task) *stat {
 }
 
 func TestStat_HandleMessage(t *testing.T) {
+	equal := func(a, e interface{}) (bool, string) {
+		opts := cmpopts.IgnoreUnexported(task.Task{})
+		r := cmp.Diff(a, e, opts)
+		return r == "", r
+	}
 	dummyID := nsq.MessageID{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'}
 	fn := func(args ...interface{}) (interface{}, error) {
 		b := args[0].(string)
@@ -131,7 +139,7 @@ func TestStat_HandleMessage(t *testing.T) {
 			Expected: map[string]task.Task{},
 		},
 	}
-	trial.New(fn, cases).Test(t)
+	trial.New(fn, cases).EqualFn(equal).Test(t)
 }
 
 func TestApp_HandleMessage(t *testing.T) {
@@ -183,11 +191,9 @@ Success: 1.00% 	10  min: 0s max 1s avg:10ms
 Failed: 0.00% 
 InProgress: 2`, `task2
 Success: 0.75% 	3  min: 5ms max 10s avg:830ms
-Failed: 0.25% 	1  min: 1µs max 3s avg:50ms
-InProgress: 0`, `task3
+Failed: 0.25% 	1  min: 1µs max 3s avg:50ms`, `task3
 Success: 0.00% 
-Failed: 1.00% 	7  min: 50ms max 100ms avg:550ms
-InProgress: 0`}
+Failed: 1.00% 	7  min: 50ms max 100ms avg:550ms`}
 	fn := func(args ...interface{}) (interface{}, error) {
 		req := httptest.NewRequest("GET", args[0].(string), nil)
 		w := httptest.NewRecorder()
