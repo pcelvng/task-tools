@@ -48,7 +48,7 @@ func TestHandleNoRequestValues(t *testing.T) {
 // response should send to the selected bus
 // response should always be Content-Type of application/json
 func TestHandleBodyRequestValues(t *testing.T) {
-	reader := strings.NewReader(`{"task_type":"fb-hourly-loader","from":"2018-05-01T00:00:00Z"}`)
+	reader := strings.NewReader(`{"task_type":"fb-hourly-loader","from":"2018-05-01T00"}`)
 	req := httptest.NewRequest("POST", "localhost:8080", reader) // could be any http method that has a body ie: GET, PUT, DELETE
 	w := httptest.NewRecorder()
 	opts := newOptions()
@@ -66,11 +66,11 @@ func TestHandleBodyRequestValues(t *testing.T) {
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	urlUnescapeBody, _ := url.QueryUnescape(string(body))
 
-	assert.Contains(t, urlUnescapeBody, `{"type":"batcher","info":"?from=2018-05-01T00:00:00Z\u0026task-type=fb-hourly-loader\u0026to=2018-05-01T00:00:00Z"`)
+	assert.Contains(t, urlUnescapeBody, `{"type":"batcher","info":"?from=2018-05-01T00\u0026task-type=fb-hourly-loader\u0026to=2018-05-01T00"`)
 }
 
-func TestQueryParamsReqeust(t *testing.T) {
-	req := httptest.NewRequest("GET", "localhost:8080?task-type=fee-campaign&from=2018-05-01T00:00:00Z", nil) // could be any http method that has a body ie: GET, PUT, DELETE
+func TestQueryParamsRequest(t *testing.T) {
+	req := httptest.NewRequest("GET", "localhost:8080?task-type=fee-campaign&from=2018-05-01T00", nil) // could be any http method that has a body ie: GET, PUT, DELETE
 	w := httptest.NewRecorder()
 	opts := newOptions()
 
@@ -115,7 +115,7 @@ func TestHandleBadBodyRequest(t *testing.T) {
 }
 
 func TestHandleBadSendTask(t *testing.T) {
-	req := httptest.NewRequest("GET", "localhost:8080?task-type=fee-campaign&from=2018-05-01T00:00:00Z", nil)
+	req := httptest.NewRequest("GET", "localhost:8080?task-type=fee-campaign&from=2018-05-01T00", nil)
 	w := httptest.NewRecorder()
 
 	opts := newOptions()
@@ -143,11 +143,11 @@ func TestValidate(t *testing.T) {
 	err = req.validate()
 	assert.NotNil(t, err) // from is required
 
-	req.From = time.Now()
+	req.From = hour{time.Now()}
 	err = req.validate()
 	assert.NotNil(t, err) // to value required if for value is not provided
 
-	req.To = time.Now()
+	req.To = hour{time.Now()}
 	err = req.validate()
 	assert.Nil(t, err)
 
@@ -206,8 +206,9 @@ func TestHandleStatus(t *testing.T) {
 
 func TestHandleBatch(t *testing.T) {
 	hm := &httpMaster{
-		Template: map[string][]string{
-			"task1": {"s3://path/to/file.gz?hour=2018-01-01T00"},
+		Templates: []template{
+			{Name: "group1", Info: "s3://path/to/file.gz?hour=2018-01-01T00", Topic: "task1"},
+			{Name: "group1", Info: "s3://path/to/file.gz?hour=2018-01-01T00", Topic: "task2"},
 		},
 	}
 	fn := func(args ...interface{}) (interface{}, error) {
@@ -232,10 +233,22 @@ func TestHandleBatch(t *testing.T) {
 	}
 	cases := trial.Cases{
 		"simple batch": {
-			Input:    httptest.NewRequest("GET", "http://localhost:8080/?task-type=task&from=2018-01-01T00:00:00Z#?s3://data.json.gz", nil),
-			Expected: []string{`?from=2018-01-01T00:00:00Z&task-type=task&to=2018-01-01T00:00:00Z#?s3://data.json.gz`},
+			Input:    httptest.NewRequest("GET", "http://localhost:8080/?task-type=task&from=2018-01-01T00#?s3://data.json.gz", nil),
+			Expected: []string{`?from=2018-01-01T00&task-type=task&to=2018-01-01T00#?s3://data.json.gz`},
+		},
+		"group1": {
+			Input: httptest.NewRequest("GET", "http://localhost:8080/?template=group1&from=2018-01-01T00", nil),
+			Expected: []string{
+				`from=2018-01-01T00&task-type=task1&template=group1&to=2018-01-01T00#s3://path/to/file.gz?hour=2018-01-01T00`,
+				`from=2018-01-01T00&task-type=task2&template=group1&to=2018-01-01T00#s3://path/to/file.gz?hour=2018-01-01T00`,
+			},
+		},
+		"template not found": {
+			Input:       httptest.NewRequest("GET", "http://localhost:8080?template=invalid&from=2018-01-01T00", nil),
+			ExpectedErr: errors.New("template 'invalid' not found"),
 		},
 	}
-	trial.New(fn, cases).Test(t)
+
+	trial.New(fn, cases).EqualFn(trial.ContainsFn).Test(t)
 
 }

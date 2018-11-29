@@ -44,9 +44,15 @@ type httpMaster struct {
 
 	Bus *bus.Options `toml:"bus"`
 
-	producer bus.Producer
-	Template map[string][]string `comment:"list of templates (name=[\"infoString\"])"`
-	Apps     map[string]string   `comment:"ip address and status ports of apps (appname=localhost:1234)"`
+	producer  bus.Producer
+	Templates []template        `toml:"template" comment:"list of templates (name=[\"infoString\"])"`
+	Apps      map[string]string `comment:"ip address and status ports of apps (appname=localhost:1234)"`
+}
+
+type template struct {
+	Name  string
+	Topic string
+	Info  string
 }
 
 func main() {
@@ -67,6 +73,7 @@ func newOptions() *httpMaster {
 		HttpPort: defaultPort,
 		Bus:      bus.NewOptions("nop"),
 		Apps:     make(map[string]string),
-		Template: make(map[string][]string),
+		//Template: make(map[string][]template),
+		Templates: make([]template, 0),
 	}
 }

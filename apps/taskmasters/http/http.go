@@ -5,25 +5,25 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
-
-	"gopkg.in/jbsmith7741/uri.v0"
 
 	"github.com/pcelvng/task"
 	"github.com/pkg/errors"
+	"gopkg.in/jbsmith7741/uri.v0"
 )
 
 type TaskRequest struct {
-	TaskType     string    `json:"task_type" uri:"task-type"`         // the task type for the batcher to use (should not be batcher)
-	For          string    `json:"for" uri:"for"`                     // go duration to create the tasks (used by batcher)
-	From         time.Time `json:"from" uri:"from"`                   // start time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
-	To           time.Time `json:"to" uri:"to"`                       // end time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
-	DestTemplate string    `json:"dest_template" uri:"fragment"`      // task destination template (uri fragment)
-	Topic        string    `json:"topic" uri:"topic"`                 // overrides task type as the default topic)
-	EveryXHours  int       `json:"every_x_hours" uri:"every-x-hours"` // will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' options.)
-	OnHours      []int     `json:"on_hours" uri:"on-hours"`           // comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15)
-	OffHours     []int     `json:"off_hours" uri:"off-hours"`         // comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.)
-	Template     string    `json:"template" uri:"template"`
+	TaskType     string `json:"task_type" uri:"task-type"`         // the task type for the batcher to use (should not be batcher)
+	For          string `json:"for" uri:"for"`                     // go duration to create the tasks (used by batcher)
+	From         hour   `json:"from" uri:"from"`                   // start time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
+	To           hour   `json:"to" uri:"to"`                       // end time - format RFC 3339 YYYY-MM-DDTHH:MM:SSZ
+	DestTemplate string `json:"dest_template" uri:"fragment"`      // task destination template (uri fragment)
+	Topic        string `json:"topic" uri:"topic"`                 // overrides task type as the default topic)
+	EveryXHours  int    `json:"every_x_hours" uri:"every-x-hours"` // will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' options.)
+	OnHours      []int  `json:"on_hours" uri:"on-hours"`           // comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15)
+	OffHours     []int  `json:"off_hours" uri:"off-hours"`         // comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.)
+	Template     string `json:"template" uri:"template"`
 }
 
 func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
@@ -46,22 +46,25 @@ func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// process template files if given
-	if tmp := req.Template; tmp != "" {
-		batches, found := opt.Template[tmp]
-		if !found {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Unknown template " + tmp))
-			return
+	if req.Template != "" {
+		var found bool
+		for _, v := range opt.Templates {
+			if v.Name == req.Template {
+				found = true
+				var s string
+				req.DestTemplate = v.Info
+				req.TaskType = v.Topic
+				info := uri.Marshal(req)
+				tsk := task.New(defaultTopic, info)
+				opt.producer.Send(defaultTopic, tsk.JSONBytes())
+				s += tsk.JSONString() + "\n"
+				w.Write([]byte(s))
+			}
+			if !found {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, `{"msg":"Error sending task","error":"template '%s' not found"}`, req.Template)
+			}
 		}
-		var s string
-		for _, v := range batches {
-			req.DestTemplate = v
-			info := uri.Marshal(req)
-			tsk := task.New(defaultTopic, info)
-			opt.producer.Send(defaultTopic, tsk.JSONBytes())
-			s += tsk.JSONString() + "\n"
-		}
-		w.Write([]byte(s))
 		return
 	}
 	info := uri.Marshal(req)
@@ -138,7 +141,7 @@ func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // returns an error if validation does not pass
 func (tr TaskRequest) validate() error {
-	if len(tr.TaskType) == 0 {
+	if len(tr.TaskType) == 0 && tr.Template == "" {
 		return fmt.Errorf("task type is required")
 	}
 
@@ -158,4 +161,29 @@ func (tr TaskRequest) validate() error {
 	}
 
 	return nil
+}
+
+type hour struct {
+	time.Time
+}
+
+func (h *hour) UnmarshalJSON(b []byte) error {
+	return h.UnmarshalText(b)
+}
+func (h *hour) UnmarshalText(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	t, err := time.Parse("2006-01-02T15", s)
+	if err != nil {
+		return err
+	}
+	h.Time = t
+	return nil
+}
+
+func (h hour) MarshalText() ([]byte, error) {
+	return []byte(h.String()), nil
+}
+
+func (h hour) String() string {
+	return h.Format("2006-01-02T15")
 }
