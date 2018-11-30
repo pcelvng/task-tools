@@ -109,7 +109,7 @@ func (tm *taskMaster) generate(info string) error {
 		if iOpts.For == 0 {
 			return errors.New("end date required (see for/to)")
 		}
-		iOpts.End = iOpts.Start.Add(iOpts.For.Duration())
+		iOpts.End.Time = iOpts.Start.Add(iOpts.For.Duration())
 	}
 	if iOpts.Topic == "" {
 		iOpts.Topic = iOpts.TaskType

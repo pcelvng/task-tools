@@ -10,15 +10,18 @@ import (
 )
 
 const (
-	tasktype    = "http"
-	description = `http creates a batcher task based on the http request.
+	tasktype     = "http"
+	defaultTopic = "batcher"
+	defaultPort  = "8080"
+	description  = `http creates a batcher task based on the http request.
 	Values can be provided in a http json body or be provided as uri params.
 	
 # http request variables ‼(PLEASE NOTE ~ underscores for json body request, dashes for uri query params)‼ 💣
 
-task_type     - the task type for the new tasks (REQUIRED)
-topic         - overrides task-type as the default topic
-from - the start time of the first task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (REQUIRED)
+task_type	- the task type for the new tasks (REQUIRED)
+topic	    - overrides task-type as the default topic
+from 		- the start time of the first task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (REQUIRED)
+template 	- the template used to generated the batch task(s)
 
 *** pick a duration modifier *** 
 	to - the end time of the last task to be created format RFC 3339 YYYY-MM-DDTHH:MM:SSZ (takes presidence over for value)
@@ -36,34 +39,41 @@ Examples:
   curl -v -X GET 'localhost:{http_port}/path/is/ignored/?task-type=example-task&from=2018-05-01T00:00:00Z'`
 )
 
-var (
-	defaultTopic = "batcher"
-	defaultPort  = "8080"
-)
-
 type httpMaster struct {
 	HttpPort string `toml:"http_port"`
 
 	Bus *bus.Options `toml:"bus"`
 
-	producer bus.Producer
+	producer  bus.Producer
+	Templates []template        `toml:"template" comment:"list of templates (name=[\"infoString\"])"`
+	Apps      map[string]string `comment:"ip address and status ports of apps (appname=localhost:1234)"`
+}
+
+type template struct {
+	Name  string
+	Topic string
+	Info  string
 }
 
 func main() {
 	tm := newOptions()
 	bootstrap.NewUtility(tasktype, tm).
 		Version(tools.String()).Description(description).Initialize()
+
 	tm.producer, _ = bus.NewProducer(tm.Bus)
 
-	http.HandleFunc("/", tm.handleRequest)
+	http.HandleFunc("/batch", tm.handleBatch)
+	http.HandleFunc("/status", tm.handleStatus)
 	log.Println("starting http server on port", tm.HttpPort)
 	log.Print(http.ListenAndServe(":"+tm.HttpPort, nil))
 
 }
-
 func newOptions() *httpMaster {
 	return &httpMaster{
 		HttpPort: defaultPort,
 		Bus:      bus.NewOptions("nop"),
+		Apps:     make(map[string]string),
+		//Template: make(map[string][]template),
+		Templates: make([]template, 0),
 	}
 }

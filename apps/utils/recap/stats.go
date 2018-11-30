@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	percision = 10 * time.Millisecond
+	precision = 10 * time.Millisecond
 )
 
 type taskStats struct {
@@ -46,7 +46,7 @@ func (s *durStats) Add(d time.Duration) {
 		s.Min = d
 	}
 	// truncate times to milliseconds to preserve space
-	s.sum += int64(d / percision)
+	s.sum += int64(d / precision)
 	s.count++
 }
 
@@ -54,7 +54,7 @@ func (s *durStats) Average() time.Duration {
 	if s.count == 0 {
 		return 0
 	}
-	return time.Duration(s.sum/s.count) * percision
+	return time.Duration(s.sum/s.count) * precision
 }
 
 func (s durStats) String() string {

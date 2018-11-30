@@ -30,16 +30,3 @@ func (d *duration) UnmarshalText(b []byte) error {
 func (d duration) Duration() time.Duration {
 	return time.Duration(d)
 }
-
-type hour struct {
-	time.Time
-}
-
-func (h *hour) UnmarshalText(b []byte) error {
-	t, err := time.Parse("2006-01-02T15", string(b))
-	if err != nil {
-		return err
-	}
-	h.Time = t
-	return nil
-}

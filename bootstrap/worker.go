@@ -380,7 +380,7 @@ func (w *Worker) Run() {
 
 	// do tasks
 	done, cncl := w.launcher.DoTasks()
-	w.Log("listening for %s tasks on '%s'", w.wkrOpt.BusOpt.Bus, w.wkrOpt.BusOpt.InTopic)
+	w.Log("listening for %s tasks on '%s'", w.wkrOpt.BusOpt.InBus, w.wkrOpt.BusOpt.InTopic)
 
 	select {
 	case <-sigChan:
