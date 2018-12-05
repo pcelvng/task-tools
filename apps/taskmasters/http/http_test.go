@@ -169,7 +169,7 @@ func TestHandleStatus(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.Deactivate()
 	httpmock.RegisterResponder("GET", "http://endpoint:10000",
-		httpmock.NewStringResponder(http.StatusOK, "app ok"))
+		httpmock.NewStringResponder(http.StatusOK, `{"msg":"app ok"}`))
 	httpmock.RegisterResponder("GET", "http://null",
 		httpmock.NewErrorResponder(errors.New("connection refused")))
 
@@ -180,6 +180,9 @@ func TestHandleStatus(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			return nil, errors.New(w.Body.String())
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), nil); err != nil {
+			return nil, errors.New("invalid json response")
 		}
 		return w.Body.String(), nil
 	}

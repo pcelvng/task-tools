@@ -49,21 +49,24 @@ func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 	if req.Template != "" {
 		var found bool
 		for _, v := range opt.Templates {
+			tsks := make([]*task.Task, 0)
 			if v.Name == req.Template {
 				found = true
-				var s string
 				req.DestTemplate = v.Info
 				req.TaskType = v.Topic
 				info := uri.Marshal(req)
 				tsk := task.New(defaultTopic, info)
 				opt.producer.Send(defaultTopic, tsk.JSONBytes())
-				s += tsk.JSONString() + "\n"
-				w.Write([]byte(s))
+				tsks = append(tsks, tsk)
 			}
 			if !found {
 				w.WriteHeader(http.StatusBadRequest)
 				fmt.Fprintf(w, `{"msg":"Error sending task","error":"template '%s' not found"}`, req.Template)
+				return
 			}
+			b, _ := json.Marshal(tsks)
+			w.WriteHeader(http.StatusOK)
+			w.Write(b)
 		}
 		return
 	}
@@ -122,7 +125,7 @@ func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
 	ip, found := opt.Apps[a.App]
 	if !found {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"msg":"unknown app %q"}`, a.App)
+		fmt.Fprintf(w, `{"msg":"unknown app'%s'"}`, a.App)
 		return
 	}
 	req, _ := http.NewRequest("GET", "http://"+ip, nil)
