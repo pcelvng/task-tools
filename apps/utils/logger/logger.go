@@ -44,10 +44,12 @@ func (l *Logger) CreateWriters(opts *file.Options, destinations []string) error 
 
 	// close and reset open writers
 	l.mu.Lock()
-	for _, w := range l.writers {
-		errs.Add(w.Close())
-	}
 	l.writers = writers
+
+	for i := range l.writers {
+		errs.Add(l.writers[i].Close())
+	}
+
 	l.mu.Unlock()
 	return errs.ErrOrNil()
 }

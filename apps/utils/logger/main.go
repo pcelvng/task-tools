@@ -158,7 +158,7 @@ func (a *app) Stop() {
 
 func (a *app) Validate() error {
 	if a.Bus == "nsq" && len(a.LookupdHosts) == 0 {
-		return errors.New("at least one LookupD host is needed for nsq")
+		return errors.New("at least one lookupd host is needed for nsq")
 	}
 
 	if len(a.DestTemplates) == 0 {
