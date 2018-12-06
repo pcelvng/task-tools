@@ -23,7 +23,7 @@ $(BLDDIR)/http:           $(wildcard apps/taskmasters/http/*.go)
 
 $(BLDDIR)/filewatcher:    $(wildcard apps/utils/filewatcher/*.go)
 $(BLDDIR)/recap:          $(wildcard apps/utils/recap/*.go)
-$(BLDDIR)/recap:          $(wildcard apps/utils/stats/*.go)
+$(BLDDIR)/stats:          $(wildcard apps/utils/stats/*.go)
 $(BLDDIR)/logger:         $(wildcard apps/utils/logger/*.go)
 
 $(BLDDIR)/nop:            $(wildcard apps/workers/nop/*.go)
