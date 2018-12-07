@@ -83,7 +83,7 @@ func (a *app) Start() {
 		fmt.Println("closing...")
 		go func() {
 			time.Sleep(5 * time.Second)
-			log.Fatal("forced shutdown")
+			log.Fatal("fatal: forced shutdown")
 		}()
 		a.Stop()
 	}
@@ -158,11 +158,11 @@ func (a *app) Stop() {
 
 func (a *app) Validate() error {
 	if a.Bus == "nsq" && len(a.LookupdHosts) == 0 {
-		return errors.New("at least one lookupd host is needed for nsq")
+		return errors.New("error: at least one lookupd host is needed for nsq")
 	}
 
 	if len(a.DestTemplates) == 0 {
-		return errors.New("at least one destination template is required")
+		return errors.New("error: at least one destination template is required")
 	}
 
 	return nil
