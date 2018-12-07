@@ -260,5 +260,78 @@ func TestHandleBatch(t *testing.T) {
 	}
 
 	trial.New(fn, cases).EqualFn(trial.ContainsFn).Test(t)
+}
 
+func TestHandleStats(t *testing.T) {
+	type input struct {
+		master  httpMaster
+		request string
+	}
+
+	// setup the mock responder to response with the request.
+	// this lets us verify that the request being made is as expected
+	httpmock.Activate()
+	defer httpmock.Deactivate()
+	httpmock.RegisterResponder("GET", "http://endpoint:100/stats", echoURLResponse)
+
+	fn := func(args ...interface{}) (interface{}, error) {
+		w := httptest.NewRecorder()
+
+		in := args[0].(input)
+		req := httptest.NewRequest("GET", in.request, nil)
+		(&in.master).handleStats(w, req)
+		if w.Code != http.StatusOK {
+			return nil, errors.New(w.Body.String())
+		}
+		return w.Body.String(), nil
+	}
+	cases := trial.Cases{
+		"no stats setup": {
+			Input:       input{request: "/stats"},
+			ExpectedErr: errors.New("stats not setup"),
+		},
+		"request all topics": {
+			Input: input{httpMaster{Stats: "endpoint:100"}, "/stats?"},
+		},
+		"request 2 topics": {
+			Input: input{
+				master:  httpMaster{Stats: "endpoint:100"},
+				request: "/stats?topic=task1,task2",
+			},
+			Expected: "http://endpoint:100/stats?topic=task1&topic=task2",
+		},
+		"name matching": {
+			Input: input{
+				master: httpMaster{
+					Stats: "endpoint:100",
+					Apps: map[string]string{
+						"task1": "",
+						"task2": "",
+						"task3": "",
+					}},
+				request: "/stats?topic=task",
+			},
+			Expected: "http://endpoint:100/stats?topic=task1&topic=task2&topic=task3",
+		},
+		"error from stats request": {
+			Input: input{master: httpMaster{Stats: "invalid"},
+				request: "/stats",
+			},
+			ShouldErr: true,
+		},
+		"invalid stats endpoint": {
+			Input: input{master: httpMaster{Stats: "/"},
+				request: "/stats",
+			},
+			ExpectedErr: errors.New("invalid stats request"),
+		},
+	}
+
+	trial.New(fn, cases).EqualFn(trial.ContainsFn).Test(t)
+}
+
+// echoURLResponse returns the url in the body of the response
+func echoURLResponse(req *http.Request) (*http.Response, error) {
+	body := httpmock.NewRespBodyFromString(req.URL.String())
+	return &http.Response{Request: req, StatusCode: http.StatusOK, Body: body}, nil
 }

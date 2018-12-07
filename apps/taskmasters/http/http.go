@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/jbsmith7741/uri"
+
 	"github.com/pcelvng/task"
 	"github.com/pkg/errors"
-	"gopkg.in/jbsmith7741/uri.v0"
 )
 
 type TaskRequest struct {
@@ -26,6 +28,7 @@ type TaskRequest struct {
 	Template     string `json:"template" uri:"template"`
 }
 
+// handleBatch is a handler for /batch
 func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	req := &TaskRequest{}
@@ -109,6 +112,31 @@ func parseRequest(r *http.Request, i interface{}) error {
 	return nil
 }
 
+// returns an error if validation does not pass
+func (tr TaskRequest) validate() error {
+	if len(tr.TaskType) == 0 && tr.Template == "" {
+		return fmt.Errorf("task type is required")
+	}
+
+	if tr.From.IsZero() {
+		return fmt.Errorf("from value is required")
+	}
+
+	if tr.To.IsZero() && len(tr.For) == 0 {
+		return fmt.Errorf("to value is required if for value is not provided")
+	}
+
+	if len(tr.For) > 0 {
+		_, err := time.ParseDuration(tr.For)
+		if err != nil {
+			return fmt.Errorf("cannot parse for value %v - %v", tr.For, err)
+		}
+	}
+
+	return nil
+}
+
+// handleStatus is a handler for the /status
 func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
@@ -119,7 +147,7 @@ func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
 	a := &params{}
 	if err := parseRequest(r, a); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"msg":"%s"}`, err.Error())
+		fmt.Fprintf(w, `{"msg":"request could not be parsed","error":"%s"}`, err.Error())
 		return
 	}
 
@@ -143,28 +171,57 @@ func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-// returns an error if validation does not pass
-func (tr TaskRequest) validate() error {
-	if len(tr.TaskType) == 0 && tr.Template == "" {
-		return fmt.Errorf("task type is required")
+// handleStats is a handler for the /stats
+func (opt *httpMaster) handleStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "text/plain")
+	if opt.Stats == "" {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("stats not setup"))
+		return
 	}
 
-	if tr.From.IsZero() {
-		return fmt.Errorf("from value is required")
-	}
-
-	if tr.To.IsZero() && len(tr.For) == 0 {
-		return fmt.Errorf("to value is required if for value is not provided")
-	}
-
-	if len(tr.For) > 0 {
-		_, err := time.ParseDuration(tr.For)
-		if err != nil {
-			return fmt.Errorf("cannot parse for value %v - %v", tr.For, err)
+	topics := make([]string, 0)
+	for _, t := range r.URL.Query()["topic"] {
+		var found bool
+		for a := range opt.Apps {
+			if strings.Contains(a, t) {
+				found = true
+				topics = append(topics, a)
+			}
+		}
+		if !found {
+			topics = append(topics, t)
 		}
 	}
+	sort.Sort(sort.StringSlice(topics))
+	url := struct {
+		Scheme string   `uri:"scheme"`
+		Host   string   `uri:"host"`
+		Path   string   `uri:"path"`
+		Topics []string `uri:"topic"`
+	}{
+		Scheme: "http",
+		Path:   "stats",
+		Host:   opt.Stats,
+		Topics: topics,
+	}
 
-	return nil
+	req, err := http.NewRequest("GET", uri.Marshal(url), nil)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "invalid stats request: %s", err)
+		return
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
 
 type hour struct {
