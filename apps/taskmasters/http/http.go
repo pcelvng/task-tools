@@ -31,7 +31,8 @@ func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 	req := &TaskRequest{}
 	if err := parseRequest(r, req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"msg":"%s"}`, err.Error())
+		fmt.Fprintf(w, `{"msg":"request could not be parsed","error":"%s"}`, err.Error())
+		return
 	}
 
 	// if 'for' and 'to' are not provided, run for only one time
@@ -48,8 +49,8 @@ func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 	// process template files if given
 	if req.Template != "" {
 		var found bool
+		tsks := make([]*task.Task, 0)
 		for _, v := range opt.Templates {
-			tsks := make([]*task.Task, 0)
 			if v.Name == req.Template {
 				found = true
 				req.DestTemplate = v.Info
@@ -64,10 +65,10 @@ func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, `{"msg":"Error sending task","error":"template '%s' not found"}`, req.Template)
 				return
 			}
-			b, _ := json.Marshal(tsks)
-			w.WriteHeader(http.StatusOK)
-			w.Write(b)
 		}
+		b, _ := json.Marshal(tsks)
+		w.WriteHeader(http.StatusOK)
+		w.Write(b)
 		return
 	}
 	info := uri.Marshal(req)
@@ -176,11 +177,8 @@ func (h *hour) UnmarshalJSON(b []byte) error {
 func (h *hour) UnmarshalText(b []byte) error {
 	s := strings.Trim(string(b), `"`)
 	t, err := time.Parse("2006-01-02T15", s)
-	if err != nil {
-		return err
-	}
 	h.Time = t
-	return nil
+	return err
 }
 
 func (h hour) MarshalText() ([]byte, error) {

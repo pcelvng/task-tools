@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -181,15 +182,16 @@ func TestHandleStatus(t *testing.T) {
 		if w.Code != http.StatusOK {
 			return nil, errors.New(w.Body.String())
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), nil); err != nil {
-			return nil, errors.New("invalid json response")
+
+		if err := json.Unmarshal(w.Body.Bytes(), &struct{}{}); err != nil {
+			return nil, fmt.Errorf("invalid json response %q", err)
 		}
 		return w.Body.String(), nil
 	}
 	cases := trial.Cases{
 		"successful call": {
 			Input:    httptest.NewRequest("GET", "http://path/status?app=valid", nil),
-			Expected: "app ok",
+			Expected: `{"msg":"app ok"}`,
 		},
 		"no response": {
 			Input:       httptest.NewRequest("GET", "http://path/status?app=timeout", nil),
@@ -199,6 +201,7 @@ func TestHandleStatus(t *testing.T) {
 			Input:       httptest.NewRequest("GET", "http://", nil),
 			ExpectedErr: errors.New("missing request values"),
 		},
+
 		"non-registered app": {
 			Input:       httptest.NewRequest("GET", "http://path/status?app=missing", nil),
 			ExpectedErr: errors.New("unknown app"),
@@ -236,11 +239,11 @@ func TestHandleBatch(t *testing.T) {
 	}
 	cases := trial.Cases{
 		"simple batch": {
-			Input:    httptest.NewRequest("GET", "http://localhost:8080/?task-type=task&from=2018-01-01T00#?s3://data.json.gz", nil),
+			Input:    httptest.NewRequest("GET", "http://localhost:8080/batch?task-type=task&from=2018-01-01T00#?s3://data.json.gz", nil),
 			Expected: []string{`?from=2018-01-01T00&task-type=task&to=2018-01-01T00#?s3://data.json.gz`},
 		},
 		"group1": {
-			Input: httptest.NewRequest("GET", "http://localhost:8080/?template=group1&from=2018-01-01T00", nil),
+			Input: httptest.NewRequest("GET", "http://localhost:8080/batch?template=group1&from=2018-01-01T00", nil),
 			Expected: []string{
 				`from=2018-01-01T00&task-type=task1&template=group1&to=2018-01-01T00#s3://path/to/file.gz?hour=2018-01-01T00`,
 				`from=2018-01-01T00&task-type=task2&template=group1&to=2018-01-01T00#s3://path/to/file.gz?hour=2018-01-01T00`,
@@ -249,6 +252,10 @@ func TestHandleBatch(t *testing.T) {
 		"template not found": {
 			Input:       httptest.NewRequest("GET", "http://localhost:8080?template=invalid&from=2018-01-01T00", nil),
 			ExpectedErr: errors.New("template 'invalid' not found"),
+		},
+		"invalid time format": {
+			Input:       httptest.NewRequest("GET", "http://localhost?template=group1&from=2018-111-11", nil),
+			ExpectedErr: errors.New("request could not be parsed"),
 		},
 	}
 

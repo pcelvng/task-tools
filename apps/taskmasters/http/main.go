@@ -68,6 +68,7 @@ func main() {
 	log.Print(http.ListenAndServe(":"+tm.HttpPort, nil))
 
 }
+
 func newOptions() *httpMaster {
 	return &httpMaster{
 		HttpPort: defaultPort,
