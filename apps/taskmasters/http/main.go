@@ -13,7 +13,7 @@ const (
 	tasktype     = "http"
 	defaultTopic = "batcher"
 	defaultPort  = "8080"
-	description  = `http is a set of endpoint used for managing a task system
+	description  = `a set of endpoints used for managing a task system
 /batch - create a batcher task
 	Values can be provided in a http json body or be provided as uri params.
 	
@@ -39,7 +39,7 @@ dest-template - task destination template (may have to build a registry for thes
 app - name of the app to query
 
 /stats - 
-app - name of app(s) to show stats on (globing is supported) 
+topic - name of app(s) to show stats on (globing is supported) 
 
 Examples:
 curl localhost:8080/batch?task-type=task1&from=2018-01-01T00&to=2018-02-01T00
@@ -47,7 +47,7 @@ curl localhost:8080/batch?task-type=task1&from=2018-01-01T00&to=2018-02-01T00
 curl localhost:8080/status?app=task1
 
 curl localhost:8080/stats?app=task1,task2
-curl localhost:8080/stats?topic=task*
+curl localhost:8080/stats?topic=task #search for any registers apps that contain task
   `
 )
 
@@ -77,6 +77,7 @@ func main() {
 
 	http.HandleFunc("/batch", tm.handleBatch)
 	http.HandleFunc("/status", tm.handleStatus)
+	http.HandleFunc("/stats", tm.handleStats)
 	log.Println("starting http server on port", tm.HttpPort)
 	log.Print(http.ListenAndServe(":"+tm.HttpPort, nil))
 
