@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/jbsmith7741/uri"
+
 	"github.com/pcelvng/task"
 	"github.com/pkg/errors"
-	"gopkg.in/jbsmith7741/uri.v0"
 )
 
 type TaskRequest struct {
@@ -26,12 +28,14 @@ type TaskRequest struct {
 	Template     string `json:"template" uri:"template"`
 }
 
+// handleBatch is a handler for /batch
 func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	req := &TaskRequest{}
 	if err := parseRequest(r, req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"msg":"%s"}`, err.Error())
+		fmt.Fprintf(w, `{"msg":"request could not be parsed","error":"%s"}`, err.Error())
+		return
 	}
 
 	// if 'for' and 'to' are not provided, run for only one time
@@ -48,23 +52,26 @@ func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 	// process template files if given
 	if req.Template != "" {
 		var found bool
+		tsks := make([]*task.Task, 0)
 		for _, v := range opt.Templates {
 			if v.Name == req.Template {
 				found = true
-				var s string
 				req.DestTemplate = v.Info
 				req.TaskType = v.Topic
 				info := uri.Marshal(req)
 				tsk := task.New(defaultTopic, info)
 				opt.producer.Send(defaultTopic, tsk.JSONBytes())
-				s += tsk.JSONString() + "\n"
-				w.Write([]byte(s))
+				tsks = append(tsks, tsk)
 			}
 			if !found {
 				w.WriteHeader(http.StatusBadRequest)
 				fmt.Fprintf(w, `{"msg":"Error sending task","error":"template '%s' not found"}`, req.Template)
+				return
 			}
 		}
+		b, _ := json.Marshal(tsks)
+		w.WriteHeader(http.StatusOK)
+		w.Write(b)
 		return
 	}
 	info := uri.Marshal(req)
@@ -105,40 +112,6 @@ func parseRequest(r *http.Request, i interface{}) error {
 	return nil
 }
 
-func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	type params struct {
-		App string `uri:"app" required:"true"`
-	}
-
-	a := &params{}
-	if err := parseRequest(r, a); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"msg":"%s"}`, err.Error())
-		return
-	}
-
-	ip, found := opt.Apps[a.App]
-	if !found {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"msg":"unknown app %q"}`, a.App)
-		return
-	}
-	req, _ := http.NewRequest("GET", "http://"+ip, nil)
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprintf(w, `{"msg":"%s}`, err)
-		return
-	}
-
-	defer res.Body.Close()
-	body, _ := ioutil.ReadAll(res.Body)
-	w.WriteHeader(http.StatusOK)
-	w.Write(body)
-}
-
 // returns an error if validation does not pass
 func (tr TaskRequest) validate() error {
 	if len(tr.TaskType) == 0 && tr.Template == "" {
@@ -163,6 +136,94 @@ func (tr TaskRequest) validate() error {
 	return nil
 }
 
+// handleStatus is a handler for the /status
+func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+
+	type params struct {
+		App string `uri:"app" required:"true"`
+	}
+
+	a := &params{}
+	if err := parseRequest(r, a); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"msg":"request could not be parsed","error":"%s"}`, err.Error())
+		return
+	}
+
+	ip, found := opt.Apps[a.App]
+	if !found {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"msg":"unknown app'%s'"}`, a.App)
+		return
+	}
+	req, _ := http.NewRequest("GET", "http://"+ip, nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprintf(w, `{"msg":"%s}`, err)
+		return
+	}
+
+	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
+}
+
+// handleStats is a handler for the /stats
+func (opt *httpMaster) handleStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "text/plain")
+	if opt.Stats == "" {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("stats not setup"))
+		return
+	}
+
+	topics := make([]string, 0)
+	for _, t := range r.URL.Query()["topic"] {
+		var found bool
+		for a := range opt.Apps {
+			if strings.Contains(a, t) {
+				found = true
+				topics = append(topics, a)
+			}
+		}
+		if !found {
+			topics = append(topics, t)
+		}
+	}
+	sort.Sort(sort.StringSlice(topics))
+	url := struct {
+		Scheme string   `uri:"scheme"`
+		Host   string   `uri:"host"`
+		Path   string   `uri:"path"`
+		Topics []string `uri:"topic"`
+	}{
+		Scheme: "http",
+		Path:   "stats",
+		Host:   opt.Stats,
+		Topics: topics,
+	}
+
+	req, err := http.NewRequest("GET", uri.Marshal(url), nil)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "invalid stats request: %s", err)
+		return
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
+}
+
 type hour struct {
 	time.Time
 }
@@ -173,11 +234,8 @@ func (h *hour) UnmarshalJSON(b []byte) error {
 func (h *hour) UnmarshalText(b []byte) error {
 	s := strings.Trim(string(b), `"`)
 	t, err := time.Parse("2006-01-02T15", s)
-	if err != nil {
-		return err
-	}
 	h.Time = t
-	return nil
+	return err
 }
 
 func (h hour) MarshalText() ([]byte, error) {

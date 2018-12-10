@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -169,7 +170,7 @@ func TestHandleStatus(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.Deactivate()
 	httpmock.RegisterResponder("GET", "http://endpoint:10000",
-		httpmock.NewStringResponder(http.StatusOK, "app ok"))
+		httpmock.NewStringResponder(http.StatusOK, `{"msg":"app ok"}`))
 	httpmock.RegisterResponder("GET", "http://null",
 		httpmock.NewErrorResponder(errors.New("connection refused")))
 
@@ -181,12 +182,16 @@ func TestHandleStatus(t *testing.T) {
 		if w.Code != http.StatusOK {
 			return nil, errors.New(w.Body.String())
 		}
+
+		if err := json.Unmarshal(w.Body.Bytes(), &struct{}{}); err != nil {
+			return nil, fmt.Errorf("invalid json response %q", err)
+		}
 		return w.Body.String(), nil
 	}
 	cases := trial.Cases{
 		"successful call": {
 			Input:    httptest.NewRequest("GET", "http://path/status?app=valid", nil),
-			Expected: "app ok",
+			Expected: `{"msg":"app ok"}`,
 		},
 		"no response": {
 			Input:       httptest.NewRequest("GET", "http://path/status?app=timeout", nil),
@@ -196,6 +201,7 @@ func TestHandleStatus(t *testing.T) {
 			Input:       httptest.NewRequest("GET", "http://", nil),
 			ExpectedErr: errors.New("missing request values"),
 		},
+
 		"non-registered app": {
 			Input:       httptest.NewRequest("GET", "http://path/status?app=missing", nil),
 			ExpectedErr: errors.New("unknown app"),
@@ -233,11 +239,11 @@ func TestHandleBatch(t *testing.T) {
 	}
 	cases := trial.Cases{
 		"simple batch": {
-			Input:    httptest.NewRequest("GET", "http://localhost:8080/?task-type=task&from=2018-01-01T00#?s3://data.json.gz", nil),
+			Input:    httptest.NewRequest("GET", "http://localhost:8080/batch?task-type=task&from=2018-01-01T00#?s3://data.json.gz", nil),
 			Expected: []string{`?from=2018-01-01T00&task-type=task&to=2018-01-01T00#?s3://data.json.gz`},
 		},
 		"group1": {
-			Input: httptest.NewRequest("GET", "http://localhost:8080/?template=group1&from=2018-01-01T00", nil),
+			Input: httptest.NewRequest("GET", "http://localhost:8080/batch?template=group1&from=2018-01-01T00", nil),
 			Expected: []string{
 				`from=2018-01-01T00&task-type=task1&template=group1&to=2018-01-01T00#s3://path/to/file.gz?hour=2018-01-01T00`,
 				`from=2018-01-01T00&task-type=task2&template=group1&to=2018-01-01T00#s3://path/to/file.gz?hour=2018-01-01T00`,
@@ -247,8 +253,85 @@ func TestHandleBatch(t *testing.T) {
 			Input:       httptest.NewRequest("GET", "http://localhost:8080?template=invalid&from=2018-01-01T00", nil),
 			ExpectedErr: errors.New("template 'invalid' not found"),
 		},
+		"invalid time format": {
+			Input:       httptest.NewRequest("GET", "http://localhost?template=group1&from=2018-111-11", nil),
+			ExpectedErr: errors.New("request could not be parsed"),
+		},
 	}
 
 	trial.New(fn, cases).EqualFn(trial.ContainsFn).Test(t)
+}
 
+func TestHandleStats(t *testing.T) {
+	type input struct {
+		master  httpMaster
+		request string
+	}
+
+	// setup the mock responder to response with the request.
+	// this lets us verify that the request being made is as expected
+	httpmock.Activate()
+	defer httpmock.Deactivate()
+	httpmock.RegisterResponder("GET", "http://endpoint:100/stats", echoURLResponse)
+
+	fn := func(args ...interface{}) (interface{}, error) {
+		w := httptest.NewRecorder()
+
+		in := args[0].(input)
+		req := httptest.NewRequest("GET", in.request, nil)
+		(&in.master).handleStats(w, req)
+		if w.Code != http.StatusOK {
+			return nil, errors.New(w.Body.String())
+		}
+		return w.Body.String(), nil
+	}
+	cases := trial.Cases{
+		"no stats setup": {
+			Input:       input{request: "/stats"},
+			ExpectedErr: errors.New("stats not setup"),
+		},
+		"request all topics": {
+			Input: input{httpMaster{Stats: "endpoint:100"}, "/stats?"},
+		},
+		"request 2 topics": {
+			Input: input{
+				master:  httpMaster{Stats: "endpoint:100"},
+				request: "/stats?topic=task1,task2",
+			},
+			Expected: "http://endpoint:100/stats?topic=task1&topic=task2",
+		},
+		"name matching": {
+			Input: input{
+				master: httpMaster{
+					Stats: "endpoint:100",
+					Apps: map[string]string{
+						"task1": "",
+						"task2": "",
+						"task3": "",
+					}},
+				request: "/stats?topic=task",
+			},
+			Expected: "http://endpoint:100/stats?topic=task1&topic=task2&topic=task3",
+		},
+		"error from stats request": {
+			Input: input{master: httpMaster{Stats: "invalid"},
+				request: "/stats",
+			},
+			ShouldErr: true,
+		},
+		"invalid stats endpoint": {
+			Input: input{master: httpMaster{Stats: "/"},
+				request: "/stats",
+			},
+			ExpectedErr: errors.New("invalid stats request"),
+		},
+	}
+
+	trial.New(fn, cases).EqualFn(trial.ContainsFn).Test(t)
+}
+
+// echoURLResponse returns the url in the body of the response
+func echoURLResponse(req *http.Request) (*http.Response, error) {
+	body := httpmock.NewRespBodyFromString(req.URL.String())
+	return &http.Response{Request: req, StatusCode: http.StatusOK, Body: body}, nil
 }

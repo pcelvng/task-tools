@@ -37,7 +37,7 @@ type app struct {
 
 func New() *app {
 	a := &app{
-		StatusPort:    8080,
+		StatusPort:    0,
 		Bus:           "nsq",
 		Channel:       "logger",
 		PollPeriod:    time.Minute,
@@ -55,11 +55,11 @@ const (
 
 func main() {
 	app := New()
-	bootstrap.NewUtility("logger", app).
+	u := bootstrap.NewUtility("logger", app).
 		Description(description).
-		Version(tools.String()).
-		AddInfo(app.Info, app.StatusPort).
-		Initialize()
+		Version(tools.String())
+	u.Initialize()
+	u.AddInfo(app.Info, app.StatusPort)
 
 	app.Start()
 }
@@ -83,7 +83,7 @@ func (a *app) Start() {
 		fmt.Println("closing...")
 		go func() {
 			time.Sleep(5 * time.Second)
-			log.Fatal("forced shutdown")
+			log.Fatal("fatal: forced shutdown")
 		}()
 		a.Stop()
 	}
@@ -158,11 +158,11 @@ func (a *app) Stop() {
 
 func (a *app) Validate() error {
 	if a.Bus == "nsq" && len(a.LookupdHosts) == 0 {
-		return errors.New("at least one LookupD host is needed for nsq")
+		return errors.New("error: at least one lookupd host is needed for nsq")
 	}
 
 	if len(a.DestTemplates) == 0 {
-		return errors.New("at least one destination template is required")
+		return errors.New("error: at least one destination template is required")
 	}
 
 	return nil

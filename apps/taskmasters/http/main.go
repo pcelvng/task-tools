@@ -13,7 +13,8 @@ const (
 	tasktype     = "http"
 	defaultTopic = "batcher"
 	defaultPort  = "8080"
-	description  = `http creates a batcher task based on the http request.
+	description  = `a set of endpoints used for managing a task system
+/batch - create a batcher task
 	Values can be provided in a http json body or be provided as uri params.
 	
 # http request variables ‼(PLEASE NOTE ~ underscores for json body request, dashes for uri query params)‼ 💣
@@ -34,9 +35,20 @@ off-hours     - comma separated list of hours to  NOT create a task (each value 
 
 dest-template - task destination template (may have to build a registry for these)
 
+/status - shows the status for a specific app
+app - name of the app to query
+
+/stats - 
+topic - name of app(s) to show stats on (globing is supported) 
+
 Examples:
-  curl -v -X POST -d '{"task-type":"batcher","every-x-hours":"1","from":"2018-05-01T00:00:00Z"}' 'localhost:{http_port}/path/is/ignored/'
-  curl -v -X GET 'localhost:{http_port}/path/is/ignored/?task-type=example-task&from=2018-05-01T00:00:00Z'`
+curl localhost:8080/batch?task-type=task1&from=2018-01-01T00&to=2018-02-01T00
+
+curl localhost:8080/status?app=task1
+
+curl localhost:8080/stats?app=task1,task2
+curl localhost:8080/stats?topic=task #search for any registers apps that contain task
+  `
 )
 
 type httpMaster struct {
@@ -47,6 +59,7 @@ type httpMaster struct {
 	producer  bus.Producer
 	Templates []template        `toml:"template" comment:"list of templates (name=[\"infoString\"])"`
 	Apps      map[string]string `comment:"ip address and status ports of apps (appname=localhost:1234)"`
+	Stats     string            `comment:"host:port of running stats app" commented:"true"`
 }
 
 type template struct {
@@ -64,10 +77,12 @@ func main() {
 
 	http.HandleFunc("/batch", tm.handleBatch)
 	http.HandleFunc("/status", tm.handleStatus)
+	http.HandleFunc("/stats", tm.handleStats)
 	log.Println("starting http server on port", tm.HttpPort)
 	log.Print(http.ListenAndServe(":"+tm.HttpPort, nil))
 
 }
+
 func newOptions() *httpMaster {
 	return &httpMaster{
 		HttpPort: defaultPort,
@@ -75,5 +90,6 @@ func newOptions() *httpMaster {
 		Apps:     make(map[string]string),
 		//Template: make(map[string][]template),
 		Templates: make([]template, 0),
+		Stats:     "localhost:8081",
 	}
 }

@@ -24,7 +24,7 @@ func (d *discover) run() {
 	for ; ; time.Sleep(d.pollPeriod) {
 		t, err := d.registerConsumer(prevTopics)
 		if err != nil {
-			log.Println(err)
+			log.Println("error:", err)
 			continue
 		}
 		prevTopics = t

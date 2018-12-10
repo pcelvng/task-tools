@@ -44,10 +44,19 @@ func (l *Logger) CreateWriters(opts *file.Options, destinations []string) error 
 
 	// close and reset open writers
 	l.mu.Lock()
-	for _, w := range l.writers {
-		errs.Add(w.Close())
+
+	// the previous wirters should be closed or aborted before the new wirters are set
+	for i := range l.writers {
+		if l.writers[i].Stats().ByteCnt > 0 {
+			errs.Add(l.writers[i].Close())
+		} else {
+			errs.Add(l.writers[i].Abort())
+		}
 	}
+
+	// set new writers
 	l.writers = writers
+
 	l.mu.Unlock()
 	return errs.ErrOrNil()
 }
@@ -55,11 +64,16 @@ func (l *Logger) CreateWriters(opts *file.Options, destinations []string) error 
 func (l *Logger) HandleMessage(msg *nsq.Message) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if len(l.writers) == 0 {
+		log.Println("error: no writers exists for HandleMessage")
+	}
 	for i := range l.writers {
 		// write the message to each writer
-		err := l.writers[i].WriteLine(msg.Body)
-		if err != nil {
-			log.Println("error writing message", l.writers[i], msg.Body)
+		if len(msg.Body) > 0 {
+			err := l.writers[i].WriteLine(msg.Body)
+			if err != nil {
+				log.Println("writeline error:", err, "message:", string(msg.Body))
+			}
 		}
 	}
 	l.Messages++
