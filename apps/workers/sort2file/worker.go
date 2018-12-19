@@ -88,7 +88,7 @@ func newWorker(info string) task.Worker {
 
 	// file opts
 	wfOpt := file.NewOptions()
-	wfOpt.UseFileBuf = iOpt.UseFileBuffer
+	wfOpt.UseFileBuf = iOpt.UseFileBuffer || fOpt.UseFileBuf
 	wfOpt.FileBufDir = fOpt.FileBufDir
 	wfOpt.FileBufPrefix = fOpt.FileBufPrefix
 	wfOpt.AWSAccessKey = fOpt.AWSAccessKey
