@@ -52,9 +52,9 @@ curl localhost:8080/stats?topic=task #search for any registers apps that contain
 )
 
 type httpMaster struct {
-	HttpPort string `toml:"http_port"`
-
-	Bus *bus.Options `toml:"bus"`
+	HttpPort   string       `toml:"http_port"`
+	BatchTopic string       `toml:"batch_topic" comment:"topic batch jobs will be sent to" commented:"true"`
+	Bus        *bus.Options `toml:"bus"`
 
 	producer  bus.Producer
 	Templates []template        `toml:"template" comment:"list of templates (name=[\"infoString\"])"`
@@ -85,9 +85,10 @@ func main() {
 
 func newOptions() *httpMaster {
 	return &httpMaster{
-		HttpPort: defaultPort,
-		Bus:      bus.NewOptions("nop"),
-		Apps:     make(map[string]string),
+		HttpPort:   defaultPort,
+		BatchTopic: defaultTopic,
+		Bus:        bus.NewOptions("nop"),
+		Apps:       make(map[string]string),
 		//Template: make(map[string][]template),
 		Templates: make([]template, 0),
 		Stats:     "localhost:8081",
