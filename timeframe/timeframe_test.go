@@ -12,10 +12,10 @@ func TestTimeFrame_Generate(t *testing.T) {
 		return args[0].(*TimeFrame).Generate(), nil
 	}
 	trial.New(fn, trial.Cases{
-		"normal 24 hour generation": {
+		"normal 24 Hour generation": {
 			Input: &TimeFrame{
-				Start: hour{trial.TimeDay("2018-05-01")},
-				End:   hour{trial.TimeDay("2018-05-02")},
+				Start: Hour{trial.TimeDay("2018-05-01")},
+				End:   Hour{trial.TimeDay("2018-05-02")},
 			},
 			Expected: trial.Times("2006-01-02T15",
 				"2018-05-01T00",
@@ -46,8 +46,8 @@ func TestTimeFrame_Generate(t *testing.T) {
 		},
 		"every 7 hours": {
 			Input: &TimeFrame{
-				Start:       hour{trial.TimeDay("2018-05-01")},
-				End:         hour{trial.TimeDay("2018-05-02")},
+				Start:       Hour{trial.TimeDay("2018-05-01")},
+				End:         Hour{trial.TimeDay("2018-05-02")},
 				EveryXHours: 7,
 			},
 			Expected: trial.Times("2006-01-02T15",
@@ -59,8 +59,8 @@ func TestTimeFrame_Generate(t *testing.T) {
 		},
 		"every 2 hours, not hours 4,8,12": {
 			Input: &TimeFrame{
-				Start:       hour{trial.TimeHour("2018-05-01T00")},
-				End:         hour{trial.TimeHour("2018-05-01T12")},
+				Start:       Hour{trial.TimeHour("2018-05-01T00")},
+				End:         Hour{trial.TimeHour("2018-05-01T12")},
 				EveryXHours: 2,
 				OffHours:    []int{4, 8, 12},
 			},
@@ -73,8 +73,8 @@ func TestTimeFrame_Generate(t *testing.T) {
 		},
 		"only prime hours": {
 			Input: &TimeFrame{
-				Start:   hour{trial.TimeHour("2018-05-01T00")},
-				End:     hour{trial.TimeHour("2018-05-01T23")},
+				Start:   Hour{trial.TimeHour("2018-05-01T00")},
+				End:     Hour{trial.TimeHour("2018-05-01T23")},
 				OnHours: []int{1, 2, 3, 5, 7, 11, 13, 17, 23},
 			},
 			Expected: trial.Times("2006-01-02T15",
@@ -89,10 +89,10 @@ func TestTimeFrame_Generate(t *testing.T) {
 				"2018-05-01T23",
 			),
 		},
-		"every 3 hour include evens except 6": {
+		"every 3 Hour include evens except 6": {
 			Input: &TimeFrame{
-				Start:       hour{trial.TimeHour("2018-05-01T00")},
-				End:         hour{trial.TimeHour("2018-05-01T12")},
+				Start:       Hour{trial.TimeHour("2018-05-01T00")},
+				End:         Hour{trial.TimeHour("2018-05-01T12")},
 				EveryXHours: 3,
 				OnHours:     []int{0, 2, 4, 6, 8, 10, 12},
 				OffHours:    []int{6},
@@ -104,8 +104,8 @@ func TestTimeFrame_Generate(t *testing.T) {
 		},
 		"reverse time": {
 			Input: &TimeFrame{
-				Start: hour{trial.TimeHour("2018-05-01T12")},
-				End:   hour{trial.TimeHour("2018-05-01T06")},
+				Start: Hour{trial.TimeHour("2018-05-01T12")},
+				End:   Hour{trial.TimeHour("2018-05-01T06")},
 			},
 			Expected: trial.Times("2006-01-02T15",
 				"2018-05-01T12",
@@ -127,28 +127,28 @@ func TestTimeFrame_Validate(t *testing.T) {
 	trial.New(fn, trial.Cases{
 		"valid struct": {
 			Input: &TimeFrame{
-				Start: hour{trial.TimeDay("2018-05-01")},
-				End:   hour{trial.TimeDay("2018-05-02")},
+				Start: Hour{trial.TimeDay("2018-05-01")},
+				End:   Hour{trial.TimeDay("2018-05-02")},
 			},
 		},
 		"missing start time": {
 			Input: &TimeFrame{
-				End: hour{trial.TimeDay("2018-05-02")},
+				End: Hour{trial.TimeDay("2018-05-02")},
 			},
 			ShouldErr: true,
 		},
 		"onHours out of range": {
 			Input: &TimeFrame{
-				Start:   hour{trial.TimeDay("2018-05-01")},
-				End:     hour{trial.TimeDay("2018-05-02")},
+				Start:   Hour{trial.TimeDay("2018-05-01")},
+				End:     Hour{trial.TimeDay("2018-05-02")},
 				OnHours: []int{-1, 25},
 			},
 			ExpectedErr: errors.New("on hours -1 invalid"),
 		},
 		"offHours out of range": {
 			Input: &TimeFrame{
-				Start:    hour{trial.TimeDay("2018-05-01")},
-				End:      hour{trial.TimeDay("2018-05-02")},
+				Start:    Hour{trial.TimeDay("2018-05-01")},
+				End:      Hour{trial.TimeDay("2018-05-02")},
 				OffHours: []int{1, 2, 3, 6, 25},
 			},
 			ExpectedErr: errors.New("off hours 25 invalid"),

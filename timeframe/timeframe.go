@@ -9,21 +9,21 @@ import (
 )
 
 type TimeFrame struct {
-	Start       hour  `uri:"from" required:"true"`
-	End         hour  `uri:"to"`
+	Start       Hour  `uri:"from" required:"true"`
+	End         Hour  `uri:"to"`
 	EveryXHours int   `uri:"every-x-hours" default:"1"`
 	OnHours     []int `uri:"on-hours"`
 	OffHours    []int `uri:"off-hours"`
 }
 
-type hour struct {
+type Hour struct {
 	time.Time
 }
 
-func (h *hour) UnmarshalJSON(b []byte) error {
+func (h *Hour) UnmarshalJSON(b []byte) error {
 	return h.UnmarshalText(b)
 }
-func (h *hour) UnmarshalText(b []byte) error {
+func (h *Hour) UnmarshalText(b []byte) error {
 	s := strings.Trim(string(b), `"`)
 	t, err := time.Parse("2006-01-02T15", s)
 	if err != nil {
@@ -33,11 +33,17 @@ func (h *hour) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (h hour) MarshalText() ([]byte, error) {
+func NewHour(s string) (Hour, error) {
+	h := &Hour{}
+	err := h.UnmarshalText([]byte(s))
+	return *h, err
+}
+
+func (h Hour) MarshalText() ([]byte, error) {
 	return []byte(h.String()), nil
 }
 
-func (h hour) String() string {
+func (h Hour) String() string {
 	return h.Format("2006-01-02T15")
 }
 
