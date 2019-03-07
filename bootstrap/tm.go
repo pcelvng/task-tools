@@ -296,7 +296,7 @@ func (tm *TaskMaster) loadOptions() error {
 
 		// connect
 		pg := tm.pgOpts.Postgres
-		tm.postgres, err = db.Postgres(pg.Username, pg.Password, pg.Host, pg.DBName)
+		tm.postgres, err = db.PostgresTx(pg.Username, pg.Password, pg.Host, pg.DBName, pg.Serializable)
 		if err != nil {
 			return err
 		}
@@ -311,7 +311,7 @@ func (tm *TaskMaster) loadOptions() error {
 
 		// connect
 		mysql := tm.mysqlOpts.MySQL
-		tm.mysql, err = db.MySQL(mysql.Username, mysql.Password, mysql.Host, mysql.DBName)
+		tm.mysql, err = db.MySQLTx(mysql.Username, mysql.Password, mysql.Host, mysql.DBName, mysql.Serializable)
 		if err != nil {
 			return err
 		}

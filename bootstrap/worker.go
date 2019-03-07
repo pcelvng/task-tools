@@ -348,7 +348,7 @@ func (w *Worker) loadOptions(cpth string) error {
 
 		// connect
 		pg := w.pgOpts.Postgres
-		w.postgres, err = db.Postgres(pg.Username, pg.Password, pg.Host, pg.DBName)
+		w.postgres, err = db.PostgresTx(pg.Username, pg.Password, pg.Host, pg.DBName, pg.Serializable)
 		if err != nil {
 			return err
 		}
@@ -363,7 +363,7 @@ func (w *Worker) loadOptions(cpth string) error {
 
 		// connect
 		mysql := w.mysqlOpts.MySQL
-		w.mysql, err = db.MySQL(mysql.Username, mysql.Password, mysql.Host, mysql.DBName)
+		w.mysql, err = db.MySQLTx(mysql.Username, mysql.Password, mysql.Host, mysql.DBName, mysql.Serializable)
 		if err != nil {
 			return err
 		}
@@ -441,7 +441,9 @@ func (w *Worker) FileOpts() *Worker {
 // to use in this way.
 func (w *Worker) MySQLOpts() *Worker {
 	if w.mysqlOpts == nil {
-		w.mysqlOpts = &mysqlOptions{}
+		w.mysqlOpts = &mysqlOptions{
+			MySQL:DBOptions{Serializable: true},
+		}
 	}
 	return w
 }
@@ -461,7 +463,9 @@ func (w *Worker) MySQLOpts() *Worker {
 // to use in this way.
 func (w *Worker) PostgresOpts() *Worker {
 	if w.pgOpts == nil {
-		w.pgOpts = &pgOptions{}
+		w.pgOpts = &pgOptions{
+			Postgres:DBOptions{Serializable: true},
+		}
 	}
 	return w
 }
