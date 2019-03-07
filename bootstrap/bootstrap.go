@@ -66,6 +66,7 @@ type DBOptions struct {
 	Password string `toml:"password" commented:"true"`
 	Host     string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
 	DBName   string `toml:"dbname"`
+	Serializable bool      `toml:"serializable" comment:"set isolation level to serializable, required for proper writing to database" commented:"true"`
 }
 
 // newConsumer is a convenience method that will use
