@@ -145,6 +145,14 @@ func TestPathTime(t *testing.T) {
 	}
 }
 
+func TestHostSlug(t *testing.T) {
+	tmp := "{HOST}"
+	result := Parse(tmp, time.Now())
+	if result == tmp || result == "" {
+		t.Error("FAIL: invalid hostname")
+	}
+}
+
 func mustParse(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {

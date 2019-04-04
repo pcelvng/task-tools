@@ -2,6 +2,7 @@ package tmpl
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -31,6 +32,7 @@ var (
 // {HOUR_SLUG} (date hour slug, shorthand for {YYYY}/{MM}/{DD}/{HH})
 // {DAY_SLUG} (date day slug, shorthand for {YYYY}/{MM}/{DD})
 // {MONTH_SLUG} (date month slug, shorthand for {YYYY}/{MM})
+// {HOST} (os hostname)
 //
 // Template values are case sensitive.
 //
@@ -86,6 +88,12 @@ func Parse(s string, t time.Time) string {
 
 	hour := fmt.Sprintf("%02d", t.Hour())
 	s = regHour.ReplaceAllString(s, hour)
+
+	// {HOST}
+	if h, err := os.Hostname(); err == nil {
+		s = strings.Replace(s, "{HOST}", h, -1)
+		// should we handle error case?
+	}
 
 	return s + end
 }
