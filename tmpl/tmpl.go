@@ -91,8 +91,8 @@ func Parse(s string, t time.Time) string {
 
 	// {HOST}
 	if h, err := os.Hostname(); err == nil {
-		s = strings.Replace(s, "{HOST}", h, -1)
-		// should we handle error case?
+		re := regexp.MustCompile(`(?i){host}`)
+		s = re.ReplaceAllString(s, h)
 	}
 
 	return s + end
