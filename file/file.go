@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/pcelvng/task-tools/file/gcs"
 	"github.com/pcelvng/task-tools/file/local"
 	"github.com/pcelvng/task-tools/file/nop"
 	"github.com/pcelvng/task-tools/file/s3"
@@ -78,8 +79,8 @@ func NewOptions() *Options {
 // Options presents general options across all stats readers and
 // writers.
 type Options struct {
-	AWSAccessKey string `toml:"aws_access_key"`
-	AWSSecretKey string `toml:"aws_secret_key"`
+	AccessKey string `toml:"access_key"`
+	SecretKey string `toml:"secret_key"`
 
 	// UseFileBuf specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name
@@ -112,6 +113,14 @@ func s3Options(opt Options) s3.Options {
 	return *s3Opts
 }
 
+func gcsOptions(opt Options) gcs.Options {
+	gcsOpts := gcs.NewOptions()
+	gcsOpts.UseFileBuf = opt.UseFileBuf
+	gcsOpts.FileBufDir = opt.FileBufDir
+	gcsOpts.FileBufPrefix = opt.FileBufPrefix
+	return *gcsOpts
+}
+
 func localOptions(opt Options) local.Options {
 	localOpts := local.NewOptions()
 	localOpts.UseFileBuf = opt.UseFileBuf
@@ -132,9 +141,13 @@ func NewReader(pth string, opt *Options) (r Reader, err error) {
 
 	switch u.Scheme {
 	case "s3":
-		accessKey := opt.AWSAccessKey
-		secretKey := opt.AWSSecretKey
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
 		r, err = s3.NewReader(pth, accessKey, secretKey)
+	case "gcs":
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
+		r, err = gcs.NewReader(pth, accessKey, secretKey)
 	case "nop":
 		r, err = nop.NewReader(pth)
 	case "local":
@@ -153,10 +166,15 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 
 	switch parseScheme(pth) {
 	case "s3":
-		accessKey := opt.AWSAccessKey
-		secretKey := opt.AWSSecretKey
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
 		s3Opts := s3Options(*opt)
 		w, err = s3.NewWriter(pth, accessKey, secretKey, &s3Opts)
+	case "gcs":
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
+		gcsOpts := gcsOptions(*opt)
+		w, err = gcs.NewWriter(pth, accessKey, secretKey, &gcsOpts)
 	case "nop":
 		w, err = nop.NewWriter(pth)
 	case "local":
@@ -183,8 +201,8 @@ func List(pthDir string, opt *Options) ([]stat.Stats, error) {
 	fileType := parseScheme(pthDir)
 	switch fileType {
 	case "s3":
-		accessKey := opt.AWSAccessKey
-		secretKey := opt.AWSSecretKey
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
 		return s3.ListFiles(pthDir, accessKey, secretKey)
 	case "nop":
 		return nop.ListFiles(pthDir)
