@@ -18,12 +18,12 @@ func ExampleNewReader() {
 	}
 
 	fmt.Println(err)        // output: <nil>
-	fmt.Println(r.sts.Path) // output: gcs://task-tools-test/read/test.txt
+	fmt.Println(r.sts.Path) // output: gcs://task-tools-gcstest/read/test.txt
 	fmt.Println(r.sts.Size) // output: 20
 
 	// Output:
 	// <nil>
-	// gcs://task-tools-test/read/test.txt
+	// gcs://task-tools-gcstest/read/test.txt
 	// 20
 }
 

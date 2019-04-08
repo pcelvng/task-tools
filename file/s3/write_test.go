@@ -14,19 +14,19 @@ func ExampleNewWriter() {
 	}
 
 	fmt.Println(err)               // output: <nil>
-	fmt.Println(w.sts.Path)        // output: s3://task-tools-test/write/test.txt
+	fmt.Println(w.sts.Path)        // output: s3://task-tools-s3test/write/test.txt
 	fmt.Println(w.s3Client != nil) // output: true
 	fmt.Println(w.bfr != nil)      // output: true
-	fmt.Println(w.bucket)          // output: task-tools-test
+	fmt.Println(w.bucket)          // output: task-tools-s3test
 	fmt.Println(w.objPth)          // output: write/test.txt
 	fmt.Println(w.tmpPth == "")    // output: true
 
 	// Output:
 	// <nil>
-	// s3://task-tools-test/write/test.txt
+	// s3://task-tools-s3test/write/test.txt
 	// true
 	// true
-	// task-tools-test
+	// task-tools-s3test
 	// write/test.txt
 	// true
 }
@@ -43,10 +43,10 @@ func ExampleNewWriterTmpFile() {
 	}
 
 	fmt.Println(err)               // output: <nil>
-	fmt.Println(w.sts.Path)        // output: s3://task-tools-test/write/test.txt
+	fmt.Println(w.sts.Path)        // output: s3://task-tools-s3test/write/test.txt
 	fmt.Println(w.s3Client != nil) // output: true
 	fmt.Println(w.bfr != nil)      // output: true
-	fmt.Println(w.bucket)          // output: task-tools-test
+	fmt.Println(w.bucket)          // output: task-tools-s3test
 	fmt.Println(w.objPth)          // output: write/test.txt
 	fmt.Println(w.tmpPth != "")    // output: true
 
@@ -57,10 +57,10 @@ func ExampleNewWriterTmpFile() {
 
 	// Output:
 	// <nil>
-	// s3://task-tools-test/write/test.txt
+	// s3://task-tools-s3test/write/test.txt
 	// true
 	// true
-	// task-tools-test
+	// task-tools-s3test
 	// write/test.txt
 	// true
 }
@@ -73,19 +73,19 @@ func ExampleNewWriterCompressed() {
 	}
 
 	fmt.Println(err)               // output: <nil>
-	fmt.Println(w.sts.Path)        // output: s3://task-tools-test/write/test.gz
+	fmt.Println(w.sts.Path)        // output: s3://task-tools-s3test/write/test.gz
 	fmt.Println(w.s3Client != nil) // output: true
 	fmt.Println(w.bfr != nil)      // output: true
-	fmt.Println(w.bucket)          // output: task-tools-test
+	fmt.Println(w.bucket)          // output: task-tools-s3test
 	fmt.Println(w.objPth)          // output: write/test.gz
 	fmt.Println(w.tmpPth == "")    // output: true
 
 	// Output:
 	// <nil>
-	// s3://task-tools-test/write/test.gz
+	// s3://task-tools-s3test/write/test.gz
 	// true
 	// true
-	// task-tools-test
+	// task-tools-s3test
 	// write/test.gz
 	// true
 }
@@ -172,7 +172,7 @@ func ExampleWriter_Stats() {
 	w.WriteLine([]byte("test line"))
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: s3://task-tools-test/write/test.txt
+	fmt.Println(sts.Path)          // output: s3://task-tools-s3test/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 0
@@ -180,7 +180,7 @@ func ExampleWriter_Stats() {
 	fmt.Println(sts.Created == "") // output: true
 
 	// Output:
-	// s3://task-tools-test/write/test.txt
+	// s3://task-tools-s3test/write/test.txt
 	// 20
 	// 2
 	// 0
@@ -200,7 +200,7 @@ func ExampleWriter_CloseStats() {
 	w.Close()
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: s3://task-tools-test/write/test.txt
+	fmt.Println(sts.Path)          // output: s3://task-tools-s3test/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 20
@@ -211,7 +211,7 @@ func ExampleWriter_CloseStats() {
 	rmTestFile(pth)
 
 	// Output:
-	// s3://task-tools-test/write/test.txt
+	// s3://task-tools-s3test/write/test.txt
 	// 20
 	// 2
 	// 20
