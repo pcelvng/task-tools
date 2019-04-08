@@ -21,7 +21,7 @@ import (
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
 	btoml "gopkg.in/BurntSushi/toml.v0"
-	ptoml "gopkg.in/pelletier/go-toml.v1"
+	ptoml "github.com/pelletier/go-toml"
 )
 
 type NewRunner func(*TaskMaster) Runner

@@ -20,7 +20,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/nwingert/task-tools v0.3.0 // indirect
-	github.com/pcelvng/task v0.1.0
+	github.com/pcelvng/task v0.1.1-0.20181210204914-9f2210538813
+	github.com/pelletier/go-toml v1.3.0
 	github.com/pkg/errors v0.8.1
 	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967
 	github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a // indirect
