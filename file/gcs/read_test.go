@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/minio/minio-go"
+	minio "github.com/minio/minio-go"
 )
 
 func ExampleNewReader() {

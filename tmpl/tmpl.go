@@ -16,6 +16,7 @@ var (
 	regMonth     = regexp.MustCompile(`{(M|m){2}}`)
 	regDay       = regexp.MustCompile(`{(D|d){2}}`)
 	regHour      = regexp.MustCompile(`{(H|h){2}}`)
+	regHost      = regexp.MustCompile(`(?i){host}`)
 )
 
 // Parse will parse a template string according to the provided
@@ -91,8 +92,7 @@ func Parse(s string, t time.Time) string {
 
 	// {HOST}
 	if h, err := os.Hostname(); err == nil {
-		re := regexp.MustCompile(`(?i){host}`)
-		s = re.ReplaceAllString(s, h)
+		s = regHost.ReplaceAllString(s, h)
 	}
 
 	return s + end

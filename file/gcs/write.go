@@ -5,8 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/minio/minio-go"
-
+	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
 )
@@ -51,11 +50,11 @@ func newWriterFromGCSClient(pth string, gcsClient *minio.Client, opt *Options) (
 
 	return &Writer{
 		gcsClient: gcsClient,
-		bfr:      bfr,
-		bucket:   bucket,
-		objPth:   objPth,
-		tmpPth:   tmpPth,
-		sts:      sts,
+		bfr:       bfr,
+		bucket:    bucket,
+		objPth:    objPth,
+		tmpPth:    tmpPth,
+		sts:       sts,
 	}, nil
 }
 
@@ -72,9 +71,9 @@ func newWriterFromGCSClient(pth string, gcsClient *minio.Client, opt *Options) (
 // Calling Abort() after Close() will do nothing.
 type Writer struct {
 	gcsClient *minio.Client
-	bfr      *buf.Buffer
-	sts      stat.Stats
-	objSts   stat.Stats // stats as reported by gcs
+	bfr       *buf.Buffer
+	sts       stat.Stats
+	objSts    stat.Stats // stats as reported by gcs
 
 	tmpPth string
 	bucket string // destination gcs bucket

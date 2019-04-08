@@ -4,14 +4,11 @@ import (
 	"bufio"
 	"compress/gzip"
 	"crypto/md5"
-	"path/filepath"
-
-	"github.com/minio/minio-go"
-
 	"fmt"
-
+	"path/filepath"
 	"strings"
 
+	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )

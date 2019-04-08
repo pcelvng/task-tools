@@ -4,14 +4,11 @@ import (
 	"bufio"
 	"compress/gzip"
 	"crypto/md5"
-	"path/filepath"
-
-	"github.com/minio/minio-go"
-
 	"fmt"
-
+	"path/filepath"
 	"strings"
 
+	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )
@@ -65,19 +62,19 @@ func newReaderFromGCSClient(pth string, gcsClient *minio.Client) (*Reader, error
 
 	return &Reader{
 		gcsObj: gcsObj,
-		rBuf:  rBuf,
-		rGzip: rGzip,
-		rHshr: rHshr,
-		sts:   sts,
+		rBuf:   rBuf,
+		rGzip:  rGzip,
+		rHshr:  rHshr,
+		sts:    sts,
 	}, nil
 }
 
 // Reader will read in streamed bytes from the gcs object.NewGCSClient
 type Reader struct {
 	gcsObj *minio.Object // gcs file object
-	rBuf  *bufio.Reader
-	rGzip *gzip.Reader
-	rHshr *util.HashReader
+	rBuf   *bufio.Reader
+	rGzip  *gzip.Reader
+	rHshr  *util.HashReader
 
 	sts    stat.Stats
 	closed bool
