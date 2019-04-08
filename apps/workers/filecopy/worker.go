@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pkg/errors"
-	"gopkg.in/jbsmith7741/uri.v0"
 )
 
 func newInfoOptions(info string) (*infoOptions, error) {

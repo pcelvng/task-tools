@@ -17,7 +17,7 @@ var (
 	testEndpoint  = "play.minio.io:9000"
 	testAccessKey = "Q3AM3UQ867SPQQA43P2F"
 	testSecretKey = "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
-	testBucket    = "task-tools-test"
+	testBucket    = "task-tools-gcstest"
 	testGCSClient *minio.Client
 )
 
