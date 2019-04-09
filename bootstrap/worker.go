@@ -19,8 +19,8 @@ import (
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
 	"github.com/pcelvng/task/bus/info"
+	ptoml "github.com/pelletier/go-toml"
 	btoml "gopkg.in/BurntSushi/toml.v0"
-	ptoml "gopkg.in/pelletier/go-toml.v1"
 )
 
 type Worker struct {
@@ -442,7 +442,7 @@ func (w *Worker) FileOpts() *Worker {
 func (w *Worker) MySQLOpts() *Worker {
 	if w.mysqlOpts == nil {
 		w.mysqlOpts = &mysqlOptions{
-			MySQL:DBOptions{Serializable: true},
+			MySQL: DBOptions{Serializable: true},
 		}
 	}
 	return w
@@ -464,7 +464,7 @@ func (w *Worker) MySQLOpts() *Worker {
 func (w *Worker) PostgresOpts() *Worker {
 	if w.pgOpts == nil {
 		w.pgOpts = &pgOptions{
-			Postgres:DBOptions{Serializable: true},
+			Postgres: DBOptions{Serializable: true},
 		}
 	}
 	return w

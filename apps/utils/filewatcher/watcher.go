@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
-	"gopkg.in/dustinevan/chron.v0"
+	chron "gopkg.in/dustinevan/chron.v0"
 )
 
 var (
@@ -138,8 +138,8 @@ func (w watcher) currentFiles(paths ...string) fileList {
 	fileList := make(fileList)
 	for _, p := range paths {
 		list, err := file.List(p, &file.Options{
-			AWSAccessKey: w.appOpt.AWSAccessKey,
-			AWSSecretKey: w.appOpt.AWSSecretKey,
+			AccessKey: w.appOpt.AccessKey,
+			SecretKey: w.appOpt.SecretKey,
 		})
 		if err != nil {
 			log.Println(err)

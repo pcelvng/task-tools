@@ -2,6 +2,7 @@ package tmpl
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -15,6 +16,7 @@ var (
 	regMonth     = regexp.MustCompile(`{(M|m){2}}`)
 	regDay       = regexp.MustCompile(`{(D|d){2}}`)
 	regHour      = regexp.MustCompile(`{(H|h){2}}`)
+	regHost      = regexp.MustCompile(`(?i){host}`)
 )
 
 // Parse will parse a template string according to the provided
@@ -31,6 +33,7 @@ var (
 // {HOUR_SLUG} (date hour slug, shorthand for {YYYY}/{MM}/{DD}/{HH})
 // {DAY_SLUG} (date day slug, shorthand for {YYYY}/{MM}/{DD})
 // {MONTH_SLUG} (date month slug, shorthand for {YYYY}/{MM})
+// {HOST} (os hostname)
 //
 // Template values are case sensitive.
 //
@@ -86,6 +89,11 @@ func Parse(s string, t time.Time) string {
 
 	hour := fmt.Sprintf("%02d", t.Hour())
 	s = regHour.ReplaceAllString(s, hour)
+
+	// {HOST}
+	if h, err := os.Hostname(); err == nil {
+		s = regHost.ReplaceAllString(s, h)
+	}
 
 	return s + end
 }

@@ -1,6 +1,7 @@
 package tmpl
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -142,6 +143,20 @@ func TestPathTime(t *testing.T) {
 		} else {
 			t.Logf("PASS: %q", test.msg)
 		}
+	}
+}
+
+func TestHostSlug(t *testing.T) {
+	h, _ := os.Hostname()
+
+	tmp := "{HOST}"
+	if r1 := Parse(tmp, time.Now()); r1 != h {
+		t.Error("FAIL: invalid hostname")
+	}
+
+	tmp = "{host}"
+	if r2 := Parse(tmp, time.Now()); r2 != h {
+		t.Error("FAIL: invalid hostname")
 	}
 }
 

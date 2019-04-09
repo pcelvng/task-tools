@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task-tools/file/util"
-	"gopkg.in/jbsmith7741/uri.v0"
 )
 
 func New() Stats {

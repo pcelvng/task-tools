@@ -5,8 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/minio/minio-go"
-
+	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
 )

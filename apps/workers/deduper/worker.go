@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/dedup"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
-	"gopkg.in/jbsmith7741/uri.v0"
 )
 
 func newInfoOptions(info string) (*infoOptions, error) {
@@ -77,8 +77,8 @@ func newWorker(info string) task.Worker {
 	wfOpt.UseFileBuf = iOpt.UseFileBuffer
 	wfOpt.FileBufDir = fOpt.FileBufDir
 	wfOpt.FileBufPrefix = fOpt.FileBufPrefix
-	wfOpt.AWSAccessKey = fOpt.AWSAccessKey
-	wfOpt.AWSSecretKey = fOpt.AWSSecretKey
+	wfOpt.AccessKey = fOpt.AccessKey
+	wfOpt.SecretKey = fOpt.SecretKey
 
 	// all paths (if pth is directory)
 	fSts, _ := file.List(iOpt.SrcPath, fOpt)

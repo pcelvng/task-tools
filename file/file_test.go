@@ -90,8 +90,8 @@ func TestGlob_Local(t *testing.T) {
 func TestGlob_S3(t *testing.T) {
 	// create files
 	opt := NewOptions()
-	opt.AWSAccessKey = testAccessKey
-	opt.AWSSecretKey = testSecretKey
+	opt.AccessKey = testAccessKey
+	opt.SecretKey = testSecretKey
 	pthDir := fmt.Sprintf("s3://%v/test", testBucket)
 	pths := []string{
 		fmt.Sprintf("%v/file-1.txt", pthDir),
@@ -175,8 +175,8 @@ func TestMain(m *testing.M) {
 
 func createFile(pth string) {
 	opt := NewOptions()
-	opt.AWSSecretKey = testSecretKey
-	opt.AWSAccessKey = testAccessKey
+	opt.SecretKey = testSecretKey
+	opt.AccessKey = testAccessKey
 
 	w, _ := NewWriter(pth, opt)
 	w.WriteLine([]byte("test line"))

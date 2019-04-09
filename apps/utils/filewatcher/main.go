@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
-	"github.com/pcelvng/task-tools"
+	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task/bus"
 )
@@ -21,10 +21,10 @@ const (
 type options struct {
 	Bus *bus.Options `toml:"bus"`
 
-	AWSAccessKey string  `toml:"aws_access_key" desc:"aws secret token for S3 access "`
-	AWSSecretKey string  `toml:"aws_secret_key" desc:"aws secret key for S3 access "`
-	FilesTopic   string  `toml:"files_topic" desc:"topic override (default is files)"`
-	Rules        []*Rule `toml:"rule"`
+	AccessKey  string  `toml:"access_key" desc:"secret token for S3/GCS access "`
+	SecretKey  string  `toml:"secret_key" desc:"secret key for S3/GCS access "`
+	FilesTopic string  `toml:"files_topic" desc:"topic override (default is files)"`
+	Rules      []*Rule `toml:"rule"`
 }
 
 type Rule struct {
@@ -35,7 +35,7 @@ type Rule struct {
 
 func (o options) Validate() error {
 	errs := appenderr.New()
-	if o.AWSAccessKey == "" || o.AWSSecretKey == "" {
+	if o.AccessKey == "" || o.SecretKey == "" {
 		log.Println("AWS Credentials are blank")
 	}
 	if len(o.Rules) == 0 {
