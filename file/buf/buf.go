@@ -42,6 +42,10 @@ type Options struct {
 	// CompressType type of compression used on the file
 	// best speed, best compression, default
 	CompressType int
+
+	// KeepFailed files when using a file buffer and the
+	// copy commands fails
+	KeepFailed bool
 }
 
 func NewBuffer(opt *Options) (b *Buffer, err error) {
@@ -136,6 +140,7 @@ type Buffer struct {
 
 	sts stat.Stats
 	mu  sync.Mutex // safe concurrent writing
+
 }
 
 // Read will read the raw underlying buffer bytes.
@@ -235,6 +240,24 @@ func (bfr *Buffer) Cleanup() (err error) {
 		err = util.RmTmp(bfr.sts.Path)
 	}
 	return err
+}
+
+// Reset will reset the in-memory buffer (if used)
+// and remove the reference to the tmp file (if exists)
+//
+// Reset does not verify that the tmp file is closed
+func (bfr *Buffer) Reset() {
+	// cleanup bytes buffer (if used)
+	if bfr.bBuf != nil {
+		// reset still retains underlying slice
+		bfr.bBuf.Reset()
+
+		// replace current bytes buffer. The
+		// gc will take care of clearing it
+		// out completely.
+		bfr.bBuf = &bytes.Buffer{}
+	}
+	bfr.fBuf = nil
 }
 
 // Close prevents further writing

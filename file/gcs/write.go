@@ -49,12 +49,13 @@ func newWriterFromGCSClient(pth string, gcsClient *minio.Client, opt *Options) (
 	bucket, objPth := parsePth(pth)
 
 	return &Writer{
-		gcsClient: gcsClient,
-		bfr:       bfr,
-		bucket:    bucket,
-		objPth:    objPth,
-		tmpPth:    tmpPth,
-		sts:       sts,
+		gcsClient:  gcsClient,
+		bfr:        bfr,
+		bucket:     bucket,
+		objPth:     objPth,
+		tmpPth:     tmpPth,
+		sts:        sts,
+		keepFailed: opt.KeepFailed,
 	}, nil
 }
 
@@ -81,6 +82,8 @@ type Writer struct {
 
 	done bool
 	mu   sync.Mutex
+
+	keepFailed bool // keep local copy of failed file if file buffer is used
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
@@ -144,7 +147,11 @@ func (w *Writer) Close() error {
 	// do copy
 	_, err := w.copy()
 	if err != nil {
-		w.bfr.Cleanup()
+		if w.keepFailed {
+			w.bfr.Reset()
+		} else {
+			w.bfr.Cleanup()
+		}
 		return err
 	}
 

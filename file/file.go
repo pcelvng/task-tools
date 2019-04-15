@@ -107,7 +107,8 @@ type Options struct {
 	//
 	// If no prefix is provided then the temp file name is just a random
 	// unique number.
-	FileBufPrefix string `toml:"-"` // default is usually 'task-type_'
+	FileBufPrefix     string `toml:"-"` // default is usually 'task-type_'
+	FileBufKeepFailed bool   `toml:"file_buf_keep_failed" commented:"true" comment:"keep the local buffer file on a upload failure"`
 }
 
 func compressionLookup(s string) int {
@@ -127,6 +128,7 @@ func s3Options(opt Options) s3.Options {
 	s3Opts.UseFileBuf = opt.UseFileBuf
 	s3Opts.FileBufDir = opt.FileBufDir
 	s3Opts.FileBufPrefix = opt.FileBufPrefix
+	s3Opts.KeepFailed = opt.FileBufKeepFailed
 	return *s3Opts
 }
 
@@ -136,6 +138,7 @@ func gcsOptions(opt Options) gcs.Options {
 	gcsOpts.UseFileBuf = opt.UseFileBuf
 	gcsOpts.FileBufDir = opt.FileBufDir
 	gcsOpts.FileBufPrefix = opt.FileBufPrefix
+	gcsOpts.KeepFailed = opt.FileBufKeepFailed
 	return *gcsOpts
 }
 

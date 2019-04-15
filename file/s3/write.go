@@ -49,12 +49,13 @@ func newWriterFromS3Client(pth string, s3Client *minio.Client, opt *Options) (*W
 	bucket, objPth := parsePth(pth)
 
 	return &Writer{
-		s3Client: s3Client,
-		bfr:      bfr,
-		bucket:   bucket,
-		objPth:   objPth,
-		tmpPth:   tmpPth,
-		sts:      sts,
+		s3Client:   s3Client,
+		bfr:        bfr,
+		bucket:     bucket,
+		objPth:     objPth,
+		tmpPth:     tmpPth,
+		sts:        sts,
+		keepFailed: opt.KeepFailed,
 	}, nil
 }
 
@@ -81,6 +82,8 @@ type Writer struct {
 
 	done bool
 	mu   sync.Mutex
+
+	keepFailed bool // keep local copy of failed file if file buffer is used
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
@@ -144,7 +147,11 @@ func (w *Writer) Close() error {
 	// do copy
 	_, err := w.copy()
 	if err != nil {
-		w.bfr.Cleanup()
+		if w.keepFailed {
+			w.bfr.Reset()
+		} else {
+			w.bfr.Cleanup()
+		}
 		return err
 	}
 
