@@ -15,7 +15,9 @@ import (
 )
 
 func NewOptions() *Options {
-	return &Options{}
+	return &Options{
+		CompressType: gzip.BestSpeed,
+	}
 }
 
 type Options struct {
