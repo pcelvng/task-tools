@@ -1,6 +1,7 @@
 package file
 
 import (
+	"compress/gzip"
 	"context"
 	"io"
 	"net/url"
@@ -73,7 +74,9 @@ type Writer interface {
 
 // NewOptions
 func NewOptions() *Options {
-	return &Options{}
+	return &Options{
+		Compression: "speed",
+	}
 }
 
 // Options presents general options across all stats readers and
@@ -81,6 +84,8 @@ func NewOptions() *Options {
 type Options struct {
 	AccessKey string `toml:"access_key"`
 	SecretKey string `toml:"secret_key"`
+
+	Compression string `toml:"file_compression" commented:"true" comment:"gzip compression level (speed|size|default)"`
 
 	// UseFileBuf specifies to use a tmp file for the delayed writing.
 	// Can optionally also specify the tmp directory and tmp name
@@ -105,8 +110,20 @@ type Options struct {
 	FileBufPrefix string `toml:"-"` // default is usually 'task-type_'
 }
 
+func compressionLookup(s string) int {
+	switch s {
+	case "speed":
+		return gzip.BestSpeed
+	case "size":
+		return gzip.BestCompression
+	default:
+		return gzip.DefaultCompression
+	}
+}
+
 func s3Options(opt Options) s3.Options {
 	s3Opts := s3.NewOptions()
+	s3Opts.CompressType = compressionLookup(opt.Compression)
 	s3Opts.UseFileBuf = opt.UseFileBuf
 	s3Opts.FileBufDir = opt.FileBufDir
 	s3Opts.FileBufPrefix = opt.FileBufPrefix
@@ -115,6 +132,7 @@ func s3Options(opt Options) s3.Options {
 
 func gcsOptions(opt Options) gcs.Options {
 	gcsOpts := gcs.NewOptions()
+	gcsOpts.CompressType = compressionLookup(opt.Compression)
 	gcsOpts.UseFileBuf = opt.UseFileBuf
 	gcsOpts.FileBufDir = opt.FileBufDir
 	gcsOpts.FileBufPrefix = opt.FileBufPrefix
@@ -123,6 +141,7 @@ func gcsOptions(opt Options) gcs.Options {
 
 func localOptions(opt Options) local.Options {
 	localOpts := local.NewOptions()
+	localOpts.CompressType = compressionLookup(opt.Compression)
 	localOpts.UseFileBuf = opt.UseFileBuf
 	localOpts.FileBufDir = opt.FileBufDir
 	localOpts.FileBufPrefix = opt.FileBufPrefix

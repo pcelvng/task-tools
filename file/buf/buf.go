@@ -38,6 +38,10 @@ type Options struct {
 	// Writes will be compressed but reads will read raw
 	// compressed bytes.
 	Compress bool
+
+	// CompressType type of compression used on the file
+	// best speed, best compression, default
+	CompressType int
 }
 
 func NewBuffer(opt *Options) (b *Buffer, err error) {
@@ -90,7 +94,7 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 
 	// compression
 	if opt.Compress {
-		wGzip, _ = gzip.NewWriterLevel(w, gzip.BestSpeed)
+		wGzip, _ = gzip.NewWriterLevel(w, opt.CompressType)
 		w = wGzip
 	}
 
@@ -167,7 +171,7 @@ func (bfr *Buffer) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
-// Write will write to the underlying buffer. The underlying
+// WriteLine will write to the underlying buffer. The underlying
 // bytes writing will be compressed if compression was
 // specified on buffer initialization.
 //

@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	// GCS endpoint (s3 compatible api)
+	// StoreHost is a GCS endpoint (s3 compatible api)
 	StoreHost = "storage.googleapis.com"
 
 	// map that maintains gcs clients
