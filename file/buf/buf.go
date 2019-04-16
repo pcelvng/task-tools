@@ -15,7 +15,9 @@ import (
 )
 
 func NewOptions() *Options {
-	return &Options{}
+	return &Options{
+		CompressLevel: gzip.BestSpeed,
+	}
 }
 
 type Options struct {
@@ -38,6 +40,16 @@ type Options struct {
 	// Writes will be compressed but reads will read raw
 	// compressed bytes.
 	Compress bool
+
+	// CompressLevel type of compression used on the file
+	// gzip.BestSpeed = 1 // quick but very little compression
+	// gzip.BestCompression = 9 // smallest size but takes longer
+	// gzip.DefaultCompression = -1 // balance between speed and size
+	CompressLevel int
+
+	// KeepFailed files when using a file buffer and the
+	// copy commands fails
+	KeepFailed bool
 }
 
 func NewBuffer(opt *Options) (b *Buffer, err error) {
@@ -90,7 +102,7 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 
 	// compression
 	if opt.Compress {
-		wGzip, _ = gzip.NewWriterLevel(w, gzip.BestSpeed)
+		wGzip, _ = gzip.NewWriterLevel(w, opt.CompressLevel)
 		w = wGzip
 	}
 
@@ -132,6 +144,7 @@ type Buffer struct {
 
 	sts stat.Stats
 	mu  sync.Mutex // safe concurrent writing
+
 }
 
 // Read will read the raw underlying buffer bytes.
@@ -167,7 +180,7 @@ func (bfr *Buffer) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
-// Write will write to the underlying buffer. The underlying
+// WriteLine will write to the underlying buffer. The underlying
 // bytes writing will be compressed if compression was
 // specified on buffer initialization.
 //
@@ -231,6 +244,24 @@ func (bfr *Buffer) Cleanup() (err error) {
 		err = util.RmTmp(bfr.sts.Path)
 	}
 	return err
+}
+
+// Reset will reset the in-memory buffer (if used)
+// and remove the reference to the tmp file (if exists)
+//
+// Reset does not verify that the tmp file is closed
+func (bfr *Buffer) Reset() {
+	// cleanup bytes buffer (if used)
+	if bfr.bBuf != nil {
+		// reset still retains underlying slice
+		bfr.bBuf.Reset()
+
+		// replace current bytes buffer. The
+		// gc will take care of clearing it
+		// out completely.
+		bfr.bBuf = &bytes.Buffer{}
+	}
+	bfr.fBuf = nil
 }
 
 // Close prevents further writing

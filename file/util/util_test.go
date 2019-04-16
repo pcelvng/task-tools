@@ -4,45 +4,31 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path"
+	"testing"
+
+	"github.com/jbsmith7741/trial"
 )
 
-func Example_OpenTmp() {
-	// showing:
-	// - dir normalization
-	// - tmp file prefix
-
-	tmpPth, f, err := OpenTmp("/noexist/../tmp/", "test_")
-	if err != nil {
-		return
+func TestOpenTmp(t *testing.T) {
+	fn := func(args ...interface{}) (interface{}, error) {
+		s, _, err := OpenTmp(args[0].(string), args[1].(string))
+		return s, err
 	}
-	tmpDir, tmpF := path.Split(tmpPth)
-	fmt.Println(tmpDir)
-	fmt.Println(tmpF[0:5])
-
-	if f != nil {
-		f.Close()
+	cases := trial.Cases{
+		"normalize path": {
+			Input:    trial.Args("/noexist/../tmp/", "test_"),
+			Expected: "tmp/test_",
+		},
+		"no permission": {
+			Input:       trial.Args("/root/bad", ""),
+			ExpectedErr: errors.New("permission denied"),
+		},
+		"prefix with spaces": {
+			Input:    trial.Args("/tmp/path", "test prefix"),
+			Expected: "/tmp/path/test prefix",
+		},
 	}
-	err = os.Remove(tmpPth)
-	fmt.Println(err)
-
-	// Output:
-	// /tmp/
-	// test_
-	// <nil>
-}
-
-func ExampleOpenTmp_err() {
-	// showing:
-	// closeF no err on nil f
-
-	_, _, err := OpenTmp("/root/bad", "")
-	isDenied := os.IsPermission(err)
-	fmt.Println(isDenied) // output: true
-
-	// Output:
-	// true
+	trial.New(fn, cases).Comparer(trial.Contains).Test(t)
 }
 
 func ExampleMultiWriteCloser() {
