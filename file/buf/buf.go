@@ -16,7 +16,7 @@ import (
 
 func NewOptions() *Options {
 	return &Options{
-		CompressType: gzip.BestSpeed,
+		CompressLevel: gzip.BestSpeed,
 	}
 }
 
@@ -41,9 +41,11 @@ type Options struct {
 	// compressed bytes.
 	Compress bool
 
-	// CompressType type of compression used on the file
-	// best speed, best compression, default
-	CompressType int
+	// CompressLevel type of compression used on the file
+	// gzip.BestSpeed = 1 // quick but very little compression
+	// gzip.BestCompression = 9 // smallest size but takes longer
+	// gzip.DefaultCompression = -1 // balance between speed and size
+	CompressLevel int
 
 	// KeepFailed files when using a file buffer and the
 	// copy commands fails
@@ -100,7 +102,7 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 
 	// compression
 	if opt.Compress {
-		wGzip, _ = gzip.NewWriterLevel(w, opt.CompressType)
+		wGzip, _ = gzip.NewWriterLevel(w, opt.CompressLevel)
 		w = wGzip
 	}
 
