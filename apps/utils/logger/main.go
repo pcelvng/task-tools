@@ -12,14 +12,12 @@ import (
 	"time"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
-
-	"github.com/pcelvng/task-tools/tmpl"
-
 	nsq "github.com/nsqio/go-nsq"
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/consumer"
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/tmpl"
 )
 
 type app struct {
@@ -30,6 +28,7 @@ type app struct {
 	Channel       string        `toml:"channel" comment:"read nsq channel default logger"`
 	PollPeriod    time.Duration `toml:"poll_period" comment:"the time between refresh on the topic list"`
 	WriteOptions  file.Options  `toml:"write_options"`
+	RotateFiles   time.Duration `toml:"rotate_files" comment:"time between rotation for log files default is an hour (3600000000000 nano seconds)"`
 
 	consumers []*nsq.Consumer
 	topics    map[string]*Logger
@@ -88,22 +87,17 @@ func (a *app) Start() {
 		a.Stop()
 	}
 }
+
 func (a *app) RotateLogs() {
-	for ; ; time.Sleep(nextHour(time.Now())) {
+	if a.RotateFiles == 0 {
+		a.RotateFiles = time.Hour
+	}
+	for ; ; time.Sleep(a.RotateFiles) {
 		if err := a.rotateWriters(time.Now()); err != nil {
 			log.Println(err)
 			a.Stop()
 		}
 	}
-}
-
-func nextHour(t time.Time) time.Duration {
-	h := t.Truncate(time.Hour).Add(59*time.Minute + 50*time.Second)
-	d := h.Sub(t.Round(time.Second))
-	if d <= 0 {
-		d += time.Hour
-	}
-	return d
 }
 
 func (a *app) rotateWriters(tm time.Time) error {

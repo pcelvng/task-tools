@@ -41,32 +41,6 @@ func TestParse(t *testing.T) {
 	trial.New(fn, cases).Test(t)
 }
 
-func TestNextHour(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		return nextHour(args[0].(time.Time)), nil
-
-	}
-	cases := trial.Cases{
-		"in 15 minutes": {
-			Input:    trial.Time(time.RFC3339, "2018-11-01T12:44:50Z"),
-			Expected: 15 * time.Minute,
-		},
-		"55 minutes": {
-			Input:    trial.Time(time.RFC3339Nano, "2018-11-01T12:59:55Z"),
-			Expected: 59*time.Minute + 55*time.Second,
-		},
-		"1 nano second": {
-			Input:    trial.Time(time.RFC3339Nano, "2018-11-01T12:59:49.599999999Z"),
-			Expected: time.Hour,
-		},
-		"start of the hour": {
-			Input:    trial.Time(time.RFC3339, "2018-11-01T12:00:00Z"),
-			Expected: 59*time.Minute + 50*time.Second,
-		},
-	}
-	trial.New(fn, cases).Test(t)
-}
-
 func TestCreateWriters(t *testing.T) {
 	type input struct {
 		logger *Logger
