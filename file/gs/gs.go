@@ -1,4 +1,4 @@
-package gcs
+package gs
 
 import (
 	"strings"
@@ -30,20 +30,20 @@ type Options struct {
 	*buf.Options
 }
 
-func newGCSClient(accessKey, secretKey string) (gcsClient *minio.Client, err error) {
+func newGSClient(accessKey, secretKey string) (gsClient *minio.Client, err error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	gcsClient, _ = gcsClients[StoreHost+accessKey+secretKey]
-	if gcsClient == nil {
-		gcsClient, err = minio.New(StoreHost, accessKey, secretKey, true)
-		gcsClients[StoreHost+accessKey+secretKey] = gcsClient
+	gsClient, _ = gcsClients[StoreHost+accessKey+secretKey]
+	if gsClient == nil {
+		gsClient, err = minio.New(StoreHost, accessKey, secretKey, true)
+		gcsClients[StoreHost+accessKey+secretKey] = gsClient
 	}
-	return gcsClient, err
+	return gsClient, err
 }
 
 // parsePth will parse an gcs path of the form:
-// "gcs://{bucket}/{path/to/object.txt}
+// "gs://{bucket}/{path/to/object.txt}
 // and return the bucket and object path.
 // If either bucket or object are empty then
 // pth was not in the correct format for parsing or

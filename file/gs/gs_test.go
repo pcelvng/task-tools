@@ -1,4 +1,4 @@
-package gcs
+package gs
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ var (
 	testAccessKey = "Q3AM3UQ867SPQQA43P2F"
 	testSecretKey = "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
 	testBucket    = "task-tools-gcstest"
-	testGCSClient *minio.Client
+	testGSClient  *minio.Client
 )
 
 func TestMain(m *testing.M) {
@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 	StoreHost = testEndpoint
 
 	// test client
-	testGCSClient, err = newTestGCSClient()
+	testGSClient, err = newTestGSClient()
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
@@ -38,11 +38,11 @@ func TestMain(m *testing.M) {
 	createBucket(testBucket)
 
 	// create two test files for reading
-	pth := fmt.Sprintf("gcs://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.txt", testBucket)
 	createTestFile(pth)
 
 	// compressed read test file
-	gzPth := fmt.Sprintf("gcs://%v/read/test.gz", testBucket)
+	gzPth := fmt.Sprintf("gs://%v/read/test.gz", testBucket)
 	createTestFile(gzPth)
 
 	// run
@@ -58,12 +58,12 @@ func TestMain(m *testing.M) {
 	os.Exit(runRslt)
 }
 
-func newTestGCSClient() (*minio.Client, error) {
-	return newGCSClient(testAccessKey, testSecretKey)
+func newTestGSClient() (*minio.Client, error) {
+	return newGSClient(testAccessKey, testSecretKey)
 }
 
 func createBucket(bckt string) error {
-	exists, err := testGCSClient.BucketExists(bckt)
+	exists, err := testGSClient.BucketExists(bckt)
 	if err != nil {
 		return err
 	}
@@ -72,15 +72,15 @@ func createBucket(bckt string) error {
 		return nil
 	}
 
-	return testGCSClient.MakeBucket(bckt, "us-east-1")
+	return testGSClient.MakeBucket(bckt, "us-east-1")
 }
 
 func rmBucket(bckt string) error {
-	return testGCSClient.RemoveBucket(bckt)
+	return testGSClient.RemoveBucket(bckt)
 }
 
 func createTestFile(pth string) error {
-	w, err := newWriterFromGCSClient(pth, testGCSClient, nil)
+	w, err := newWriterFromGSClient(pth, testGSClient, nil)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func createTestFile(pth string) error {
 
 func rmTestFile(pth string) error {
 	bckt, objPth := parsePth(pth)
-	return testGCSClient.RemoveObject(bckt, objPth)
+	return testGSClient.RemoveObject(bckt, objPth)
 }
 
 func ExampleParsePth() {
@@ -100,7 +100,7 @@ func ExampleParsePth() {
 	// - returned bucket
 	// - returned object path
 
-	pth := "gcs://bucket/path/to/object.txt"
+	pth := "gs://bucket/path/to/object.txt"
 	bucket, objectPth := parsePth(pth)
 	fmt.Println(bucket)    // output: bucket
 	fmt.Println(objectPth) // output: /path/to/object.txt
@@ -118,14 +118,14 @@ func TestParsePth(t *testing.T) {
 	}
 	tests := []inputOutput{
 		{"", "", ""},
-		{"gcs://", "", ""},
-		{"gcs://bucket", "bucket", ""},
-		{"gcs://bucket/", "bucket", ""},
-		{"gcs://bucket/pth/to", "bucket", "pth/to"},
-		{"gcs://bucket/pth/to/", "bucket", "pth/to/"},
-		{"gcs://bucket/pth//to/", "bucket", "pth//to/"},
-		{"gcs://bucket/pth//to//", "bucket", "pth//to//"},
-		{"gcs://bucket/pth/to/object.txt", "bucket", "pth/to/object.txt"},
+		{"gs://", "", ""},
+		{"gs://bucket", "bucket", ""},
+		{"gs://bucket/", "bucket", ""},
+		{"gs://bucket/pth/to", "bucket", "pth/to"},
+		{"gs://bucket/pth/to/", "bucket", "pth/to/"},
+		{"gs://bucket/pth//to/", "bucket", "pth//to/"},
+		{"gs://bucket/pth//to//", "bucket", "pth//to//"},
+		{"gs://bucket/pth/to/object.txt", "bucket", "pth/to/object.txt"},
 	}
 
 	for _, tst := range tests {

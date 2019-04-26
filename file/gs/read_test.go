@@ -1,4 +1,4 @@
-package gcs
+package gs
 
 import (
 	"bytes"
@@ -11,19 +11,19 @@ import (
 )
 
 func ExampleNewReader() {
-	pth := fmt.Sprintf("gcs://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.txt", testBucket)
 	r, err := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
 
 	fmt.Println(err)        // output: <nil>
-	fmt.Println(r.sts.Path) // output: gcs://task-tools-gcstest/read/test.txt
+	fmt.Println(r.sts.Path) // output: gs://task-tools-gcstest/read/test.txt
 	fmt.Println(r.sts.Size) // output: 20
 
 	// Output:
 	// <nil>
-	// gcs://task-tools-gcstest/read/test.txt
+	// gs://task-tools-gcstest/read/test.txt
 	// 20
 }
 
@@ -58,7 +58,7 @@ func ExampleNewReaderErrBadObject() {
 }
 
 func ExampleNewReaderErrObjStat() {
-	pth := "gcs://does-not/exist.txt"
+	pth := "gs://does-not/exist.txt"
 	r, err := NewReader(pth, testAccessKey, testSecretKey)
 
 	fmt.Println(r)   // output: <nil>
@@ -82,7 +82,7 @@ func ExampleNewReaderErrGzip() {
 	buf.Write([]byte("test line\n"))
 	opts := minio.PutObjectOptions{}
 	opts.ContentType = "application/octet-stream"
-	_, err := testGCSClient.PutObject(
+	_, err := testGSClient.PutObject(
 		testBucket,
 		"bad.gz",
 		&buf,
@@ -94,7 +94,7 @@ func ExampleNewReaderErrGzip() {
 		return
 	}
 
-	pth := fmt.Sprintf("gcs://%v/bad.gz", testBucket)
+	pth := fmt.Sprintf("gs://%v/bad.gz", testBucket)
 	r, err := NewReader(pth, testAccessKey, testSecretKey)
 
 	fmt.Println(r)   // output: <nil>
@@ -109,7 +109,7 @@ func ExampleNewReaderErrGzip() {
 }
 
 func ExampleReader_Read() {
-	pth := fmt.Sprintf("gcs://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.txt", testBucket)
 	r, err := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -134,7 +134,7 @@ func ExampleReader_Read() {
 }
 
 func ExampleReader_ReadCompressed() {
-	pth := fmt.Sprintf("gcs://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -159,7 +159,7 @@ func ExampleReader_ReadCompressed() {
 }
 
 func ExampleReader_ReadLine() {
-	pth := fmt.Sprintf("gcs://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.txt", testBucket)
 	r, _ := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -185,7 +185,7 @@ func ExampleReader_ReadLine() {
 }
 
 func ExampleReader_ReadLineCompressed() {
-	pth := fmt.Sprintf("gcs://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -216,7 +216,7 @@ func ExampleReader_ReadLineCompressed() {
 }
 
 func ExampleReader_Stats() {
-	pth := fmt.Sprintf("gcs://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.txt", testBucket)
 	r, _ := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -233,7 +233,7 @@ func ExampleReader_Stats() {
 }
 
 func ExampleReader_Close() {
-	pth := fmt.Sprintf("gcs://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.txt", testBucket)
 	r, _ := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -258,7 +258,7 @@ func ExampleReader_Close() {
 }
 
 func ExampleReader_CloseCompressed() {
-	pth := fmt.Sprintf("gcs://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -283,7 +283,7 @@ func ExampleReader_CloseCompressed() {
 }
 
 func ExampleReader_CloseandClose() {
-	pth := fmt.Sprintf("gcs://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("gs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testAccessKey, testSecretKey)
 	if r == nil {
 		return
@@ -313,9 +313,9 @@ func ExampleReader_CloseandClose() {
 func TestListFiles(t *testing.T) {
 	// setup - create objects
 	pths := []string{
-		fmt.Sprintf("gcs://%s/list-test/f1.txt", testBucket),
-		fmt.Sprintf("gcs://%s/list-test/f2.txt", testBucket),
-		fmt.Sprintf("gcs://%s/list-test/dir/f3.txt", testBucket),
+		fmt.Sprintf("gs://%s/list-test/f1.txt", testBucket),
+		fmt.Sprintf("gs://%s/list-test/f2.txt", testBucket),
+		fmt.Sprintf("gs://%s/list-test/dir/f3.txt", testBucket),
 	}
 
 	for _, pth := range pths {
@@ -323,7 +323,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test returns only files
-	dirPth := fmt.Sprintf("gcs://%s/list-test/", testBucket)
+	dirPth := fmt.Sprintf("gs://%s/list-test/", testBucket)
 	allSts, err := ListFiles(dirPth, testAccessKey, testSecretKey)
 	if err != nil {
 		t.Error(err)
@@ -356,7 +356,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test that missing trailing "/" has same results
-	dirPth = fmt.Sprintf("gcs://%s/list-test", testBucket)
+	dirPth = fmt.Sprintf("gs://%s/list-test", testBucket)
 	allSts, err = ListFiles(dirPth, testAccessKey, testSecretKey)
 	if err != nil {
 		t.Errorf("expected nil but got err '%v'\n", err.Error())

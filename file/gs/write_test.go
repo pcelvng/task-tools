@@ -1,4 +1,4 @@
-package gcs
+package gs
 
 import (
 	"fmt"
@@ -7,14 +7,14 @@ import (
 )
 
 func ExampleNewWriter() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, err := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
 
 	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gcs://task-tools-gcstest/write/test.txt
+	fmt.Println(w.sts.Path)         // output: gs://task-tools-gcstest/write/test.txt
 	fmt.Println(w.gcsClient != nil) // output: true
 	fmt.Println(w.bfr != nil)       // output: true
 	fmt.Println(w.bucket)           // output: task-tools-gcstest
@@ -23,7 +23,7 @@ func ExampleNewWriter() {
 
 	// Output:
 	// <nil>
-	// gcs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gcstest/write/test.txt
 	// true
 	// true
 	// task-tools-gcstest
@@ -32,7 +32,7 @@ func ExampleNewWriter() {
 }
 
 func ExampleNewWriterTmpFile() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	opt := NewOptions()
 	opt.UseFileBuf = true
 	opt.FileBufDir = "./test/tmp"
@@ -43,7 +43,7 @@ func ExampleNewWriterTmpFile() {
 	}
 
 	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gcs://task-tools-gcstest/write/test.txt
+	fmt.Println(w.sts.Path)         // output: gs://task-tools-gcstest/write/test.txt
 	fmt.Println(w.gcsClient != nil) // output: true
 	fmt.Println(w.bfr != nil)       // output: true
 	fmt.Println(w.bucket)           // output: task-tools-gcstest
@@ -57,7 +57,7 @@ func ExampleNewWriterTmpFile() {
 
 	// Output:
 	// <nil>
-	// gcs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gcstest/write/test.txt
 	// true
 	// true
 	// task-tools-gcstest
@@ -66,14 +66,14 @@ func ExampleNewWriterTmpFile() {
 }
 
 func ExampleNewWriterCompressed() {
-	pth := fmt.Sprintf("gcs://%v/write/test.gz", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.gz", testBucket)
 	w, err := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
 
 	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gcs://task-tools-gcstest/write/test.gz
+	fmt.Println(w.sts.Path)         // output: gs://task-tools-gcstest/write/test.gz
 	fmt.Println(w.gcsClient != nil) // output: true
 	fmt.Println(w.bfr != nil)       // output: true
 	fmt.Println(w.bucket)           // output: task-tools-gcstest
@@ -82,7 +82,7 @@ func ExampleNewWriterCompressed() {
 
 	// Output:
 	// <nil>
-	// gcs://task-tools-gcstest/write/test.gz
+	// gs://task-tools-gcstest/write/test.gz
 	// true
 	// true
 	// task-tools-gcstest
@@ -91,7 +91,7 @@ func ExampleNewWriterCompressed() {
 }
 
 func ExampleNewWriterErrBuf() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	opt := NewOptions()
 	opt.UseFileBuf = true
 	opt.FileBufDir = "/bad/tmp/dir"
@@ -130,7 +130,7 @@ func ExampleNewWriterErrBadClient() {
 }
 
 func ExampleWriter_Write() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -147,7 +147,7 @@ func ExampleWriter_Write() {
 }
 
 func ExampleWriter_WriteLine() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -162,7 +162,7 @@ func ExampleWriter_WriteLine() {
 }
 
 func ExampleWriter_Stats() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -172,7 +172,7 @@ func ExampleWriter_Stats() {
 	w.WriteLine([]byte("test line"))
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: gcs://task-tools-gcstest/write/test.txt
+	fmt.Println(sts.Path)          // output: gs://task-tools-gcstest/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 0
@@ -180,7 +180,7 @@ func ExampleWriter_Stats() {
 	fmt.Println(sts.Created == "") // output: true
 
 	// Output:
-	// gcs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gcstest/write/test.txt
 	// 20
 	// 2
 	// 0
@@ -189,7 +189,7 @@ func ExampleWriter_Stats() {
 }
 
 func ExampleWriter_CloseStats() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -200,7 +200,7 @@ func ExampleWriter_CloseStats() {
 	w.Close()
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: gcs://task-tools-gcstest/write/test.txt
+	fmt.Println(sts.Path)          // output: gs://task-tools-gcstest/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 20
@@ -211,7 +211,7 @@ func ExampleWriter_CloseStats() {
 	rmTestFile(pth)
 
 	// Output:
-	// gcs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gcstest/write/test.txt
 	// 20
 	// 2
 	// 20
@@ -220,7 +220,7 @@ func ExampleWriter_CloseStats() {
 }
 
 func ExampleWriter_Abort() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -241,7 +241,7 @@ func ExampleWriter_Abort() {
 }
 
 func ExampleWriter_AbortAndAbort() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -260,7 +260,7 @@ func ExampleWriter_AbortAndAbort() {
 }
 
 func ExampleWriter_Close() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -284,7 +284,7 @@ func ExampleWriter_Close() {
 }
 
 func ExampleWriter_CloseErrCopy() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -307,7 +307,7 @@ func ExampleWriter_CloseErrCopy() {
 }
 
 func ExampleWriter_CloseAndClose() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -332,7 +332,7 @@ func ExampleWriter_CloseAndClose() {
 }
 
 func ExampleWriter_AbortAndClose() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -353,7 +353,7 @@ func ExampleWriter_AbortAndClose() {
 }
 
 func ExampleWriter_CloseAndAbort() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -378,7 +378,7 @@ func ExampleWriter_CloseAndAbort() {
 }
 
 func ExampleWriter_CopyTmpFile() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	opt := NewOptions()
 	opt.UseFileBuf = true
 	opt.FileBufDir = "./test/tmp"
@@ -417,7 +417,7 @@ func ExampleWriter_CopyTmpFile() {
 }
 
 func ExampleWriter_CopyNoExtension() {
-	pth := fmt.Sprintf("gcs://%v/write/test", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -449,7 +449,7 @@ func ExampleWriter_CopyNoExtension() {
 }
 
 func ExampleWriter_SetObjSts() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
@@ -479,7 +479,7 @@ func ExampleWriter_SetObjSts() {
 }
 
 func ExampleWriter_SetObjStsErr() {
-	pth := fmt.Sprintf("gcs://%v/write/test.txt", testBucket)
+	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return

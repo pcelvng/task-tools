@@ -1,4 +1,4 @@
-package gcs
+package gs
 
 import (
 	"bufio"
@@ -15,15 +15,15 @@ import (
 
 func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 	// get gcs client
-	gcsClient, err := newGCSClient(accessKey, secretKey)
+	gcsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return newReaderFromGCSClient(pth, gcsClient)
+	return newReaderFromGSClient(pth, gcsClient)
 }
 
-func newReaderFromGCSClient(pth string, gcsClient *minio.Client) (*Reader, error) {
+func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
@@ -134,7 +134,7 @@ func (r *Reader) Close() (err error) {
 // if one does not already exist.
 func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 	// get gcs client
-	gcsClient, err := newGCSClient(accessKey, secretKey)
+	gcsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 		sts := stat.New()
 		sts.SetCreated(objInfo.LastModified)
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
-		sts.SetPath(fmt.Sprintf("gcs://%s/%s", bucket, objInfo.Key))
+		sts.SetPath(fmt.Sprintf("gs://%s/%s", bucket, objInfo.Key))
 		sts.SetSize(objInfo.Size)
 
 		allSts = append(allSts, sts)
