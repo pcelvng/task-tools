@@ -14,19 +14,19 @@ func ExampleNewWriter() {
 	}
 
 	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gs://task-tools-gcstest/write/test.txt
+	fmt.Println(w.sts.Path)         // output: gs://task-tools-gstest/write/test.txt
 	fmt.Println(w.gcsClient != nil) // output: true
 	fmt.Println(w.bfr != nil)       // output: true
-	fmt.Println(w.bucket)           // output: task-tools-gcstest
+	fmt.Println(w.bucket)           // output: task-tools-gstest
 	fmt.Println(w.objPth)           // output: write/test.txt
 	fmt.Println(w.tmpPth == "")     // output: true
 
 	// Output:
 	// <nil>
-	// gs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gstest/write/test.txt
 	// true
 	// true
-	// task-tools-gcstest
+	// task-tools-gstest
 	// write/test.txt
 	// true
 }
@@ -43,10 +43,10 @@ func ExampleNewWriterTmpFile() {
 	}
 
 	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gs://task-tools-gcstest/write/test.txt
+	fmt.Println(w.sts.Path)         // output: gs://task-tools-gstest/write/test.txt
 	fmt.Println(w.gcsClient != nil) // output: true
 	fmt.Println(w.bfr != nil)       // output: true
-	fmt.Println(w.bucket)           // output: task-tools-gcstest
+	fmt.Println(w.bucket)           // output: task-tools-gstest
 	fmt.Println(w.objPth)           // output: write/test.txt
 	fmt.Println(w.tmpPth != "")     // output: true
 
@@ -57,10 +57,10 @@ func ExampleNewWriterTmpFile() {
 
 	// Output:
 	// <nil>
-	// gs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gstest/write/test.txt
 	// true
 	// true
-	// task-tools-gcstest
+	// task-tools-gstest
 	// write/test.txt
 	// true
 }
@@ -73,19 +73,19 @@ func ExampleNewWriterCompressed() {
 	}
 
 	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gs://task-tools-gcstest/write/test.gz
+	fmt.Println(w.sts.Path)         // output: gs://task-tools-gstest/write/test.gz
 	fmt.Println(w.gcsClient != nil) // output: true
 	fmt.Println(w.bfr != nil)       // output: true
-	fmt.Println(w.bucket)           // output: task-tools-gcstest
+	fmt.Println(w.bucket)           // output: task-tools-gstest
 	fmt.Println(w.objPth)           // output: write/test.gz
 	fmt.Println(w.tmpPth == "")     // output: true
 
 	// Output:
 	// <nil>
-	// gs://task-tools-gcstest/write/test.gz
+	// gs://task-tools-gstest/write/test.gz
 	// true
 	// true
-	// task-tools-gcstest
+	// task-tools-gstest
 	// write/test.gz
 	// true
 }
@@ -172,7 +172,7 @@ func ExampleWriter_Stats() {
 	w.WriteLine([]byte("test line"))
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: gs://task-tools-gcstest/write/test.txt
+	fmt.Println(sts.Path)          // output: gs://task-tools-gstest/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 0
@@ -180,7 +180,7 @@ func ExampleWriter_Stats() {
 	fmt.Println(sts.Created == "") // output: true
 
 	// Output:
-	// gs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gstest/write/test.txt
 	// 20
 	// 2
 	// 0
@@ -200,7 +200,7 @@ func ExampleWriter_CloseStats() {
 	w.Close()
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: gs://task-tools-gcstest/write/test.txt
+	fmt.Println(sts.Path)          // output: gs://task-tools-gstest/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 20
@@ -211,7 +211,7 @@ func ExampleWriter_CloseStats() {
 	rmTestFile(pth)
 
 	// Output:
-	// gs://task-tools-gcstest/write/test.txt
+	// gs://task-tools-gstest/write/test.txt
 	// 20
 	// 2
 	// 20

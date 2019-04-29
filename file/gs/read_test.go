@@ -13,17 +13,17 @@ import (
 func ExampleNewReader() {
 	pth := fmt.Sprintf("gs://%v/read/test.txt", testBucket)
 	r, err := NewReader(pth, testAccessKey, testSecretKey)
+	fmt.Println(err) // output: <nil>
 	if r == nil {
 		return
 	}
 
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(r.sts.Path) // output: gs://task-tools-gcstest/read/test.txt
+	fmt.Println(r.sts.Path) // output: gs://task-tools-gstest/read/test.txt
 	fmt.Println(r.sts.Size) // output: 20
 
 	// Output:
 	// <nil>
-	// gs://task-tools-gcstest/read/test.txt
+	// gs://task-tools-gstest/read/test.txt
 	// 20
 }
 
