@@ -8,7 +8,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/pcelvng/task-tools/file/gcs"
+	"github.com/pcelvng/task-tools/file/gs"
 	"github.com/pcelvng/task-tools/file/local"
 	"github.com/pcelvng/task-tools/file/nop"
 	"github.com/pcelvng/task-tools/file/s3"
@@ -132,8 +132,8 @@ func s3Options(opt Options) s3.Options {
 	return *s3Opts
 }
 
-func gcsOptions(opt Options) gcs.Options {
-	gcsOpts := gcs.NewOptions()
+func gcsOptions(opt Options) gs.Options {
+	gcsOpts := gs.NewOptions()
 	gcsOpts.CompressLevel = compressionLookup(opt.CompressionLevel)
 	gcsOpts.UseFileBuf = opt.UseFileBuf
 	gcsOpts.FileBufDir = opt.FileBufDir
@@ -166,10 +166,10 @@ func NewReader(pth string, opt *Options) (r Reader, err error) {
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
 		r, err = s3.NewReader(pth, accessKey, secretKey)
-	case "gcs":
+	case "gcs", "gs":
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
-		r, err = gcs.NewReader(pth, accessKey, secretKey)
+		r, err = gs.NewReader(pth, accessKey, secretKey)
 	case "nop":
 		r, err = nop.NewReader(pth)
 	case "local":
@@ -192,11 +192,11 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 		secretKey := opt.SecretKey
 		s3Opts := s3Options(*opt)
 		w, err = s3.NewWriter(pth, accessKey, secretKey, &s3Opts)
-	case "gcs":
+	case "gcs", "gs":
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
 		gcsOpts := gcsOptions(*opt)
-		w, err = gcs.NewWriter(pth, accessKey, secretKey, &gcsOpts)
+		w, err = gs.NewWriter(pth, accessKey, secretKey, &gcsOpts)
 	case "nop":
 		w, err = nop.NewWriter(pth)
 	case "local":
@@ -226,6 +226,10 @@ func List(pthDir string, opt *Options) ([]stat.Stats, error) {
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
 		return s3.ListFiles(pthDir, accessKey, secretKey)
+	case "gs":
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
+		return gs.ListFiles(pthDir, accessKey, secretKey)
 	case "nop":
 		return nop.ListFiles(pthDir)
 	}

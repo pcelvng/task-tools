@@ -1,4 +1,4 @@
-package gcs
+package gs
 
 import (
 	"mime"
@@ -16,15 +16,15 @@ func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, 
 	// final writing doesn't happen until Close is called
 	// but getting the client now does authentication
 	// so we know early of authentication issues.
-	gcsClient, err := newGCSClient(accessKey, secretKey)
+	gcsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return newWriterFromGCSClient(pth, gcsClient, opt)
+	return newWriterFromGSClient(pth, gcsClient, opt)
 }
 
-func newWriterFromGCSClient(pth string, gcsClient *minio.Client, opt *Options) (*Writer, error) {
+func newWriterFromGSClient(pth string, gcsClient *minio.Client, opt *Options) (*Writer, error) {
 	if opt == nil {
 		opt = NewOptions()
 	}

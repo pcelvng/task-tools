@@ -35,15 +35,21 @@ func TestMain(m *testing.M) {
 	}
 
 	// make test bucket
-	createBucket(testBucket)
+	if err := createBucket(testBucket); err != nil {
+		log.Fatal(err)
+	}
 
 	// create two test files for reading
 	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	createTestFile(pth)
+	if err := createTestFile(pth); err != nil {
+		log.Fatal(err)
+	}
 
 	// compressed read test file
 	gzPth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
-	createTestFile(gzPth)
+	if err := createTestFile(gzPth); err != nil {
+		log.Fatal(err)
+	}
 
 	// run
 	runRslt := m.Run()
