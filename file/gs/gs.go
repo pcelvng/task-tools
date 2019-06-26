@@ -10,14 +10,14 @@ import (
 )
 
 var (
-	// StoreHost is a GCS endpoint (s3 compatible api)
+	// StoreHost is a gs endpoint (s3 compatible api)
 	StoreHost = "storage.googleapis.com"
 
-	// map that maintains gcs clients
+	// map that maintains gs clients
 	// to prevent creating new clients with
 	// every file for the same auth credentials
-	gcsClients = make(map[string]*minio.Client)
-	mu         sync.Mutex
+	gsClients = make(map[string]*minio.Client)
+	mu        sync.Mutex
 )
 
 func NewOptions() *Options {
@@ -34,15 +34,15 @@ func newGSClient(accessKey, secretKey string) (gsClient *minio.Client, err error
 	mu.Lock()
 	defer mu.Unlock()
 
-	gsClient, _ = gcsClients[StoreHost+accessKey+secretKey]
+	gsClient, _ = gsClients[StoreHost+accessKey+secretKey]
 	if gsClient == nil {
 		gsClient, err = minio.New(StoreHost, accessKey, secretKey, true)
-		gcsClients[StoreHost+accessKey+secretKey] = gsClient
+		gsClients[StoreHost+accessKey+secretKey] = gsClient
 	}
 	return gsClient, err
 }
 
-// parsePth will parse an gcs path of the form:
+// parsePth will parse an gs path of the form:
 // "gs://{bucket}/{path/to/object.txt}
 // and return the bucket and object path.
 // If either bucket or object are empty then

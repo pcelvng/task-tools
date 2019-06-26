@@ -70,7 +70,7 @@ func ExampleNewReaderErrObjStat() {
 }
 
 func ExampleNewReaderErrGzip() {
-	// write a normal file to gcs as if it
+	// write a normal file to gs as if it
 	// were a gzip file. NewReader will see
 	// the .gz extension and read it as a
 	// gz file. Since it's not and there is
@@ -384,7 +384,7 @@ func TestListFiles(t *testing.T) {
 		t.Errorf("expected 2 files but got %v instead\n", len(allSts))
 	}
 
-	// test bad gcs client
+	// test bad gs client
 	origHost := StoreHost
 	StoreHost = "bad/endpoint/"
 	_, err = ListFiles(dirPth, testAccessKey, testSecretKey)

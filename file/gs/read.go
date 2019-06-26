@@ -14,7 +14,7 @@ import (
 )
 
 func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
-	// get gcs client
+	// get gs client
 	gsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
@@ -63,20 +63,20 @@ func newReaderFromGSClient(pth string, gsClient *minio.Client) (*Reader, error) 
 	}
 
 	return &Reader{
-		gcsObj: gsObj,
-		rBuf:   rBuf,
-		rGzip:  rGzip,
-		rHshr:  rHshr,
-		sts:    sts,
+		gsObj: gsObj,
+		rBuf:  rBuf,
+		rGzip: rGzip,
+		rHshr: rHshr,
+		sts:   sts,
 	}, nil
 }
 
-// Reader will read in streamed bytes from the gcs object.NewGCSClient
+// Reader will read in streamed bytes from the gs object.NewgsClient
 type Reader struct {
-	gcsObj *minio.Object // gcs file object
-	rBuf   *bufio.Reader
-	rGzip  *gzip.Reader
-	rHshr  *util.HashReader
+	gsObj *minio.Object // gs file object
+	rBuf  *bufio.Reader
+	rGzip *gzip.Reader
+	rHshr *util.HashReader
 
 	sts    stat.Stats
 	closed bool
@@ -122,7 +122,7 @@ func (r *Reader) Close() (err error) {
 	if r.rGzip != nil {
 		r.rGzip.Close()
 	}
-	err = r.gcsObj.Close()
+	err = r.gsObj.Close()
 
 	// calculate checksum
 	r.sts.SetChecksum(r.rHshr.Hshr)
@@ -135,8 +135,8 @@ func (r *Reader) Close() (err error) {
 // pth is assumed to be a directory and so a trailing "/" is appended
 // if one does not already exist.
 func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
-	// get gcs client
-	gcsClient, err := newGSClient(accessKey, secretKey)
+	// get gs client
+	gsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 	defer close(doneCh)
 
 	allSts := make([]stat.Stats, 0)
-	objInfoCh := gcsClient.ListObjectsV2(bucket, objPth, false, doneCh)
+	objInfoCh := gsClient.ListObjectsV2(bucket, objPth, false, doneCh)
 	for objInfo := range objInfoCh {
 		// don't include dir and err objects
 		if strings.HasSuffix(objInfo.Key, "/") || objInfo.Err != nil {
