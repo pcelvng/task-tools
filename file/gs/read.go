@@ -15,15 +15,15 @@ import (
 
 func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
 	// get gcs client
-	gcsClient, err := newGSClient(accessKey, secretKey)
+	gsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return newReaderFromGSClient(pth, gcsClient)
+	return newReaderFromGSClient(pth, gsClient)
 }
 
-func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error) {
+func newReaderFromGSClient(pth string, gsClient *minio.Client) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
@@ -31,13 +31,15 @@ func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error)
 	bucket, objPth := parsePth(pth)
 
 	// get object
-	gcsObj, err := gcsClient.GetObject(bucket, objPth, minio.GetObjectOptions{})
+	opts := &minio.GetObjectOptions{}
+	opts.Set("Accept-Encoding", "gzip") // needed to read file with the metadata gzip
+	gsObj, err := gsClient.GetObject(bucket, objPth, *opts)
 	if err != nil {
 		return nil, err
 	}
 
 	// stats
-	objInfo, err := gcsObj.Stat()
+	objInfo, err := gsObj.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +47,7 @@ func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error)
 	sts.SetSize(objInfo.Size)
 
 	// hash reader
-	rHshr := util.NewHashReader(md5.New(), gcsObj)
+	rHshr := util.NewHashReader(md5.New(), gsObj)
 
 	// compression
 	var rBuf *bufio.Reader
@@ -61,7 +63,7 @@ func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error)
 	}
 
 	return &Reader{
-		gcsObj: gcsObj,
+		gcsObj: gsObj,
 		rBuf:   rBuf,
 		rGzip:  rGzip,
 		rHshr:  rHshr,
