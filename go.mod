@@ -1,6 +1,6 @@
 module github.com/pcelvng/task-tools
 
-go 1.12
+go 1.11
 
 require (
 	github.com/bitly/go-hostpool v0.0.0-20171023180738-a3a6125de932 // indirect
