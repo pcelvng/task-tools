@@ -49,7 +49,9 @@ Example:
  Query string params:
  - fields (field combination that makes a record unique)
  - dest-template
- - sep (optional - csv separator for csv files) 
+ - sep (optional - csv separator for csv files)
+
+NOTE: \t or tab must be url encoded %09 
 `
 
 	appOpt = &options{

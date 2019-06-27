@@ -11,20 +11,20 @@ import (
 )
 
 func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, error) {
-	// gcs client:
+	// gs client:
 	// using minio client library;
 	// final writing doesn't happen until Close is called
 	// but getting the client now does authentication
 	// so we know early of authentication issues.
-	gcsClient, err := newGSClient(accessKey, secretKey)
+	gsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return newWriterFromGSClient(pth, gcsClient, opt)
+	return newWriterFromGSClient(pth, gsClient, opt)
 }
 
-func newWriterFromGSClient(pth string, gcsClient *minio.Client, opt *Options) (*Writer, error) {
+func newWriterFromGSClient(pth string, gsClient *minio.Client, opt *Options) (*Writer, error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
@@ -45,11 +45,11 @@ func newWriterFromGSClient(pth string, gcsClient *minio.Client, opt *Options) (*
 	}
 	tmpPth := bfr.Stats().Path
 
-	// gcs bucket, objPth
+	// gs bucket, objPth
 	bucket, objPth := parsePth(pth)
 
 	return &Writer{
-		gcsClient:  gcsClient,
+		gsClient:   gsClient,
 		bfr:        bfr,
 		bucket:     bucket,
 		objPth:     objPth,
@@ -61,24 +61,24 @@ func newWriterFromGSClient(pth string, gcsClient *minio.Client, opt *Options) (*
 
 // Writer will write to local buffer first
 // and will copy all the written contents
-// to the GCS destination after calling Close().
+// to the gs destination after calling Close().
 // Close() must be called in order for the written
-// contents to be written to GCS.
+// contents to be written to gs.
 //
 // Calling Abort() before Close() will cleanup the
 // buffer. Calling Close() after Abort() will not
-// result in any writing to GCS.
+// result in any writing to gs.
 //
 // Calling Abort() after Close() will do nothing.
 type Writer struct {
-	gcsClient *minio.Client
-	bfr       *buf.Buffer
-	sts       stat.Stats
-	objSts    stat.Stats // stats as reported by gcs
+	gsClient *minio.Client
+	bfr      *buf.Buffer
+	sts      stat.Stats
+	objSts   stat.Stats // stats as reported by gs
 
 	tmpPth string
-	bucket string // destination gcs bucket
-	objPth string // destination gcs object path
+	bucket string // destination gs bucket
+	objPth string // destination gs object path
 
 	done bool
 	mu   sync.Mutex
@@ -125,7 +125,7 @@ func (w *Writer) Abort() (err error) {
 // - report any errors
 //
 // If an error is returned it should be assumed
-// that GCS object writing failed.
+// that gs object writing failed.
 //
 // Calling Abort after Close will do nothing.
 // Writing after calling Close has undefined behavior.
@@ -165,7 +165,7 @@ func (w *Writer) Close() error {
 }
 
 // copy will copy the contents of buf
-// to the gcs path indicated at bucket and
+// to the gs path indicated at bucket and
 // objPth.
 //
 // Returns num of bytes copied and error.
@@ -179,7 +179,7 @@ func (w *Writer) copy() (n int64, err error) {
 
 	// copy tmp file buffer
 	if w.tmpPth != "" {
-		return w.gcsClient.FPutObject(
+		return w.gsClient.FPutObject(
 			w.bucket,
 			w.objPth,
 			w.tmpPth,
@@ -188,7 +188,7 @@ func (w *Writer) copy() (n int64, err error) {
 	}
 
 	// copy memory buffer
-	return w.gcsClient.PutObject(
+	return w.gsClient.PutObject(
 		w.bucket,
 		w.objPth,
 		w.bfr,
@@ -203,7 +203,7 @@ func (w *Writer) copy() (n int64, err error) {
 // zero value.
 func (w *Writer) setObjSts() error {
 	// created date
-	objInfo, err := w.gcsClient.StatObject(
+	objInfo, err := w.gsClient.StatObject(
 		w.bucket,
 		w.objPth,
 		minio.StatObjectOptions{},

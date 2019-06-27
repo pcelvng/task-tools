@@ -13,13 +13,13 @@ func ExampleNewWriter() {
 		return
 	}
 
-	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gs://task-tools-gstest/write/test.txt
-	fmt.Println(w.gcsClient != nil) // output: true
-	fmt.Println(w.bfr != nil)       // output: true
-	fmt.Println(w.bucket)           // output: task-tools-gstest
-	fmt.Println(w.objPth)           // output: write/test.txt
-	fmt.Println(w.tmpPth == "")     // output: true
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(w.sts.Path)        // output: gs://task-tools-gstest/write/test.txt
+	fmt.Println(w.gsClient != nil) // output: true
+	fmt.Println(w.bfr != nil)      // output: true
+	fmt.Println(w.bucket)          // output: task-tools-gstest
+	fmt.Println(w.objPth)          // output: write/test.txt
+	fmt.Println(w.tmpPth == "")    // output: true
 
 	// Output:
 	// <nil>
@@ -42,13 +42,13 @@ func ExampleNewWriterTmpFile() {
 		return
 	}
 
-	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gs://task-tools-gstest/write/test.txt
-	fmt.Println(w.gcsClient != nil) // output: true
-	fmt.Println(w.bfr != nil)       // output: true
-	fmt.Println(w.bucket)           // output: task-tools-gstest
-	fmt.Println(w.objPth)           // output: write/test.txt
-	fmt.Println(w.tmpPth != "")     // output: true
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(w.sts.Path)        // output: gs://task-tools-gstest/write/test.txt
+	fmt.Println(w.gsClient != nil) // output: true
+	fmt.Println(w.bfr != nil)      // output: true
+	fmt.Println(w.bucket)          // output: task-tools-gstest
+	fmt.Println(w.objPth)          // output: write/test.txt
+	fmt.Println(w.tmpPth != "")    // output: true
 
 	// cleanup
 	w.bfr.Cleanup()
@@ -72,13 +72,13 @@ func ExampleNewWriterCompressed() {
 		return
 	}
 
-	fmt.Println(err)                // output: <nil>
-	fmt.Println(w.sts.Path)         // output: gs://task-tools-gstest/write/test.gz
-	fmt.Println(w.gcsClient != nil) // output: true
-	fmt.Println(w.bfr != nil)       // output: true
-	fmt.Println(w.bucket)           // output: task-tools-gstest
-	fmt.Println(w.objPth)           // output: write/test.gz
-	fmt.Println(w.tmpPth == "")     // output: true
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(w.sts.Path)        // output: gs://task-tools-gstest/write/test.gz
+	fmt.Println(w.gsClient != nil) // output: true
+	fmt.Println(w.bfr != nil)      // output: true
+	fmt.Println(w.bucket)          // output: task-tools-gstest
+	fmt.Println(w.objPth)          // output: write/test.gz
+	fmt.Println(w.tmpPth == "")    // output: true
 
 	// Output:
 	// <nil>

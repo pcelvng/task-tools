@@ -14,16 +14,16 @@ import (
 )
 
 func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
-	// get gcs client
-	gcsClient, err := newGSClient(accessKey, secretKey)
+	// get gs client
+	gsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return newReaderFromGSClient(pth, gcsClient)
+	return newReaderFromGSClient(pth, gsClient)
 }
 
-func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error) {
+func newReaderFromGSClient(pth string, gsClient *minio.Client) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
@@ -31,13 +31,15 @@ func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error)
 	bucket, objPth := parsePth(pth)
 
 	// get object
-	gcsObj, err := gcsClient.GetObject(bucket, objPth, minio.GetObjectOptions{})
+	opts := &minio.GetObjectOptions{}
+	opts.Set("Accept-Encoding", "gzip") // needed to read file with the metadata gzip
+	gsObj, err := gsClient.GetObject(bucket, objPth, *opts)
 	if err != nil {
 		return nil, err
 	}
 
 	// stats
-	objInfo, err := gcsObj.Stat()
+	objInfo, err := gsObj.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +47,7 @@ func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error)
 	sts.SetSize(objInfo.Size)
 
 	// hash reader
-	rHshr := util.NewHashReader(md5.New(), gcsObj)
+	rHshr := util.NewHashReader(md5.New(), gsObj)
 
 	// compression
 	var rBuf *bufio.Reader
@@ -61,20 +63,20 @@ func newReaderFromGSClient(pth string, gcsClient *minio.Client) (*Reader, error)
 	}
 
 	return &Reader{
-		gcsObj: gcsObj,
-		rBuf:   rBuf,
-		rGzip:  rGzip,
-		rHshr:  rHshr,
-		sts:    sts,
+		gsObj: gsObj,
+		rBuf:  rBuf,
+		rGzip: rGzip,
+		rHshr: rHshr,
+		sts:   sts,
 	}, nil
 }
 
-// Reader will read in streamed bytes from the gcs object.NewGCSClient
+// Reader will read in streamed bytes from the gs object.NewgsClient
 type Reader struct {
-	gcsObj *minio.Object // gcs file object
-	rBuf   *bufio.Reader
-	rGzip  *gzip.Reader
-	rHshr  *util.HashReader
+	gsObj *minio.Object // gs file object
+	rBuf  *bufio.Reader
+	rGzip *gzip.Reader
+	rHshr *util.HashReader
 
 	sts    stat.Stats
 	closed bool
@@ -120,7 +122,7 @@ func (r *Reader) Close() (err error) {
 	if r.rGzip != nil {
 		r.rGzip.Close()
 	}
-	err = r.gcsObj.Close()
+	err = r.gsObj.Close()
 
 	// calculate checksum
 	r.sts.SetChecksum(r.rHshr.Hshr)
@@ -133,8 +135,8 @@ func (r *Reader) Close() (err error) {
 // pth is assumed to be a directory and so a trailing "/" is appended
 // if one does not already exist.
 func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
-	// get gcs client
-	gcsClient, err := newGSClient(accessKey, secretKey)
+	// get gs client
+	gsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +155,7 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 	defer close(doneCh)
 
 	allSts := make([]stat.Stats, 0)
-	objInfoCh := gcsClient.ListObjectsV2(bucket, objPth, false, doneCh)
+	objInfoCh := gsClient.ListObjectsV2(bucket, objPth, false, doneCh)
 	for objInfo := range objInfoCh {
 		// don't include dir and err objects
 		if strings.HasSuffix(objInfo.Key, "/") || objInfo.Err != nil {

@@ -269,7 +269,7 @@ func TestWorker_DoTask(t *testing.T) {
 		{
 			appOpt:         &options{},
 			producer:       nopProducer,
-			info:           "./test/5/dups-20160101T000000.csv?dest-template=./test/5/dedup/dedup.csv&sep=\t&fields=0,1",
+			info:           "./test/5/dups-20160101T000000.csv?dest-template=./test/5/dedup/dedup.csv&sep=%09&fields=0,1",
 			expectedResult: task.CompleteResult,
 			expectedMsg:    `read 6 lines from 1 files and wrote 4 lines`,
 		},

@@ -64,10 +64,13 @@ func (i *infoOptions) validate() error {
 
 func newWorker(info string) task.Worker {
 	// parse info
-	iOpt, _ := newInfoOptions(info)
+	iOpt, err := newInfoOptions(info)
+	if err != nil {
+		return task.InvalidWorker(err.Error())
+	}
 
 	// validate
-	err := iOpt.validate()
+	err = iOpt.validate()
 	if err != nil {
 		return task.InvalidWorker(err.Error())
 	}
