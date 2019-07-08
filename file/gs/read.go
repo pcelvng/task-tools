@@ -155,7 +155,9 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 	defer close(doneCh)
 
 	allSts := make([]stat.Stats, 0)
-	objInfoCh := gsClient.ListObjectsV2(bucket, objPth, false, doneCh)
+	// ListObjectsV2 is not implemented for GS S3 API as of 7/8/2019
+	// https://stackoverflow.com/questions/45638871/is-the-listobjectsv2-api-call-implemented-in-google-cloud-storage
+	objInfoCh := gsClient.ListObjects(bucket, objPth, false, doneCh)
 	for objInfo := range objInfoCh {
 		// don't include dir and err objects
 		if strings.HasSuffix(objInfo.Key, "/") || objInfo.Err != nil {
