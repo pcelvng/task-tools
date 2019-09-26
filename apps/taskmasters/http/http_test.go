@@ -15,11 +15,11 @@ import (
 
 	"github.com/pcelvng/task/bus/nop"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task/bus"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/jarcoal/httpmock.v1"
 )
 
 func TestMain(m *testing.M) {
