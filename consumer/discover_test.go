@@ -3,10 +3,10 @@ package consumer
 import (
 	"testing"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/jbsmith7741/trial"
 	"github.com/nsqio/go-nsq"
 	"github.com/pkg/errors"
-	"gopkg.in/jarcoal/httpmock.v1"
 )
 
 func TestGetTopics(t *testing.T) {
