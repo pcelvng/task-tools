@@ -1,11 +1,9 @@
 language: go
 
 go:
-  - 1.10.x
-  - 1.11
   - 1.12
-  - 1.13
-env: 
+  - 1.13.x
+env:
   - GO111MODULE=on
 install:
   - go get -t -v ./...
