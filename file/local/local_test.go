@@ -24,7 +24,7 @@ func TestStat(t *testing.T) {
 			t.Error("directory", err)
 		}
 		if s.Size == 0 || s.Path == "" || s.Created == "" {
-			t.Error("directory stats: not set", s.JSONBytes())
+			t.Error("directory stats: not set", s.JSONString())
 		}
 		if !s.IsDir {
 			t.Error("dir: incorrect file type")
@@ -37,7 +37,7 @@ func TestStat(t *testing.T) {
 			t.Error("file", err)
 		}
 		if s.Size == 0 || s.Path == "" || s.Created == "" {
-			t.Error("file stats: not set", s.JSONBytes())
+			t.Error("file stats: not set", s.JSONString())
 		}
 		if s.IsDir {
 			t.Error("file: incorrect file type")

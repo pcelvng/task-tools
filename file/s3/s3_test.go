@@ -148,3 +148,47 @@ func TestParsePth(t *testing.T) {
 		}
 	}
 }
+
+func TestStat(t *testing.T) {
+	//setup
+	dir := "s3://" + testBucket + "/stat/test/"
+	file := "test.txt"
+	path := dir + file
+	t.Log(path)
+	if err := createTestFile(path); err != nil {
+		t.Fatal("setup", err)
+	}
+
+	t.Run("directory", func(t *testing.T) {
+		s, err := Stat(dir, testAccessKey, testSecretKey)
+		if err != nil {
+			t.Error("directory", err)
+		}
+		if s.Path == "" {
+			t.Error("directory stats: not set", s.JSONString())
+		}
+		if !s.IsDir {
+			t.Error("dir: incorrect file type")
+		}
+	})
+
+	t.Run("file", func(t *testing.T) {
+		s, err := Stat(path, testAccessKey, testSecretKey)
+		if err != nil {
+			t.Error("file", err)
+		}
+		if s.Size == 0 || s.Path == "" || s.Created == "" {
+			t.Error("file stats: not set", s.JSONString())
+		}
+		if s.IsDir {
+			t.Error("file: incorrect file type")
+		}
+	})
+
+	t.Run("missing", func(t *testing.T) {
+		_, err := Stat(dir+"missing.txt", testAccessKey, testSecretKey)
+		if err == nil {
+			t.Error("Expected error on missing file")
+		}
+	})
+}
