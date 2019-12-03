@@ -3,10 +3,13 @@ package s3
 import (
 	"strings"
 	"sync"
+	"time"
 
 	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/buf"
+	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -52,4 +55,39 @@ func parsePth(pth string) (bucket, objPth string) {
 	_, bucket, objPth = util.ParsePath(pth)
 	objPth = strings.TrimLeft(objPth, "/")
 	return bucket, objPth
+}
+
+// Stat a s3 directory or file for additional information
+func Stat(pth string, accessKey, secretKey string) (stat.Stats, error) {
+	client, err := newS3Client(accessKey, secretKey)
+	if err != nil {
+		return stat.Stats{}, errors.Wrap(err, "s3 client init")
+	}
+	bucket, objPth := parsePth(pth)
+	info, err := client.StatObject(bucket, objPth, minio.StatObjectOptions{})
+	// check if directory
+	if err != nil {
+		donech := make(chan struct{})
+		defer close(donech)
+		count := 0
+		for range client.ListObjects(bucket, objPth, false, donech) {
+			count++
+		}
+		if count > 0 {
+			return stat.Stats{
+				Path:  pth,
+				IsDir: true,
+			}, nil
+		}
+		return stat.Stats{}, err
+	}
+
+	return stat.Stats{
+		ByteCnt:  0,
+		Size:     info.Size,
+		Checksum: info.ETag,
+		Path:     info.Key,
+		Created:  info.LastModified.Format(time.RFC3339),
+		IsDir:    false,
+	}, nil
 }

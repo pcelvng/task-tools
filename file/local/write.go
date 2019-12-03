@@ -126,7 +126,8 @@ func (w *Writer) Close() error {
 	_, err := w.copyAndClean()
 
 	// set created date
-	w.sts.SetCreated(fileCreated(w.sts.Path))
+	s, err := Stat(w.sts.Path) 
+	w.sts = s 
 
 	return err
 }

@@ -45,10 +45,7 @@ func NewReader(pth string) (*Reader, error) {
 		rBuf = bufio.NewReader(rHshr)
 	}
 
-	sts := stat.New()
-	sts.SetPath(pth)
-	sts.SetSize(fileSize(sts.Path))
-	sts.SetCreated(fileCreated(sts.Path))
+	sts, _ := Stat(pth)
 
 	return &Reader{
 		f:     f,

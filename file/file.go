@@ -236,11 +236,30 @@ func List(pthDir string, opt *Options) ([]stat.Stats, error) {
 	return local.ListFiles(pthDir)
 }
 
+// Stat returns a summary stats of a file or directory.
+// It can be used to verify read permissions
+func Stat(path string, opt *Options) (stat.Stats, error) {
+	if opt == nil {
+		opt = NewOptions()
+	}
+	switch parseScheme(path) {
+	case "s3":
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
+		return s3.Stat(path, accessKey, secretKey)
+	case "gs":
+		accessKey := opt.AccessKey
+		secretKey := opt.SecretKey
+		return gs.Stat(path, accessKey, secretKey)
+	}
+	return local.Stat(path)
+}
+
 // Glob will only match to files and will
 // not match recursively. Only files directly in pthDir
 // are candidates for matching.
 //
-// Supports the same globbing patterns as provided in *nix
+// Supports the same globing patterns as provided in *nix
 // terminals.
 //
 // Globing in directories is not supported.

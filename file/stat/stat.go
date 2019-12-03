@@ -56,6 +56,8 @@ type Stats struct {
 	// whichever is more recent.
 	Created string `json:"created" uri:"created"`
 
+	IsDir bool `json:"-"`
+
 	mu sync.Mutex
 }
 
