@@ -36,7 +36,7 @@ func TestStat(t *testing.T) {
 		if err != nil {
 			t.Error("file", err)
 		}
-		if s.Size == 0 || s.Path == "" || s.Created == "" {
+		if s.Size == 0 || s.Path == "" || s.Created == "" || s.Checksum == "" {
 			t.Error("file stats: not set", s.JSONString())
 		}
 		if s.IsDir {

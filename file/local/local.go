@@ -1,6 +1,9 @@
 package local
 
 import (
+	"crypto/md5"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -63,12 +66,18 @@ func Stat(pth string) (stat.Stats, error) {
 	p := rmLocalPrefix(pth)
 	i, err := os.Stat(p)
 	if err != nil {
-		return stat.Stats{}, err 
+		return stat.Stats{}, err
+	}
+	// md5 the file
+	var checksum string
+	if b, err := ioutil.ReadFile(pth); err == nil {
+		checksum = fmt.Sprintf("%x", md5.Sum(b))
 	}
 	return stat.Stats{
-		Size:    i.Size(),
-		Path:    pth,
-		IsDir:   i.IsDir(),
-		Created: i.ModTime().String(),
+		Checksum: checksum,
+		Size:     i.Size(),
+		Path:     pth,
+		IsDir:    i.IsDir(),
+		Created:  i.ModTime().String(),
 	}, err
 }
