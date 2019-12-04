@@ -15,19 +15,20 @@ import (
 	"github.com/pcelvng/task-tools/file"
 )
 
-func (o options) NewWorker(info string) task.Worker {
+func (o *options) NewWorker(info string) task.Worker {
 	w := &worker{
-		options: o,
+		fileTopic: o.FileTopic,
+		fOpts:     o.File,
 	}
 	err := uri.Unmarshal(info, w)
 	if err != nil {
 		return task.InvalidWorker("uri %s", err)
 	}
-	w.reader, err = file.NewReader(w.File, w.options.File)
+	w.reader, err = file.NewReader(w.File, w.fOpts)
 	if err != nil {
 		return task.InvalidWorker("new reader %s", err)
 	}
-	w.writer, err = file.NewWriter(w.Output, w.options.File)
+	w.writer, err = file.NewWriter(w.Output, w.fOpts)
 	if err != nil {
 		return task.InvalidWorker("new writer %s", err)
 	}
@@ -35,14 +36,15 @@ func (o options) NewWorker(info string) task.Worker {
 }
 
 type worker struct {
-	options
 	File   string   `uri:"origin" required:"true"`
 	Output string   `uri:"output" required:"true"`
 	Fields []string `uri:"field"`
 	Sep    string   `uri:"sep" default:","`
 
-	reader file.Reader
-	writer file.Writer
+	reader    file.Reader
+	writer    file.Writer
+	fOpts     *file.Options
+	fileTopic string
 }
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
@@ -79,10 +81,10 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		return task.Failed(errors.Wrapf(err, "write close"))
 	}
 	sts := w.writer.Stats()
-	if err := w.producer.Send(w.FileTopic, sts.JSONBytes()); err != nil {
+	if err := producer.Send(w.fileTopic, sts.JSONBytes()); err != nil {
 		log.Println("file stats", err)
 	}
-	return task.Completed("%d lines writen to %s", sts.LineCnt, sts.Path)
+	return task.Completed("%d bytes writen to %s", sts.ByteCnt, sts.Path)
 }
 
 // getFields returns a sorted list of the header found in the map

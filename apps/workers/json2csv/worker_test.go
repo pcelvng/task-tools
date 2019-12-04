@@ -7,7 +7,6 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus/nop"
 
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/mock"
@@ -79,14 +78,10 @@ func TestWorker_DoTask(t *testing.T) {
 			v.sep = ","
 		}
 		w := mock.NewWriter(v.writePath)
-		p, _ := nop.NewProducer("")
 		wkr := &worker{
 			Sep:    v.sep,
 			reader: v.reader,
 			writer: w,
-			options: options{
-				producer: p,
-			},
 		}
 		// cancel the context option
 		ctx, cncl := context.WithCancel(context.Background())

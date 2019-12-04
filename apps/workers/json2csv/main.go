@@ -7,9 +7,10 @@ import (
 	"github.com/pcelvng/task/bus"
 )
 
+var producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+
 type options struct {
 	File      *file.Options
-	producer  bus.Producer
 	FileTopic string `toml:"file-topic"`
 }
 
@@ -28,6 +29,6 @@ func main() {
 		Description(desc).
 		Version(tools.String()).
 		Initialize()
-	opts.producer = app.NewProducer()
+	producer = app.NewProducer()
 	app.Run()
 }
