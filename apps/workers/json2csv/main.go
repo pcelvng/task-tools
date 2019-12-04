@@ -20,8 +20,9 @@ func main() {
 	opts := &options{
 		File: file.NewOptions(),
 	}
-	bootstrap.NewWorkerApp("json2csv", opts.NewWorker, opts).
+	app := bootstrap.NewWorkerApp("json2csv", opts.NewWorker, opts).
 		Description(desc).
 		Version(tools.String()).
 		Initialize()
+	app.Run()
 }
