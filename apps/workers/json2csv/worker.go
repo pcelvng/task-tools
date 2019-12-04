@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 
 	"github.com/jbsmith7741/uri"
@@ -16,17 +17,17 @@ import (
 
 func (o options) NewWorker(info string) task.Worker {
 	w := &worker{
-		fOpts: o.File,
+		options: o,
 	}
 	err := uri.Unmarshal(info, w)
 	if err != nil {
 		return task.InvalidWorker("uri %s", err)
 	}
-	w.reader, err = file.NewReader(w.File, w.fOpts)
+	w.reader, err = file.NewReader(w.File, w.options.File)
 	if err != nil {
 		return task.InvalidWorker("new reader %s", err)
 	}
-	w.writer, err = file.NewWriter(w.Output, w.fOpts)
+	w.writer, err = file.NewWriter(w.Output, w.options.File)
 	if err != nil {
 		return task.InvalidWorker("new writer %s", err)
 	}
@@ -34,12 +35,12 @@ func (o options) NewWorker(info string) task.Worker {
 }
 
 type worker struct {
+	options
 	File   string   `uri:"origin" required:"true"`
 	Output string   `uri:"output" required:"true"`
 	Fields []string `uri:"field"`
 	Sep    string   `uri:"sep" default:","`
 
-	fOpts  *file.Options
 	reader file.Reader
 	writer file.Writer
 }
@@ -78,7 +79,10 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		return task.Failed(errors.Wrapf(err, "write close"))
 	}
 	sts := w.writer.Stats()
-	return task.Completed("done %v", sts)
+	if err := w.producer.Send(w.FileTopic, sts.JSONBytes()); err != nil {
+		log.Println("file stats", err)
+	}
+	return task.Completed("%d lines writen to %s", sts.LineCnt, sts.Path)
 }
 
 // getFields returns a sorted list of the header found in the map
