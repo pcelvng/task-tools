@@ -27,6 +27,7 @@ $(BLDDIR)/stats:          $(wildcard apps/utils/stats/*.go)
 $(BLDDIR)/logger:         $(wildcard apps/utils/logger/*.go)
 
 $(BLDDIR)/nop:            $(wildcard apps/workers/nop/*.go)
+$(BLDDIR)/json2csv:       $(wildcard apps/workers/json2csv/*.go)
 $(BLDDIR)/sort2file:      $(wildcard apps/workers/sort2file/*.go)
 $(BLDDIR)/deduper:        $(wildcard apps/workers/deduper/*.go)
 $(BLDDIR)/filecopy:       $(wildcard apps/workers/filecopy/*.go)

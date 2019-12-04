@@ -60,7 +60,7 @@ func (r *reader) Close() error {
 	return nil
 }
 
-func (r *reader) SetLineNumber(i int) *reader {
+func (r *reader) SetLineCount(i int) *reader {
 	r.lineCount = i
 	return r
 }

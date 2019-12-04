@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	"github.com/jbsmith7741/uri"
@@ -17,37 +18,43 @@ func (o options) NewWorker(info string) task.Worker {
 	w := &worker{
 		fOpts: o.File,
 	}
-	if err := uri.Unmarshal(info, w); err != nil {
+	err := uri.Unmarshal(info, w)
+	if err != nil {
 		return task.InvalidWorker("uri %s", err)
+	}
+	w.reader, err = file.NewReader(w.File, w.fOpts)
+	if err != nil {
+		return task.InvalidWorker("new reader %s", err)
+	}
+	w.writer, err = file.NewWriter(w.Output, w.fOpts)
+	if err != nil {
+		return task.InvalidWorker("new writer %s", err)
 	}
 	return w
 }
 
 type worker struct {
-	File   string   `uri:"file" required:"true"`
+	File   string   `uri:"origin" required:"true"`
 	Output string   `uri:"output" required:"true"`
 	Fields []string `uri:"field"`
 	Sep    string   `uri:"sep" default:","`
 
-	fOpts *file.Options
+	fOpts  *file.Options
+	reader file.Reader
+	writer file.Writer
 }
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
-	r, err := file.NewReader(w.File, w.fOpts)
-	if err != nil {
-		return task.Failed(errors.Wrapf(err, "new reader"))
-	}
-	out, err := file.NewWriter(w.Output, w.fOpts)
-	if err != nil {
-		return task.Failed(errors.Wrapf(err, "new writer"))
-	}
-	writer := csv.NewWriter(out)
-	scanner := file.NewScanner(r)
+	writer := csv.NewWriter(w.writer)
+	writer.Comma = rune(w.Sep[0])
+	scanner := file.NewScanner(w.reader)
 	for i := 0; scanner.Scan(); i++ {
-
-		data := map[string]string{}
-		if err := json.Unmarshal(scanner.Bytes(), data); err != nil {
-			task.Failed(errors.Wrapf(err, "invalid json: %s", scanner.Text()))
+		if task.IsDone(ctx) {
+			return task.Failf("context canceled")
+		}
+		data := map[string]interface{}{}
+		if err := json.Unmarshal(scanner.Bytes(), &data); err != nil {
+			return task.Failf("invalid json: %s %s", err, scanner.Text())
 		}
 		// first time
 		if i == 0 {
@@ -56,23 +63,26 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			}
 			//write header
 			if err := writer.Write(w.Fields); err != nil {
-				task.Failed(errors.Wrapf(err, "header write"))
+				return task.Failf("header write %s", err)
 			}
 		}
-		if err := writer.Write(getValues(data)); err != nil {
-			task.Failed(errors.Wrapf(err, "line %d", i))
+		if err := writer.Write(getValues(w.Fields, data)); err != nil {
+			return task.Failf("line %d: %s", i, err)
 		}
-
 	}
-	if err := out.Close(); err != nil {
-		task.Failed(errors.Wrapf(err, "write close"))
+	if scanner.Err() != nil {
+		return task.Failed(scanner.Err())
 	}
-	sts := out.Stats()
-	return task.Completed("done", sts)
+	writer.Flush()
+	if err := w.writer.Close(); err != nil {
+		return task.Failed(errors.Wrapf(err, "write close"))
+	}
+	sts := w.writer.Stats()
+	return task.Completed("done %v", sts)
 }
 
 // getFields returns a sorted list of the header found in the map
-func getFields(m map[string]string) (s []string) {
+func getFields(m map[string]interface{}) (s []string) {
 	for key := range m {
 		s = append(s, key)
 	}
@@ -80,9 +90,9 @@ func getFields(m map[string]string) (s []string) {
 	return s
 }
 
-func getValues(m map[string]string) (s []string) {
-	for _, v := range m {
-		s = append(s, m[v])
+func getValues(keys []string, m map[string]interface{}) (s []string) {
+	for _, k := range keys {
+		s = append(s, fmt.Sprintf("%v", m[k]))
 	}
 	return s
 }
