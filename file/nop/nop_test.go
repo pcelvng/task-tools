@@ -2,7 +2,46 @@ package nop
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
+	"github.com/hydronica/trial"
+
+	"github.com/pcelvng/task-tools/file/stat"
 )
+
+func TestStat(t *testing.T) {
+	tm := time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339)
+	fn := func(in trial.Input) (interface{}, error) {
+		return Stat(in.String())
+	}
+	cases := trial.Cases{
+		"file.txt": {
+			Input: "nop://file.txt",
+			Expected: stat.Stats{
+				LineCnt:  10,
+				Size:     123,
+				Checksum: "28130874f9b9eb9711de4606399b7231",
+				Created:  tm,
+				Path:     "nop://file.txt"},
+		},
+		"error": {
+			Input:     "nop://err",
+			ShouldErr: true,
+		},
+		"directory": {
+			Input: "nop://path/to/dir?stat_dir",
+			Expected: stat.Stats{
+				LineCnt:  10,
+				Size:     123,
+				Checksum: "0df5b11bdb0296d6f0646c840d64e738",
+				Created:  tm,
+				IsDir:    true,
+				Path:     "nop://path/to/dir?stat_dir"},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
 
 func ExampleNewReader() {
 	// showing:
