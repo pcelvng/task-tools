@@ -3,6 +3,7 @@ module github.com/pcelvng/task-tools
 go 1.13
 
 require (
+	github.com/BurntSushi/toml v0.3.1
 	github.com/bitly/go-hostpool v0.0.0-20171023180738-a3a6125de932 // indirect
 	github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23
 	github.com/davecgh/go-spew v1.1.1
@@ -11,6 +12,7 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-cmp v0.3.1
+	github.com/hydronica/trial v0.4.0
 	github.com/jarcoal/httpmock v1.0.4
 	github.com/jbsmith7741/go-tools v0.2.0
 	github.com/jbsmith7741/trial v0.3.0
