@@ -26,6 +26,10 @@ func TestOptions_NewWorker(t *testing.T) {
 			Input:    "nop://file.txt?output=nop://file.csv",
 			Expected: &worker{File: "nop://file.txt", Output: "nop://file.csv", Sep: ","},
 		},
+		"templating": {
+			Input:    "nop://2019/11/01/2019-11-01.json.gz?output=nop://{yyyy}-{mm}-{dd}.csv",
+			Expected: &worker{File: "nop://2019/11/01/2019-11-01.json.gz", Output: "nop://2019-11-01.csv", Sep: ","},
+		},
 		"tab": {
 			Input:    "nop://file.txt?output=nop://file.csv&sep=%09",
 			Expected: &worker{File: "nop://file.txt", Output: "nop://file.csv", Sep: "\t"},

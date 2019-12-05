@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/tmpl"
 )
 
 func (o *options) NewWorker(info string) task.Worker {
@@ -24,10 +25,13 @@ func (o *options) NewWorker(info string) task.Worker {
 	if err != nil {
 		return task.InvalidWorker("uri %s", err)
 	}
+
 	w.reader, err = file.NewReader(w.File, w.fOpts)
 	if err != nil {
 		return task.InvalidWorker("new reader %s", err)
 	}
+	tm := tmpl.PathTime(w.File)
+	w.Output = tmpl.Parse(w.Output, tm)
 	w.writer, err = file.NewWriter(w.Output, w.fOpts)
 	if err != nil {
 		return task.InvalidWorker("new writer %s", err)
