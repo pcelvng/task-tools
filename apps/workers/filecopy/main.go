@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/pcelvng/task-tools"
+	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
@@ -40,7 +40,7 @@ Where:
     {MONTH_SLUG} (date month slug, shorthand for {YYYY}/{MM})
 
     - use-file-buffer - set to 'true' if file processing should use a file buffer instead of memory
-    - note: the worker app user must have permissions to read and write to this locaiton
+    - note: the worker app user must have permissions to read and write to this location
 
 Example task:
  
