@@ -251,6 +251,8 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
 		return gs.Stat(path, accessKey, secretKey)
+	case "nop":
+		return nop.Stat(path)
 	}
 	return local.Stat(path)
 }

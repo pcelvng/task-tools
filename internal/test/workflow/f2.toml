@@ -1,0 +1,17 @@
+[[Workflow]]
+task = "task1"
+rule = "0 0 * * * *"
+retry = 3
+template = "?date={yyyy}-{mm}-{dd}"
+
+[[Workflow]]
+task = "task2"
+rule = ""
+retry = 3
+template = "{meta:file}?time={{yyyy}}-{{mm}}-{{dd}}"
+
+[[Workflow]]
+task = "task3"
+rule = ""
+retry = 0
+template = "{meta:database}"
