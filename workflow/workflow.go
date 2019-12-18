@@ -3,10 +3,8 @@ package workflow
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"path/filepath"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/jbsmith7741/go-tools/appenderr"
@@ -20,11 +18,11 @@ type Workflow struct {
 	Task      string // doubles as the Name of the topic to send data to
 	Rule      string
 	DependsOn string // Task that the previous workflow depends on
-	Retries   int
+	Retry     int
 	Template  string // template used to create the task
 }
 
-type loader struct {
+type Record struct {
 	Checksum string
 	Workflow []Workflow
 }
@@ -35,14 +33,14 @@ type Cache struct {
 	isDir bool
 	fOpts file.Options
 
-	Workflows map[string]loader // map[name]Workflow
+	Workflows map[string]Record // the key is the filename for the workflow
 }
 
 // New returns a Cache used to manage auto updating a workflow
 func New(path string, opts *file.Options) (*Cache, error) {
 	c := &Cache{
 		done:      make(chan struct{}),
-		Workflows: make(map[string]loader),
+		Workflows: make(map[string]Record),
 		path:      path,
 	}
 	if opts != nil {
@@ -53,27 +51,13 @@ func New(path string, opts *file.Options) (*Cache, error) {
 		return nil, errors.Wrapf(err, "problem with path %s", path)
 	}
 	c.isDir = sts.IsDir
-
-	go func() {
-		tick := time.NewTicker(5 * time.Minute)
-		for {
-			select {
-			case <-c.done:
-				return
-			case <-tick.C:
-				if err := c.refresh(); err != nil {
-					log.Println(err)
-				}
-			}
-		}
-	}()
-	return c, c.refresh()
+	return c, c.Refresh()
 }
 
 // Parent workflow for the specified file.
 // A parent workflow is one that doesn't depend on any other tasks
-func (c *Cache) Parent(file string) (p []Workflow) {
-	for _, w := range c.Workflows[file].Workflow {
+func (r Record) Parent() (p []Workflow) {
+	for _, w := range r.Workflow {
 		if w.DependsOn == "" {
 			p = append(p, w)
 		}
@@ -98,26 +82,26 @@ func (c *Cache) Get(t task.Task) Workflow {
 // Empty slice will be returned if no children are found.
 // A task without a type or meta data containing the workflow info
 // will result in an error
-func (c *Cache) Children(t task.Task) ([]Workflow, error) {
+func (c *Cache) Children(t task.Task) []Workflow {
 	if t.Type == "" {
-		return nil, errors.New("Task type cannot be empty")
+		return nil
 	}
 	values, _ := url.ParseQuery(t.Meta)
 	result := make([]Workflow, 0)
 	key := values.Get("workflow")
 	if key == "" {
-		return nil, errors.New("could not find workflow filename")
+		return nil
 	}
 	for _, w := range c.Workflows[key].Workflow {
 		if w.DependsOn == t.Type {
 			result = append(result, w)
 		}
 	}
-	return result, nil
+	return result
 }
 
-// refresh checks the cache and reloads any files in the checksum has changed.
-func (c *Cache) refresh() error {
+// Refresh checks the cache and reloads any files in the checksum has changed.
+func (c *Cache) Refresh() error {
 	if !c.isDir {
 		return c.loadFile(c.path, &c.fOpts)
 	}

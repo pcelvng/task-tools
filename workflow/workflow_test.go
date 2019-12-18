@@ -17,7 +17,7 @@ func TestLoadFile(t *testing.T) {
 	fn := func(v trial.Input) (interface{}, error) {
 		in := v.Interface().(input)
 		if in.cache == nil {
-			in.cache = &Cache{Workflows: make(map[string]loader)}
+			in.cache = &Cache{Workflows: make(map[string]Record)}
 		}
 		err := in.cache.loadFile(in.path, nil)
 		_, f := filepath.Split(in.path)
@@ -51,8 +51,8 @@ func TestLoadFile(t *testing.T) {
 func TestRefresh(t *testing.T) {
 	fn := func(input trial.Input) (interface{}, error) {
 		c := input.Interface().(*Cache)
-		c.Workflows = make(map[string]loader)
-		err := c.refresh()
+		c.Workflows = make(map[string]Record)
+		err := c.Refresh()
 		return len(c.Workflows), err
 	}
 	cases := trial.Cases{
@@ -87,7 +87,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	cache := &Cache{Workflows: map[string]loader{
+	cache := &Cache{Workflows: map[string]Record{
 		"workflow.toml": {
 			Workflow: []Workflow{
 				{Task: "task1"},
@@ -123,7 +123,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestParent(t *testing.T) {
-	cache := &Cache{Workflows: map[string]loader{
+	cache := &Cache{Workflows: map[string]Record{
 		"workflow.toml": {
 			Workflow: []Workflow{
 				{Task: "task1"},
@@ -140,7 +140,7 @@ func TestParent(t *testing.T) {
 }
 
 func TestChildren(t *testing.T) {
-	cache := &Cache{Workflows: map[string]loader{
+	cache := &Cache{Workflows: map[string]Record{
 		"workflow.toml": {
 			Workflow: []Workflow{
 				{Task: "task1"},
