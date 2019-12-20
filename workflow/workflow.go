@@ -157,6 +157,6 @@ func (c *Cache) loadFile(path string, opts *file.Options) error {
 
 // Close the cache
 func (c *Cache) Close() error {
-	c.done <- struct{}{}
+	close(c.done)
 	return nil
 }

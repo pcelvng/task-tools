@@ -133,7 +133,7 @@ func TestParent(t *testing.T) {
 			},
 		},
 	}}
-	w := cache.Parent("workflow.toml")
+	w := cache.Workflows["workflow.toml"].Parent()
 	if eq, s := trial.Equal(w, []Workflow{{Task: "task1"}, {Task: "task3"}}); !eq {
 		t.Error("FAIL", s)
 	}
@@ -152,7 +152,7 @@ func TestChildren(t *testing.T) {
 	}}
 	fn := func(v trial.Input) (interface{}, error) {
 		t := v.Interface().(task.Task)
-		return cache.Children(t)
+		return cache.Children(t), nil
 	}
 	cases := trial.Cases{
 		"no meta": {

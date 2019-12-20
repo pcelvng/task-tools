@@ -1,12 +1,13 @@
 package tmpl
 
 import (
+	"net/url"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 )
 
 func TestParse(t *testing.T) {
@@ -103,37 +104,37 @@ func TestPathTime(t *testing.T) {
 		{
 			msg:     "filename parsing",
 			path:    "/path/to/file/20180214T140000.txt",
-			expTime: mustParse("2018-02-14T14:00:00Z"),
+			expTime: trial.TimeHour("2018-02-14T14"),
 		},
 		{
 			msg:     "hour slug matching",
 			path:    "/path/to/file/2018/02/14/14/file.txt",
-			expTime: mustParse("2018-02-14T14:00:00Z"),
+			expTime: trial.TimeHour("2018-02-14T14"),
 		},
 		{
 			msg:     "hour slug file match",
 			path:    "/path/to/file/2018/02/14/14.txt",
-			expTime: mustParse("2018-02-14T14:00:00Z"),
+			expTime: trial.TimeHour("2018-02-14T14"),
 		},
 		{
 			msg:     "day slug matching",
 			path:    "/path/to/file/2018/01/07/file.txt",
-			expTime: mustParse("2018-01-07T00:00:00Z"),
+			expTime: trial.TimeHour("2018-01-07T00"),
 		},
 		{
 			msg:     "day file matching",
 			path:    "/path/to/file/2018/01/07.txt",
-			expTime: mustParse("2018-01-07T00:00:00Z"),
+			expTime: trial.TimeHour("2018-01-07T00"),
 		},
 		{
 			msg:     "month slug matching",
 			path:    "/path/to/file/2017/12/file.txt",
-			expTime: mustParse("2017-12-01T00:00:00Z"),
+			expTime: trial.TimeHour("2017-12-01T00"),
 		},
 		{
 			msg:     "month file matching",
 			path:    "/path/to/file/2017/12.txt",
-			expTime: mustParse("2017-12-01T00:00:00Z"),
+			expTime: trial.TimeHour("2017-12-01T00"),
 		},
 	}
 	for _, test := range cases {
@@ -144,6 +145,40 @@ func TestPathTime(t *testing.T) {
 			t.Logf("PASS: %q", test.msg)
 		}
 	}
+}
+
+func TestParseMeta(t *testing.T) {
+	fn := func(v trial.Input) (interface{}, error) {
+		template := v.Slice(0).String()
+		meta, err := url.ParseQuery(v.Slice(1).String())
+		if err != nil {
+			return nil, err
+		}
+		return Meta(template, meta), nil
+	}
+	cases := trial.Cases{
+		"{file}": {
+			Input:    trial.Args("{meta:file}", "file=s3://path/to/file.txt"),
+			Expected: "s3://path/to/file.txt",
+		},
+		"missing key": { // populate with a blank if missing the key
+			Input:    trial.Args("{meta:file}", ""),
+			Expected: "",
+		},
+		"no change": {
+			Input:    trial.Args("the quick brown fox jumped over the lazy dog", ""),
+			Expected: "the quick brown fox jumped over the lazy dog",
+		},
+		"invalid match": {
+			Input:    trial.Args("{meta:da ta}", ""),
+			Expected: "{meta:da ta}",
+		},
+		"complex": {
+			Input:    trial.Args("{meta:file}?hour={meta:time}&key=value&pass={meta:pass}", "file=gs://bucket/test.gz&time=2019-03-04&pass=r$kE43"),
+			Expected: "gs://bucket/test.gz?hour=2019-03-04&key=value&pass=r$kE43",
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
 }
 
 func TestHostSlug(t *testing.T) {
@@ -158,12 +193,4 @@ func TestHostSlug(t *testing.T) {
 	if r2 := Parse(tmp, time.Now()); r2 != h {
 		t.Error("FAIL: invalid hostname")
 	}
-}
-
-func mustParse(s string) time.Time {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		panic(err)
-	}
-	return t
 }

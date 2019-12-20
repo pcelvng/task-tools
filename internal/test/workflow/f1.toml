@@ -9,7 +9,7 @@ task = "task2"
 dependsOn = "task1"
 rule = ""
 retry = 3
-template = "{meta:file}?time={{yyyy}}-{{mm}}-{{dd}}"
+template = "{meta:file}?time={yyyy}-{mm}-{dd}"
 
 [[Workflow]]
 task = "task3"
