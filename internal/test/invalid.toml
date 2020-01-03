@@ -1,6 +1,6 @@
 The brown fox jump over the lazy dog
 
-[[Workflow]]
+[[Phase]]
 task = "task1"
 rule = "0 0 * * * *"
 retry = "invalid"

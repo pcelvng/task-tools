@@ -17,7 +17,7 @@ func TestLoadFile(t *testing.T) {
 	fn := func(v trial.Input) (interface{}, error) {
 		in := v.Interface().(input)
 		if in.cache == nil {
-			in.cache = &Cache{Workflows: make(map[string]Record)}
+			in.cache = &Cache{Workflows: make(map[string]Workflow)}
 		}
 		err := in.cache.loadFile(in.path, nil)
 		_, f := filepath.Split(in.path)
@@ -26,7 +26,7 @@ func TestLoadFile(t *testing.T) {
 	cases := trial.Cases{
 		"read file": {
 			Input:    input{path: "../internal/test/workflow/f1.toml"},
-			Expected: "e841d7e6deb3e774caf3681034e1151a", // checksum of test file
+			Expected: "c6d051592d7aa78b8943f0b72a5c9d71", // checksum of test file
 		},
 		"stat error": {
 			Input:       input{path: "nop://stat_err"},
@@ -51,7 +51,7 @@ func TestLoadFile(t *testing.T) {
 func TestRefresh(t *testing.T) {
 	fn := func(input trial.Input) (interface{}, error) {
 		c := input.Interface().(*Cache)
-		c.Workflows = make(map[string]Record)
+		c.Workflows = make(map[string]Workflow)
 		err := c.Refresh()
 		return len(c.Workflows), err
 	}
@@ -87,9 +87,9 @@ func TestNew(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	cache := &Cache{Workflows: map[string]Record{
+	cache := &Cache{Workflows: map[string]Workflow{
 		"workflow.toml": {
-			Workflow: []Workflow{
+			Phases: []Phase{
 				{Task: "task1"},
 				{Task: "task2", DependsOn: "task1"},
 				{Task: "task3", DependsOn: "task2"},
@@ -104,28 +104,28 @@ func TestGet(t *testing.T) {
 	cases := trial.Cases{
 		"no meta": {
 			Input:    task.Task{Type: "task1"},
-			Expected: Workflow{},
+			Expected: Phase{},
 		},
 		"blank task": {
 			Input:    task.Task{Meta: "workflow=workflow.toml"},
-			Expected: Workflow{},
+			Expected: Phase{},
 		},
 		"not found": {
 			Input:    task.Task{Type: "missing", Meta: "workflow=workflow.toml"},
-			Expected: Workflow{},
+			Expected: Phase{},
 		},
 		"task2": {
 			Input:    task.Task{Type: "task2", Meta: "workflow=workflow.toml"},
-			Expected: Workflow{Task: "task2", DependsOn: "task1"},
+			Expected: Phase{Task: "task2", DependsOn: "task1"},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
 }
 
 func TestParent(t *testing.T) {
-	cache := &Cache{Workflows: map[string]Record{
+	cache := &Cache{Workflows: map[string]Workflow{
 		"workflow.toml": {
-			Workflow: []Workflow{
+			Phases: []Phase{
 				{Task: "task1"},
 				{Task: "task2", DependsOn: "task1"},
 				{Task: "task3"},
@@ -134,15 +134,15 @@ func TestParent(t *testing.T) {
 		},
 	}}
 	w := cache.Workflows["workflow.toml"].Parent()
-	if eq, s := trial.Equal(w, []Workflow{{Task: "task1"}, {Task: "task3"}}); !eq {
+	if eq, s := trial.Equal(w, []Phase{{Task: "task1"}, {Task: "task3"}}); !eq {
 		t.Error("FAIL", s)
 	}
 }
 
 func TestChildren(t *testing.T) {
-	cache := &Cache{Workflows: map[string]Record{
+	cache := &Cache{Workflows: map[string]Workflow{
 		"workflow.toml": {
-			Workflow: []Workflow{
+			Phases: []Phase{
 				{Task: "task1"},
 				{Task: "task2", DependsOn: "task1"},
 				{Task: "task3", DependsOn: "task2"},
@@ -165,19 +165,19 @@ func TestChildren(t *testing.T) {
 		},
 		"task1": {
 			Input:    task.Task{Type: "task1", Meta: "workflow=workflow.toml"},
-			Expected: []Workflow{{Task: "task2", DependsOn: "task1"}},
+			Expected: []Phase{{Task: "task2", DependsOn: "task1"}},
 		},
 		"task2": {
 			Input:    task.Task{Type: "task2", Meta: "workflow=workflow.toml"},
-			Expected: []Workflow{{Task: "task3", DependsOn: "task2"}, {Task: "task4", DependsOn: "task2"}},
+			Expected: []Phase{{Task: "task3", DependsOn: "task2"}, {Task: "task4", DependsOn: "task2"}},
 		},
 		"task3": {
 			Input:    task.Task{Type: "task3", Meta: "workflow=workflow.toml"},
-			Expected: []Workflow{},
+			Expected: []Phase{},
 		},
 		"task4": {
 			Input:    task.Task{Type: "task4", Meta: "workflow=workflow.toml"},
-			Expected: []Workflow{},
+			Expected: []Phase{},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

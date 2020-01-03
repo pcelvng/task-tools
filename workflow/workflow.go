@@ -14,7 +14,7 @@ import (
 	"github.com/pcelvng/task-tools/file"
 )
 
-type Workflow struct {
+type Phase struct {
 	Task      string // doubles as the Name of the topic to send data to
 	Rule      string
 	DependsOn string // Task that the previous workflow depends on
@@ -22,9 +22,9 @@ type Workflow struct {
 	Template  string // template used to create the task
 }
 
-type Record struct {
+type Workflow struct {
 	Checksum string
-	Workflow []Workflow
+	Phases   []Phase `toml:"phase"`
 }
 
 type Cache struct {
@@ -33,14 +33,14 @@ type Cache struct {
 	isDir bool
 	fOpts file.Options
 
-	Workflows map[string]Record // the key is the filename for the workflow
+	Workflows map[string]Workflow // the key is the filename for the workflow
 }
 
 // New returns a Cache used to manage auto updating a workflow
 func New(path string, opts *file.Options) (*Cache, error) {
 	c := &Cache{
 		done:      make(chan struct{}),
-		Workflows: make(map[string]Record),
+		Workflows: make(map[string]Workflow),
 		path:      path,
 	}
 	if opts != nil {
@@ -51,13 +51,14 @@ func New(path string, opts *file.Options) (*Cache, error) {
 		return nil, errors.Wrapf(err, "problem with path %s", path)
 	}
 	c.isDir = sts.IsDir
-	return c, c.Refresh()
+	err = c.Refresh()
+	return c, err
 }
 
-// Parent workflow for the specified file.
-// A parent workflow is one that doesn't depend on any other tasks
-func (r Record) Parent() (p []Workflow) {
-	for _, w := range r.Workflow {
+// Parent phase for the specified workflow file.
+// A parent phase is one that doesn't depend on any other tasks
+func (r Workflow) Parent() (p []Phase) {
+	for _, w := range r.Phases {
 		if w.DependsOn == "" {
 			p = append(p, w)
 		}
@@ -65,34 +66,34 @@ func (r Record) Parent() (p []Workflow) {
 	return p
 }
 
-// Get the Workflow associated with the task t
-func (c *Cache) Get(t task.Task) Workflow {
+// Get the Phase associated with the task t
+func (c *Cache) Get(t task.Task) Phase {
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
-	for _, w := range c.Workflows[key].Workflow {
+	for _, w := range c.Workflows[key].Phases {
 		if w.Task == t.Type {
 			return w
 		}
 	}
 
-	return Workflow{}
+	return Phase{}
 }
 
-// Children of the given task t, a child workflow is one that dependsOn another task
+// Children of the given task t, a child phase is one that dependsOn another task
 // Empty slice will be returned if no children are found.
 // A task without a type or meta data containing the workflow info
 // will result in an error
-func (c *Cache) Children(t task.Task) []Workflow {
+func (c *Cache) Children(t task.Task) []Phase {
 	if t.Type == "" {
 		return nil
 	}
 	values, _ := url.ParseQuery(t.Meta)
-	result := make([]Workflow, 0)
+	result := make([]Phase, 0)
 	key := values.Get("workflow")
 	if key == "" {
 		return nil
 	}
-	for _, w := range c.Workflows[key].Workflow {
+	for _, w := range c.Workflows[key].Phases {
 		if w.DependsOn == t.Type {
 			result = append(result, w)
 		}
