@@ -13,13 +13,13 @@ type job struct {
 	Workflow string
 	Topic    string
 	Schedule string
-	Offset   int
+	Offset   time.Duration
 	Template string
 	producer bus.Producer
 }
 
 func (j *job) Run() {
-	tm := time.Now().Add(time.Hour * time.Duration(j.Offset))
+	tm := time.Now().Add(j.Offset)
 	info := tmpl.Parse(j.Template, tm)
 	tsk := task.New(j.Topic, info)
 	tsk.Meta = "workflow=" + j.Workflow

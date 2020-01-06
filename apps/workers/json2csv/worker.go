@@ -20,6 +20,7 @@ func (o *options) NewWorker(info string) task.Worker {
 	w := &worker{
 		fileTopic: o.FileTopic,
 		fOpts:     o.File,
+		Meta:      task.NewMeta(),
 	}
 	err := uri.Unmarshal(info, w)
 	if err != nil {
@@ -40,6 +41,7 @@ func (o *options) NewWorker(info string) task.Worker {
 }
 
 type worker struct {
+	task.Meta
 	File   string   `uri:"origin" required:"true"`
 	Output string   `uri:"output" required:"true"`
 	Fields []string `uri:"field"`
@@ -85,9 +87,12 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		return task.Failed(errors.Wrapf(err, "write close"))
 	}
 	sts := w.writer.Stats()
-	if err := producer.Send(w.fileTopic, sts.JSONBytes()); err != nil {
-		log.Println("file stats", err)
+	if w.fileTopic != "" {
+		if err := producer.Send(w.fileTopic, sts.JSONBytes()); err != nil {
+			log.Println("file stats", err)
+		}
 	}
+	w.SetMeta("file", sts.Path)
 	return task.Completed("%d bytes writen to %s", sts.ByteCnt, sts.Path)
 }
 

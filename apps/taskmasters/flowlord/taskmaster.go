@@ -16,6 +16,7 @@ import (
 
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -57,6 +58,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
 		return errors.Wrapf(err, "workflow setup")
 	}
+
 	// todo: setup refresh for workflow cache
 	if err := tm.schedule(); err != nil {
 		return errors.Wrapf(err, "cron schedule")
@@ -73,7 +75,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 }
 
 // schedule the tasks and refresh the schedule when updated
-func (tm *taskMaster) schedule() error {
+func (tm *taskMaster) schedule() (err error) {
 	for name, record := range tm.Workflows {
 		for _, w := range record.Parent() {
 			rules, _ := url.ParseQuery(w.Rule)
@@ -81,16 +83,21 @@ func (tm *taskMaster) schedule() error {
 				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)
 				continue
 			}
-			offset, _ := strconv.Atoi(rules.Get("offset"))
+
 			j := &job{
 				Workflow: name,
 				Topic:    w.Task,
 				Schedule: rules.Get("cron"),
 				Template: w.Template,
-				Offset:   offset,
 				producer: tm.producer,
 			}
-			if err := tm.cron.AddJob(j.Schedule, j); err != nil {
+			if s := rules.Get("offset"); s != "" {
+				j.Offset, err = time.ParseDuration(s)
+				if err != nil {
+					return errors.Wrapf(err, "invalid duration %s")
+				}
+			}
+			if err = tm.cron.AddJob(j.Schedule, j); err != nil {
 				return errors.Wrapf(err, "invalid rule for %s:%s %s", name, w.Task, w.Rule)
 			}
 			log.Printf("cron: task:%s, rule:%s, info:%s", w.Task, j.Schedule, w.Template)
@@ -125,8 +132,8 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	// start off any children tasks
 	if t.Result == task.CompleteResult {
 		for _, w := range tm.Children(*t) {
-			// todo: add templating and rules logic
-			child := task.NewWithID(w.Task, w.Template, t.ID)
+			info := tmpl.Meta(w.Template, meta)
+			child := task.NewWithID(w.Task, info, t.ID)
 			child.Meta = "workflow=" + meta.Get("workflow")
 			if err := tm.producer.Send(w.Task, child.JSONBytes()); err != nil {
 				return err
