@@ -2,6 +2,7 @@ package tmpl
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -152,4 +153,20 @@ func PathTime(pth string) time.Time {
 	}
 
 	return time.Time{}
+}
+
+var regexMeta = regexp.MustCompile(`{meta:(\w+)}`)
+
+// Meta will parse a template string according to the provided
+// metadata query params
+// all token should be prefixed with meta
+// {meta:key}
+func Meta(s string, meta url.Values) string {
+	for _, match := range regexMeta.FindAllStringSubmatch(s, -1) {
+		// replace the original match with the meta value from the key
+		v, key := match[0], match[1]
+		s = strings.Replace(s, v, meta.Get(key), -1)
+	}
+
+	return s
 }

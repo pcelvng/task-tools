@@ -26,8 +26,7 @@ Example:
 
 func main() {
 	opts := &options{
-		File:      file.NewOptions(),
-		FileTopic: "files",
+		File: file.NewOptions(),
 	}
 	app := bootstrap.NewWorkerApp("json2csv", opts.NewWorker, opts).
 		Description(desc).
