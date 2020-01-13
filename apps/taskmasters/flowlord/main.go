@@ -24,22 +24,26 @@ Field | Field name   | Allowed values  | Allowed special characters
 
 type options struct {
 	Workflow string `comment:"path to workflow file or directory"`
+	Refresh  string `comment:"the refresh duration value default is 1 hour '1h'"`
 }
 
 func main() {
-
-	opts := &options{}
+	opts := &options{
+		Refresh: "1h",
+	}
 
 	app := bootstrap.NewTaskMaster(name, New, opts).
 		Version(tools.String()).
 		Description(description)
+
 	app.Initialize()
 	app.Run()
 }
 
 func (o options) Validate() error {
 	if o.Workflow == "" {
-		return errors.New("workflow is required")
+		return errors.New("workflow path is required")
 	}
+
 	return nil
 }

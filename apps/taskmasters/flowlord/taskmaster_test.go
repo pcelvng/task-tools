@@ -12,7 +12,7 @@ import (
 )
 
 func TestTaskMaster_Process(t *testing.T) {
-	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", nil)
+	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", "1h", nil)
 	if err != nil {
 		t.Fatal("cache init", err)
 	}
@@ -95,7 +95,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{
 				{
 					Type: "task2",
-					Info: "{meta:file}?time={{yyyy}}-{{mm}}-{{dd}}", // todo: change after templating
+					Info: "?time={yyyy}-{mm}-{dd}", // todo: change after templating
 					ID:   "UUID_task1",
 					Meta: "workflow=f1.toml",
 				},
@@ -109,7 +109,7 @@ func TestTaskMaster_Process(t *testing.T) {
 				Meta: "retry=3&workflow=f1.toml"},
 			ShouldErr: true,
 		},
-		"task2 complete": {
+		"task2_complete": {
 			Input: task.Task{
 				Type:   "task2",
 				ID:     "UUID_task1",
@@ -117,8 +117,8 @@ func TestTaskMaster_Process(t *testing.T) {
 				Result: task.CompleteResult,
 			},
 			Expected: []task.Task{
-				{Type: "task3", Info: "{meta:file}", ID: "UUID_task1", Meta: "workflow=f1.toml"},
-				{Type: "task4", Info: "{meta:file}", ID: "UUID_task1", Meta: "workflow=f1.toml"},
+				{Type: "task3", Info: "", ID: "UUID_task1", Meta: "workflow=f1.toml"},
+				{Type: "task4", Info: "", ID: "UUID_task1", Meta: "workflow=f1.toml"},
 			},
 		},
 	}

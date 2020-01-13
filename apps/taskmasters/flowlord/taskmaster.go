@@ -23,6 +23,7 @@ import (
 type taskMaster struct {
 	initTime time.Time
 	path     string
+	dur      string
 	producer bus.Producer
 	consumer bus.Consumer
 	fOpts    *file.Options
@@ -44,6 +45,7 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 		producer: app.NewProducer(),
 		consumer: app.NewConsumer(),
 		cron:     cron.New(),
+		dur:      opts.Refresh,
 	}
 }
 
@@ -55,7 +57,7 @@ func (tm *taskMaster) Info() interface{} {
 }
 
 func (tm *taskMaster) Run(ctx context.Context) (err error) {
-	if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
+	if tm.Cache, err = workflow.New(tm.path, tm.dur, tm.fOpts); err != nil {
 		return errors.Wrapf(err, "workflow setup")
 	}
 
@@ -94,7 +96,7 @@ func (tm *taskMaster) schedule() (err error) {
 			if s := rules.Get("offset"); s != "" {
 				j.Offset, err = time.ParseDuration(s)
 				if err != nil {
-					return errors.Wrapf(err, "invalid duration %s")
+					return errors.Wrapf(err, "invalid duration %s", s)
 				}
 			}
 			if err = tm.cron.AddJob(j.Schedule, j); err != nil {
