@@ -12,9 +12,8 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
-	"github.com/pkg/errors"
-
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pkg/errors"
 )
 
 type Phase struct {

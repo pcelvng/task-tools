@@ -6,9 +6,8 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus/nop"
-
 	"github.com/pcelvng/task-tools/workflow"
+	"github.com/pcelvng/task/bus/nop"
 )
 
 func TestTaskMaster_Process(t *testing.T) {
