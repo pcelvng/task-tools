@@ -11,7 +11,7 @@ import (
 )
 
 func TestTaskMaster_Process(t *testing.T) {
-	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", "1h", nil)
+	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", nil)
 	if err != nil {
 		t.Fatal("cache init", err)
 	}

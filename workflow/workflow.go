@@ -3,11 +3,9 @@ package workflow
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/jbsmith7741/go-tools/appenderr"
@@ -36,28 +34,12 @@ type Cache struct {
 	fOpts file.Options
 
 	Workflows map[string]Workflow // the key is the filename for the workflow
-	mutex     sync.Mutex          // used to update changes to any workflows
-}
-
-// InitRefresh will initialize a go routine to refresh the workflow(s) based on a duration
-func (c *Cache) InitRefresh(dur string) {
-	d, err := time.ParseDuration(dur)
-	if err != nil {
-		log.Fatal("could not parse workflow refresh duration")
-	}
-	// starts a looping routine to update workflow changes after a time duration
-	go func(d time.Duration) {
-		for now := range time.Tick(d) {
-			fmt.Println("refreshing workflows", now)
-			c.mutex.Lock()
-			c.Refresh()
-			c.mutex.Unlock()
-		}
-	}(d)
+	Mutex     sync.Mutex          // used to update changes to any workflows
+	Reload    bool                // has the cache been reloaded due to changes
 }
 
 // New returns a Cache used to manage auto updating a workflow
-func New(path, dur string, opts *file.Options) (*Cache, error) {
+func New(path string, opts *file.Options) (*Cache, error) {
 	c := &Cache{
 		done:      make(chan struct{}),
 		Workflows: make(map[string]Workflow),
@@ -71,7 +53,6 @@ func New(path, dur string, opts *file.Options) (*Cache, error) {
 		return nil, errors.Wrapf(err, "problem with path %s", path)
 	}
 	c.isDir = sts.IsDir
-	c.InitRefresh(dur)
 	err = c.Refresh()
 	return c, err
 }
@@ -156,8 +137,10 @@ func (c *Cache) loadFile(path string, opts *file.Options) error {
 	}
 	// check if file has changed
 	if data.Checksum == sts.Checksum {
+		c.Reload = false // if the cache is re-loaded
 		return nil
 	}
+	c.Reload = true
 	data.Checksum = sts.Checksum
 
 	r, err := file.NewReader(path, opts)

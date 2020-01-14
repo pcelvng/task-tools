@@ -55,12 +55,41 @@ func (tm *taskMaster) Info() interface{} {
 	}
 }
 
+func (tm *taskMaster) CacheUpdate(ctx context.Context) {
+	d, err := time.ParseDuration(tm.dur)
+	if err != nil {
+		log.Println("error parsing cache duration", err)
+		return
+	}
+
+	// starts a looping routine to update workflow file changes after a time duration
+	go func(d time.Duration, ctx context.Context) {
+		for now := range time.Tick(d) {
+			fmt.Println("checking for workflow changes", now)
+			if ctx.Err() != nil {
+				fmt.Println("stopping cache update", ctx.Err())
+				return
+			}
+			tm.Cache.Mutex.Lock()
+			tm.Cache.Refresh()
+			if tm.Cache.Reload {
+				err := tm.schedule()
+				if err != nil {
+					log.Println("error setting up cron schedule", err)
+					return
+				}
+			}
+			tm.Cache.Mutex.Unlock()
+		}
+	}(d, ctx)
+}
+
 func (tm *taskMaster) Run(ctx context.Context) (err error) {
-	if tm.Cache, err = workflow.New(tm.path, tm.dur, tm.fOpts); err != nil {
+	if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
 		return errors.Wrapf(err, "workflow setup")
 	}
 
-	// todo: setup refresh for workflow cache
+	tm.CacheUpdate(ctx) // refresh the workflow if the file(s) have been changed
 	if err := tm.schedule(); err != nil {
 		return errors.Wrapf(err, "cron schedule")
 	}
@@ -77,8 +106,8 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 
 // schedule the tasks and refresh the schedule when updated
 func (tm *taskMaster) schedule() (err error) {
-	for name, record := range tm.Workflows {
-		for _, w := range record.Parent() {
+	for name, workflow := range tm.Workflows {
+		for _, w := range workflow.Parent() {
 			rules, _ := url.ParseQuery(w.Rule)
 			if rules.Get("cron") == "" {
 				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)
@@ -98,6 +127,7 @@ func (tm *taskMaster) schedule() (err error) {
 					return errors.Wrapf(err, "invalid duration %s", s)
 				}
 			}
+
 			if err = tm.cron.AddJob(j.Schedule, j); err != nil {
 				return errors.Wrapf(err, "invalid rule for %s:%s %s", name, w.Task, w.Rule)
 			}

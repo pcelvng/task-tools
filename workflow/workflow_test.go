@@ -74,12 +74,12 @@ func TestRefresh(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	// error on new
-	if _, err := New("nop://err", "1h", nil); err == nil {
+	if _, err := New("nop://err", nil); err == nil {
 		t.Error("Expected error")
 	}
 
 	//proper setup
-	c, err := New("../internal/test/workflow/f1.toml", "1h", nil)
+	c, err := New("../internal/test/workflow/f1.toml", nil)
 	if err != nil {
 		t.Error("Unexpected error", err)
 	}
