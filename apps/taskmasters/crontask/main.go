@@ -11,10 +11,10 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/jbsmith7741/go-tools/appenderr"
-	"github.com/pcelvng/task-tools"
+	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task/bus"
-	"github.com/robfig/cron"
+	"github.com/robfig/cron/v3"
 )
 
 const (
@@ -91,7 +91,8 @@ func (o options) Validate() error {
 		if r.Topic == "" && r.TaskType == "" {
 			errs.Add(fmt.Errorf("topic is required: [%d]\n%s", i, spew.Sdump(r)))
 		}
-		if _, err := cron.Parse(r.CronRule); err != nil {
+
+		if _, err := cron.NewParser(cron.Second).Parse(r.CronRule); err != nil {
 			errs.Add(fmt.Errorf("invalid cron rule: [%d] %s\n%s", i, r.CronRule, err))
 		}
 	}
@@ -109,7 +110,7 @@ func (o *options) Info() interface{} {
 	info := make([]NextRun, len(o.Rules))
 	now := time.Now()
 	for i, r := range o.Rules {
-		s, _ := cron.Parse(r.CronRule)
+		s, _ := cron.NewParser(cron.Second).Parse(r.CronRule)
 		info[i].Topic = r.TaskType
 		info[i].Rule = r.CronRule
 		info[i].Time = s.Next(now)

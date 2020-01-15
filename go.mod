@@ -23,7 +23,7 @@ require (
 	github.com/pcelvng/task v0.4.0
 	github.com/pelletier/go-toml v1.6.0
 	github.com/pkg/errors v0.8.1
-	github.com/robfig/cron v1.2.0
+	github.com/robfig/cron/v3 v3.0.0
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.4.0
 	gopkg.in/BurntSushi/toml.v0 v0.3.1

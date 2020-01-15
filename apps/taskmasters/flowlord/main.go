@@ -23,13 +23,17 @@ Field | Field name   | Allowed values  | Allowed special characters
 )
 
 type options struct {
-	Workflow string `comment:"path to workflow file or directory"`
-	Refresh  string `comment:"the refresh duration value default is 1 hour '1h'"`
+	Workflow         string `toml:"workflow" comment:"path to workflow file or directory"`
+	Refresh          string `toml:"refresh" comment:"the workflow changes refresh duration value default is 1 hour"`
+	DoneTopic        string `toml:"done_topic" comment:"default is done"`
+	RetryFailedTopic string `toml:"retry_failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
 }
 
 func main() {
 	opts := &options{
-		Refresh: "1h",
+		Refresh:          "1h",
+		DoneTopic:        "done",
+		RetryFailedTopic: "retry-failed",
 	}
 
 	app := bootstrap.NewTaskMaster(name, New, opts).

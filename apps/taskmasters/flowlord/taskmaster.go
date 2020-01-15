@@ -16,35 +16,39 @@ import (
 	"github.com/pcelvng/task-tools/workflow"
 	"github.com/pcelvng/task/bus"
 	"github.com/pkg/errors"
-	"github.com/robfig/cron"
+	"github.com/robfig/cron/v3"
 )
 
 type taskMaster struct {
-	initTime time.Time
-	path     string
-	dur      string
-	producer bus.Producer
-	consumer bus.Consumer
-	fOpts    *file.Options
+	initTime         time.Time
+	path             string
+	dur              string
+	producer         bus.Producer
+	consumer         bus.Consumer
+	fOpts            *file.Options
+	doneTopic        string
+	retryFailedTopic string
 	*workflow.Cache
 	cron *cron.Cron
 }
 
 type stats struct {
-	RunTime string        `json:"runtime"`
-	Entries []*cron.Entry `json:"entries"`
+	RunTime string       `json:"runtime"`
+	Entries []cron.Entry `json:"entries"`
 }
 
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	opts := app.AppOpt().(*options)
 	return &taskMaster{
-		initTime: time.Now(),
-		path:     opts.Workflow,
-		fOpts:    app.GetFileOpts(),
-		producer: app.NewProducer(),
-		consumer: app.NewConsumer(),
-		cron:     cron.New(),
-		dur:      opts.Refresh,
+		initTime:         time.Now(),
+		path:             opts.Workflow,
+		doneTopic:        opts.DoneTopic,
+		retryFailedTopic: opts.RetryFailedTopic,
+		fOpts:            app.GetFileOpts(),
+		producer:         app.NewProducer(),
+		consumer:         app.NewConsumer(),
+		cron:             cron.New(cron.WithSeconds()),
+		dur:              opts.Refresh,
 	}
 }
 
@@ -73,6 +77,8 @@ func (tm *taskMaster) CacheUpdate(ctx context.Context) {
 			tm.Cache.Mutex.Lock()
 			tm.Cache.Refresh()
 			if tm.Cache.Reload {
+				tm.cron.Stop()
+				tm.cron = cron.New(cron.WithSeconds())
 				err := tm.schedule()
 				if err != nil {
 					log.Println("error setting up cron schedule", err)
@@ -128,7 +134,7 @@ func (tm *taskMaster) schedule() (err error) {
 				}
 			}
 
-			if err = tm.cron.AddJob(j.Schedule, j); err != nil {
+			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
 				return errors.Wrapf(err, "invalid rule for %s:%s %s", name, w.Task, w.Rule)
 			}
 			log.Printf("cron: task:%s, rule:%s, info:%s", w.Task, j.Schedule, w.Template)
@@ -141,6 +147,7 @@ func (tm *taskMaster) schedule() (err error) {
 // Process the given task
 // 1. check if the task needs to be retried
 // 2. start any downstream tasks
+// Log retries and failed retries to corrosponding topics
 func (tm *taskMaster) Process(t *task.Task) error {
 	meta, _ := url.ParseQuery(t.Meta)
 	// attempt to return
@@ -155,6 +162,13 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			t.Meta = meta.Encode()
 			if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
 				return err
+			}
+		} else {
+			// send to the retry failed topic if retries > w.Retry
+			if tm.retryFailedTopic != "-" {
+				meta.Set("retry", "failed")
+				t.Meta = meta.Encode()
+				tm.producer.Send(tm.retryFailedTopic, t.JSONBytes())
 			}
 		}
 		return nil

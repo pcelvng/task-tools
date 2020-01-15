@@ -7,16 +7,16 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
-	"github.com/robfig/cron"
+	"github.com/robfig/cron/v3"
 )
 
 // makeCron will create the cron and setup all the cron jobs.
 // It will not start the cron.
 func makeCron(rules []Rule, producer bus.Producer) (*cron.Cron, error) {
-	c := cron.New()
+	c := cron.New(cron.WithSeconds())
 	for _, rule := range rules {
 		job := newJob(rule, producer)
-		if err := c.AddJob(rule.CronRule, job); err != nil {
+		if _, err := c.AddJob(rule.CronRule, job); err != nil {
 			return nil, fmt.Errorf("cron: '%s' '%v'", rule.CronRule, err.Error())
 		}
 	}

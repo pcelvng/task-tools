@@ -20,8 +20,8 @@ import (
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
-	btoml "gopkg.in/BurntSushi/toml.v0"
 	ptoml "github.com/pelletier/go-toml"
+	btoml "gopkg.in/BurntSushi/toml.v0"
 )
 
 type NewRunner func(*TaskMaster) Runner
@@ -352,6 +352,11 @@ func (tm *TaskMaster) start() {
 		err := http.ListenAndServe(":"+strconv.Itoa(tm.HttpPort()), nil)
 		log.Fatal("http health service failed", err)
 	}()
+}
+
+// SetHandler will overwrite the current HandleRequest function on root requests
+func (tm *TaskMaster) SetHandler(fn func(http.ResponseWriter, *http.Request)) {
+	http.HandleFunc("/", fn)
 }
 
 // Run until the application is complete and then exit.

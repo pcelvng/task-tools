@@ -15,7 +15,7 @@ import (
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task/bus"
 	"github.com/pcelvng/task/bus/info"
-	"github.com/robfig/cron"
+	"github.com/robfig/cron/v3"
 )
 
 func (tm *tskMaster) Run(ctx context.Context) error {
@@ -319,14 +319,14 @@ func (tm *tskMaster) sendTsk(tsk *task.Task, rule *Rule) {
 // It will also start the cron if there are no errors and if there
 // is at least one job.
 func makeCron(rules []*Rule, tm *tskMaster) (*cron.Cron, error) {
-	c := cron.New()
+	c := cron.New(cron.WithSeconds())
 	for _, rule := range rules {
 		if rule.CronCheck == "" {
 			continue
 		}
 
 		job := newJob(rule, tm)
-		err := c.AddJob(rule.CronCheck, job)
+		_, err := c.AddJob(rule.CronCheck, job)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cron: '%v'", err.Error())
 		}
