@@ -10,6 +10,7 @@ require (
 	github.com/go-ini/ini v1.51.1 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/google/go-cmp v0.4.0
+	github.com/hydronica/toml v0.4.1
 	github.com/hydronica/trial v0.4.0
 	github.com/jarcoal/httpmock v1.0.4
 	github.com/jbsmith7741/go-tools v0.2.0
