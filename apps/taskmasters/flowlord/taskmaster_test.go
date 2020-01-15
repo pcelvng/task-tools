@@ -6,9 +6,8 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus/nop"
-
 	"github.com/pcelvng/task-tools/workflow"
+	"github.com/pcelvng/task/bus/nop"
 )
 
 func TestTaskMaster_Process(t *testing.T) {
@@ -51,13 +50,13 @@ func TestTaskMaster_Process(t *testing.T) {
 				Result:  task.ErrResult,
 				Started: "now",
 				Ended:   "before",
-				ID:      "UUID_task1",
+				ID:      "UUID_task1_attempt0",
 				Meta:    "workflow=f1.toml"},
 			Expected: []task.Task{
 				{
 					Type: "task1",
 					Info: "?date=2019-12-12",
-					ID:   "UUID_task1",
+					ID:   "UUID_task1_attempt0",
 					Meta: "retry=1&workflow=f1.toml"},
 			},
 		},
@@ -66,13 +65,13 @@ func TestTaskMaster_Process(t *testing.T) {
 				Type:   "task1",
 				Info:   "?date=2019-12-12",
 				Result: task.ErrResult,
-				ID:     "UUID_task1",
+				ID:     "UUID_task1_attempt2",
 				Meta:   "retry=2&workflow=f1.toml"},
 			Expected: []task.Task{
 				{
 					Type: "task1",
 					Info: "?date=2019-12-12",
-					ID:   "UUID_task1",
+					ID:   "UUID_task1_attempt2",
 					Meta: "retry=3&workflow=f1.toml"},
 			},
 		},
@@ -83,7 +82,15 @@ func TestTaskMaster_Process(t *testing.T) {
 				Result: task.ErrResult,
 				ID:     "UUID_task1",
 				Meta:   "retry=3&workflow=f1.toml"},
-			Expected: []task.Task{},
+			Expected: []task.Task{
+				task.Task{
+					Type:   "task1",
+					Info:   "?date=2019-12-12",
+					ID:     "UUID_task1",
+					Meta:   "retry=failed&workflow=f1.toml",
+					Result: "error",
+				},
+			},
 		},
 		"task1 complete": {
 			Input: task.Task{
@@ -95,7 +102,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{
 				{
 					Type: "task2",
-					Info: "{meta:file}?time={{yyyy}}-{{mm}}-{{dd}}", // todo: change after templating
+					Info: "?time={yyyy}-{mm}-{dd}", // todo: change after templating
 					ID:   "UUID_task1",
 					Meta: "workflow=f1.toml",
 				},
@@ -109,7 +116,7 @@ func TestTaskMaster_Process(t *testing.T) {
 				Meta: "retry=3&workflow=f1.toml"},
 			ShouldErr: true,
 		},
-		"task2 complete": {
+		"task2_complete": {
 			Input: task.Task{
 				Type:   "task2",
 				ID:     "UUID_task1",
@@ -117,8 +124,8 @@ func TestTaskMaster_Process(t *testing.T) {
 				Result: task.CompleteResult,
 			},
 			Expected: []task.Task{
-				{Type: "task3", Info: "{meta:file}", ID: "UUID_task1", Meta: "workflow=f1.toml"},
-				{Type: "task4", Info: "{meta:file}", ID: "UUID_task1", Meta: "workflow=f1.toml"},
+				{Type: "task3", Info: "", ID: "UUID_task1", Meta: "workflow=f1.toml"},
+				{Type: "task4", Info: "", ID: "UUID_task1", Meta: "workflow=f1.toml"},
 			},
 		},
 	}

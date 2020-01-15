@@ -10,6 +10,7 @@ require (
 	github.com/go-ini/ini v1.51.1 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/google/go-cmp v0.4.0
+	github.com/hydronica/toml v0.4.1
 	github.com/hydronica/trial v0.4.0
 	github.com/jarcoal/httpmock v1.0.4
 	github.com/jbsmith7741/go-tools v0.2.0
@@ -23,7 +24,7 @@ require (
 	github.com/pcelvng/task v0.4.0
 	github.com/pelletier/go-toml v1.6.0
 	github.com/pkg/errors v0.8.1
-	github.com/robfig/cron v1.2.0
+	github.com/robfig/cron/v3 v3.0.0
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.4.0
 	gopkg.in/BurntSushi/toml.v0 v0.3.1

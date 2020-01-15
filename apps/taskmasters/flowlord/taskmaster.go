@@ -10,40 +10,45 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus"
-	"github.com/pkg/errors"
-	"github.com/robfig/cron"
-
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
+	"github.com/pcelvng/task/bus"
+	"github.com/pkg/errors"
+	"github.com/robfig/cron/v3"
 )
 
 type taskMaster struct {
-	initTime time.Time
-	path     string
-	producer bus.Producer
-	consumer bus.Consumer
-	fOpts    *file.Options
+	initTime    time.Time
+	path        string
+	dur         time.Duration
+	producer    bus.Producer
+	consumer    bus.Consumer
+	fOpts       *file.Options
+	doneTopic   string
+	failedTopic string
 	*workflow.Cache
 	cron *cron.Cron
 }
 
 type stats struct {
-	RunTime string        `json:"runtime"`
-	Entries []*cron.Entry `json:"entries"`
+	RunTime string       `json:"runtime"`
+	Entries []cron.Entry `json:"entries"`
 }
 
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	opts := app.AppOpt().(*options)
 	return &taskMaster{
-		initTime: time.Now(),
-		path:     opts.Workflow,
-		fOpts:    app.GetFileOpts(),
-		producer: app.NewProducer(),
-		consumer: app.NewConsumer(),
-		cron:     cron.New(),
+		initTime:    time.Now(),
+		path:        opts.Workflow,
+		doneTopic:   opts.DoneTopic,
+		failedTopic: opts.FailedTopic,
+		fOpts:       app.GetFileOpts(),
+		producer:    app.NewProducer(),
+		consumer:    app.NewConsumer(),
+		cron:        cron.New(cron.WithSeconds()),
+		dur:         opts.Refresh,
 	}
 }
 
@@ -54,12 +59,38 @@ func (tm *taskMaster) Info() interface{} {
 	}
 }
 
+// AutoUpdate will create a go routine to auto update the cached files
+// if any changes have been made to the workflow files
+func (tm *taskMaster) AutoUpdate() {
+	for _ = range time.Tick(tm.dur) {
+		files, err := tm.Cache.Refresh()
+		if err != nil {
+			log.Println("error reloading workflow files", err)
+			return
+		}
+		// if there are values in files, there are changes that need to be reloaded
+		if len(files) > 0 {
+			log.Println("reloading workflow changes")
+			tcron := tm.cron
+			tm.cron = cron.New(cron.WithSeconds())
+			if err := tm.schedule(); err != nil {
+				log.Println("error setting up cron schedule", err)
+				tm.cron = tcron
+			} else {
+				tcron.Stop()
+			}
+		}
+	}
+}
+
 func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
 		return errors.Wrapf(err, "workflow setup")
 	}
 
-	// todo: setup refresh for workflow cache
+	// refresh the workflow if the file(s) have been changed
+	go tm.AutoUpdate()
+
 	if err := tm.schedule(); err != nil {
 		return errors.Wrapf(err, "cron schedule")
 	}
@@ -76,8 +107,8 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 
 // schedule the tasks and refresh the schedule when updated
 func (tm *taskMaster) schedule() (err error) {
-	for name, record := range tm.Workflows {
-		for _, w := range record.Parent() {
+	for name, workflow := range tm.Workflows {
+		for _, w := range workflow.Parent() {
 			rules, _ := url.ParseQuery(w.Rule)
 			if rules.Get("cron") == "" {
 				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)
@@ -94,10 +125,11 @@ func (tm *taskMaster) schedule() (err error) {
 			if s := rules.Get("offset"); s != "" {
 				j.Offset, err = time.ParseDuration(s)
 				if err != nil {
-					return errors.Wrapf(err, "invalid duration %s")
+					return errors.Wrapf(err, "invalid duration %s", s)
 				}
 			}
-			if err = tm.cron.AddJob(j.Schedule, j); err != nil {
+
+			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
 				return errors.Wrapf(err, "invalid rule for %s:%s %s", name, w.Task, w.Rule)
 			}
 			log.Printf("cron: task:%s, rule:%s, info:%s", w.Task, j.Schedule, w.Template)
@@ -110,6 +142,7 @@ func (tm *taskMaster) schedule() (err error) {
 // Process the given task
 // 1. check if the task needs to be retried
 // 2. start any downstream tasks
+// Send retry failed tasks to tm.failedTopic
 func (tm *taskMaster) Process(t *task.Task) error {
 	meta, _ := url.ParseQuery(t.Meta)
 	// attempt to return
@@ -125,7 +158,13 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
 				return err
 			}
+		} else if tm.failedTopic != "-" {
+			// send to the retry failed topic if retries > w.Retry
+			meta.Set("retry", "failed")
+			t.Meta = meta.Encode()
+			tm.producer.Send(tm.failedTopic, t.JSONBytes())
 		}
+
 		return nil
 	}
 

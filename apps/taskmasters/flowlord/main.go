@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"time"
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
@@ -23,23 +24,31 @@ Field | Field name   | Allowed values  | Allowed special characters
 )
 
 type options struct {
-	Workflow string `comment:"path to workflow file or directory"`
+	Workflow    string        `toml:"workflow" comment:"path to workflow file or directory"`
+	Refresh     time.Duration `toml:"refresh" comment:"the workflow changes refresh duration value default is 15 min"`
+	DoneTopic   string        `toml:"done_topic" comment:"default is done"`
+	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
 }
 
 func main() {
-
-	opts := &options{}
+	opts := &options{
+		Refresh:     time.Minute * 15,
+		DoneTopic:   "done",
+		FailedTopic: "retry-failed",
+	}
 
 	app := bootstrap.NewTaskMaster(name, New, opts).
 		Version(tools.String()).
 		Description(description)
+
 	app.Initialize()
 	app.Run()
 }
 
 func (o options) Validate() error {
 	if o.Workflow == "" {
-		return errors.New("workflow is required")
+		return errors.New("workflow path is required")
 	}
+
 	return nil
 }

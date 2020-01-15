@@ -5,13 +5,13 @@ import (
 	"io/ioutil"
 	"net/url"
 	"path/filepath"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
-	"github.com/pkg/errors"
-
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pkg/errors"
 )
 
 type Phase struct {
@@ -23,7 +23,7 @@ type Phase struct {
 }
 
 type Workflow struct {
-	Checksum string
+	Checksum string  // md5 hash for the file to check for changes
 	Phases   []Phase `toml:"phase"`
 }
 
@@ -32,6 +32,7 @@ type Cache struct {
 	path  string
 	isDir bool
 	fOpts file.Options
+	mutex sync.RWMutex
 
 	Workflows map[string]Workflow // the key is the filename for the workflow
 }
@@ -51,7 +52,7 @@ func New(path string, opts *file.Options) (*Cache, error) {
 		return nil, errors.Wrapf(err, "problem with path %s", path)
 	}
 	c.isDir = sts.IsDir
-	err = c.Refresh()
+	_, err = c.Refresh()
 	return c, err
 }
 
@@ -68,6 +69,9 @@ func (r Workflow) Parent() (p []Phase) {
 
 // Get the Phase associated with the task t
 func (c *Cache) Get(t task.Task) Phase {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
 	for _, w := range c.Workflows[key].Phases {
@@ -84,6 +88,9 @@ func (c *Cache) Get(t task.Task) Phase {
 // A task without a type or meta data containing the workflow info
 // will result in an error
 func (c *Cache) Children(t task.Task) []Phase {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
 	if t.Type == "" {
 		return nil
 	}
@@ -102,58 +109,76 @@ func (c *Cache) Children(t task.Task) []Phase {
 }
 
 // Refresh checks the cache and reloads any files in the checksum has changed.
-func (c *Cache) Refresh() error {
+func (c *Cache) Refresh() (files []string, err error) {
 	if !c.isDir {
-		return c.loadFile(c.path, &c.fOpts)
+		f, err := c.loadFile(c.path, &c.fOpts)
+		if len(f) > 0 { // only add to files if there is a file
+			files = append(files, f)
+		}
+		return files, err
 	}
 
 	//list and read all files
 	sts, err := file.List(c.path, &c.fOpts)
 	if err != nil {
-		return err
+		return files, err
 	}
+
+	files = make([]string, 0)
 	errs := appenderr.New()
 	for _, s := range sts {
-		errs.Add(c.loadFile(s.Path, &c.fOpts))
+		f, err := c.loadFile(s.Path, &c.fOpts)
+		if err != nil {
+			errs.Add(err)
+		}
+		if len(f) > 0 {
+			files = append(files, f)
+		}
 	}
 
-	return errs.ErrOrNil()
+	err = errs.ErrOrNil()
+	return files, err
 }
 
-// loadFile checks a files checksum and updates if required
-func (c *Cache) loadFile(path string, opts *file.Options) error {
-	_, f := filepath.Split(path)
+// loadFile checks a files checksum and updates map if required
+// loaded file name is returned
+func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	_, f = filepath.Split(path)
 	sts, err := file.Stat(path, opts)
 	data := c.Workflows[f]
 	// permission issues
 	if err != nil {
-		return errors.Wrapf(err, "stats %s", path)
+		return "", errors.Wrapf(err, "stats %s", path)
 	}
 	// We can't process a directory here
 	if sts.IsDir {
-		return fmt.Errorf("can not read directory %s", path)
+		return "", fmt.Errorf("can not read directory %s", path)
 	}
 	// check if file has changed
 	if data.Checksum == sts.Checksum {
-		return nil
+		return "", nil
 	}
 	data.Checksum = sts.Checksum
 
 	r, err := file.NewReader(path, opts)
 	if err != nil {
-		return errors.Wrapf(err, "new reader %s", path)
+		return "", errors.Wrapf(err, "new reader %s", path)
 	}
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
-		return errors.Wrapf(err, "read-all: %s", path)
+		return "", errors.Wrapf(err, "read-all: %s", path)
 	}
 
 	if _, err := toml.Decode(string(b), &data); err != nil {
-		return errors.Wrapf(err, "decode: %s", string(b))
+		return "", errors.Wrapf(err, "decode: %s", string(b))
 	}
 
 	c.Workflows[f] = data
-	return nil
+
+	return f, nil
 }
 
 // Close the cache
