@@ -71,6 +71,9 @@ func Stat(pth string, accessKey, secretKey string) (stat.Stats, error) {
 		defer close(donech)
 		count := 0
 		for range client.ListObjects(bucket, objPth, false, donech) {
+			if info.Err != nil {
+				return stat.Stats{}, err
+			}
 			count++
 		}
 		if count > 0 {

@@ -70,7 +70,10 @@ func Stat(pth string, accessKey, secretKey string) (stat.Stats, error) {
 		donech := make(chan struct{})
 		defer close(donech)
 		count := 0
-		for range client.ListObjects(bucket, objPth, false, donech) {
+		for info := range client.ListObjects(bucket, objPth, false, donech) {
+			if info.Err != nil {
+				return stat.Stats{}, err
+			}
 			count++
 		}
 		if count > 0 {

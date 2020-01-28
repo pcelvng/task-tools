@@ -6,6 +6,7 @@ import (
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/pcelvng/task-tools/file"
 )
 
 const (
@@ -28,6 +29,7 @@ type options struct {
 	Refresh     time.Duration `toml:"refresh" comment:"the workflow changes refresh duration value default is 15 min"`
 	DoneTopic   string        `toml:"done_topic" comment:"default is done"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
+	File        *file.Options `toml:"file"`
 }
 
 func main() {

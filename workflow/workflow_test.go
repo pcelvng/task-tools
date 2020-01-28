@@ -19,14 +19,14 @@ func TestLoadFile(t *testing.T) {
 		if in.cache == nil {
 			in.cache = &Cache{Workflows: make(map[string]Workflow)}
 		}
-		err := in.cache.loadFile(in.path, nil)
+		_, err := in.cache.loadFile(in.path, nil)
 		_, f := filepath.Split(in.path)
 		return in.cache.Workflows[f].Checksum, err
 	}
 	cases := trial.Cases{
 		"read file": {
 			Input:    input{path: "../internal/test/workflow/f1.toml"},
-			Expected: "c6d051592d7aa78b8943f0b72a5c9d71", // checksum of test file
+			Expected: "78e42982f08f9b288aa7512f0bdba674", // checksum of test file
 		},
 		"stat error": {
 			Input:       input{path: "nop://stat_err"},
@@ -52,7 +52,7 @@ func TestRefresh(t *testing.T) {
 	fn := func(input trial.Input) (interface{}, error) {
 		c := input.Interface().(*Cache)
 		c.Workflows = make(map[string]Workflow)
-		err := c.Refresh()
+		_, err := c.Refresh()
 		return len(c.Workflows), err
 	}
 	cases := trial.Cases{
@@ -84,6 +84,12 @@ func TestNew(t *testing.T) {
 		t.Error("Unexpected error", err)
 	}
 	c.Close()
+
+	// workflow invalid or empty
+	if _, err := New("../internal/test/workflow/f3.toml", nil); err == nil {
+		t.Error("Expected error for missing file")
+	}
+
 }
 
 func TestGet(t *testing.T) {
@@ -156,12 +162,12 @@ func TestChildren(t *testing.T) {
 	}
 	cases := trial.Cases{
 		"no meta": {
-			Input:     task.Task{Type: "task1"},
-			ShouldErr: true,
+			Input:    task.Task{Type: "task1"},
+			Expected: []Phase(nil),
 		},
 		"blank task": {
-			Input:     task.Task{Meta: "workflow=workflow.toml"},
-			ShouldErr: true,
+			Input:    task.Task{Meta: "workflow=workflow.toml"},
+			Expected: []Phase(nil),
 		},
 		"task1": {
 			Input:    task.Task{Type: "task1", Meta: "workflow=workflow.toml"},

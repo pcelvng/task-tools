@@ -39,14 +39,23 @@ type stats struct {
 
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	opts := app.AppOpt().(*options)
+	bOpts := app.GetBusOpts()
+	bOpts.InTopic = opts.DoneTopic
+	if bOpts.Bus == "pubsub" {
+		bOpts.InChannel = opts.DoneTopic + "-flowlord"
+	}
+	consumer, err := bus.NewConsumer(bOpts)
+	if err != nil {
+		log.Fatal("consumer init", err)
+	}
 	return &taskMaster{
 		initTime:    time.Now(),
 		path:        opts.Workflow,
 		doneTopic:   opts.DoneTopic,
 		failedTopic: opts.FailedTopic,
-		fOpts:       app.GetFileOpts(),
+		fOpts:       opts.File,
 		producer:    app.NewProducer(),
-		consumer:    app.NewConsumer(),
+		consumer:    consumer,
 		cron:        cron.New(cron.WithSeconds()),
 		dur:         opts.Refresh,
 	}
@@ -62,7 +71,7 @@ func (tm *taskMaster) Info() interface{} {
 // AutoUpdate will create a go routine to auto update the cached files
 // if any changes have been made to the workflow files
 func (tm *taskMaster) AutoUpdate() {
-	for _ = range time.Tick(tm.dur) {
+	for {
 		files, err := tm.Cache.Refresh()
 		if err != nil {
 			log.Println("error reloading workflow files", err)
@@ -80,6 +89,7 @@ func (tm *taskMaster) AutoUpdate() {
 				tcron.Stop()
 			}
 		}
+		<-time.Tick(tm.dur)
 	}
 }
 
@@ -107,6 +117,9 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 
 // schedule the tasks and refresh the schedule when updated
 func (tm *taskMaster) schedule() (err error) {
+	if len(tm.Workflows) == 0 {
+		return fmt.Errorf("no workflows found check path %s", tm.path)
+	}
 	for name, workflow := range tm.Workflows {
 		for _, w := range workflow.Parent() {
 			rules, _ := url.ParseQuery(w.Rule)

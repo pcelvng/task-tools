@@ -505,6 +505,13 @@ func (tm *TaskMaster) NewConsumer() bus.Consumer {
 	return newConsumer(busOpt, busOpt.InTopic, busOpt.InChannel)
 }
 
+func (tm *TaskMaster) GetBusOpts() *bus.Options {
+	if tm != nil {
+		return tm.tmOpt.BusOpt
+	}
+	return nil
+}
+
 // NewProducer will use the bus config information
 // to create a new producer instance.
 func (tm *TaskMaster) NewProducer() bus.Producer {
