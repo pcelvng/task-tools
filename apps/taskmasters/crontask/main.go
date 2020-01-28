@@ -92,9 +92,14 @@ func (o options) Validate() error {
 			errs.Add(fmt.Errorf("topic is required: [%d]\n%s", i, spew.Sdump(r)))
 		}
 
-		if _, err := cron.NewParser(cron.Second).Parse(r.CronRule); err != nil {
-			errs.Add(fmt.Errorf("invalid cron rule: [%d] %s\n%s", i, r.CronRule, err))
+		// Parse the cron rules with the same rules in older versions.
+		_, err := cron.NewParser(
+			cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
+		).Parse(r.CronRule)
+		if err != nil {
+			errs.Add(fmt.Errorf("invalid cron rule: [%d] %s\n  error: %s", i, r.CronRule, err))
 		}
+
 	}
 	return errs.ErrOrNil()
 }
@@ -107,10 +112,17 @@ type NextRun struct {
 }
 
 func (o *options) Info() interface{} {
+	fmt.Println("called options.info()")
 	info := make([]NextRun, len(o.Rules))
 	now := time.Now()
 	for i, r := range o.Rules {
-		s, _ := cron.NewParser(cron.Second).Parse(r.CronRule)
+		s, err := cron.NewParser(
+			cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
+		).Parse(r.CronRule)
+		if err != nil {
+			fmt.Println("error parsing cron rule", err)
+		}
+
 		info[i].Topic = r.TaskType
 		info[i].Rule = r.CronRule
 		info[i].Time = s.Next(now)

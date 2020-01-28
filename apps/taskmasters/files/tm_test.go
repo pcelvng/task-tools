@@ -75,10 +75,10 @@ func TestTskMaster(t *testing.T) {
 
 	opt := &options{
 		Rules: []*Rule{
-			{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt", Topic: "./test/out.tsks.json"},                       // send immediately
-			{TaskType: "test-type", SrcPattern: "/test/file*.gz", Topic: "./test/out.tsks.json"},                               // send immediately
-			{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3, Topic: "./test/out.tsks.json"},         // send when count is reached
-			{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *", Topic: "./test/out.tsks.json"}, // send when count is reached
+			{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt", Topic: "./test/out.tsks.json"},                         // send immediately
+			{TaskType: "test-type", SrcPattern: "/test/file*.gz", Topic: "./test/out.tsks.json"},                                 // send immediately
+			{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3, Topic: "./test/out.tsks.json"},           // send when count is reached
+			{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * * *", Topic: "./test/out.tsks.json"}, // send when count is reached
 		},
 	}
 	tm := opt.new(nil).(*tskMaster)
@@ -212,10 +212,10 @@ func TestTskMaster_ClearFiles(t *testing.T) {
 	// test: typical lifecycle
 	appOpt := &options{
 		Rules: []*Rule{
-			{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt"},                       // send immediately
-			{TaskType: "test-type", SrcPattern: "/test/file*.gz"},                               // send immediately
-			{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3},         // send when count is reached
-			{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * *"}, // send when count is reached
+			{TaskType: "test-type-s3", SrcPattern: "s3://test/file*.txt"},                         // send immediately
+			{TaskType: "test-type", SrcPattern: "/test/file*.gz"},                                 // send immediately
+			{TaskType: "test-type-count", SrcPattern: "/test/file*.txt", CountCheck: 3},           // send when count is reached
+			{TaskType: "test-type-cron", SrcPattern: "/test/file3.txt", CronCheck: "* * * * * *"}, // send when count is reached
 		},
 	}
 	tm := appOpt.new(nil).(*tskMaster)
