@@ -24,15 +24,15 @@ func TestOptions_NewWorker(t *testing.T) {
 	cases := trial.Cases{
 		"valid": {
 			Input:    "nop://file.txt?output=nop://file.csv",
-			Expected: &worker{File: "nop://file.txt", Output: "nop://file.csv", Sep: ","},
+			Expected: &worker{Meta: task.Meta{}, File: "nop://file.txt", Output: "nop://file.csv", Sep: ","},
 		},
 		"templating": {
 			Input:    "nop://2019/11/01/2019-11-01.json.gz?output=nop://{yyyy}-{mm}-{dd}.csv",
-			Expected: &worker{File: "nop://2019/11/01/2019-11-01.json.gz", Output: "nop://2019-11-01.csv", Sep: ","},
+			Expected: &worker{Meta: task.Meta{}, File: "nop://2019/11/01/2019-11-01.json.gz", Output: "nop://2019-11-01.csv", Sep: ","},
 		},
 		"tab": {
 			Input:    "nop://file.txt?output=nop://file.csv&sep=%09",
-			Expected: &worker{File: "nop://file.txt", Output: "nop://file.csv", Sep: "\t"},
+			Expected: &worker{Meta: task.Meta{}, File: "nop://file.txt", Output: "nop://file.csv", Sep: "\t"},
 		},
 		"valid with fields": {
 			Input: "nop://file.txt?output=nop://file.csv&field=abc,def,hij",
@@ -41,6 +41,7 @@ func TestOptions_NewWorker(t *testing.T) {
 				Output: "nop://file.csv",
 				Sep:    ",",
 				Fields: []string{"abc", "def", "hij"},
+				Meta:   task.Meta{},
 			},
 		},
 		"missing file": {
@@ -86,6 +87,7 @@ func TestWorker_DoTask(t *testing.T) {
 			Sep:    v.sep,
 			reader: v.reader,
 			writer: w,
+			Meta:   task.NewMeta(),
 		}
 		// cancel the context option
 		ctx, cncl := context.WithCancel(context.Background())

@@ -1184,6 +1184,8 @@ var largeRowVals = []interface{}{
 }
 
 func TestMain(m *testing.M) {
+	return
+
 	err := setupPG()
 	if err != nil {
 		log.Fatal(err)
