@@ -112,7 +112,6 @@ type NextRun struct {
 }
 
 func (o *options) Info() interface{} {
-	fmt.Println("called options.info()")
 	info := make([]NextRun, len(o.Rules))
 	now := time.Now()
 	for i, r := range o.Rules {
