@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"sort"
 	"testing"
 
 	"github.com/hydronica/trial"
@@ -40,6 +41,9 @@ func TestTaskMaster_Process(t *testing.T) {
 				result = append(result, v)
 			}
 		}
+		sort.Slice(result, func(i, j int) bool {
+			return result[i].Type < result[j].Type
+		})
 		return result, err
 	}
 	cases := trial.Cases{
