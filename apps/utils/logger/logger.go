@@ -6,76 +6,78 @@ import (
 	"time"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/pcelvng/task/bus"
 
-	nsq "github.com/nsqio/go-nsq"
 	"github.com/pcelvng/task-tools/file"
 )
 
 type Logger struct {
 	mu       sync.Mutex
 	topic    string
-	consumer *nsq.Consumer
-	writers  []file.Writer
+	consumer bus.Consumer
+	writer   file.Writer
 	Messages int
+	done     chan struct{}
 }
 
-func newlog(topic string, c *nsq.Consumer) *Logger {
-	return &Logger{
+func newlog(topic string, c bus.Consumer) *Logger {
+	l := &Logger{
 		topic:    topic,
 		consumer: c,
-		writers:  make([]file.Writer, 0),
 	}
+	go l.Read()
+	return l
 }
 
-func (l *Logger) CreateWriters(opts *file.Options, destinations []string) error {
+func (l *Logger) Stop() {
+	l.consumer.Stop()
+	<-l.done
+}
+
+func (l *Logger) CreateWriters(opts *file.Options, destination string) error {
 	errs := appenderr.New()
 
-	// create new writers
-	writers := make([]file.Writer, 0)
-	for _, d := range destinations {
-		path := Parse(d, l.topic, time.Now())
-		w, err := file.NewWriter(path, opts)
-		if err != nil {
-			errs.Add(err)
-			continue
-		}
-		writers = append(writers, w)
+	// create new writer
+	path := Parse(destination, l.topic, time.Now())
+	w, err := file.NewWriter(path, opts)
+	if err != nil {
+		errs.Add(err)
 	}
 
-	// close and reset open writers
+	// close and reset open writer
 	l.mu.Lock()
-
-	// the previous wirters should be closed or aborted before the new wirters are set
-	for i := range l.writers {
-		if l.writers[i].Stats().ByteCnt > 0 {
-			errs.Add(l.writers[i].Close())
+	// the previous writer should be closed or aborted before the new writer are set
+	if l.writer != nil {
+		if l.writer.Stats().ByteCnt > 0 {
+			errs.Add(l.writer.Close())
 		} else {
-			errs.Add(l.writers[i].Abort())
+			errs.Add(l.writer.Abort())
 		}
 	}
-
-	// set new writers
-	l.writers = writers
-
+	// set new writer
+	l.writer = w
 	l.mu.Unlock()
 	return errs.ErrOrNil()
 }
 
-func (l *Logger) HandleMessage(msg *nsq.Message) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if len(l.writers) == 0 {
-		log.Println("error: no writers exists for HandleMessage")
-	}
-	for i := range l.writers {
-		// write the message to each writer
-		if len(msg.Body) > 0 {
-			err := l.writers[i].WriteLine(msg.Body)
-			if err != nil {
-				log.Println("writeline error:", err, "message:", string(msg.Body))
-			}
+func (l *Logger) Read() {
+	for msg, done, err := l.consumer.Msg(); !done; msg, done, err = l.consumer.Msg() {
+		if err != nil {
+			log.Println(err)
+			break
 		}
+		if done {
+			break
+		}
+		l.mu.Lock()
+		l.writer.WriteLine(msg)
+		l.mu.Unlock()
 	}
-	l.Messages++
-	return nil
+
+	if l.writer.Stats().ByteCnt > 0 {
+		l.writer.Close()
+	} else {
+		l.writer.Abort()
+	}
+	l.done <- struct{}{}
 }
