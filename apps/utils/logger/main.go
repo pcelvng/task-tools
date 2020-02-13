@@ -12,45 +12,42 @@ import (
 	"time"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
-	nsq "github.com/nsqio/go-nsq"
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
-	"github.com/pcelvng/task-tools/consumer"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
+	"github.com/pcelvng/task/bus"
 )
 
 type app struct {
-	StatusPort    int           `toml:"status_port"`
-	DestTemplates []string      `toml:"dest_templates" comment:"list of locations to save topic output"`
-	Bus           string        `toml:"bus" comment:"the bus type ie:nsq, kafka"`
-	LookupdHosts  []string      `toml:"lookupd_hosts" comment:"host names of nsq lookupd servers"`
-	Channel       string        `toml:"channel" comment:"read nsq channel default logger"`
-	PollPeriod    time.Duration `toml:"poll_period" comment:"the time between refresh on the topic list"`
-	WriteOptions  file.Options  `toml:"write_options"`
-	RotateFiles   time.Duration `toml:"rotate_files" comment:"time between rotation for log files default is an hour (3600000000000 nano seconds)"`
-
-	consumers []*nsq.Consumer
-	topics    map[string]*Logger
-}
-
-func New() *app {
-	a := &app{
-		StatusPort:    0,
-		Bus:           "nsq",
-		Channel:       "logger",
-		PollPeriod:    time.Minute,
-		DestTemplates: make([]string, 0),
-		consumers:     make([]*nsq.Consumer, 0),
-		topics:        make(map[string]*Logger),
-	}
-
-	return a
+	StatusPort  int           `toml:"status_port"`
+	LogPath     string        `toml:"log_path" comment:"destination template path for the logs to be written to"`
+	Bus         bus.Options   `toml:"bus"`
+	PollPeriod  time.Duration `toml:"poll_period" comment:"refresh time to check current topics"`
+	File        file.Options  `toml:"file"`
+	RotateFiles time.Duration `toml:"rotate_files" comment:"time between rotation for log files default is an hour (3600000000000 nano seconds)"`
+	topics      map[string]*Logger
+	TopicPrefix string `toml:"topic_prefix" comment:"(optional) topic prefix filter. Can be used to only connect to topic with a certain prefix"`
 }
 
 const (
 	description = `logger is a utility to log nsq messages from all found topics to all destination templates`
 )
+
+func New() *app {
+	a := &app{
+		StatusPort: 0,
+		Bus: bus.Options{
+			Bus:       "pubsub",
+			InChannel: "logger",
+		},
+		PollPeriod: time.Minute,
+		LogPath:    "./{TS}-{topic}.json.gz",
+		topics:     make(map[string]*Logger),
+	}
+
+	return a
+}
 
 func main() {
 	app := New()
@@ -59,7 +56,9 @@ func main() {
 		Version(tools.String())
 	u.Initialize()
 	u.AddInfo(app.Info, app.StatusPort)
-
+	if err := app.Validate(); err != nil {
+		log.Fatal(err)
+	}
 	app.Start()
 }
 
@@ -73,7 +72,7 @@ func (a *app) Info() interface{} {
 
 func (a *app) Start() {
 	go a.RotateLogs()
-	consumer.DiscoverTopics(a.newConsumer, a.Channel, a.PollPeriod, a.LookupdHosts)
+	go a.UpdateTopics()
 
 	sigChan := make(chan os.Signal) // app signal handling
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -85,6 +84,36 @@ func (a *app) Start() {
 			log.Fatal("fatal: forced shutdown")
 		}()
 		a.Stop()
+	}
+}
+
+func (a *app) UpdateTopics() {
+	for ; ; time.Sleep(a.PollPeriod) {
+		topics, err := bus.Topics(&a.Bus)
+		if err != nil {
+			log.Printf("topics read error: %s", err)
+		}
+		for _, t := range topics {
+			if !strings.HasPrefix(t, a.TopicPrefix) {
+				continue
+			}
+			if _, found := a.topics[t]; !found {
+				opts := a.Bus
+				opts.InTopic = t
+				opts.InChannel = t + "-logger"
+				c, err := bus.NewConsumer(&opts)
+				if err != nil {
+					log.Println("consumer create error", err)
+					continue
+				}
+				log.Printf("connecting to %s", t)
+				l := newlog(t, c)
+				if err := l.CreateWriters(&a.File, Parse(a.LogPath, t, time.Now())); err != nil {
+					log.Fatalf("writer err for %s: %s", t, err)
+				}
+				a.topics[t] = l
+			}
+		}
 	}
 }
 
@@ -104,7 +133,7 @@ func (a *app) rotateWriters(tm time.Time) error {
 	fmt.Println("files rotate", len(a.topics))
 	errs := appenderr.New()
 	for _, topic := range a.topics {
-		errs.Add(topic.CreateWriters(&a.WriteOptions, a.DestTemplates))
+		errs.Add(topic.CreateWriters(&a.File, a.LogPath))
 	}
 	return errs.ErrOrNil()
 }
@@ -115,34 +144,13 @@ func Parse(path, topic string, t time.Time) string {
 	return tmpl.Parse(path, t)
 }
 
-func (a *app) newConsumer(topic string, c *nsq.Consumer) {
-	log.Printf("connecting to %s", topic)
-	a.consumers = append(a.consumers, c)
-
-	if _, found := a.topics[topic]; found {
-		log.Printf("duplicate topic consumer created %s", topic)
-		return
-	}
-	l := newlog(topic, c)
-
-	c.AddHandler(l)
-	if err := l.CreateWriters(&a.WriteOptions, a.DestTemplates); err != nil {
-		log.Println(err)
-	}
-	if err := c.ConnectToNSQLookupds(a.LookupdHosts); err != nil {
-		log.Println(err)
-	}
-	a.topics[topic] = l
-}
-
 func (a *app) Stop() {
 	wg := sync.WaitGroup{}
-	for i := range a.consumers {
-		c := a.consumers[i]
+	for t, l := range a.topics {
 		wg.Add(1)
 		go func() {
-			c.Stop()
-			<-c.StopChan
+			l.Stop()
+			log.Print(t, "stopped")
 			wg.Done()
 		}()
 	}
@@ -151,13 +159,19 @@ func (a *app) Stop() {
 }
 
 func (a *app) Validate() error {
-	if a.Bus == "nsq" && len(a.LookupdHosts) == 0 {
+	if a.Bus.Bus == "" {
+		return errors.New("bus is required")
+	}
+	if a.Bus.Bus == "nsq" && len(a.Bus.LookupdHosts) == 0 {
 		return errors.New("error: at least one lookupd host is needed for nsq")
 	}
 
-	if len(a.DestTemplates) == 0 {
-		return errors.New("error: at least one destination template is required")
+	if a.Bus.Bus == "pubsub" && a.Bus.ProjectID == "" {
+		return errors.New("pubsub project id is required")
 	}
 
+	if a.LogPath == "" {
+		return errors.New("error: log path is required")
+	}
 	return nil
 }

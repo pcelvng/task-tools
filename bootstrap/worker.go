@@ -14,13 +14,13 @@ import (
 	"strconv"
 	"syscall"
 
+	btoml "github.com/hydronica/toml"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
 	"github.com/pcelvng/task/bus/info"
 	ptoml "github.com/pelletier/go-toml"
-	btoml "gopkg.in/BurntSushi/toml.v0"
 )
 
 type Worker struct {

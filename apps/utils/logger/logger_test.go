@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/jbsmith7741/trial"
-	nsq "github.com/nsqio/go-nsq"
+	"github.com/pcelvng/task/bus"
+	"github.com/pcelvng/task/bus/nop"
+
 	"github.com/pcelvng/task-tools/file"
 )
 
@@ -45,65 +47,30 @@ func TestCreateWriters(t *testing.T) {
 	type input struct {
 		logger *Logger
 		opts   *file.Options
-		dests  []string
+		dest   string
 	}
 
 	fn := func(args ...interface{}) (interface{}, error) {
 		in := args[0].(input)
 		l := in.logger
-		return nil, l.CreateWriters(in.opts, in.dests)
+		return nil, l.CreateWriters(in.opts, in.dest)
 	}
 
 	cases := trial.Cases{
-		"good writers": {Input: input{
+		"good writer": {Input: input{
 			opts:   &file.Options{},
-			dests:  []string{"nop://path1", "nop://path2"},
-			logger: newlog("topic", &nsq.Consumer{}),
+			dest:   "nop://path1",
+			logger: &Logger{topic: "topic", consumer: &nop.Consumer{}},
 		}},
 		"bad init writer": {Input: input{
 			opts:   &file.Options{},
-			dests:  []string{"nop://init_err", "nop://path2"},
-			logger: newlog("topic", &nsq.Consumer{}),
+			dest:   "nop://init_err",
+			logger: &Logger{topic: "topic", consumer: &nop.Consumer{}},
 		},
 			ExpectedErr: errors.New("init_err"),
 		},
 	}
 	time.Sleep(time.Second)
-	trial.New(fn, cases).Test(t)
-}
-
-func TestHandleMessage(t *testing.T) {
-	type input struct {
-		logger *Logger
-		opts   *file.Options
-		dests  []string
-		msg    *nsq.Message
-	}
-
-	fn := func(args ...interface{}) (interface{}, error) {
-		in := args[0].(input)
-		l := in.logger
-		l.CreateWriters(in.opts, in.dests)
-		return nil, l.HandleMessage(in.msg)
-	}
-
-	cases := trial.Cases{
-		"good handle message": {Input: input{
-			msg:    nsq.NewMessage([nsq.MsgIDLength]byte{}, []byte("test message")),
-			opts:   &file.Options{},
-			dests:  []string{"nop://path1", "nop://path2"},
-			logger: newlog("topic", &nsq.Consumer{}),
-		}},
-		"bad writeline error": {Input: input{
-			msg:    nsq.NewMessage([nsq.MsgIDLength]byte{}, []byte("test message")),
-			opts:   &file.Options{},
-			dests:  []string{"nop://writeline_err", "nop://close_err"},
-			logger: newlog("topic", &nsq.Consumer{}),
-		},
-			ShouldErr: false, // HandleMessage only returns nil so it won't block, logging is where the error is displayed
-		},
-	}
-
 	trial.New(fn, cases).Test(t)
 }
 
@@ -116,25 +83,45 @@ func TestValidate(t *testing.T) {
 	cases := trial.Cases{
 		"good validation": {
 			Input: app{
-				Bus:           "nsq",
-				LookupdHosts:  []string{"one", "two"},
-				DestTemplates: []string{"path1", "path2"},
+				Bus: bus.Options{
+					Bus:          "nsq",
+					LookupdHosts: []string{"localhost:4161"},
+				},
+				LogPath: "nop://file",
 			},
 			ShouldErr: false,
 		},
 		"bad dest templates": {
 			Input: app{
-				Bus:           "nsq",
-				LookupdHosts:  []string{"one", "two"},
-				DestTemplates: []string{},
+				Bus: bus.Options{
+					Bus:          "nsq",
+					LookupdHosts: []string{"localhost:4161"},
+				},
 			},
 			ShouldErr: true,
 		},
 		"bad lookup hosts": {
 			Input: app{
-				Bus:           "nsq",
-				LookupdHosts:  []string{},
-				DestTemplates: []string{"path1", "path2"},
+				Bus: bus.Options{
+					Bus: "nsq",
+				},
+				LogPath: "nop://file",
+			},
+			ShouldErr: true,
+		},
+		"missing bus ": {
+			Input: app{
+				Bus:     bus.Options{},
+				LogPath: "nop://file",
+			},
+			ShouldErr: true,
+		},
+		"pubsub- no project id ": {
+			Input: app{
+				Bus: bus.Options{
+					Bus: "pubsub",
+				},
+				LogPath: "nop://file",
 			},
 			ShouldErr: true,
 		},
