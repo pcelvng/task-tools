@@ -56,7 +56,9 @@ func main() {
 		Version(tools.String())
 	u.Initialize()
 	u.AddInfo(app.Info, app.StatusPort)
-
+	if err := app.Validate(); err != nil {
+		log.Fatal(err)
+	}
 	app.Start()
 }
 
@@ -89,7 +91,7 @@ func (a *app) UpdateTopics() {
 	for ; ; time.Sleep(a.PollPeriod) {
 		topics, err := bus.Topics(&a.Bus)
 		if err != nil {
-			log.Println("topics read error: %s", err)
+			log.Printf("topics read error: %s", err)
 		}
 		for _, t := range topics {
 			if !strings.HasPrefix(t, a.TopicPrefix) {
@@ -157,6 +159,9 @@ func (a *app) Stop() {
 }
 
 func (a *app) Validate() error {
+	if a.Bus.Bus == "" {
+		return errors.New("bus is required")
+	}
 	if a.Bus.Bus == "nsq" && len(a.Bus.LookupdHosts) == 0 {
 		return errors.New("error: at least one lookupd host is needed for nsq")
 	}
