@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -12,15 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"cloud.google.com/go/pubsub"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
 )
 
 type app struct {
@@ -30,7 +26,6 @@ type app struct {
 	PollPeriod  time.Duration `toml:"poll_period" comment:"refresh time to check current topics"`
 	File        file.Options  `toml:"file"`
 	RotateFiles time.Duration `toml:"rotate_files" comment:"time between rotation for log files default is an hour (3600000000000 nano seconds)"`
-	client      *pubsub.Client
 	topics      map[string]*Logger
 	TopicPrefix string `toml:"topic_prefix" comment:"(optional) topic prefix filter. Can be used to only connect to topic with a certain prefix"`
 }
@@ -74,16 +69,6 @@ func (a *app) Info() interface{} {
 }
 
 func (a *app) Start() {
-	opts := make([]option.ClientOption, 0)
-	if a.Bus.JSONAuth != "" {
-		opts = append(opts, option.WithCredentialsFile(a.Bus.JSONAuth))
-	}
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	client, err := pubsub.NewClient(ctx, a.Bus.ProjectID)
-	if err != nil {
-		log.Fatal("pubsub connect ", err)
-	}
-	a.client = client
 	go a.RotateLogs()
 	go a.UpdateTopics()
 
@@ -101,42 +86,33 @@ func (a *app) Start() {
 }
 
 func (a *app) UpdateTopics() {
-	for _, t := range Topics(a.client) {
-		if !strings.HasPrefix(t, a.TopicPrefix) {
-			continue
+	for ; ; time.Sleep(a.PollPeriod) {
+		topics, err := bus.Topics(&a.Bus)
+		if err != nil {
+			log.Println("topics read error: %s", err)
 		}
-		if _, found := a.topics[t]; !found {
-			opts := a.Bus
-			opts.InTopic = t
-			opts.InChannel = t + "-logger"
-			c, err := bus.NewConsumer(&opts)
-			if err != nil {
-				log.Println("consumer create error", err)
+		for _, t := range topics {
+			if !strings.HasPrefix(t, a.TopicPrefix) {
 				continue
 			}
-			log.Printf("connecting to %s", t)
-			l := newlog(t, c)
-			if err := l.CreateWriters(&a.File, Parse(a.LogPath, t, time.Now())); err != nil {
-				log.Fatalf("writer err for %s: %s", t, err)
+			if _, found := a.topics[t]; !found {
+				opts := a.Bus
+				opts.InTopic = t
+				opts.InChannel = t + "-logger"
+				c, err := bus.NewConsumer(&opts)
+				if err != nil {
+					log.Println("consumer create error", err)
+					continue
+				}
+				log.Printf("connecting to %s", t)
+				l := newlog(t, c)
+				if err := l.CreateWriters(&a.File, Parse(a.LogPath, t, time.Now())); err != nil {
+					log.Fatalf("writer err for %s: %s", t, err)
+				}
+				a.topics[t] = l
 			}
-			a.topics[t] = l
 		}
 	}
-}
-
-func Topics(client *pubsub.Client) []string {
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	q := client.Topics(ctx)
-	topics := make([]string, 0)
-	t, err := q.Next()
-	for ; err == nil; t, err = q.Next() {
-		topics = append(topics, t.ID())
-	}
-	if err != iterator.Done {
-		log.Println(err)
-	}
-
-	return topics
 }
 
 func (a *app) RotateLogs() {

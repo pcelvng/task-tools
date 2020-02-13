@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"strconv"
 
-	btoml "gopkg.in/BurntSushi/toml.v0"
+	btoml "github.com/hydronica/toml"
 	ptoml "github.com/pelletier/go-toml"
 )
 
