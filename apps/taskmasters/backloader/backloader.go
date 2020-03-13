@@ -64,9 +64,6 @@ func (bl *backloader) backload() (int, error) {
 
 			// normalize topic
 			topic := bl.config.TaskType
-			if bl.config.Topic != "" {
-				topic = bl.config.Topic
-			}
 
 			// send task to task bus
 			if err := bl.busProducer.Send(topic, tsk.JSONBytes()); err != nil {
