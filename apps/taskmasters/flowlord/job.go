@@ -10,6 +10,7 @@ import (
 )
 
 type job struct {
+	Name     string
 	Workflow string
 	Topic    string
 	Schedule string

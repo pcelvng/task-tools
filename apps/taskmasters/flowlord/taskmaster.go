@@ -120,7 +120,7 @@ func (tm *taskMaster) schedule() (err error) {
 	if len(tm.Workflows) == 0 {
 		return fmt.Errorf("no workflows found check path %s", tm.path)
 	}
-	for name, workflow := range tm.Workflows {
+	for path, workflow := range tm.Workflows {
 		for _, w := range workflow.Parent() {
 			rules, _ := url.ParseQuery(w.Rule)
 			if rules.Get("cron") == "" {
@@ -129,7 +129,8 @@ func (tm *taskMaster) schedule() (err error) {
 			}
 
 			j := &job{
-				Workflow: name,
+				Name:     rules.Get("job"),
+				Workflow: path,
 				Topic:    w.Task,
 				Schedule: rules.Get("cron"),
 				Template: w.Template,
@@ -143,7 +144,7 @@ func (tm *taskMaster) schedule() (err error) {
 			}
 
 			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
-				return errors.Wrapf(err, "invalid rule for %s:%s %s", name, w.Task, w.Rule)
+				return errors.Wrapf(err, "invalid rule for %s:%s %s", path, w.Task, w.Rule)
 			}
 			log.Printf("cron: task:%s, rule:%s, info:%s", w.Task, j.Schedule, w.Template)
 		}
