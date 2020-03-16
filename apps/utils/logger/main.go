@@ -50,6 +50,7 @@ func New() *app {
 }
 
 func main() {
+	log.SetFlags(log.Ldate | log.Lshortfile)
 	app := New()
 	u := bootstrap.NewUtility("logger", app).
 		Description(description).
@@ -122,15 +123,15 @@ func (a *app) RotateLogs() {
 		a.RotateFiles = time.Hour
 	}
 	for ; ; time.Sleep(a.RotateFiles) {
-		if err := a.rotateWriters(time.Now()); err != nil {
+		if err := a.rotateWriters(); err != nil {
 			log.Println(err)
 			a.Stop()
 		}
 	}
 }
 
-func (a *app) rotateWriters(tm time.Time) error {
-	fmt.Println("files rotate", len(a.topics))
+func (a *app) rotateWriters() error {
+	log.Println("active topics", len(a.topics))
 	errs := appenderr.New()
 	for _, topic := range a.topics {
 		errs.Add(topic.CreateWriters(&a.File, a.LogPath))
