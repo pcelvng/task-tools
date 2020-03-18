@@ -24,7 +24,7 @@ require (
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/nsqio/go-nsq v1.0.8
-	github.com/pcelvng/task v0.5.1-0.20200313213626-5a6dc57d8cd1
+	github.com/pcelvng/task v0.5.1
 	github.com/pelletier/go-toml v1.6.0
 	github.com/pkg/errors v0.9.1
 	github.com/robfig/cron/v3 v3.0.0
