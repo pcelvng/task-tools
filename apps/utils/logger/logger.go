@@ -39,6 +39,7 @@ func (l *Logger) CreateWriters(opts *file.Options, destination string) error {
 
 	// create new writer
 	path := Parse(destination, l.topic, time.Now())
+	opts.FileBufPrefix = l.topic
 	w, err := file.NewWriter(path, opts)
 	if err != nil {
 		errs.Add(err)

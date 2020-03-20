@@ -24,6 +24,9 @@ func (j *job) Run() {
 	info := tmpl.Parse(j.Template, tm)
 	tsk := task.New(j.Topic, info)
 	tsk.Meta = "workflow=" + j.Workflow
+	if j.Name != "" {
+		tsk.Meta += "&job=" + j.Name
+	}
 
 	j.producer.Send(j.Topic, tsk.JSONBytes())
 }

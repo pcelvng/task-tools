@@ -147,6 +147,7 @@ func (tm *taskMaster) schedule() (err error) {
 				return errors.Wrapf(err, "invalid rule for %s:%s %s", path, w.Task, w.Rule)
 			}
 			log.Printf("cron: task:%s, rule:%s, info:%s", w.Task, j.Schedule, w.Template)
+			log.Println(rules)
 		}
 	}
 	tm.cron.Start()

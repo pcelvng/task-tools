@@ -9,6 +9,7 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/workflow"
 	"github.com/pcelvng/task/bus/nop"
+	"github.com/robfig/cron/v3"
 )
 
 func TestTaskMaster_Process(t *testing.T) {
@@ -134,6 +135,30 @@ func TestTaskMaster_Process(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
+}
+
+func TestTaskMaster_Schedule(t *testing.T) {
+	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", nil)
+	if err != nil {
+		t.Fatal("cache init", err)
+	}
+	consumer, err := nop.NewConsumer("")
+	producer, err := nop.NewProducer("")
+	if err != nil {
+		t.Fatal("consumer", err)
+	}
+	tm := taskMaster{consumer: consumer, producer: producer, Cache: cache, cron: cron.New()}
+	// verify task1 was scheduled correctly
+	if err := tm.schedule(); err != nil {
+		t.Fatal(err)
+	}
+	//
+	for _, e := range tm.cron.Entries() {
+		e.Job.Run()
+	}
+	if eq, diff := trial.Contains(producer.Messages["task1"], []string{`"type":"task1"`, `"meta":"workflow=f1.toml\u0026job=t2"`}); !eq {
+		t.Error(diff)
+	}
 }
 
 func comparer(i1, i2 interface{}) (equal bool, diff string) {

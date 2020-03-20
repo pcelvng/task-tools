@@ -26,7 +26,7 @@ func TestLoadFile(t *testing.T) {
 	cases := trial.Cases{
 		"read file": {
 			Input:    input{path: "../internal/test/workflow/f1.toml"},
-			Expected: "78e42982f08f9b288aa7512f0bdba674", // checksum of test file
+			Expected: "34cf5142fbd029fa778ee657592d03ce", // checksum of test file
 		},
 		"stat error": {
 			Input:       input{path: "nop://stat_err"},
