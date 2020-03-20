@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"time"
 
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools"
+	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -55,6 +56,10 @@ func doneTopic(scanner *bufio.Scanner) []string {
 			ExecTimes:      &durStats{},
 		}
 		topic := tsk.Type
+		m, _ := url.ParseQuery(tsk.Meta)
+		if j := m.Get("job"); j != "" {
+			topic += ":" + j
+		}
 		if *path {
 			topic += "\t" + rootPath(tsk.Info, taskTime(tsk))
 		}
