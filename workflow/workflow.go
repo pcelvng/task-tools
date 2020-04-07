@@ -74,9 +74,34 @@ func (c *Cache) Get(t task.Task) Phase {
 
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
+	job := values.Get("job")
+
+	if key == "*" { // search all workflows for first match
+		for _, phases := range c.Workflows {
+			for _, w := range phases.Phases {
+				if w.Task == t.Type {
+					if job == "" {
+						return w
+					}
+					v, _ := url.ParseQuery(w.Rule)
+					if v.Get("job") == job {
+						return w
+					}
+				}
+			}
+		}
+		return Phase{}
+	}
+
 	for _, w := range c.Workflows[key].Phases {
 		if w.Task == t.Type {
-			return w
+			if job == "" {
+				return w
+			}
+			v, _ := url.ParseQuery(w.Rule)
+			if v.Get("job") == job {
+				return w
+			}
 		}
 	}
 
