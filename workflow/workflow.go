@@ -22,6 +22,10 @@ type Phase struct {
 	Template  string // template used to create the task
 }
 
+func (p Phase) IsEmpty() bool {
+	return p.Task == "" && p.Rule == "" && p.DependsOn == "" && p.Template == ""
+}
+
 type Workflow struct {
 	Checksum string  // md5 hash for the file to check for changes
 	Phases   []Phase `toml:"phase"`

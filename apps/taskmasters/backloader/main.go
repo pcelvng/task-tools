@@ -14,6 +14,7 @@ import (
 
 	"github.com/hydronica/toml"
 	"github.com/jbsmith7741/uri"
+	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 
 	tools "github.com/pcelvng/task-tools"
@@ -79,6 +80,7 @@ var (
 	version     = flag.Bool("version", false, "show version")
 	config      = flag.String("c", "", "(optional config path)")
 	dFmt        = "2006-01-02T15"
+	job         = flag.String("job", "", "(optional: with config) workflow job")
 )
 
 func init() {
@@ -212,6 +214,8 @@ func (c *options) validate() error {
 }
 
 func loadOptions() (*options, error) {
+	flag.Parse()
+
 	if *version {
 		tools.String()
 		os.Exit(0)
@@ -220,10 +224,11 @@ func loadOptions() (*options, error) {
 	var fConf *Config
 	if *config != "" {
 		fConf = &Config{}
-		if _, err := toml.DecodeFile(*config, fConf); err != nil {
+		_, err := toml.DecodeFile(*config, fConf)
+		if err != nil {
 			return nil, err
 		}
-		c, err := workflow.New(fConf.Workflow, &fConf.File)
+		fConf.cache, err = workflow.New(fConf.Workflow, &fConf.File)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +250,13 @@ func loadOptions() (*options, error) {
 	// populate template
 	c.TaskTemplate = *template
 	if fConf != nil {
-		fConf.cache.Get(c.TaskType)
+		tsk := task.Task{Type: c.TaskType, Meta: "workflow=*"}
+		if *job != "" {
+			tsk.Meta += "&job=" + *job
+		}
+		if p := fConf.cache.Get(tsk); !p.IsEmpty() {
+			c.TaskTemplate = p.Template
+		}
 	}
 	c.EveryXHours = int(*everyXHours)
 
