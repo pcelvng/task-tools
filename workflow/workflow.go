@@ -22,6 +22,10 @@ type Phase struct {
 	Template  string // template used to create the task
 }
 
+func (p Phase) IsEmpty() bool {
+	return p.Task == "" && p.Rule == "" && p.DependsOn == "" && p.Template == ""
+}
+
 type Workflow struct {
 	Checksum string  // md5 hash for the file to check for changes
 	Phases   []Phase `toml:"phase"`
@@ -74,9 +78,34 @@ func (c *Cache) Get(t task.Task) Phase {
 
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
+	job := values.Get("job")
+
+	if key == "*" { // search all workflows for first match
+		for _, phases := range c.Workflows {
+			for _, w := range phases.Phases {
+				if w.Task == t.Type {
+					if job == "" {
+						return w
+					}
+					v, _ := url.ParseQuery(w.Rule)
+					if v.Get("job") == job {
+						return w
+					}
+				}
+			}
+		}
+		return Phase{}
+	}
+
 	for _, w := range c.Workflows[key].Phases {
 		if w.Task == t.Type {
-			return w
+			if job == "" {
+				return w
+			}
+			v, _ := url.ParseQuery(w.Rule)
+			if v.Get("job") == job {
+				return w
+			}
 		}
 	}
 

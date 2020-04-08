@@ -1,16 +1,18 @@
 package main
 
 import (
+	"bufio"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 )
 
 func TestPrintDates(t *testing.T) {
 	f := "2006/01/02T15"
-	fn := func(args ...interface{}) (interface{}, error) {
-		s := printDates(args[0].([]time.Time))
+	fn := func(in trial.Input) (interface{}, error) {
+		s := printDates(in.Interface().([]time.Time))
 		return s, nil
 	}
 	trial.New(fn, map[string]trial.Case{
@@ -39,8 +41,8 @@ func TestPrintDates(t *testing.T) {
 }
 
 func TestRootPath(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		return rootPath(args[0].(string), args[1].(time.Time)), nil
+	fn := func(in trial.Input) (interface{}, error) {
+		return rootPath(in.Slice(0).String(), in.Slice(1).Interface().(time.Time)), nil
 	}
 	trial.New(fn, map[string]trial.Case{
 		"full time slug": {
@@ -60,4 +62,31 @@ func TestRootPath(t *testing.T) {
 			Expected: "s3://bucket/path/to/static/file/data",
 		},
 	}).Test(t)
+}
+
+func TestDoneTopic(t *testing.T) {
+	fn := func(in trial.Input) (interface{}, error) {
+
+		r := strings.NewReader(in.String())
+		scanner := bufio.NewScanner(r)
+		return doneTopic(scanner), nil
+
+	}
+	cases := trial.Cases{
+		"task without job": {
+			Input:    `{"type":"test","info":"?date=2020-01-02","result":"complete"}`,
+			Expected: []string{"test\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02"},
+		},
+		"task with job meta": {
+			Input:    `{"type":"test","info":"?date=2020-01-02","result":"complete","meta":"job=part1"}`,
+			Expected: []string{"test:part1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02"},
+		},
+		"2 task with job meta": {
+			Input: `{"type":"test","info":"?date=2020-01-02","result":"complete","meta":"job=part1"}
+{"type":"test","info":"?date=2020-01-02","result":"complete","meta":"job=part2"}`,
+			Expected: []string{"test:part1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02",
+				"test:part2\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02"},
+		},
+	}
+	trial.New(fn, cases).Test(t)
 }

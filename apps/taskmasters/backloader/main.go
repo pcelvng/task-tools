@@ -12,10 +12,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hydronica/toml"
 	"github.com/jbsmith7741/uri"
+	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 
 	tools "github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/workflow"
 )
 
 var sigChan = make(chan os.Signal, 1)
@@ -74,13 +78,21 @@ var (
 	onHours     = flag.String("on-hours", "", "comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15")
 	offHours    = flag.String("off-hours", "", "comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.")
 	version     = flag.Bool("version", false, "show version")
+	config      = flag.String("c", "", "(optional config path)")
 	dFmt        = "2006-01-02T15"
+	job         = flag.String("job", "", "(optional: with config) workflow job")
 )
 
 func init() {
 	flag.StringVar(tskType, "t", "", "alias of 'type'")
 	flag.StringVar(outBus, "b", "", "alias of 'bus'")
 	flag.BoolVar(version, "v", false, "show version")
+}
+
+type Config struct {
+	Workflow string       `toml:"workflow"`
+	File     file.Options `toml:"file"`
+	cache    *workflow.Cache
 }
 
 func newOptions() *options {
@@ -203,11 +215,24 @@ func (c *options) validate() error {
 
 func loadOptions() (*options, error) {
 	flag.Parse()
+
 	if *version {
 		tools.String()
 		os.Exit(0)
 	}
 
+	var fConf *Config
+	if *config != "" {
+		fConf = &Config{}
+		_, err := toml.DecodeFile(*config, fConf)
+		if err != nil {
+			return nil, err
+		}
+		fConf.cache, err = workflow.New(fConf.Workflow, &fConf.File)
+		if err != nil {
+			return nil, err
+		}
+	}
 	ops := busOptions{}
 	c := newOptions()
 
@@ -221,7 +246,18 @@ func loadOptions() (*options, error) {
 
 	// load config
 	c.TaskType = *tskType
+
+	// populate template
 	c.TaskTemplate = *template
+	if fConf != nil {
+		tsk := task.Task{Type: c.TaskType, Meta: "workflow=*"}
+		if *job != "" {
+			tsk.Meta += "&job=" + *job
+		}
+		if p := fConf.cache.Get(tsk); !p.IsEmpty() {
+			c.TaskTemplate = p.Template
+		}
+	}
 	c.EveryXHours = int(*everyXHours)
 
 	if err := c.setOnHours(*onHours); err != nil {

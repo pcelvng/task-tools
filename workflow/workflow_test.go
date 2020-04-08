@@ -97,12 +97,22 @@ func TestGet(t *testing.T) {
 		"workflow.toml": {
 			Phases: []Phase{
 				{Task: "task1"},
+				{Task: "dup"},
 				{Task: "task2", DependsOn: "task1"},
 				{Task: "task3", DependsOn: "task2"},
 				{Task: "task4", DependsOn: "task2"},
 			},
 		},
-	}}
+		"w2job.toml": {
+			Phases: []Phase{
+				{Task: "dup"},
+				{Task: "t2", Rule: "job=j1"},
+				{Task: "t2", Rule: "job=j2"},
+				{Task: "t2", Rule: "job=j3"},
+			},
+		},
+	},
+	}
 	fn := func(v trial.Input) (interface{}, error) {
 		t := v.Interface().(task.Task)
 		return cache.Get(t), nil
@@ -123,6 +133,22 @@ func TestGet(t *testing.T) {
 		"task2": {
 			Input:    task.Task{Type: "task2", Meta: "workflow=workflow.toml"},
 			Expected: Phase{Task: "task2", DependsOn: "task1"},
+		},
+		"task=t2 with job=j1": {
+			Input:    task.Task{Type: "t2", Meta: "workflow=w2job.toml&job=j1"},
+			Expected: Phase{Task: "t2", Rule: "job=j1"},
+		},
+		"job does not exist": {
+			Input:    task.Task{Type: "t2", Meta: "workflow=w2job.toml&job=invalid"},
+			Expected: Phase{},
+		},
+		"wildcard search": {
+			Input:    task.Task{Type: "t2", Meta: "workflow=*&job=j3"},
+			Expected: Phase{Task: "t2", Rule: "job=j3"},
+		},
+		"wildcard with same task in different files": { // picks first match, results will vary
+			Input:    task.Task{Type: "dup", Meta: "workflow=*"},
+			Expected: Phase{Task: "dup"},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
