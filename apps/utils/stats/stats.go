@@ -2,24 +2,24 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/pcelvng/task"
 )
 
 func key(t task.Task) string {
+	if t.ID != "" {
+		return t.ID
+	}
 	return t.Type + ":" + t.Info + ":" + t.Created
 }
 
-func newStat(c *nsq.Consumer) *stat {
+func newStat() *stat {
 	return &stat{
 		inProgress: make(map[string]task.Task),
 		success:    &durStats{},
 		error:      &durStats{},
-		consumer:   c,
 	}
 }
 
@@ -28,7 +28,7 @@ type stat struct {
 	inProgress map[string]task.Task
 	success    *durStats
 	error      *durStats
-	consumer   *nsq.Consumer
+	//	consumer   bus.Consumer
 }
 
 // NewTask adds a new inProgress task to the queue
@@ -36,19 +36,6 @@ func (s *stat) NewTask(t task.Task) {
 	s.mu.Lock()
 	s.inProgress[key(t)] = t
 	s.mu.Unlock()
-}
-
-func (s *stat) HandleMessage(msg *nsq.Message) error {
-	t, err := task.NewFromBytes(msg.Body)
-	if err != nil {
-		log.Println("invalid task", err)
-		return nil
-	}
-	if task.IsZero(*t) {
-		return nil
-	}
-	s.NewTask(*t)
-	return nil
 }
 
 // DoneTask adds a completed task to the queue, removes the matching inProgress task
