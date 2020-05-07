@@ -23,16 +23,22 @@ type Slack struct {
 	Title   string
 }
 
+// msg object is in the format for slack's hook api
+// https://api.slack.com/reference/messaging/payload
 type msg struct {
 	Channel    string       `json:"channel,omitempty"`
 	Text       string       `json:"text,omitempty"`
 	Attchments []attachment `json:"attachments"`
 }
 
+// attachment object for slacks web hook api
+// https://api.slack.com/reference/messaging/attachments
 type attachment struct {
-	Title string `json:"title,omitempty"`
-	Text  string `json:"text,omitempty"`
-	Color string `json:"color,omitempty"`
+	Title      string `json:"title,omitempty"` // title
+	Text       string `json:"text,omitempty"`  // Optional `text` that appears within the attachment
+	Color      string `json:"color,omitempty"` // color #36a64f
+	PreText    string `json:"pretext"`         // Optional pre-text that appears above the attachment block
+	AuthorName string `json:"author_name"`     // author name
 }
 
 // Sends a slack message with a level indicator
