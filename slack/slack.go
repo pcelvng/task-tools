@@ -80,10 +80,13 @@ func (s *Slack) newMessage(message, color string) msg {
 	m := msg{
 		s.Channel,
 		"",
-		[]attachment{
-			{s.Title,
-				message,
-				colorCode(color)},
+		[]attachment{{
+			Title:      s.Title,
+			Text:       message,
+			Color:      colorCode(color),
+			PreText:    "task-tools",
+			AuthorName: "",
+		},
 		},
 	}
 	return m
