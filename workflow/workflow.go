@@ -137,7 +137,7 @@ func (c *Cache) Children(t task.Task) []Phase {
 	return result
 }
 
-// Refresh checks the cache and reloads any files in the checksum has changed.
+// Refresh checks the cache and reloads any files if the checksum has changed.
 func (c *Cache) Refresh() (files []string, err error) {
 	if !c.isDir {
 		f, err := c.loadFile(c.path, &c.fOpts)

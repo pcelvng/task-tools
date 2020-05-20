@@ -113,7 +113,7 @@ func TestWorker_DoTask(t *testing.T) {
 		},
 		"cancel context": {
 			Input: input{
-				reader:   mock.NewReader("").AddLines(header, "1,2,3,4,5"),
+				reader:   mock.NewReader("").AddLines(header, "1,2,3,4,5").SetLineCount(100),
 				canceled: true,
 			},
 			ExpectedErr: errors.New("context canceled"),
@@ -153,9 +153,15 @@ func TestWorker_DoTask(t *testing.T) {
 		},
 		"too many rows": {
 			Input: input{
-				reader: mock.NewReader("").AddLines(header, ",,3,4,5,6,7"),
+				reader: mock.NewReader("").AddLines(header, ",,3,4,5,6,7", "read_eof"),
 			},
 			ExpectedErr: errors.New("inconsistent length"),
+		},
+		"row with quote": {
+			Input: input{
+				reader: mock.NewReader("").AddLines(header, "1,\"a,b,c\",3,4,5"),
+			},
+			Expected: []string{`{"f1":1,"f2":"a,b,c","f3":3,"f4":4,"f5":5}`},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

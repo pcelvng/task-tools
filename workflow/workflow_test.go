@@ -51,7 +51,9 @@ func TestLoadFile(t *testing.T) {
 func TestRefresh(t *testing.T) {
 	fn := func(input trial.Input) (interface{}, error) {
 		c := input.Interface().(*Cache)
-		c.Workflows = make(map[string]Workflow)
+		if c.Workflows == nil {
+			c.Workflows = make(map[string]Workflow)
+		}
 		_, err := c.Refresh()
 		return len(c.Workflows), err
 	}
@@ -67,6 +69,16 @@ func TestRefresh(t *testing.T) {
 		"error case": {
 			Input:     &Cache{path: "nop://err", isDir: true},
 			ShouldErr: true,
+		},
+		"file removed": {
+			Input: &Cache{
+				path:  "../internal/test/workflow/empty",
+				isDir: true,
+				Workflows: map[string]Workflow{
+					"missing.toml": {},
+				},
+			},
+			Expected: 0,
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
