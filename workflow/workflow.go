@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -228,7 +229,11 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 // filePath returns a filePath consist of all unique part
 // after the path set in the cache
 func (c *Cache) filePath(p string) string {
-	return strings.TrimLeft(strings.Replace(p, c.path, "", 1), "/")
+	s := strings.TrimLeft(strings.Replace(p, c.path, "", 1), "/")
+	if s == "" {
+		_, s = filepath.Split(p)
+	}
+	return s
 }
 
 // Close the cache

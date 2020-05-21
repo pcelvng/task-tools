@@ -75,13 +75,15 @@ func TestRefresh(t *testing.T) {
 		},
 		"file removed": {
 			Input: &Cache{
-				path:  "../internal/test/workflow/empty",
+				path:  "../internal/test/workflow",
 				isDir: true,
 				Workflows: map[string]Workflow{
 					"missing.toml": {},
+					"f1.toml":      {},
+					"f2.toml":      {},
 				},
 			},
-			Expected: 0,
+			Expected: 2,
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
@@ -225,6 +227,35 @@ func TestChildren(t *testing.T) {
 		"task4": {
 			Input:    task.Task{Type: "task4", Meta: "workflow=workflow.toml"},
 			Expected: []Phase{},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestCache_FilePath(t *testing.T) {
+
+	type input struct {
+		cachePath string
+		file      string
+	}
+
+	fn := func(v trial.Input) (interface{}, error) {
+
+		c := &Cache{path: v.Slice(0).String()}
+		return c.filePath(v.Slice(1).String()), nil
+	}
+	cases := trial.Cases{
+		"single file": {
+			Input:    []string{"./path", "./path/file.toml"},
+			Expected: "file.toml",
+		},
+		"same name": {
+			Input:    []string{"./path/file.toml", "./path/file.toml"},
+			Expected: "file.toml",
+		},
+		"sub directory": {
+			Input:    []string{"./path", "./path/sub/file.toml"},
+			Expected: "sub/file.toml",
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
