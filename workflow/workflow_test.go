@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/hydronica/trial"
@@ -20,7 +19,7 @@ func TestLoadFile(t *testing.T) {
 			in.cache = &Cache{Workflows: make(map[string]Workflow)}
 		}
 		_, err := in.cache.loadFile(in.path, nil)
-		_, f := filepath.Split(in.path)
+		f := in.cache.filePath(in.path)
 		return in.cache.Workflows[f].Checksum, err
 	}
 	cases := trial.Cases{
@@ -66,6 +65,10 @@ func TestRefresh(t *testing.T) {
 			Input:    &Cache{path: "../internal/test/workflow", isDir: true},
 			Expected: 2, // load folder with 2 files
 		},
+		/*"sub-folder": {
+			Input:    &Cache{path: "../internal/test/parent", isDir: true},
+			Expected: 2, // load folder with 1 files and sub-folder with 1 file
+		},*/
 		"error case": {
 			Input:     &Cache{path: "nop://err", isDir: true},
 			ShouldErr: true,
