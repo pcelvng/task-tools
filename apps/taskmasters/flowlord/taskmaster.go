@@ -182,11 +182,10 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			t.Meta = meta.Encode()
 			tm.producer.Send(tm.failedTopic, t.JSONBytes())
 			if tm.slack != nil {
-				tm.slack.Notify(fmt.Sprintf("failed task on topic: %s workflow %s, msg: %s",
-					tm.failedTopic, meta.Get("workflow"), t.Msg), slack.Critical)
+				b, _ := json.MarshalIndent(t, "", "  ")
+				tm.slack.Notify(string(b), slack.Critical)
 			}
 		}
-
 		return nil
 	}
 

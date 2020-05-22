@@ -81,8 +81,8 @@ func (r *reader) Read(p []byte) (n int, err error) {
 	if line == "err" {
 		return 0, errors.New("err")
 	}
-	ln := int(math.Min(float64(len(r.lines[r.index])), float64(len(p))))
-	p = []byte(r.lines[r.index][:ln])
+	ln := int(math.Min(float64(len(line)), float64(len(p))))
+	p = []byte(line[:ln])
 	return ln, nil
 }
 

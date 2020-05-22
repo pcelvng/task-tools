@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"strconv"
-	"strings"
 
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
@@ -52,17 +54,19 @@ type worker struct {
 }
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
-	scanner := file.NewScanner(w.reader)
+	reader := csv.NewReader(w.reader)
+
 	// read header
-	scanner.Scan()
-	headers := strings.Split(scanner.Text(), w.Sep)
-	for rIdx := 0; scanner.Scan(); rIdx++ {
+
+	headers, err := reader.Read()
+	fmt.Println(headers)
+	if err != nil {
+		return task.Failed(err)
+	}
+	var row []string
+	for row, err = reader.Read(); err == nil; row, err = reader.Read() {
 		if task.IsDone(ctx) {
 			return task.Failf("context canceled")
-		}
-		row := strings.Split(scanner.Text(), w.Sep)
-		if len(row) != len(headers) {
-			return task.Failf("inconsistent length on line %d, header:%d != row:%d", rIdx, len(headers), len(row))
 		}
 		data := map[string]interface{}{}
 		for i, v := range row {
@@ -94,9 +98,9 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			return task.Failed(err)
 		}
 	}
-	if scanner.Err() != nil {
+	if err != io.EOF {
 		w.writer.Abort()
-		return task.Failf("scanner %s", scanner.Err())
+		return task.Failf("scanner %s", err)
 	}
 	if err := w.writer.Close(); err != nil {
 		return task.Failed(err)
