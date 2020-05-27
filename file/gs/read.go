@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jbsmith7741/go-tools/appenderr"
 	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
@@ -135,6 +136,7 @@ func (r *Reader) Close() (err error) {
 // pth is assumed to be a directory and so a trailing "/" is appended
 // if one does not already exist.
 func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
+
 	// get gs client
 	gsClient, err := newGSClient(accessKey, secretKey)
 	if err != nil {
@@ -158,13 +160,17 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 	// ListObjectsV2 is not implemented for GS S3 API as of 7/8/2019
 	// https://stackoverflow.com/questions/45638871/is-the-listobjectsv2-api-call-implemented-in-google-cloud-storage
 	objInfoCh := gsClient.ListObjects(bucket, objPth, false, doneCh)
+	errs := appenderr.New()
 	for objInfo := range objInfoCh {
+
 		// don't include dir and err objects
-		if strings.HasSuffix(objInfo.Key, "/") || objInfo.Err != nil {
+		if objInfo.Err != nil {
+			errs.Add(objInfo.Err)
 			continue
 		}
 
 		sts := stat.New()
+		sts.IsDir = strings.HasSuffix(objInfo.Key, "/")
 		sts.SetCreated(objInfo.LastModified)
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
 		sts.SetPath(fmt.Sprintf("gs://%s/%s", bucket, objInfo.Key))
@@ -173,5 +179,5 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 		allSts = append(allSts, sts)
 	}
 
-	return allSts, nil
+	return allSts, errs.ErrOrNil()
 }

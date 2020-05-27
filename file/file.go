@@ -282,6 +282,9 @@ func Glob(pth string, opt *Options) ([]stat.Stats, error) {
 	// filter out files that don't match the glob pattern
 	glbSts := make([]stat.Stats, 0)
 	for _, sts := range allSts {
+		if sts.IsDir {
+			continue
+		}
 		_, fName := path.Split(sts.Path)
 		isMatch, err := filepath.Match(pattern, fName)
 		if err != nil {

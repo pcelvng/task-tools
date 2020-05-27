@@ -185,6 +185,10 @@ func (c *Cache) Refresh() (files []string, err error) {
 	return files, errs.ErrOrNil()
 }
 
+func (c *Cache) listPath(p string, opts *file.Options) ([]string, error) {
+	return nil, nil
+}
+
 // loadFile checks a files checksum and updates map if required
 // loaded file name is returned
 func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) {

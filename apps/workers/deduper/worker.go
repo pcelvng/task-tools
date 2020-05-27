@@ -98,6 +98,9 @@ func newWorker(info string) task.Worker {
 	stsFiles := make(StatsFiles, len(fSts))
 
 	for i, sts := range fSts {
+		if sts.IsDir {
+			continue
+		}
 		stsFiles[i].Stats = sts
 		stsFiles[i].pthTime = tmpl.PathTime(sts.Path)
 	}

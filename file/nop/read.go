@@ -169,6 +169,7 @@ func (r *Reader) Close() (err error) {
 // instance of error.
 func ListFiles(pth string) ([]stat.Stats, error) {
 	sts := stat.New()
+	sts.IsDir = strings.HasSuffix(pth, "/")
 
 	// determine to return err
 	errMode, _ := url.Parse(pth)
