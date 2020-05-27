@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	minio "github.com/minio/minio-go"
+	"github.com/pcelvng/task-tools/file/stat"
 )
 
 func ExampleNewReader() {
@@ -329,30 +330,34 @@ func TestListFiles(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(allSts) == 2 {
-		f1Txt := strings.Contains(allSts[0].Path, "f1.txt")
-		if !f1Txt {
-			f1Txt = strings.Contains(allSts[1].Path, "f1.txt")
+	if len(allSts) != 3 {
+		t.Fatalf("expected 3 files but got %v instead\n", len(allSts))
+	}
+	m := make(map[string]stat.Stats)
+	for _, f := range allSts {
+		m[strings.Replace(f.Path, dirPth, "", -1)] = f
+		if !f.IsDir {
+			if f.Created == "" {
+				t.Errorf("%s should have created date", f.Path)
+			}
+			if f.Size == 0 {
+				t.Errorf("%s should have size", f.Path)
+			}
+			if f.Checksum == "" {
+				t.Errorf("%s should have checksum", f.Path)
+			}
 		}
-
-		if strings.Contains(allSts[0].Checksum, `"`) {
-			t.Errorf("checksum '%v' contains quotes", allSts[0].Checksum)
+	}
+	f, ok := m["dir/"]
+	if !ok {
+		s := []string{}
+		for key := range m {
+			s = append(s, key)
 		}
-
-		f2Txt := strings.Contains(allSts[0].Path, "f2.txt")
-		if !f2Txt {
-			f2Txt = strings.Contains(allSts[1].Path, "f2.txt")
-		}
-
-		if !f1Txt {
-			t.Error("f1.txt not returned")
-		}
-
-		if !f2Txt {
-			t.Error("f2.txt not returned")
-		}
-	} else {
-		t.Errorf("expected 2 files but got %v instead\n", len(allSts))
+		t.Errorf("missing dir/ path, found %v", s)
+	}
+	if !f.IsDir {
+		t.Errorf("should be dir")
 	}
 
 	// test that missing trailing "/" has same results
@@ -362,26 +367,34 @@ func TestListFiles(t *testing.T) {
 		t.Errorf("expected nil but got err '%v'\n", err.Error())
 	}
 
-	if len(allSts) == 2 {
-		f1Txt := strings.Contains(allSts[0].Path, "f1.txt")
-		if !f1Txt {
-			f1Txt = strings.Contains(allSts[1].Path, "f1.txt")
+	if len(allSts) != 3 {
+		t.Fatalf("expected 3 files but got %v instead\n", len(allSts))
+	}
+	m = make(map[string]stat.Stats)
+	for _, f := range allSts {
+		m[strings.Replace(f.Path, dirPth, "", -1)] = f
+		if !f.IsDir {
+			if f.Created == "" {
+				t.Errorf("%s should have created date", f.Path)
+			}
+			if f.Size == 0 {
+				t.Errorf("%s should have size", f.Path)
+			}
+			if f.Checksum == "" {
+				t.Errorf("%s should have checksum", f.Path)
+			}
 		}
-
-		f2Txt := strings.Contains(allSts[0].Path, "f2.txt")
-		if !f2Txt {
-			f2Txt = strings.Contains(allSts[1].Path, "f2.txt")
+	}
+	f, ok = m["/dir/"]
+	if !ok {
+		s := []string{}
+		for key := range m {
+			s = append(s, key)
 		}
-
-		if !f1Txt {
-			t.Error("f1.txt not returned")
-		}
-
-		if !f2Txt {
-			t.Error("f2.txt not returned")
-		}
-	} else {
-		t.Errorf("expected 2 files but got %v instead\n", len(allSts))
+		t.Errorf("missing /dir/ path, found %v", s)
+	}
+	if !f.IsDir {
+		t.Errorf("should be dir")
 	}
 
 	// test bad s3 client

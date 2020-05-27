@@ -1,0 +1,26 @@
+[[Phase]]
+task = "task1"
+rule = "cron=0 * * * *&offset=-4h&job=t2"
+retry = 3
+template = "?date={yyyy}-{mm}-{dd}T{hh}"
+
+[[Phase]]
+task = "task2"
+dependsOn = "task1"
+rule = ""
+retry = 3
+template = "{meta:file}?time={yyyy}-{mm}-{dd}"
+
+[[Phase]]
+task = "task3"
+dependsOn = "task2"
+rule = ""
+retry = 0
+template = "{meta:file}"
+
+[[Phase]]
+task = "task4"
+DependsOn = "task2"
+rule = ""
+retry = 0
+template = "{meta:file}"

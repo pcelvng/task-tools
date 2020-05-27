@@ -3,8 +3,10 @@ package local
 import (
 	"fmt"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
+
+	"github.com/pcelvng/task-tools/file/stat"
 )
 
 func createFile(pth string) {
@@ -386,37 +388,31 @@ func TestListFiles(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(allSts) == 2 {
-		sts1 := allSts[0]
-		sts2 := allSts[1]
-
-		// make sure stats are set
-		if sts1.Created == "" {
-			t.Error("file sts.Created not set")
+	if len(allSts) != 3 {
+		t.Fatalf("expected 3 files but got %v instead\n", len(allSts))
+	}
+	m := make(map[string]stat.Stats)
+	for _, f := range allSts {
+		_, p := filepath.Split(f.Path)
+		m[p] = f
+		if !f.IsDir {
+			if f.Created == "" {
+				t.Errorf("%s should have created date", f.Path)
+			}
+			if f.Size == 0 {
+				t.Errorf("%s should have size", f.Path)
+			}
+			if f.Checksum == "" {
+				t.Errorf("%s should have checksum", f.Path)
+			}
 		}
-		if sts1.Size == 0 {
-			t.Error("file sts.Size not set")
-		}
-
-		f1Txt := strings.Contains(sts1.Path, "f1.txt")
-		if !f1Txt {
-			f1Txt = strings.Contains(sts2.Path, "f1.txt")
-		}
-
-		f2Txt := strings.Contains(sts1.Path, "f2.txt")
-		if !f2Txt {
-			f2Txt = strings.Contains(sts2.Path, "f2.txt")
-		}
-
-		if !f1Txt {
-			t.Error("f1.txt not returned")
-		}
-
-		if !f2Txt {
-			t.Error("f2.txt not returned")
-		}
-	} else {
-		t.Errorf("expected 2 files but got %v instead\n", len(allSts))
+	}
+	f, ok := m["dir"]
+	if !ok {
+		t.Errorf("expected dir")
+	}
+	if !f.IsDir {
+		t.Errorf("should be dir")
 	}
 
 	// cleanup
