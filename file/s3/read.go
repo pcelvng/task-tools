@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jbsmith7741/go-tools/appenderr"
 	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
@@ -154,13 +155,16 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 
 	allSts := make([]stat.Stats, 0)
 	objInfoCh := s3Client.ListObjectsV2(bucket, objPth, false, doneCh)
+	errs := appenderr.New()
 	for objInfo := range objInfoCh {
-		// don't include dir and err objects
-		if strings.HasSuffix(objInfo.Key, "/") || objInfo.Err != nil {
+		// don't include err objects
+		if objInfo.Err != nil {
+			errs.Add(objInfo.Err)
 			continue
 		}
 
 		sts := stat.New()
+		sts.IsDir = strings.HasSuffix(objInfo.Key, "/")
 		sts.SetCreated(objInfo.LastModified)
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
 		sts.SetPath(fmt.Sprintf("s3://%s/%s", bucket, objInfo.Key))
@@ -169,5 +173,5 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 		allSts = append(allSts, sts)
 	}
 
-	return allSts, nil
+	return allSts, errs.ErrOrNil()
 }

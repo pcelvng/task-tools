@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/pcelvng/task-tools/file/buf"
@@ -80,4 +82,39 @@ func Stat(pth string) (stat.Stats, error) {
 		IsDir:    i.IsDir(),
 		Created:  i.ModTime().String(),
 	}, err
+}
+
+// ListFiles will list all files in the provided pth directory.
+// pth must be a directory.
+//
+// Will not list recursively
+// Checksums are not returned.
+func ListFiles(pth string) ([]stat.Stats, error) {
+	// remove local:// prefix if exists
+	pth = rmLocalPrefix(pth)
+
+	pth, _ = filepath.Abs(pth)
+	filesInfo, err := ioutil.ReadDir(pth)
+	if err != nil {
+		return nil, err
+	}
+
+	allSts := make([]stat.Stats, 0)
+	for _, fInfo := range filesInfo {
+		sts := stat.New()
+		sts.SetCreated(fInfo.ModTime())
+		sts.SetPath(path.Join(pth, fInfo.Name())) // full abs path
+		sts.SetSize(fInfo.Size())
+		sts.IsDir = fInfo.IsDir()
+
+		// md5 the file
+		if !sts.IsDir {
+			if b, err := ioutil.ReadFile(sts.Path); err == nil {
+				sts.Checksum = fmt.Sprintf("%x", md5.Sum(b))
+			}
+		}
+		allSts = append(allSts, sts)
+	}
+
+	return allSts, nil
 }

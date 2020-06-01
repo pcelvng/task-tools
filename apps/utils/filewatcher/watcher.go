@@ -147,6 +147,9 @@ func (w watcher) currentFiles(paths ...string) fileList {
 		}
 		// iterate over the list to setup the new complete fileList
 		for i, _ := range list {
+			if list[i].IsDir {
+				continue
+			}
 			fileList[list[i].Path] = &list[i]
 		}
 	}
