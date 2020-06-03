@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/BurntSushi/toml"
@@ -137,7 +138,7 @@ func (c *Cache) Children(t task.Task) []Phase {
 	return result
 }
 
-// Refresh checks the cache and reloads any files in the checksum has changed.
+// Refresh checks the cache and reloads any files if the checksum has changed.
 func (c *Cache) Refresh() (files []string, err error) {
 	if !c.isDir {
 		f, err := c.loadFile(c.path, &c.fOpts)
@@ -148,15 +149,14 @@ func (c *Cache) Refresh() (files []string, err error) {
 	}
 
 	//list and read all files
-	sts, err := file.List(c.path, &c.fOpts)
+	sts, err := listAllFiles(c.path, &c.fOpts)
 	if err != nil {
 		return files, err
 	}
 
-	files = make([]string, 0)
 	errs := appenderr.New()
 	for _, s := range sts {
-		f, err := c.loadFile(s.Path, &c.fOpts)
+		f, err := c.loadFile(s, &c.fOpts)
 		if err != nil {
 			errs.Add(err)
 		}
@@ -165,8 +165,44 @@ func (c *Cache) Refresh() (files []string, err error) {
 		}
 	}
 
-	err = errs.ErrOrNil()
-	return files, err
+	// remove deleted workflows
+	for key := range c.Workflows {
+		found := false
+		for _, v := range files {
+			f := c.filePath(v)
+			if f == key {
+				found = true
+				break
+			}
+		}
+		if !found {
+			delete(c.Workflows, key)
+			files = append(files, "-"+key)
+		}
+	}
+
+	return files, errs.ErrOrNil()
+}
+
+// listAllFiles recursively lists all files in a folder and sub-folders
+func listAllFiles(p string, opts *file.Options) ([]string, error) {
+	files := make([]string, 0)
+	sts, err := file.List(p, opts)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range sts {
+		if f.IsDir {
+			s, err := listAllFiles(f.Path, opts)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, s...)
+			continue
+		}
+		files = append(files, f.Path)
+	}
+	return files, nil
 }
 
 // loadFile checks a files checksum and updates map if required
@@ -175,7 +211,7 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	_, f = filepath.Split(path)
+	f = c.filePath(path)
 	sts, err := file.Stat(path, opts)
 	data := c.Workflows[f]
 	// permission issues
@@ -208,6 +244,16 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 	c.Workflows[f] = data
 
 	return f, nil
+}
+
+// filePath returns a filePath consist of all unique part
+// after the path set in the cache
+func (c *Cache) filePath(p string) string {
+	s := strings.TrimLeft(strings.Replace(p, c.path, "", 1), "/")
+	if s == "" {
+		_, s = filepath.Split(p)
+	}
+	return s
 }
 
 // Close the cache

@@ -12,6 +12,7 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 	"github.com/pcelvng/task/bus"
@@ -29,7 +30,8 @@ type taskMaster struct {
 	doneTopic   string
 	failedTopic string
 	*workflow.Cache
-	cron *cron.Cron
+	cron  *cron.Cron
+	slack *slack.Slack
 }
 
 type stats struct {
@@ -58,6 +60,7 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 		consumer:    consumer,
 		cron:        cron.New(cron.WithSeconds()),
 		dur:         opts.Refresh,
+		slack:       opts.Slack,
 	}
 }
 
@@ -178,8 +181,11 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			meta.Set("retry", "failed")
 			t.Meta = meta.Encode()
 			tm.producer.Send(tm.failedTopic, t.JSONBytes())
+			if tm.slack != nil {
+				b, _ := json.MarshalIndent(t, "", "  ")
+				tm.slack.Notify(string(b), slack.Critical)
+			}
 		}
-
 		return nil
 	}
 

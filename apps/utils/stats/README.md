@@ -1,6 +1,6 @@
 # Stats
 
-The stats utility consumes all all tasks on the task 
+The stats utility consumes all tasks on the task 
 (that transmit task objects). The stats utility can then be queried via 
 simple REST calls for general information about the active task ecosystem, In additional this information is available on a Prometheus endpoint.
 

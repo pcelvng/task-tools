@@ -107,6 +107,9 @@ func newWorker(info string) task.Worker {
 	// reader(s)
 	stsRdrs := make([]*statsReader, 0)
 	for _, sts := range fSts {
+		if sts.IsDir {
+			continue
+		}
 		sr := &statsReader{sts: &sts}
 		sr.r, err = file.NewReader(sts.Path, wfOpt)
 		if err != nil {

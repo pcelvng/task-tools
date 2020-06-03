@@ -7,6 +7,7 @@ import (
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/slack"
 )
 
 const (
@@ -29,6 +30,7 @@ type options struct {
 	Refresh     time.Duration `toml:"refresh" comment:"the workflow changes refresh duration value default is 15 min"`
 	DoneTopic   string        `toml:"done_topic" comment:"default is done"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
+	Slack       *slack.Slack`toml:"slack"`
 	File        *file.Options `toml:"file"`
 }
 

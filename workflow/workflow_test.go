@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/hydronica/trial"
@@ -20,7 +19,7 @@ func TestLoadFile(t *testing.T) {
 			in.cache = &Cache{Workflows: make(map[string]Workflow)}
 		}
 		_, err := in.cache.loadFile(in.path, nil)
-		_, f := filepath.Split(in.path)
+		f := in.cache.filePath(in.path)
 		return in.cache.Workflows[f].Checksum, err
 	}
 	cases := trial.Cases{
@@ -51,7 +50,9 @@ func TestLoadFile(t *testing.T) {
 func TestRefresh(t *testing.T) {
 	fn := func(input trial.Input) (interface{}, error) {
 		c := input.Interface().(*Cache)
-		c.Workflows = make(map[string]Workflow)
+		if c.Workflows == nil {
+			c.Workflows = make(map[string]Workflow)
+		}
 		_, err := c.Refresh()
 		return len(c.Workflows), err
 	}
@@ -64,9 +65,25 @@ func TestRefresh(t *testing.T) {
 			Input:    &Cache{path: "../internal/test/workflow", isDir: true},
 			Expected: 2, // load folder with 2 files
 		},
+		"sub-folder": {
+			Input:    &Cache{path: "../internal/test/parent", isDir: true},
+			Expected: 2, // load folder with 1 files and sub-folder with 1 file
+		},
 		"error case": {
 			Input:     &Cache{path: "nop://err", isDir: true},
 			ShouldErr: true,
+		},
+		"file removed": {
+			Input: &Cache{
+				path:  "../internal/test/workflow",
+				isDir: true,
+				Workflows: map[string]Workflow{
+					"missing.toml": {},
+					"f1.toml":      {},
+					"f2.toml":      {},
+				},
+			},
+			Expected: 2,
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
@@ -210,6 +227,35 @@ func TestChildren(t *testing.T) {
 		"task4": {
 			Input:    task.Task{Type: "task4", Meta: "workflow=workflow.toml"},
 			Expected: []Phase{},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestCache_FilePath(t *testing.T) {
+
+	type input struct {
+		cachePath string
+		file      string
+	}
+
+	fn := func(v trial.Input) (interface{}, error) {
+
+		c := &Cache{path: v.Slice(0).String()}
+		return c.filePath(v.Slice(1).String()), nil
+	}
+	cases := trial.Cases{
+		"single file": {
+			Input:    []string{"./path", "./path/file.toml"},
+			Expected: "file.toml",
+		},
+		"same name": {
+			Input:    []string{"./path/file.toml", "./path/file.toml"},
+			Expected: "file.toml",
+		},
+		"sub directory": {
+			Input:    []string{"./path", "./path/sub/file.toml"},
+			Expected: "sub/file.toml",
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
