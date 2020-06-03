@@ -34,6 +34,7 @@ curl localhost:8080?topic=task1&topic=task2`
 
 type app struct {
 	Port        int           `toml:"http_port"`
+	MetricsPort int           `toml:"metrics_port"`
 	Bus         bus.Options   `toml:"bus"`
 	PollPeriod  time.Duration `toml:"poll_period" commented:"true"`
 	consumers   []bus.Consumer
@@ -76,7 +77,7 @@ func New() *app {
 func (a *app) Start() {
 	log.Printf("starting server on port %d", a.Port)
 	http.HandleFunc("/", a.handler)
-	go http.ListenAndServe(":8081", metricsHandler())
+	go http.ListenAndServe(":"+strconv.Itoa(a.MetricsPort), metricsHandler())
 	go http.ListenAndServe(":"+strconv.Itoa(a.Port), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	go a.run(ctx)
