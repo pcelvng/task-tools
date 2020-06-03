@@ -189,3 +189,22 @@ Failed: 1.00% 	7  min: 50ms max 100ms avg:550ms`}
 	}
 	trial.New(fn, cases).SubTest(t)
 }
+
+func TestGetJobID(t *testing.T) {
+	task := task.Task{
+		Type:    "task.testtasktype",
+		Info:    "?date=2020-05-31",
+		Created: "2020-06-01T07:04:06Z",
+		ID:      "f52456b4-9686-41f7-89f9-89cc251afc72",
+		Meta:    "job=test_job_id&retry=failed&workflow=test_workflow.toml",
+		Result:  "error",
+		Msg:     "Error 400: Invalid schema update.",
+		Started: "2020-06-01T07:04:06Z",
+		Ended:   "2020-06-01T07:05:36Z",
+	}
+
+	jobid := getJobID(&task)
+	if jobid != "test_job_id" {
+		t.Error("Incorrect job id")
+	}
+}

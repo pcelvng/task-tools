@@ -14,3 +14,6 @@ simple REST calls for general information about the active task ecosystem, In ad
 - Tasks that were created but don't have a corresponding 'done' record
 
 ## Prometheus
+- Number of successful tasks (broken down by task type and job id)
+- Number of failed tasks (broken down by task type and job id)
+- Runtime of tasks (broken down by task type and job id)

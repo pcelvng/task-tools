@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -47,13 +48,20 @@ func (s *stat) DoneTask(t task.Task) {
 		return
 	}
 	delete(s.inProgress, key(t))
+
+	jobid := getJobID(&t)
+
 	start, _ := time.Parse(time.RFC3339, t.Started)
 	end, _ := time.Parse(time.RFC3339, t.Ended)
 	d := end.Sub(start)
+	jobRuntimeMetric.WithLabelValues(t.Type, jobid).Observe(d.Seconds())
+
 	if t.Result == task.ErrResult {
 		s.error.Add(d)
+		jobFailureMetric.WithLabelValues(t.Type, jobid).Inc()
 	} else if t.Result == task.CompleteResult {
 		s.success.Add(d)
+		jobSuccessMetric.WithLabelValues(t.Type, jobid).Inc()
 	}
 }
 
@@ -108,4 +116,17 @@ func (s durStats) String() string {
 		return ""
 	}
 	return fmt.Sprintf("\t%d  min: %v max %v avg:%v", s.count, s.Min, s.Max, s.Average())
+}
+
+func getJobID(t *task.Task) string {
+
+	m, err := url.ParseQuery(t.Meta)
+	if err != nil {
+		return ""
+	}
+	res, ok := m["job"]
+	if ok {
+		return res[0]
+	}
+	return ""
 }

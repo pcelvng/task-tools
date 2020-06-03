@@ -46,6 +46,8 @@ type app struct {
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ltime)
 
+	registerMetrics()
+
 	app := New()
 	bootstrap.NewUtility("stats", app).
 		Description(desc).
@@ -74,6 +76,7 @@ func New() *app {
 func (a *app) Start() {
 	log.Printf("starting server on port %d", a.Port)
 	http.HandleFunc("/", a.handler)
+	go http.ListenAndServe(":8081", metricsHandler())
 	go http.ListenAndServe(":"+strconv.Itoa(a.Port), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	go a.run(ctx)
