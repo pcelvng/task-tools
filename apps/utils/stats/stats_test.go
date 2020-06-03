@@ -1,24 +1,19 @@
 package main
 
 import (
-	"errors"
 	"io/ioutil"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-
-	"github.com/jbsmith7741/trial"
-	"github.com/nsqio/go-nsq"
+	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 )
 
 func TestStat_DoneTask(t *testing.T) {
 	type input struct {
-		Stat  *stat
+		cache []task.Task
 		Tasks []task.Task
 	}
 	type output struct {
@@ -26,22 +21,27 @@ func TestStat_DoneTask(t *testing.T) {
 		failed     int64
 		success    int64
 	}
-	fn := func(args ...interface{}) (interface{}, error) {
-		in := args[0].(input)
+	fn := func(i trial.Input) (interface{}, error) {
+		in := i.Interface().(input)
+		st := testStat(in.cache...)
 		for _, t := range in.Tasks {
-			(in.Stat).DoneTask(t)
+			st.DoneTask(t)
 		}
 		return output{
-			inProgress: len(in.Stat.inProgress),
-			failed:     in.Stat.error.count,
-			success:    in.Stat.success.count,
+			inProgress: len(st.inProgress),
+			failed:     st.error.count,
+			success:    st.success.count,
 		}, nil
 	}
 	cases := trial.Cases{
 		"remove inprogress task": {
 			Input: input{
-				Stat:  testStat(task.Task{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z"}),
-				Tasks: []task.Task{{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z", Result: task.CompleteResult}},
+				cache: []task.Task{
+					{Type: "a", Info: "?info", Started: "2018-01-01T00:00:00Z"},
+				},
+				Tasks: []task.Task{
+					{Type: "a", Info: "?info", Started: "2018-01-01T00:00:00Z", Ended: "2018-01-01T00:10:00z", Result: task.CompleteResult},
+				},
 			},
 			Expected: output{
 				success: 1,
@@ -49,7 +49,7 @@ func TestStat_DoneTask(t *testing.T) {
 		},
 		"ignore if not found": {
 			Input: input{
-				Stat:  testStat(task.Task{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z"}),
+				cache: []task.Task{{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z"}},
 				Tasks: []task.Task{{Type: "b", Info: "?info", Created: "2018-01-01T00:00:00Z"}},
 			},
 			Expected: output{
@@ -58,20 +58,20 @@ func TestStat_DoneTask(t *testing.T) {
 		},
 		"ignore if no result": {
 			Input: input{
-				Stat:  testStat(task.Task{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z"}),
+				cache: []task.Task{{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z"}},
 				Tasks: []task.Task{{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z"}},
 			},
 			Expected: output{},
 		},
 		"some succeed some fail": {
 			Input: input{
-				Stat: testStat(
+				cache: []task.Task{
 					task.Task{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z"},
 					task.Task{Type: "a", Info: "?info=2", Created: "2018-01-01T00:00:00Z"},
 					task.Task{Type: "a", Info: "?info=3", Created: "2018-01-01T00:00:00Z"},
 					task.Task{Type: "a", Info: "?info=4", Created: "2018-01-01T00:00:00Z"},
 					task.Task{Type: "a", Info: "?info=5", Created: "2018-01-01T00:00:00Z"},
-				),
+				},
 				Tasks: []task.Task{
 					{Type: "a", Info: "?info", Created: "2018-01-01T00:00:00Z", Result: task.CompleteResult},
 					{Type: "a", Info: "?info=5", Created: "2018-01-01T00:00:00Z", Result: task.ErrResult},
@@ -85,61 +85,19 @@ func TestStat_DoneTask(t *testing.T) {
 			},
 		},
 	}
-	trial.New(fn, cases).Test(t)
+	trial.New(fn, cases).SubTest(t)
 }
 
 func testStat(tasks ...task.Task) *stat {
-	s := newStat(nil)
+	s := &stat{
+		inProgress: make(map[string]task.Task),
+		success:    &durStats{},
+		error:      &durStats{},
+	}
 	for _, t := range tasks {
 		s.inProgress[key(t)] = t
 	}
 	return s
-}
-
-func TestStat_HandleMessage(t *testing.T) {
-	equal := func(a, e interface{}) (bool, string) {
-		opts := cmpopts.IgnoreUnexported(task.Task{})
-		r := cmp.Diff(a, e, opts)
-		return r == "", r
-	}
-	dummyID := nsq.MessageID{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'}
-	fn := func(args ...interface{}) (interface{}, error) {
-		b := args[0].(string)
-		msg := nsq.NewMessage(dummyID, []byte(b))
-		c := trial.CaptureLog()
-
-		st := newStat(nil)
-		st.HandleMessage(msg)
-		if s := c.ReadAll(); s != "" {
-			return nil, errors.New(s)
-		}
-		return st.inProgress, nil
-	}
-	cases := trial.Cases{
-		"Bad Json": {
-			Input:       "asde",
-			ExpectedErr: errors.New("invalid task invalid character"),
-		},
-		"invalid end time": {
-			Input:       `{"ended":"invalid"}`,
-			ExpectedErr: errors.New("invalid task parsing time"),
-		},
-		"valid task": {
-			Input: `{"type":"task","info":"","created":"2018-11-10T00:00:00Z","result":"complete","started":"2018-11-10T00:00:00Z","ended":"2018-11-10T00:00:00Z"}`,
-			Expected: map[string]task.Task{"task::2018-11-10T00:00:00Z": {
-				Type:    "task",
-				Result:  "complete",
-				Created: "2018-11-10T00:00:00Z",
-				Started: "2018-11-10T00:00:00Z",
-				Ended:   "2018-11-10T00:00:00Z",
-			}},
-		},
-		"Ignore non-tasks": {
-			Input:    "{}",
-			Expected: map[string]task.Task{},
-		},
-	}
-	trial.New(fn, cases).EqualFn(equal).Test(t)
 }
 
 func TestApp_HandleMessage(t *testing.T) {
@@ -194,8 +152,8 @@ Success: 0.75% 	3  min: 5ms max 10s avg:830ms
 Failed: 0.25% 	1  min: 1µs max 3s avg:50ms`, `task3
 Success: 0.00% 
 Failed: 1.00% 	7  min: 50ms max 100ms avg:550ms`}
-	fn := func(args ...interface{}) (interface{}, error) {
-		req := httptest.NewRequest("GET", args[0].(string), nil)
+	fn := func(in trial.Input) (interface{}, error) {
+		req := httptest.NewRequest("GET", in.String(), nil)
 		w := httptest.NewRecorder()
 		a.handler(w, req)
 		b, err := ioutil.ReadAll(w.Body)
@@ -229,5 +187,24 @@ Failed: 1.00% 	7  min: 50ms max 100ms avg:550ms`}
 			Expected: "",
 		},
 	}
-	trial.New(fn, cases).Test(t)
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestGetJobID(t *testing.T) {
+	task := task.Task{
+		Type:    "task.testtasktype",
+		Info:    "?date=2020-05-31",
+		Created: "2020-06-01T07:04:06Z",
+		ID:      "f52456b4-9686-41f7-89f9-89cc251afc72",
+		Meta:    "job=test_job_id&retry=failed&workflow=test_workflow.toml",
+		Result:  "error",
+		Msg:     "Error 400: Invalid schema update.",
+		Started: "2020-06-01T07:04:06Z",
+		Ended:   "2020-06-01T07:05:36Z",
+	}
+
+	jobid := getJobID(&task)
+	if jobid != "test_job_id" {
+		t.Error("Incorrect job id")
+	}
 }

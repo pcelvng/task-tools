@@ -10,7 +10,6 @@ require (
 	github.com/dustinevan/chron v1.0.0 // indirect
 	github.com/go-ini/ini v1.56.0 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/golang/protobuf v1.3.5 // indirect
 	github.com/google/go-cmp v0.4.0
 	github.com/hydronica/toml v0.4.1
 	github.com/hydronica/trial v0.4.0
@@ -26,6 +25,7 @@ require (
 	github.com/pcelvng/task v0.5.1
 	github.com/pelletier/go-toml v1.6.0
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.6.0
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.4.0

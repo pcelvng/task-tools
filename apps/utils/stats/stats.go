@@ -2,24 +2,25 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"net/url"
 	"sync"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/pcelvng/task"
 )
 
 func key(t task.Task) string {
+	if t.ID != "" {
+		return t.ID
+	}
 	return t.Type + ":" + t.Info + ":" + t.Created
 }
 
-func newStat(c *nsq.Consumer) *stat {
+func newStat() *stat {
 	return &stat{
 		inProgress: make(map[string]task.Task),
 		success:    &durStats{},
 		error:      &durStats{},
-		consumer:   c,
 	}
 }
 
@@ -28,7 +29,7 @@ type stat struct {
 	inProgress map[string]task.Task
 	success    *durStats
 	error      *durStats
-	consumer   *nsq.Consumer
+	//	consumer   bus.Consumer
 }
 
 // NewTask adds a new inProgress task to the queue
@@ -36,19 +37,6 @@ func (s *stat) NewTask(t task.Task) {
 	s.mu.Lock()
 	s.inProgress[key(t)] = t
 	s.mu.Unlock()
-}
-
-func (s *stat) HandleMessage(msg *nsq.Message) error {
-	t, err := task.NewFromBytes(msg.Body)
-	if err != nil {
-		log.Println("invalid task", err)
-		return nil
-	}
-	if task.IsZero(*t) {
-		return nil
-	}
-	s.NewTask(*t)
-	return nil
 }
 
 // DoneTask adds a completed task to the queue, removes the matching inProgress task
@@ -60,13 +48,20 @@ func (s *stat) DoneTask(t task.Task) {
 		return
 	}
 	delete(s.inProgress, key(t))
+
+	jobid := getJobID(&t)
+
 	start, _ := time.Parse(time.RFC3339, t.Started)
 	end, _ := time.Parse(time.RFC3339, t.Ended)
 	d := end.Sub(start)
+	jobRuntimeMetric.WithLabelValues(t.Type, jobid).Observe(d.Seconds())
+
 	if t.Result == task.ErrResult {
 		s.error.Add(d)
+		jobFailureMetric.WithLabelValues(t.Type, jobid).Inc()
 	} else if t.Result == task.CompleteResult {
 		s.success.Add(d)
+		jobSuccessMetric.WithLabelValues(t.Type, jobid).Inc()
 	}
 }
 
@@ -121,4 +116,17 @@ func (s durStats) String() string {
 		return ""
 	}
 	return fmt.Sprintf("\t%d  min: %v max %v avg:%v", s.count, s.Min, s.Max, s.Average())
+}
+
+func getJobID(t *task.Task) string {
+
+	m, err := url.ParseQuery(t.Meta)
+	if err != nil {
+		return ""
+	}
+	res, ok := m["job"]
+	if ok {
+		return res[0]
+	}
+	return ""
 }
