@@ -328,7 +328,7 @@ func (tm *TaskMaster) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	b, err := json.MarshalIndent(tm.runner.Info(), "", "  ")
 	if b != nil && err == nil {
 		// Replace the first { in the json string with the { + application name
-		b = bytes.Replace(b, []byte(`{`), []byte(`{\n  "app_name":"`+tm.appName+`",`), 1)
+		b = bytes.Replace(b, []byte(`{`), []byte("{\n  \"app_name\":\""+tm.appName+"\","), 1)
 	}
 	w.Write(b)
 }

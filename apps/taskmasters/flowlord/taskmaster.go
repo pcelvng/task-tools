@@ -35,8 +35,15 @@ type taskMaster struct {
 }
 
 type stats struct {
-	RunTime string       `json:"runtime"`
-	Entries []cron.Entry `json:"entries"`
+	RunTime  string            `json:"runtime"`
+	Workflow map[string]int    `json:"workflow"`
+	Entries  map[string]cEntry `json:"job"`
+}
+
+type cEntry struct {
+	Next     time.Time
+	Prev     time.Time
+	Schedule string
 }
 
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
@@ -65,10 +72,28 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 }
 
 func (tm *taskMaster) Info() interface{} {
-	return stats{
-		RunTime: time.Now().Sub(tm.initTime).String(),
-		Entries: tm.cron.Entries(),
+	sts := stats{
+		RunTime:  time.Now().Sub(tm.initTime).String(),
+		Entries:  make(map[string]cEntry),
+		Workflow: make(map[string]int),
 	}
+
+	for _, e := range tm.cron.Entries() {
+		j, ok := e.Job.(*job)
+		if !ok {
+			continue
+		}
+		ent := cEntry{
+			Next:     e.Next,
+			Prev:     e.Prev,
+			Schedule: j.Schedule,
+		}
+		sts.Entries[j.Name] = ent
+	}
+	for k, v := range tm.Workflows {
+		sts.Workflow[k] = len(v.Phases)
+	}
+	return sts
 }
 
 // AutoUpdate will create a go routine to auto update the cached files
@@ -149,8 +174,7 @@ func (tm *taskMaster) schedule() (err error) {
 			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
 				return errors.Wrapf(err, "invalid rule for %s:%s %s", path, w.Task, w.Rule)
 			}
-			log.Printf("cron: task:%s, rule:%s, info:%s", w.Task, j.Schedule, w.Template)
-			log.Println(rules)
+			log.Printf("cron: task:%s, rule:%s, info:%s\t %v \n", w.Task, j.Schedule, w.Template, rules)
 		}
 	}
 	tm.cron.Start()

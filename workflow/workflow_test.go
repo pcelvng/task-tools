@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/hydronica/trial"
@@ -85,8 +86,28 @@ func TestRefresh(t *testing.T) {
 			},
 			Expected: 2,
 		},
+		"keep loaded": {
+			Input: &Cache{
+				path:  testPath("../internal/test/workflow"),
+				isDir: true,
+				Workflows: map[string]Workflow{
+					"f1.toml": {
+						Checksum: "34cf5142fbd029fa778ee657592d03ce",
+					},
+					"f2.toml": {
+						Checksum: "eac7716a13d9dea0d630c5d8b1e6c6b1",
+					},
+				},
+			},
+			Expected: 2,
+		},
 	}
 	trial.New(fn, cases).SubTest(t)
+}
+
+func testPath(s string) string {
+	st, _ := filepath.Abs(s)
+	return st
 }
 
 func TestNew(t *testing.T) {

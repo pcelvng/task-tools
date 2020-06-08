@@ -166,9 +166,10 @@ func (c *Cache) Refresh() (files []string, err error) {
 	}
 
 	// remove deleted workflows
+	missing := make([]string, 0)
 	for key := range c.Workflows {
 		found := false
-		for _, v := range files {
+		for _, v := range sts {
 			f := c.filePath(v)
 			if f == key {
 				found = true
@@ -177,6 +178,7 @@ func (c *Cache) Refresh() (files []string, err error) {
 		}
 		if !found {
 			delete(c.Workflows, key)
+			missing = append(missing, key)
 			files = append(files, "-"+key)
 		}
 	}
