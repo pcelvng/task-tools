@@ -23,8 +23,9 @@ func init() {
 		Help: "The number of failed jobs",
 	}, []string{"task_type", "job_id"})
 	jobRuntimeMetric = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "job_runtime",
-		Help: "The runtime of the job in seconds",
+		Name:    "job_runtime",
+		Help:    "The runtime of the job in seconds",
+		Buckets: []float64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000},
 	}, []string{"task_type", "job_id"})
 }
 
