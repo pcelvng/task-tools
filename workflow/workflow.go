@@ -139,36 +139,36 @@ func (c *Cache) Children(t task.Task) []Phase {
 }
 
 // Refresh checks the cache and reloads any files if the checksum has changed.
-func (c *Cache) Refresh() (files []string, err error) {
+func (c *Cache) Refresh() (changedFiles []string, err error) {
 	if !c.isDir {
 		f, err := c.loadFile(c.path, &c.fOpts)
-		if len(f) > 0 { // only add to files if there is a file
-			files = append(files, f)
+		if len(f) > 0 {
+			changedFiles = append(changedFiles, f)
 		}
-		return files, err
+		return changedFiles, err
 	}
 
 	//list and read all files
-	sts, err := listAllFiles(c.path, &c.fOpts)
+	allFiles, err := listAllFiles(c.path, &c.fOpts)
 	if err != nil {
-		return files, err
+		return changedFiles, err
 	}
 
 	errs := appenderr.New()
-	for _, s := range sts {
+	for _, s := range allFiles {
 		f, err := c.loadFile(s, &c.fOpts)
 		if err != nil {
 			errs.Add(err)
 		}
 		if len(f) > 0 {
-			files = append(files, f)
+			changedFiles = append(changedFiles, f)
 		}
 	}
 
 	// remove deleted workflows
 	for key := range c.Workflows {
 		found := false
-		for _, v := range sts {
+		for _, v := range allFiles {
 			f := c.filePath(v)
 			if f == key {
 				found = true
@@ -177,11 +177,11 @@ func (c *Cache) Refresh() (files []string, err error) {
 		}
 		if !found {
 			delete(c.Workflows, key)
-			files = append(files, "-"+key)
+			changedFiles = append(changedFiles, "-"+key)
 		}
 	}
 
-	return files, errs.ErrOrNil()
+	return changedFiles, errs.ErrOrNil()
 }
 
 // listAllFiles recursively lists all files in a folder and sub-folders
