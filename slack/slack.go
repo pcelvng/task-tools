@@ -3,6 +3,7 @@ package slack
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -57,7 +58,7 @@ func (s *Slack) Notify(message string, level int) error {
 
 	// always wait 1 second before sending a message
 	// do this to keep from hitting slacks rate limits.
-	time.Sleep(time.Duration(time.Second))
+	time.Sleep(time.Second)
 
 	if s.Prefix != "" {
 		message = "[" + s.Prefix + "] " + message
@@ -107,4 +108,127 @@ func colorCode(color string) string {
 	default:
 		return ""
 	}
+}
+
+// ******************************************************************************
+// New code for the slack blocks payload, recomended to switch from attachements
+type Message struct {
+	Channel string   `json:"channel,omitempty"`
+	Text    string   `json:"text,omitempty"`
+	Blocks  []*Block `json:"blocks,omitempty"`
+}
+
+type Block struct {
+	Type       string `json:"type"`
+	*Text      `json:"text,omitempty"`
+	Elements   []*Element `json:"elements,omitempty"`
+	*Accessory `json:"accessory,omitempty"`
+}
+
+type Text struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type Element struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type Accessory struct {
+	Type    string    `json:"type"`
+	Options []*Option `json:"options,omitempty"`
+}
+
+// on an overflow Option you cannot have more than 5 items
+type Option struct {
+	*Text `json:"text,omitempty"` // type on this text must always be "plain_text"
+	Value string                  `json:"value"`
+}
+
+func (s *Slack) NewMessage(msg string) *Message {
+	m := &Message{
+		Channel: s.Channel,
+		Blocks:  make([]*Block, 0),
+	}
+
+	m.Blocks = append(m.Blocks, &Block{
+		Type: "section",
+		Text: &Text{
+			Type: "mrkdwn",
+			Text: msg,
+		},
+	})
+
+	return m
+}
+
+func (b *Block) AddOverflowOption(msg string) error {
+	if b.Accessory == nil {
+		b.Accessory = &Accessory{
+			Type:    "overflow",
+			Options: make([]*Option, 0),
+		}
+	}
+	if len(b.Accessory.Options) >= 5 {
+		return errors.New("cannot add more than 5 items to an overflow accessory")
+	}
+
+	b.Accessory.Options = append(b.Accessory.Options, &Option{
+		Text: &Text{
+			Type: "plain_text",
+			Text: msg,
+		},
+		Value: fmt.Sprintf("value-%d", len(b.Accessory.Options)-1),
+	})
+
+	return nil
+}
+
+func (m *Message) AddElements(elements ...string) {
+	l := make([]*Element, 0)
+	for _, e := range elements {
+		l = append(l, &Element{Type: "mrkdwn", Text: e})
+	}
+
+	m.Blocks = append(m.Blocks, &Block{
+		Type:     "context",
+		Elements: l,
+	})
+}
+
+func (m *Message) AddBlockMsg(msg string) {
+	m.Blocks = append(m.Blocks, &Block{
+		Type: "divider",
+	})
+
+	m.Blocks = append(m.Blocks, &Block{
+		Type: "section",
+		Text: &Text{
+			Type: "mrkdwn",
+			Text: msg,
+		},
+	})
+}
+
+func (s *Slack) SendMessage(m *Message) error {
+	// if there isn't a message just return
+	if m == nil {
+		return nil
+	}
+	// always wait 1 second before sending a message
+	// do this to keep from hitting slacks rate limits.
+	time.Sleep(time.Second)
+
+	b, _ := json.Marshal(m)
+
+	req, _ := http.NewRequest("POST", s.Url, bytes.NewBuffer(b))
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error on http do: %v", err)
+	}
+
+	return err
 }
