@@ -90,11 +90,11 @@ func ExampleNewWriterCompressed() {
 	// true
 }
 
-func ExampleNewWriterErrBuf() {
+func ExampleNewWriterErrBufGS() {
 	pth := fmt.Sprintf("gs://%v/write/test.txt", testBucket)
 	opt := NewOptions()
 	opt.UseFileBuf = true
-	opt.FileBufDir = "/bad/tmp/dir"
+	opt.FileBufDir = "/private/bad/tmp/dir"
 	opt.FileBufPrefix = "test_"
 	w, err := NewWriter(pth, testAccessKey, testSecretKey, opt)
 	if err == nil {

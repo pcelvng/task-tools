@@ -94,7 +94,7 @@ func ExampleNewBuffer_TmpFile() {
 func ExampleNewBuffer_TmpFileErr() {
 	opt := NewOptions()
 	opt.UseFileBuf = true
-	opt.FileBufDir = "/bad/path/tmp"
+	opt.FileBufDir = "/private"
 	opt.FileBufPrefix = "tmpprefix_"
 
 	bfr, err := NewBuffer(opt)

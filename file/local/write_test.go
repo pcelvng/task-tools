@@ -70,7 +70,7 @@ func ExampleNewWriterWTmpFile() {
 func ExampleNewWriterBufErr() {
 	opt := NewOptions()
 	opt.UseFileBuf = true
-	opt.FileBufDir = "/bad/tmp/dir"
+	opt.FileBufDir = "/private/bad/tmp/dir"
 	w, err := NewWriter("./test/test.txt", opt)
 	if err == nil {
 		return
@@ -87,7 +87,7 @@ func ExampleNewWriterBufErr() {
 }
 
 func ExampleNewWriterPthCheckErr() {
-	w, err := NewWriter("/bad/path/test.txt", nil)
+	w, err := NewWriter("/private/test.txt", nil)
 	if err == nil {
 		return
 	}
@@ -441,16 +441,16 @@ func ExampleWriter_copyAndCleanTmpFileToDev() {
 
 func ExampleOpenf_ErrPerms() {
 	// dir bad perms
-	_, _, err := openF("/bad/perms/dir/file.txt", false)
+	_, _, err := openF("/private/bad/perms/dir/file.txt", false)
 	fmt.Println(err)
 
 	// file bad perms
-	_, _, err = openF("/bad_perms.txt", false)
+	_, _, err = openF("/private/bad_perms.txt", false)
 	fmt.Println(err)
 
 	// Output:
-	// mkdir /bad: permission denied
-	// open /bad_perms.txt: permission denied
+	// mkdir /private/bad: permission denied
+	// open /private/bad_perms.txt: permission denied
 }
 
 func ExampleOpenf_ErrDir() {
