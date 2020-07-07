@@ -442,15 +442,19 @@ func ExampleWriter_copyAndCleanTmpFileToDev() {
 func ExampleOpenf_ErrPerms() {
 	// dir bad perms
 	_, _, err := openF("/private/bad/perms/dir/file.txt", false)
-	fmt.Println(err)
+	if strings.Contains(err.Error(), "permission denied") {
+		fmt.Println("mkdir permission denied")
+	}
 
 	// file bad perms
 	_, _, err = openF("/private/bad_perms.txt", false)
-	fmt.Println(err)
+	if strings.Contains(err.Error(), "permission denied") {
+		fmt.Println("open permission denied")
+	}
 
 	// Output:
-	// mkdir /private/bad: permission denied
-	// open /private/bad_perms.txt: permission denied
+	// mkdir permission denied
+	// open permission denied
 }
 
 func ExampleOpenf_ErrDir() {
