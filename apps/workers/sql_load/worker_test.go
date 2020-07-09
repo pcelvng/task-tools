@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,183 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 )
+
+func TestVerifyRow(t *testing.T) {
+	fn := func(in trial.Input) (interface{}, error) {
+		i := in.Interface().(*DataSet)
+		err := i.VerifyRow()
+		return i, err
+	}
+
+	// testing cases
+	cases := trial.Cases{
+		"empty_dataset_err": {
+			Input:       &DataSet{},
+			ExpectedErr: errors.New("no data found in json jRow object"),
+		},
+		"initial_missing_key": {
+			Input: &DataSet{
+				dbSchema: DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:     Jsondata{"column1": "column1datastring"},
+			},
+			Expected: &DataSet{
+				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column2": nil},
+				insertCols: []string{"column1", "column2"},
+				verified:   true,
+			},
+		},
+		"missing_db_column_ignored": {
+			Input: &DataSet{
+				dbSchema: DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:     Jsondata{"column1": "column1datastring", "column3": "column3datastring"},
+			},
+			Expected: &DataSet{
+				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column3": "column3datastring", "column2": nil},
+				insertCols: []string{"column1", "column2"},
+				verified:   true,
+			},
+		},
+		"initial_all_keys": {
+			Input: &DataSet{
+				dbSchema: DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:     Jsondata{"column1": "column1datastring", "column2": "column2datastring"},
+			},
+			Expected: &DataSet{
+				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column2": "column2datastring"},
+				insertCols: []string{"column1", "column2"},
+				verified:   true,
+			},
+		},
+		"missing_non_nullable_field": {
+			Input: &DataSet{
+				dbSchema: DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:     Jsondata{"column2": "column1datastring", "column3": "column3datastring"},
+			},
+			ExpectedErr: errors.New("missing key for non-nullable field: column1"),
+		},
+		"insert_columns_already_set": {
+			Input: &DataSet{
+				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column3", IsNullable: "YES"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column2": "column3datastring"},
+				insertCols: []string{"column1", "column3"},
+			},
+			Expected: &DataSet{
+				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column3", IsNullable: "YES"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column2": "column3datastring", "column3": nil},
+				insertCols: []string{"column1", "column3"},
+				verified:   true,
+			},
+		},
+		"all_nil_data": {
+			Input: &DataSet{
+				dbSchema: DbSchema{DbColumn{Name: "column5", IsNullable: "YES"}, DbColumn{Name: "column6", IsNullable: "YES"}},
+				jRow:     Jsondata{"column1": "column1datastring"},
+			},
+			Expected: &DataSet{
+				dbSchema:   DbSchema{DbColumn{Name: "column5", IsNullable: "YES"}, DbColumn{Name: "column6", IsNullable: "YES"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column5": nil, "column6": nil},
+				insertCols: []string{"column5", "column6"},
+				verified:   true,
+			},
+		},
+	}
+
+	trial.New(fn, cases).Test(t)
+}
+
+func TestAddRow(t *testing.T) {
+	fn := func(in trial.Input) (interface{}, error) {
+		i := in.Interface().(*DataSet)
+		err := i.AddRow()
+		return i, err
+	}
+
+	// testing cases
+	cases := trial.Cases{
+		"adding_another_row": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column1", IsNullable: "NO", DataType: "varchar"},
+					DbColumn{Name: "column3", IsNullable: "YES", DataType: "character varying"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column2": "column3datastring"},
+				insertCols: []string{"column1", "column3"},
+				insertRows: Rows{{"previous_entry", "column3value"}},
+			},
+			Expected: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column1", IsNullable: "NO", DataType: "varchar"},
+					DbColumn{Name: "column3", IsNullable: "YES", DataType: "character varying"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column2": "column3datastring", "column3": nil},
+				insertCols: []string{"column1", "column3"},
+				verified:   true,
+				insertRows: Rows{{"previous_entry", "column3value"}, {"column1datastring", nil}},
+			},
+		},
+		"new_row_nil_data": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column5", IsNullable: "YES", DataType: "doesn't matter"},
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "doesn't matter"}},
+				jRow:       Jsondata{"column1": "column1datastring"},
+				insertCols: []string{"column5", "column6"},
+			},
+			Expected: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column5", IsNullable: "YES", DataType: "doesn't matter"},
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "doesn't matter"}},
+				jRow:       Jsondata{"column1": "column1datastring", "column5": nil, "column6": nil},
+				insertCols: []string{"column5", "column6"},
+				insertRows: Rows{{nil, nil}},
+				verified:   true,
+			},
+		},
+		"cannot_string_int": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "int"},
+					DbColumn{Name: "column7", IsNullable: "YES", DataType: "bigint"}},
+				jRow:       Jsondata{"column6": "column6datastring", "column7": "column7datastring"},
+				insertCols: []string{"column6", "column7"},
+				insertRows: Rows{{nil, nil}},
+			},
+			ExpectedErr: errors.New("add_row: cannot convert string to a number for: column6 value: column6datastring type: int"),
+		},
+		"cannot_int_float": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "numeric"},
+					DbColumn{Name: "column7", IsNullable: "YES", DataType: "bigint"}},
+				jRow:       Jsondata{"column6": 12.54, "column7": 165.78},
+				insertCols: []string{"column6", "column7"},
+				insertRows: Rows{{11.5, 5487}},
+			},
+			ExpectedErr: errors.New("add_row: cannot convert number value to int64 for column7 value: 165.78 type: bigint"),
+		},
+		"float_to_int_should_work": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "numeric"},
+					DbColumn{Name: "column7", IsNullable: "YES", DataType: "bigint"}},
+				jRow:       Jsondata{"column6": 12.54, "column7": float64(16578.0)}, // unmarshal parses all numbers as float64
+				insertCols: []string{"column6", "column7"},
+				insertRows: Rows{{11.5, 5487}},
+			},
+			Expected: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "numeric"},
+					DbColumn{Name: "column7", IsNullable: "YES", DataType: "bigint"}},
+				jRow:       Jsondata{"column6": 12.54, "column7": int64(16578.0)}, // logic should convert any `int` to int64
+				insertCols: []string{"column6", "column7"},
+				insertRows: Rows{{11.5, 5487}, {12.54, int64(16578)}}, // row insert data should also be int64
+				verified:   true,
+			},
+		},
+	}
+	trial.New(fn, cases).Test(t)
+}
 
 func TestNewWorker(t *testing.T) {
 	type input struct {
@@ -22,22 +200,22 @@ func TestNewWorker(t *testing.T) {
 		Msg     string
 		Count   int
 	}
-	// create a test folder and file
-	f := "./tmp/temp1.json"
-	w, _ := file.NewWriter(f, &file.Options{})
+	// create a test folder and files
+	f1 := "./tmp/temp1.json"
+	w, _ := file.NewWriter(f1, &file.Options{})
 	w.WriteLine([]byte(`{"test":"value1","testing":"value2","number":123}`))
 	w.Close()
 
-	f = "./tmp/temp2.json"
-	w, _ = file.NewWriter(f, &file.Options{})
+	f2 := "./tmp/temp2.json"
+	w, _ = file.NewWriter(f2, &file.Options{})
 	w.WriteLine([]byte(`{"test":"value1","testing":"value2","number":123}`))
 	w.Close()
 
-	d1, _ := filepath.Abs(f)
+	d1, _ := filepath.Abs(f2)
 
-	f2 := "./tmp1"
-	os.Mkdir(f2, 0755)
-	d2, _ := filepath.Abs(f2)
+	f3 := "./tmp1"
+	os.Mkdir(f3, 0755)
+	d2, _ := filepath.Abs(f3)
 
 	fn := func(in trial.Input) (interface{}, error) {
 		// set input
@@ -47,6 +225,7 @@ func TestNewWorker(t *testing.T) {
 		// if task is invalid set values
 		o.Invalid, o.Msg = task.IsInvalidWorker(wrkr)
 
+		// if the test isn't for a invalid worker set count and params
 		if !o.Invalid {
 			myw := wrkr.(*worker)
 			o.Params = myw.Params
@@ -87,7 +266,7 @@ func TestNewWorker(t *testing.T) {
 			},
 		},
 
-		"valid_worker?": {
+		"invalid_worker": {
 			Input: input{options: &options{}, Info: d2 + "?table=schema.table_name"},
 			Expected: output{
 				Params:  InfoOptions{},
@@ -99,7 +278,10 @@ func TestNewWorker(t *testing.T) {
 	}
 
 	trial.New(fn, cases).Test(t)
-	os.Remove(f)
+
+	// cleanup
+	os.Remove(f1)
+	os.Remove(f2)
 	os.Remove("./tmp")
 	os.Remove("./tmp1")
 }

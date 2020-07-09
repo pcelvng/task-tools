@@ -20,6 +20,7 @@ type options struct {
 	sqlDB    *sql.DB
 	producer bus.Producer
 	fileOpts *file.Options
+	dbDriver string // postgres, mysql - for the batchloader
 }
 
 var (
@@ -32,7 +33,6 @@ info query params:
 table_name : required, the table name should be given in the info string so the app knows where to attempt to insert the data.
 strict     : default false, all field names in the json string have to match the table field names exactly or an error is returned,
              when this is false extra field names in the json string are ignored. 
-copy       : default false, when true transactions are not used, and the insert statement is built as a copy statement (postgresql only)
 
 Example task:
  
@@ -54,6 +54,7 @@ func main() {
 	opts.fileOpts = app.GetFileOpts()
 
 	if opts.MySQL.Host != "" {
+		opts.dbDriver = "mysql"
 		opts.sqlDB, err = db.MySQL(opts.MySQL.Username, opts.MySQL.Password, opts.MySQL.Host, opts.MySQL.DBName)
 		if err != nil {
 			log.Fatalf("cannot connect to MySQL Instance %+v", opts.MySQL)
@@ -61,6 +62,7 @@ func main() {
 	}
 
 	if opts.Postgres.Host != "" {
+		opts.dbDriver = "postgres"
 		opts.sqlDB, err = db.Postgres(opts.Postgres.Username, opts.Postgres.Password, opts.Postgres.Host, opts.Postgres.DBName)
 		if err != nil {
 			log.Fatalf("cannot connect to Postgres Instance %+v", opts.Postgres)
