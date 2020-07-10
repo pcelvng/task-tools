@@ -31,8 +31,6 @@ Initially only postgresql will be supported, but later support can be added for 
 
 info query params:
 table_name : required, the table name should be given in the info string so the app knows where to attempt to insert the data.
-strict     : default false, all field names in the json string have to match the table field names exactly or an error is returned,
-             when this is false extra field names in the json string are ignored. 
 
 Example task:
  
