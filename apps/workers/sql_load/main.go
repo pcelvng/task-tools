@@ -34,7 +34,8 @@ table_name : required, the table name should be given in the info string so the 
 
 Example task:
  
-{"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name"}`
+{"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name"}
+{"type":"sql_load","info":"gs://bucket/path/of/files/to/load/?table=schema.table_name"}`
 )
 
 func main() {
