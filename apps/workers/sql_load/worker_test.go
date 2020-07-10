@@ -230,11 +230,13 @@ func TestNewWorker(t *testing.T) {
 	}
 
 	type output struct {
-		Params  InfoOptions
-		Invalid bool
-		Msg     string
-		Count   int
+		Params     InfoOptions
+		Invalid    bool
+		Msg        string
+		Count      int
+		DeleteStmt string
 	}
+
 	// create a test folder and files
 	f1 := "./tmp/temp1.json"
 	w, _ := file.NewWriter(f1, &file.Options{})
@@ -265,6 +267,7 @@ func TestNewWorker(t *testing.T) {
 			myw := wrkr.(*worker)
 			o.Params = myw.Params
 			o.Count = len(myw.flist)
+			o.DeleteStmt = myw.delete
 		}
 
 		return o, nil
@@ -308,6 +311,21 @@ func TestNewWorker(t *testing.T) {
 				Invalid: true,
 				Msg:     "no files found in path " + d2,
 				Count:   0,
+			},
+		},
+
+		"valid_path_with_delete": {
+			Input: input{options: &options{}, Info: d1 + "?table=schema.table_name&delete=date:2020-07-01"},
+			Expected: output{
+				Params: InfoOptions{
+					FilePath:  d1,
+					Table:     "schema.table_name",
+					DeleteMap: map[string]string{"date": "2020-07-01"},
+				},
+				DeleteStmt: "delete from schema.table_name where date = '2020-07-01'",
+				Invalid:    false,
+				Msg:        "",
+				Count:      1,
 			},
 		},
 	}

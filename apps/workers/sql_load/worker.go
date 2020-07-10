@@ -18,9 +18,10 @@ import (
 )
 
 type InfoOptions struct {
-	FilePath string `uri:"origin"`                // file path to load one file or a list of files in that path (not recursive)
-	Table    string `uri:"table" required:"true"` // insert table name i.e., "schema.table_name"
-	SkipErr  bool   `uri:"skip_err"`              // if bad records are found they are skipped and logged instead of throwing an error
+	FilePath  string            `uri:"origin"`                // file path to load one file or a list of files in that path (not recursive)
+	Table     string            `uri:"table" required:"true"` // insert table name i.e., "schema.table_name"
+	SkipErr   bool              `uri:"skip_err"`              // if bad records are found they are skipped and logged instead of throwing an error
+	DeleteMap map[string]string `uri:"delete"`                // map used to build the delete query statement
 }
 
 type worker struct {
@@ -31,6 +32,7 @@ type worker struct {
 	flist   []string // list of full path file(s)
 	records int64    // inserted records
 	ds      *DataSet // the processing data for loading
+	delete  string   // query statement built from DeleteMap
 }
 
 type Jsondata map[string]interface{}
@@ -86,6 +88,8 @@ func (o *options) newWorker(info string) task.Worker {
 	if len(w.flist) == 0 {
 		return task.InvalidWorker("no files found in path %s", w.Params.FilePath)
 	}
+
+	w.deleteQuery()
 	return w
 }
 
@@ -108,9 +112,20 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		b.AddRow(row)
 	}
 
-	b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
+	b.Delete(w.delete)
 
-	return task.Completed("completed")
+	dbsts, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
+	if err != nil {
+		return task.Failed(errors.Wrap(err, "commit to db failed"))
+	}
+
+	if dbsts.Removed > 0 {
+		return task.Completed("database load completed %s table: %s records removed: %d records added: %d",
+			w.dbDriver, w.Params.Table, dbsts.Removed, w.records)
+	}
+
+	return task.Completed("database load completed %s table: %s records: %d",
+		w.dbDriver, w.Params.Table, w.records)
 }
 
 // Queries the database for the table schema for each column
@@ -194,6 +209,7 @@ func (w *worker) ReadFiles() (err error) {
 				err = errors.Wrap(e, fmt.Sprintf("%+v", w.ds.jRow))
 				continue
 			}
+			w.records++
 		}
 		r.Close() // close the reader
 	}
@@ -267,7 +283,7 @@ func (ds *DataSet) VerifyRow() (err error) {
 	return nil
 }
 
-// loop though all the insert columns,
+// SetNullValues will loop though all the insert columns,
 // if that column isn't found in the json row data
 // set that key's value in the json row to nil
 func (ds *DataSet) SetNullValues() (err error) {
@@ -343,4 +359,17 @@ func (ds *DataSet) AddRow() (err error) {
 	ds.insertRows = append(ds.insertRows, row)
 
 	return nil
+}
+
+func (w *worker) deleteQuery() string {
+	if len(w.Params.DeleteMap) == 0 {
+		return ""
+	}
+	s := make([]string, 0)
+	for k, v := range w.Params.DeleteMap {
+		s = append(s, k+" = '"+v+"'")
+	}
+	sort.Sort(sort.StringSlice(s))
+	w.delete = fmt.Sprintf("delete from %s where %s", w.Params.Table, strings.Join(s, " and "))
+	return w.delete
 }
