@@ -65,7 +65,12 @@ func TestVerifyRow(t *testing.T) {
 				dbSchema: DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
 				jRow:     Jsondata{"column2": "column1datastring", "column3": "column3datastring"},
 			},
-			ExpectedErr: errors.New("missing key for non-nullable field: column1"),
+			Expected: &DataSet{ // if not provided a non-nullable field is ignored, assuming that the DB will handle default values
+				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:       Jsondata{"column2": "column1datastring", "column3": "column3datastring"},
+				verified:   true,
+				insertCols: []string{"column2"},
+			},
 		},
 		"insert_columns_already_set": {
 			Input: &DataSet{
@@ -143,7 +148,7 @@ func TestAddRow(t *testing.T) {
 				verified:   true,
 			},
 		},
-		"cannot_string_int": {
+		"cannot_string_to_int": {
 			Input: &DataSet{
 				dbSchema: DbSchema{
 					DbColumn{Name: "column6", IsNullable: "YES", DataType: "int"},
@@ -152,7 +157,37 @@ func TestAddRow(t *testing.T) {
 				insertCols: []string{"column6", "column7"},
 				insertRows: Rows{{nil, nil}},
 			},
-			ExpectedErr: errors.New("add_row: cannot convert string to a number for: column6 value: column6datastring type: int"),
+			ExpectedErr: errors.New("strconv.ParseInt: parsing \"column6datastring\": invalid syntax"),
+		},
+		"cannot_string_to_float": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "decimal"},
+					DbColumn{Name: "column7", IsNullable: "YES", DataType: "text"}},
+				jRow:       Jsondata{"column6": "column6datastring", "column7": "column7datastring"},
+				insertCols: []string{"column6", "column7"},
+				insertRows: Rows{{nil, nil}},
+			},
+			ExpectedErr: errors.New("strconv.ParseFloat: parsing \"column6datastring\": invalid syntax"),
+		},
+		"string_to_int64": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "bigint"},
+					DbColumn{Name: "column7", IsNullable: "YES", DataType: "text"}},
+				jRow:       Jsondata{"column6": "1234567890126545643", "column7": "column7datastring"},
+				insertCols: []string{"column6", "column7"},
+				insertRows: Rows{{nil, nil}},
+			},
+			Expected: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column6", IsNullable: "YES", DataType: "bigint"},
+					DbColumn{Name: "column7", IsNullable: "YES", DataType: "text"}},
+				jRow:       Jsondata{"column6": int64(1234567890126545643), "column7": "column7datastring"},
+				insertCols: []string{"column6", "column7"},
+				insertRows: Rows{{nil, nil}, {int64(1234567890126545643), "column7datastring"}},
+				verified:   true,
+			},
 		},
 		"cannot_int_float": {
 			Input: &DataSet{

@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jbsmith7741/uri"
@@ -13,7 +14,6 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pkg/errors"
 )
 
@@ -28,9 +28,9 @@ type worker struct {
 
 	Params InfoOptions
 
-	flist   []stat.Stats // list of file(s)
-	records int64        // inserted records
-	ds      *DataSet     // the processing data for loading
+	flist   []string // list of full path file(s)
+	records int64    // inserted records
+	ds      *DataSet // the processing data for loading
 }
 
 type Jsondata map[string]interface{}
@@ -61,7 +61,7 @@ func (o *options) newWorker(info string) task.Worker {
 
 	w := &worker{
 		options: *o,
-		flist:   make([]stat.Stats, 0),
+		flist:   make([]string, 0),
 		ds:      NewDataSet(),
 	}
 
@@ -69,18 +69,20 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("params uri.unmarshal: %v", err)
 	}
 
-	f, err := os.Stat(w.Params.FilePath)
+	f, err := file.Stat(w.Params.FilePath, w.fileOpts)
 	if err != nil {
 		return task.InvalidWorker("filepath os: %v", err)
 	}
 	// app will load one file or a directory of files (only one folder deep)
-	switch mode := f.Mode(); {
-	case mode.IsDir():
-		w.flist, _ = file.List(w.Params.FilePath, w.fileOpts)
-	case mode.IsRegular():
-		s, _ := file.Stat(w.Params.FilePath, w.fileOpts)
-		w.flist = append(w.flist, s.Clone())
+	if f.IsDir {
+		list, _ := file.List(w.Params.FilePath, w.fileOpts)
+		for i := range list {
+			w.flist = append(w.flist, list[i].Path)
+		}
+	} else {
+		w.flist = append(w.flist, w.Params.FilePath)
 	}
+
 	if len(w.flist) == 0 {
 		return task.InvalidWorker("no files found in path %s", w.Params.FilePath)
 	}
@@ -162,10 +164,9 @@ func (w *worker) QuerySchema() (err error) {
 func (w *worker) ReadFiles() (err error) {
 	// read each file
 	for i := range w.flist {
-		f := w.flist[i].Clone()
-		r, e := file.NewReader(f.Path, w.fileOpts) // create a new file reader
+		r, e := file.NewReader(w.flist[i], w.fileOpts) // create a new file reader
 		if e != nil {
-			err = errors.Wrap(e, "new reader error\n")
+			err = errors.Wrap(e, "new reader error")
 			continue
 		}
 
@@ -176,7 +177,7 @@ func (w *worker) ReadFiles() (err error) {
 				if e == io.EOF {
 					break
 				}
-				err = errors.Wrap(e, "readline error: "+r.Stats().Path+"\n")
+				err = errors.Wrap(e, "readline error: "+r.Stats().Path)
 				continue
 			}
 
@@ -190,7 +191,7 @@ func (w *worker) ReadFiles() (err error) {
 
 			e = w.ds.AddRow()
 			if e != nil {
-				err = errors.Wrap(e, fmt.Sprintf("%+v", w.ds.jRow)+"\n")
+				err = errors.Wrap(e, fmt.Sprintf("%+v", w.ds.jRow))
 				continue
 			}
 		}
@@ -230,11 +231,13 @@ func (ds *DataSet) VerifyRow() (err error) {
 	if len(ds.insertCols) == 0 {
 		for k := range ds.jRow {
 			// only add the json data keys where the column was found in the database schema
+			// and the field
 			_, err := ds.dbSchema.GetColumn(k)
 			if err == nil {
 				ds.insertCols = append(ds.insertCols, k)
 			}
 		}
+
 		// verify all nullable fields have been added to the cols list
 		for _, d := range ds.dbSchema {
 			found := false
@@ -249,12 +252,10 @@ func (ds *DataSet) VerifyRow() (err error) {
 			if !found {
 				if d.IsNullable == "YES" {
 					ds.insertCols = append(ds.insertCols, d.Name)
-				} else {
-					// if the column was not found in the insert columns list, and the column is not nullable
-					return errors.New("missing key for non-nullable field: " + d.Name)
 				}
 			}
 		}
+		sort.Strings(ds.insertCols)
 	}
 
 	err = ds.SetNullValues()
@@ -314,12 +315,17 @@ func (ds *DataSet) AddRow() (err error) {
 		v, _ := ds.jRow[f]
 		switch x := v.(type) {
 		case string:
-			if !strings.Contains(c.DataType, "char") && c.DataType != "text" {
-				return errors.New(
-					fmt.Sprintf("add_row: cannot convert string to a number for: %s value: %v type: %s", f, ds.jRow[f], c.DataType))
+			if strings.Contains(c.DataType, "int") || strings.Contains(c.DataType, "serial") {
+				ds.jRow[f], err = strconv.ParseInt(x, 10, 64)
+			}
+			if strings.Contains(c.DataType, "numeric") || strings.Contains(c.DataType, "dec") ||
+				strings.Contains(c.DataType, "double") || strings.Contains(c.DataType, "real") ||
+				strings.Contains(c.DataType, "fixed") || strings.Contains(c.DataType, "float") {
+				ds.jRow[f], err = strconv.ParseFloat(x, 64)
 			}
 		case float64:
-			if strings.Contains(c.DataType, "int") {
+			// convert a float to an int if the schema is an int type
+			if strings.Contains(c.DataType, "int") || strings.Contains(c.DataType, "serial") {
 				if x == float64(int64(x)) {
 					ds.jRow[f] = int64(x)
 				} else {
@@ -327,6 +333,9 @@ func (ds *DataSet) AddRow() (err error) {
 						fmt.Sprintf("add_row: cannot convert number value to int64 for %s value: %v type: %s", f, ds.jRow[f], c.DataType))
 				}
 			}
+		}
+		if err != nil {
+			return err
 		}
 		row = append(row, ds.jRow[f])
 	}
