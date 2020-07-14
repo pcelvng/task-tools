@@ -34,11 +34,15 @@ table_name : required, the table name should be given in the info string so the 
 delete: allows insert into  pre-existing data by deleting previous data. 
     - provide a list of delete key:values to be used in the delete statement
 		- "?delete=date:2020-07-01|id:7"
-		
+fields: allows mapping different json key values to different database column names
+		- provide a list of field name mapping {DB column name}:{json key} to be mapped 
+		- ?fields=dbColumn:jsonKey
+
 Example task:
  
 {"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7"}
 {"type":"sql_load","info":"gs://bucket/path/of/files/to/load/?table=schema.table_name"}`
+{"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7&fields=dbColumnName:jsonKeyValue"}
 )
 
 func main() {

@@ -11,6 +11,10 @@ import (
 	"github.com/pcelvng/task-tools/file"
 )
 
+func TestDefaultUpdate(t *testing.T) {
+
+}
+
 func TestVerifyRow(t *testing.T) {
 	fn := func(in trial.Input) (interface{}, error) {
 		i := in.Interface().(*DataSet)
@@ -62,14 +66,14 @@ func TestVerifyRow(t *testing.T) {
 		},
 		"missing_non_nullable_field": {
 			Input: &DataSet{
-				dbSchema: DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				dbSchema: DbSchema{DbColumn{Name: "column1", IsNullable: "NO", Default: "default"}, DbColumn{Name: "column2", IsNullable: "YES"}},
 				jRow:     Jsondata{"column2": "column1datastring", "column3": "column3datastring"},
 			},
-			Expected: &DataSet{ // if not provided a non-nullable field is ignored, assuming that the DB will handle default values
-				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO"}, DbColumn{Name: "column2", IsNullable: "YES"}},
-				jRow:       Jsondata{"column2": "column1datastring", "column3": "column3datastring"},
+			Expected: &DataSet{
+				dbSchema:   DbSchema{DbColumn{Name: "column1", IsNullable: "NO", Default: "default"}, DbColumn{Name: "column2", IsNullable: "YES"}},
+				jRow:       Jsondata{"column1": "default", "column2": "column1datastring", "column3": "column3datastring"},
 				verified:   true,
-				insertCols: []string{"column2"},
+				insertCols: []string{"column1", "column2"},
 			},
 		},
 		"insert_columns_already_set": {
@@ -230,7 +234,7 @@ func TestNewWorker(t *testing.T) {
 	}
 
 	type output struct {
-		Params     InfoOptions
+		Params     InfoURI
 		Invalid    bool
 		Msg        string
 		Count      int
@@ -278,7 +282,7 @@ func TestNewWorker(t *testing.T) {
 		"valid_worker": {
 			Input: input{options: &options{}, Info: d1 + "?table=schema.table_name"},
 			Expected: output{
-				Params: InfoOptions{
+				Params: InfoURI{
 					FilePath: d1,
 					Table:    "schema.table_name",
 				},
@@ -307,7 +311,7 @@ func TestNewWorker(t *testing.T) {
 		"invalid_worker": {
 			Input: input{options: &options{}, Info: d2 + "?table=schema.table_name"},
 			Expected: output{
-				Params:  InfoOptions{},
+				Params:  InfoURI{},
 				Invalid: true,
 				Msg:     "no files found in path " + d2,
 				Count:   0,
@@ -315,16 +319,15 @@ func TestNewWorker(t *testing.T) {
 		},
 
 		"valid_path_with_delete": {
-			Input: input{options: &options{}, Info: d1 + "?table=schema.table_name&delete=date:2020-07-01"},
+			Input: input{options: &options{}, Info: d1 + "?table=schema.table_name&delete=date(hour_utc):2020-07-09|id:1572|amt:65.2154"},
 			Expected: output{
-				Params: InfoOptions{
+				Params: InfoURI{
 					FilePath:  d1,
 					Table:     "schema.table_name",
-					DeleteMap: map[string]string{"date": "2020-07-01"},
+					DeleteMap: map[string]string{"date(hour_utc)": "2020-07-09", "id": "1572", "amt": "65.2154"},
 				},
-				DeleteStmt: "delete from schema.table_name where date = '2020-07-01'",
+				DeleteStmt: "delete from schema.table_name where amt = 65.2154 and date(hour_utc) = '2020-07-09' and id = 1572",
 				Invalid:    false,
-				Msg:        "",
 				Count:      1,
 			},
 		},
