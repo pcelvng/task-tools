@@ -263,6 +263,37 @@ func TestAddRow(t *testing.T) {
 				fieldsMap:   map[string]string{},
 			},
 		},
+
+		"field_mapping_test": {
+			Input: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column1", IsNullable: "NO", DataType: "varchar", TypeName: "string"},
+					DbColumn{Name: "column2", IsNullable: "YES", DataType: "character varying", TypeName: "string"}},
+				jRow:       Jsondata{"column_1": "new_entry_1", "column_2": "new_entry_2"},
+				insertCols: []string{"column1", "column2"},
+				insertRows: Rows{{"previous_entry_1", "previous_entry_2"}},
+				insertMeta: []DbColumn{
+					{Name: "column1", IsNullable: "NO", JsonKey: "column_1"},
+					{Name: "column2", IsNullable: "YES", JsonKey: "column_2", Nullable: true}},
+				ignoredCols: map[string]bool{},
+				fieldsMap:   map[string]string{"column_1": "column1", "column_2": "column2"}, // set from the info string
+				verified:    false,
+			},
+			Expected: &DataSet{
+				dbSchema: DbSchema{
+					DbColumn{Name: "column1", IsNullable: "NO", DataType: "varchar", TypeName: "string"},
+					DbColumn{Name: "column2", IsNullable: "YES", DataType: "character varying", TypeName: "string"}},
+				jRow:       Jsondata{"column_1": "new_entry_1", "column_2": "new_entry_2"},
+				insertCols: []string{"column1", "column2"},
+				insertRows: Rows{{"previous_entry_1", "previous_entry_2"}, {"new_entry_1", "new_entry_2"}},
+				insertMeta: []DbColumn{
+					{Name: "column1", IsNullable: "NO", JsonKey: "column_1"},
+					{Name: "column2", IsNullable: "YES", JsonKey: "column_2", Nullable: true}},
+				ignoredCols: map[string]bool{},
+				fieldsMap:   map[string]string{"column_1": "column1", "column_2": "column2"},
+				verified:    true,
+			},
+		},
 	}
 
 	trial.New(fn, cases).Test(t)
