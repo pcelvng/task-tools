@@ -104,7 +104,7 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("no files found in path %s", w.Params.FilePath)
 	}
 
-	w.deleteQuery()
+	w.setDeleteQuery()
 	return w
 }
 
@@ -391,9 +391,9 @@ func (ds *DataSet) AddRow() (err error) {
 	return nil
 }
 
-func (w *worker) deleteQuery() string {
+func (w *worker) setDeleteQuery() {
 	if len(w.Params.DeleteMap) == 0 {
-		return ""
+		return
 	}
 	s := make([]string, 0)
 	for k, v := range w.Params.DeleteMap {
@@ -412,12 +412,10 @@ func (w *worker) deleteQuery() string {
 		} else {
 			s = append(s, k+" = "+v)
 		}
-
 	}
 
 	sort.Sort(sort.StringSlice(s))
 	w.delete = fmt.Sprintf("delete from %s where %s", w.Params.Table, strings.Join(s, " and "))
-	return w.delete
 }
 
 // findDbColumn will return the schema, and true if the name was found in the

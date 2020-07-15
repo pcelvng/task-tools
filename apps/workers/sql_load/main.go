@@ -24,7 +24,7 @@ type options struct {
 
 var (
 	taskType    = "sql_load"
-	description = `sql_load app is a simple worker to load a file from local, gs or s3, with a format of newline delimited json, 
+	description = `sql_load app is a generic worker to load a file from local, gs or s3, with a format of newline delimited json, 
 into a configured sql connection. 
 Initially only postgresql will be supported, but later support can be added for mysql, etc...
 
