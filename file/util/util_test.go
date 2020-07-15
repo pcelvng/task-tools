@@ -20,8 +20,8 @@ func TestOpenTmp(t *testing.T) {
 			Expected: "tmp/test_",
 		},
 		"no permission": {
-			Input:       trial.Args("/root/bad", ""),
-			ExpectedErr: errors.New("permission denied"),
+			Input:     trial.Args("/root/bad", ""),
+			ShouldErr: true,
 		},
 		"prefix with spaces": {
 			Input:    trial.Args("/tmp/path", "test prefix"),
