@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jbsmith7741/uri"
 	jsoniter "github.com/json-iterator/go"
@@ -27,6 +28,7 @@ type InfoURI struct {
 
 type worker struct {
 	options
+	task.Meta
 
 	Params InfoURI
 
@@ -34,6 +36,9 @@ type worker struct {
 	records int64    // inserted records
 	ds      *DataSet // the processing data for loading
 	delete  string   // query statement built from DeleteMap
+
+	fileReadTime time.Duration
+	queryRunTime time.Duration
 }
 
 type Jsondata map[string]interface{}
@@ -46,21 +51,20 @@ type DataSet struct {
 	dbSchema    DbSchema          // the database schema for each column
 	verified    bool              // has the jRow data been verified with the db columns
 	insertCols  []string          // the actual db column names, must match dbrows
-	insertKeys  []string          // the json keys mapping for the insert columns
-	colTypes    []string          // the type of each column
-	colNull     []bool            // is the column nullable
 	insertRows  Rows              // all rows to be inserted
+	insertMeta  []DbColumn        // Meta data for the insert rows and columns
 	fieldsMap   map[string]string // a copy of the fieldsMap from the worker uri params
 	ignoredCols map[string]bool   // a list of db fields that were not inserted into
 }
 
 type DbColumn struct {
-	Name       string
-	FieldMap   string
-	DataType   string
-	IsNullable string
-	Default    string
+	Name       string // DB column name
+	DataType   string // DB data type
+	IsNullable string // DB YES or NO string values
+	Default    string // DB default function / value
 	TypeName   string // int64, float64, string
+	JsonKey    string // matching json key name
+	Nullable   bool   // bool value if column is nullable (true) or not (false)
 }
 
 type DbSchema []DbColumn
@@ -72,6 +76,7 @@ func (o *options) newWorker(info string) task.Worker {
 
 	w := &worker{
 		options: *o,
+		Meta:    task.NewMeta(),
 		flist:   make([]string, 0),
 		ds:      NewDataSet(),
 	}
@@ -80,10 +85,6 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("params uri.unmarshal: %v", err)
 	}
 	w.ds.fieldsMap = w.Params.FieldsMap
-	// update any {colon} template with a real ":"
-	for k, m := range w.Params.DeleteMap {
-		w.Params.DeleteMap[k] = strings.Replace(m, "{colon}", ":", -1)
-	}
 
 	f, err := file.Stat(w.Params.FilePath, w.fileOpts)
 	if err != nil {
@@ -115,11 +116,12 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	}
 
 	// read the files for loading, verify columns types
+	start := time.Now()
 	err = w.ReadFiles()
 	if err != nil {
 		return task.Failed(errors.Wrap(err, "readfiles error"))
 	}
-
+	w.fileReadTime = time.Now().Sub(start)
 	b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
 
 	for _, row := range w.ds.insertRows {
@@ -127,15 +129,17 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	}
 
 	b.Delete(w.delete)
-
+	start = time.Now()
 	stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
 	if err != nil {
 		return task.Failed(errors.Wrap(err, "commit to db failed"))
 	}
-
+	w.queryRunTime = time.Now().Sub(start)
 	if stats.Removed > 0 {
-		return task.Completed("database load completed %s table: %s records removed: %d records added: %d",
-			w.dbDriver, w.Params.Table, stats.Removed, w.records)
+		w.SetMeta("removed_records", fmt.Sprintf("%d", stats.Removed))
+		w.SetMeta("insert_records", fmt.Sprintf("%d", w.records))
+		w.SetMeta("file_process_time", fmt.Sprintf("%v", w.fileReadTime))
+		w.SetMeta("query_run_time", fmt.Sprintf("%v", w.queryRunTime))
 	}
 
 	return task.Completed("database load completed %s table: %s records: %d",
@@ -272,9 +276,7 @@ func NewDataSet() *DataSet {
 		dbSchema:    make(DbSchema, 0),
 		insertRows:  make(Rows, 0),
 		insertCols:  make([]string, 0),
-		insertKeys:  make([]string, 0),
-		colNull:     make([]bool, 0),
-		colTypes:    make([]string, 0),
+		insertMeta:  make([]DbColumn, 0),
 		ignoredCols: make(map[string]bool),
 	}
 }
@@ -294,10 +296,16 @@ func (ds *DataSet) VerifyRow() (err error) {
 		c, foundDb := ds.findDbColumn(k)
 		foundCol := ds.findInsertKey(k)
 		if foundDb && !foundCol {
-			ds.insertKeys = append(ds.insertKeys, k)          // json key names
-			ds.insertCols = append(ds.insertCols, c.FieldMap) // db column names
-			ds.colTypes = append(ds.colTypes, c.TypeName)
-			ds.colNull = append(ds.colNull, c.IsNullable == "YES")
+			ds.insertCols = append(ds.insertCols, c.Name)   // db column names
+			ds.insertMeta = append(ds.insertMeta, DbColumn{ // meta data for validation
+				Name:       c.Name,
+				DataType:   c.DataType,
+				TypeName:   c.TypeName,
+				IsNullable: c.IsNullable,
+				Default:    c.Default,
+				JsonKey:    k,
+				Nullable:   c.IsNullable == "YES",
+			})
 		}
 	}
 
@@ -307,25 +315,27 @@ func (ds *DataSet) VerifyRow() (err error) {
 	return nil
 }
 
-// if the database table field is nullable, and it's not in the JSON string
+// defaultUpdate checks the size of the data values compared to the column values
+// if there are more columns than data values, run back though all the data records
+// and add default values to the insert rows (nil or zero value)
 // and it's part of the insertCols, the value will be nil (NULL)
 // if the field is NOT nullable, the value will be the zero value
 func (ds *DataSet) defaultUpdate() (err error) {
 	// has the column fields count changed?
-	for idr := range ds.insertRows { // loop though the rows
-		rowRecords := len(ds.insertRows[idr])
+	for idr := range ds.insertRows { // loop though the rows insert values
+		rowValues := len(ds.insertRows[idr])
 		colsCount := len(ds.insertCols)
 		// there are more columns to insert than data values in the row
-		if colsCount > rowRecords {
-			// start at the new row value, add columns untill row values count matches the column count
-			for idx := rowRecords; idx < colsCount; idx++ {
-				if ds.colNull[idx] {
+		if colsCount > rowValues {
+			// start at the new row value, add to the slice untill row values count matches the column count
+			for idx := rowValues; idx < colsCount; idx++ {
+				if ds.insertMeta[idx].Nullable {
 					ds.insertRows[idr] = append(ds.insertRows[idr], nil)
 				} else {
-					if ds.colTypes[idx] == "string" {
+					if ds.insertMeta[idx].TypeName == "string" {
 						ds.insertRows[idr] = append(ds.insertRows[idr], "")
 					}
-					if ds.colTypes[idx] == "int" || ds.colTypes[idx] == "float" {
+					if ds.insertMeta[idx].TypeName == "int" || ds.insertMeta[idx].TypeName == "float" {
 						ds.insertRows[idr] = append(ds.insertRows[idr], 0)
 					}
 				}
@@ -346,33 +356,34 @@ func (ds *DataSet) AddRow() (err error) {
 		}
 	}
 
-	row := make(Row, len(ds.insertKeys))
-	for k, f := range ds.insertKeys {
-		v, _ := ds.jRow[f] // search the json object for the insert key
+	row := make(Row, len(ds.insertCols))
+	for k, f := range ds.insertMeta {
+		v, _ := ds.jRow[f.JsonKey] // get the json record
 
 		switch x := v.(type) {
 		case string:
-			if ds.colTypes[k] == "int" {
-				ds.jRow[f], err = strconv.ParseInt(x, 10, 64)
+			if ds.insertMeta[k].TypeName == "int" {
+				ds.jRow[f.JsonKey], err = strconv.ParseInt(x, 10, 64)
 			}
-			if ds.colTypes[k] == "float" {
-				ds.jRow[f], err = strconv.ParseFloat(x, 64)
+			if ds.insertMeta[k].TypeName == "float" {
+				ds.jRow[f.JsonKey], err = strconv.ParseFloat(x, 64)
 			}
 		case float64:
 			// convert a float to an int if the schema is an int type
-			if ds.colTypes[k] == "int" {
+			if ds.insertMeta[k].TypeName == "int" {
 				if x == float64(int64(x)) {
-					ds.jRow[f] = int64(x)
+					ds.jRow[f.JsonKey] = int64(x)
 				} else {
 					return errors.New(
-						fmt.Sprintf("add_row: cannot convert number value to int64 for %s value: %v type: %s", f, ds.jRow[f], ds.colTypes[k]))
+						fmt.Sprintf("add_row: cannot convert number value to int64 for %s value: %v type: %s",
+							f.Name, v, ds.insertMeta[k].DataType))
 				}
 			}
 		}
 		if err != nil {
 			return err
 		}
-		row[k] = ds.jRow[f]
+		row[k] = ds.jRow[f.JsonKey]
 	}
 
 	ds.insertRows = append(ds.insertRows, row)
@@ -415,19 +426,20 @@ func (w *worker) deleteQuery() string {
 func (ds *DataSet) findDbColumn(name string) (dbc DbColumn, found bool) {
 	// check the fields map if they exist in the DB schema
 
+	// ignored columns are ignored because they do not exist in the db schema nor in the fields map
 	if ds.ignoredCols[name] {
 		return dbc, false
 	}
 
+	// if a field mapping was used look for the name in the map
 	n, ok := ds.fieldsMap[name]
 	if ok {
 		name = n
 	}
 
-	// check for the
+	// check for the name in the dbSchema
 	for _, c := range ds.dbSchema {
 		if c.Name == name {
-			c.FieldMap = name
 			return c, true
 		}
 	}
@@ -439,8 +451,8 @@ func (ds *DataSet) findDbColumn(name string) (dbc DbColumn, found bool) {
 
 // findInsertCol will return true if the name was found in the list of insert columns
 func (ds *DataSet) findInsertKey(name string) bool {
-	for _, v := range ds.insertKeys {
-		if v == name {
+	for _, v := range ds.insertMeta {
+		if v.JsonKey == name {
 			return true
 		}
 	}

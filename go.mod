@@ -15,7 +15,7 @@ require (
 	github.com/jarcoal/httpmock v1.0.4
 	github.com/jbsmith7741/go-tools v0.2.0
 	github.com/jbsmith7741/trial v0.3.1
-	github.com/jbsmith7741/uri v0.4.0
+	github.com/jbsmith7741/uri v0.4.1
 	github.com/json-iterator/go v1.1.10
 	github.com/lib/pq v1.7.0
 	github.com/minio/minio-go v6.0.14+incompatible
