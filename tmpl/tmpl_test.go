@@ -147,6 +147,51 @@ func TestPathTime(t *testing.T) {
 	}
 }
 
+func TestInfoTime(t *testing.T) {
+	fn := func(in trial.Input) (interface{}, error) {
+		return InfoTime(in.String()), nil
+	}
+	cases := trial.Cases{
+		"day": {
+			Input:    "?day=2020-03-05",
+			Expected: trial.TimeDay("2020-03-05"),
+		},
+		"date": {
+			Input:    "?date=2020-03-05",
+			Expected: trial.TimeDay("2020-03-05"),
+		},
+		"hour": {
+			Input:    "?date=something&hour=2020-03-05T11",
+			Expected: trial.TimeHour("2020-03-05T11"),
+		},
+		"time": {
+			Input:    "?time=2020-03-05T11:15:22Z",
+			Expected: trial.Time(time.RFC3339, "2020-03-05T11:15:22Z"),
+		},
+		"path": {
+			Input:    "gs://path/2020/03/05/file.txt",
+			Expected: trial.TimeDay("2020-03-05"),
+		},
+		"priority path": {
+			Input:    "gs://path/2020/03/05/file.txt?day=2000-01-02",
+			Expected: trial.TimeDay("2000-01-02"),
+		},
+		"priority file": {
+			Input:    "gs://path/2020/03/05/file.txt?data=2000-01-02",
+			Expected: trial.TimeDay("2020-03-05"),
+		},
+		"invalid time": {
+			Input:    "?day=alksdfj",
+			Expected: time.Time{},
+		},
+		"no time": {
+			Input:    "s3://path/to/file.txt?date=something",
+			Expected: time.Time{},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
 func TestParseMeta(t *testing.T) {
 	fn := func(v trial.Input) (interface{}, error) {
 		template := v.Slice(0).String()

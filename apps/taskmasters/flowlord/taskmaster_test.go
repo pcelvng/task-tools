@@ -107,7 +107,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{
 				{
 					Type: "task2",
-					Info: "?time={yyyy}-{mm}-{dd}", // todo: change after templating
+					Info: "?time=2019-12-12",
 					ID:   "UUID_task1",
 					Meta: "workflow=f1.toml",
 				},
@@ -125,12 +125,12 @@ func TestTaskMaster_Process(t *testing.T) {
 			Input: task.Task{
 				Type:   "task2",
 				ID:     "UUID_task1",
-				Meta:   "workflow=f1.toml",
+				Meta:   "workflow=f1.toml&file=metafile.txt",
 				Result: task.CompleteResult,
 			},
 			Expected: []task.Task{
-				{Type: "task3", Info: "", ID: "UUID_task1", Meta: "workflow=f1.toml"},
-				{Type: "task4", Info: "", ID: "UUID_task1", Meta: "workflow=f1.toml"},
+				{Type: "task3", Info: "metafile.txt", ID: "UUID_task1", Meta: "workflow=f1.toml"},
+				{Type: "task4", Info: "metafile.txt", ID: "UUID_task1", Meta: "workflow=f1.toml"},
 			},
 		},
 	}
