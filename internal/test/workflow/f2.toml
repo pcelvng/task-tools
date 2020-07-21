@@ -8,7 +8,7 @@ template = "?date={yyyy}-{mm}-{dd}"
 task = "task2"
 rule = ""
 retry = 3
-template = "{meta:file}?time={{yyyy}}-{{mm}}-{{dd}}"
+template = "{meta:file}?time={yyyy}-{mm}-{dd}"
 
 [[Phase]]
 task = "task3"

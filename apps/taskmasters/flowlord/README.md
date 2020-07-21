@@ -12,14 +12,14 @@ task = "topic_name"
 dependsOn = ""
 rule = "cron=0 * * * *&offset=-4h&job=t2"
 retry = 3
-template = "?date={yyyy}-{mm}-{dd}T{hh}"
+template = "?date={yyyy}-{mm}-{dd}"
 
 [[Phase]]
 task = "task1"
 dependsOn = "topic_name"
 rule = ""
 retry = 3
-template = "?date={yyyy}-{mm}-{dd}T{hh}"
+template = "?hour={yyyy}-{mm}-{dd}T{hh}"
 ```
 
 ### Phase 
@@ -46,6 +46,15 @@ templating is used to create dynamic tasks based on the time run or previous job
 | {hh} | hour of day (0-23) | 
 | {ts} | full timestamp 20060102T150405 | 
 | {meta:(\w+)} | use meta data provide in a parent task| 
+
+The timestamp is derived from the parent task's info string and supports the following params and formats 
+
+| field | format | example | 
+|-|-|-|
+| day | 2006-01-02 | ?day=2020-02-05 | 
+| date | 2006-01-02 | ?date=2010-10-12 | 
+| hour | 2006-01-02T15 | ?hour=2000-01-02T13 | 
+| time | 2006-01-02T15:04:05Z07:00 | ?time=2000-01-02T13:12:15Z | 
 
 ## scheduling 
 
