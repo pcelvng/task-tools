@@ -26,7 +26,7 @@ func TestLoadFile(t *testing.T) {
 	cases := trial.Cases{
 		"read file": {
 			Input:    input{path: "../internal/test/workflow/f1.toml"},
-			Expected: "34cf5142fbd029fa778ee657592d03ce", // checksum of test file
+			Expected: "fdedaaa79d92a318e4b50d6a9c51314e", // checksum of test file
 		},
 		"stat error": {
 			Input:       input{path: "nop://stat_err"},
@@ -217,6 +217,7 @@ func TestChildren(t *testing.T) {
 				{Task: "task2", DependsOn: "task1"},
 				{Task: "task3", DependsOn: "task2"},
 				{Task: "task4", DependsOn: "task2"},
+				{Task: "task5", DependsOn: "task1:j4"},
 			},
 		},
 	}}
@@ -248,6 +249,13 @@ func TestChildren(t *testing.T) {
 		"task4": {
 			Input:    task.Task{Type: "task4", Meta: "workflow=workflow.toml"},
 			Expected: []Phase{},
+		},
+		"task1:j4": {
+			Input: task.Task{Type: "task1", Meta: "workflow=workflow.toml&job=j4"},
+			Expected: []Phase{
+				{Task: "task2", DependsOn: "task1"},
+				{Task: "task5", DependsOn: "task1:j4"},
+			},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

@@ -24,3 +24,16 @@ DependsOn = "task2"
 rule = ""
 retry = 0
 template = "{meta:file}"
+
+[[Phase]]
+task = "task1"
+rule = "cron=0 * * * *&offset=-4h&job=t4"
+retry = 3
+template = "?date={yyyy}-{mm}-{dd}T{hh}"
+
+[[Phase]]
+task = "task5"
+rule = "job=t5"
+retry = 3
+template = "?year={yyyy}"
+DependsOn = "task1:t2"

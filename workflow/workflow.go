@@ -126,13 +126,25 @@ func (c *Cache) Children(t task.Task) []Phase {
 	}
 	values, _ := url.ParseQuery(t.Meta)
 	result := make([]Phase, 0)
+
 	key := values.Get("workflow")
+	job := values.Get("job")
 	if key == "" {
 		return nil
 	}
+
 	for _, w := range c.Workflows[key].Phases {
-		if w.DependsOn == t.Type {
-			result = append(result, w)
+		v := strings.Split(w.DependsOn, ":")
+		depends := v[0]
+		var j string
+		if len(v) > 1 {
+			j = v[1]
+		}
+
+		if depends == t.Type {
+			if j == "" || j == job {
+				result = append(result, w)
+			}
 		}
 	}
 	return result

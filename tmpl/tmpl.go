@@ -155,6 +155,46 @@ func PathTime(pth string) time.Time {
 	return time.Time{}
 }
 
+// InfoTime with attempting to pull a timestamp from a info string
+// through the query params and file path and name
+// Order of priority and supported formats
+// ?day=2006-01-02
+// ?hour=2006-01-02T15
+// file name 20060102T150405.txt
+// path layout 2006/01/02/15 or "2006/01/02 or "2006/01
+func InfoTime(info string) time.Time {
+	u, err := url.Parse(info)
+	if err != nil {
+		return time.Time{}
+	}
+	vals := u.Query()
+	if s := vals.Get("day"); s != "" {
+		tm, err := time.Parse("2006-01-02", s)
+		if err == nil {
+			return tm
+		}
+	}
+	if s := vals.Get("date"); s != "" {
+		tm, err := time.Parse("2006-01-02", s)
+		if err == nil {
+			return tm
+		}
+	}
+	if s := vals.Get("hour"); s != "" {
+		tm, err := time.Parse("2006-01-02T15", s)
+		if err == nil {
+			return tm
+		}
+	}
+	if s := vals.Get("time"); s != "" {
+		tm, err := time.Parse(time.RFC3339, s)
+		if err == nil {
+			return tm
+		}
+	}
+	return PathTime(u.Path)
+}
+
 var regexMeta = regexp.MustCompile(`{meta:(\w+)}`)
 
 // Meta will parse a template string according to the provided

@@ -10,14 +10,15 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+	"github.com/pkg/errors"
+	"github.com/robfig/cron/v3"
+
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
-	"github.com/pcelvng/task/bus"
-	"github.com/pkg/errors"
-	"github.com/robfig/cron/v3"
 )
 
 type taskMaster struct {
@@ -216,9 +217,19 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	// start off any children tasks
 	if t.Result == task.CompleteResult {
 		for _, w := range tm.Children(*t) {
+			taskTime := tmpl.InfoTime(t.Info)
 			info := tmpl.Meta(w.Template, meta)
+
+			if !taskTime.IsZero() {
+				info = tmpl.Parse(info, taskTime)
+			}
 			child := task.NewWithID(w.Task, info, t.ID)
+			rules, _ := url.ParseQuery(w.Rule)
+
 			child.Meta = "workflow=" + meta.Get("workflow")
+			if rules.Get("job") != "" {
+				child.Meta += "&job=" + rules.Get("job")
+			}
 			if err := tm.producer.Send(w.Task, child.JSONBytes()); err != nil {
 				return err
 			}
