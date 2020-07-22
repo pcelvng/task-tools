@@ -113,6 +113,28 @@ func TestTaskMaster_Process(t *testing.T) {
 				},
 			},
 		},
+		"task1:j4 complete": {
+			Input: task.Task{
+				Type:   "task1",
+				Info:   "?date=2019-12-12",
+				Result: task.CompleteResult,
+				ID:     "UUID_task1",
+				Meta:   "workflow=f1.toml&job=t2"},
+			Expected: []task.Task{
+				{
+					Type: "task2",
+					Info: "?time=2019-12-12",
+					ID:   "UUID_task1",
+					Meta: "workflow=f1.toml",
+				},
+				{
+					Type: "task5",
+					Info: "?year=2019",
+					ID:   "UUID_task1",
+					Meta: "workflow=f1.toml&job=t5",
+				},
+			},
+		},
 		"task1 unknown result": {
 			Input: task.Task{
 				Type: "task1",

@@ -219,9 +219,17 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		for _, w := range tm.Children(*t) {
 			taskTime := tmpl.InfoTime(t.Info)
 			info := tmpl.Meta(w.Template, meta)
-			info = tmpl.Parse(info, taskTime)
+
+			if !taskTime.IsZero() {
+				info = tmpl.Parse(info, taskTime)
+			}
 			child := task.NewWithID(w.Task, info, t.ID)
+			rules, _ := url.ParseQuery(w.Rule)
+
 			child.Meta = "workflow=" + meta.Get("workflow")
+			if rules.Get("job") != "" {
+				child.Meta += "&job=" + rules.Get("job")
+			}
 			if err := tm.producer.Send(w.Task, child.JSONBytes()); err != nil {
 				return err
 			}
