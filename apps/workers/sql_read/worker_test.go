@@ -40,7 +40,7 @@ func TestNewWorker(t *testing.T) {
 			ShouldErr: true,
 		},
 		"invalid table": {
-			Input:       "?table=t&dest=nop://",
+			Input:       "?table=t&field=i:i&dest=nop://",
 			ExpectedErr: errors.New("(schema.table)"),
 		},
 		"missing info params": {
@@ -51,29 +51,8 @@ func TestNewWorker(t *testing.T) {
 			Input:       tFile + "?table=schema.table&dest=nop://init_err",
 			ExpectedErr: errors.New("writer: "),
 		},
-		"invalid column": {
-			Input:       "?table=schema.table&dest=nop://&field=id:id|value:value",
-			ExpectedErr: errors.New("invalid column"),
-		},
 	}
 	trial.New(fn, cases).Timeout(3 * time.Second).SubTest(t)
-
-	// todo: convert to trial case
-	t.Run("mock query", func(t *testing.T) {
-		db, mock, _ := sqlmock.New()
-		mock.ExpectQuery("SELECT *").WillReturnRows(sqlmock.NewRows([]string{"column_name", "data_type"}).AddRow("id", "int").AddRow("value", "text"))
-		opts := &options{db: sqlx.NewDb(db, "mock")}
-		w := opts.NewWorker("?table=schema.table&dest=nop://&field=id:id|value:value")
-
-		if invalid, s := task.IsInvalidWorker(w); invalid {
-			t.Error(s)
-			return
-		}
-		eq, diff := trial.Equal(w.(*worker).Query, "select id, value from schema.table")
-		if !eq {
-			t.Error(diff)
-		}
-	})
 }
 
 func TestWorker_DoTask(t *testing.T) {
@@ -124,10 +103,7 @@ func TestWorker_DoTask(t *testing.T) {
 		},
 		"good data": {
 			Input: input{
-				fields: FieldMap{
-					"id": {"int", "id"},
-					"v":  {"text", "fruit"},
-				},
+				fields: FieldMap{"id": "id", "v": "fruit"},
 				Rows: [][]driver.Value{
 					{1, "apple"},
 					{2, "banana"},
@@ -140,12 +116,9 @@ func TestWorker_DoTask(t *testing.T) {
 		},
 		"write fail": {
 			Input: input{
-				wPath: "nop://writeline_err",
-				fields: FieldMap{
-					"id": {"int", "id"},
-					"v":  {"text", "fruit"},
-				},
-				Rows: [][]driver.Value{{1, "apple"}},
+				wPath:  "nop://writeline_err",
+				fields: FieldMap{"id": "id", "v": "fruit"},
+				Rows:   [][]driver.Value{{1, "apple"}},
 			},
 			ShouldErr: true,
 		},

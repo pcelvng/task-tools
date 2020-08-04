@@ -2,11 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
-	"strconv"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -28,12 +25,7 @@ type worker struct {
 	Query  string
 }
 
-type FieldMap map[string]*Field
-
-type Field struct {
-	DataType string
-	Name     string
-}
+type FieldMap map[string]string
 
 func (o *options) NewWorker(info string) task.Worker {
 	// unmarshal info string
@@ -47,20 +39,12 @@ func (o *options) NewWorker(info string) task.Worker {
 		return task.InvalidWorker(err.Error())
 	}
 
-	fields, err := getTableInfo(o.db, iOpts.Table)
-	if err != nil {
-		return task.InvalidWorker(err.Error())
-	}
-	for k, v := range iOpts.Fields {
-		if _, found := fields[k]; !found {
-			return task.InvalidWorker("invalid column: '%s'", k)
-		}
-		fields[k].Name = v
-	}
-
 	var query string
 	// get query
 	if len(iOpts.Fields) > 0 {
+		if s := strings.Split(iOpts.Table, "."); len(s) != 2 {
+			return task.InvalidWorker("invalid table %s (schema.table)", iOpts.Table)
+		}
 		var cols string
 		for k := range iOpts.Fields {
 			cols += k + ", "
@@ -93,10 +77,17 @@ func (o *options) NewWorker(info string) task.Worker {
 	return &worker{
 		Meta:   task.NewMeta(),
 		db:     o.db,
-		Fields: fields,
+		Fields: iOpts.Fields,
 		Query:  query,
 		writer: w,
 	}
+}
+
+/*
+
+type Field struct {
+	DataType string
+	Name     string
 }
 
 func getTableInfo(db *sqlx.DB, table string) (map[string]*Field, error) {
@@ -136,7 +127,7 @@ func getTableInfo(db *sqlx.DB, table string) (map[string]*Field, error) {
 		fields[name] = &Field{Name: name, DataType: dType}
 	}
 	return fields, rows.Close()
-}
+} */
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	// pull Data from mysql database
@@ -181,28 +172,11 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 func (m FieldMap) convertRow(data map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
 	for key, value := range data {
-		name := m[key].Name
+		name := m[key]
 		switch v := value.(type) {
 		case []byte:
 			s := string(v)
-			switch m[key].DataType {
-			case "int":
-				i, err := strconv.ParseInt(s, 10, 64)
-				if err != nil {
-					log.Printf("%s '%s' is not a valid int", key, s)
-					continue
-				}
-				result[name] = i
-			case "float":
-				f, err := strconv.ParseFloat(s, 64)
-				if err != nil {
-					log.Printf("%s '%s' is not a valid float", key, s)
-					continue
-				}
-				result[name] = f
-			default:
-				result[name] = s
-			}
+			result[name] = s
 		default:
 			result[name] = value
 		}
