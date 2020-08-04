@@ -21,7 +21,7 @@ const (
 type options struct {
 	DBOptions `toml:"mysql"`
 
-	FOpts *file.Options
+	FOpts *file.Options `toml:"file"`
 	db    *sqlx.DB
 }
 

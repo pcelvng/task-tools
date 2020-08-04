@@ -103,15 +103,15 @@ func TestWorker_DoTask(t *testing.T) {
 		},
 		"good data": {
 			Input: input{
-				fields: FieldMap{"id": "id", "v": "fruit"},
+				fields: FieldMap{"v": "fruit"},
 				Rows: [][]driver.Value{
-					{1, "apple"},
-					{2, "banana"},
+					{"apple"},
+					{"banana"},
 				},
 			},
 			Expected: []string{
-				`{"id":1,"fruit":"apple"}`,
-				`{"id":2,"fruit":"banana"}`,
+				`{"fruit":"apple"}`,
+				`{"fruit":"banana"}`,
 			},
 		},
 		"write fail": {
