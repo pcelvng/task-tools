@@ -8,18 +8,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jbsmith7741/uri"
 	"github.com/jmoiron/sqlx"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pcelvng/task"
-
 	"github.com/pcelvng/task-tools/file"
 )
 
 type worker struct {
 	task.Meta
-	db *sqlx.DB
+
+	db     *sqlx.DB
+	writer file.Writer
 
 	Fields FieldMap
 	Query  string
@@ -35,22 +37,12 @@ type Field struct {
 func (o *options) NewWorker(info string) task.Worker {
 	// unmarshal info string
 	iOpts := struct {
-		Table     string            `uri:"table" required:"true"`
-		QueryFile string            `uri:"origin"` // path to query file
-		Fields    map[string]string `uri:"field"`
+		Table       string            `uri:"table" required:"true"`
+		QueryFile   string            `uri:"origin"` // path to query file
+		Fields      map[string]string `uri:"field"`
+		Destination string            `uri:"dest" required:"true"`
 	}{}
 	if err := uri.Unmarshal(info, &iOpts); err != nil {
-		return task.InvalidWorker(err.Error())
-	}
-	if iOpts.QueryFile == "" && len(iOpts.Fields) == 0 {
-		return task.InvalidWorker("query file or fields values is required")
-	}
-
-	// todo move db connection outside to handle closing properly
-	// setup database connection
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", o.Username, o.Password, o.Host, o.DBName)
-	db, err := sqlx.Open("mysql", dsn)
-	if err != nil {
 		return task.InvalidWorker(err.Error())
 	}
 
@@ -59,12 +51,13 @@ func (o *options) NewWorker(info string) task.Worker {
 	if len(s) != 2 {
 		return task.InvalidWorker("table requires schema and table (schema.table)")
 	}
-	rows, err := db.Query("SELECT column_name, data_type\n FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", s[0], s[1])
+	rows, err := o.db.Query("SELECT column_name, data_type\n FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", s[0], s[1])
 
 	if err != nil {
 		return task.InvalidWorker(err.Error())
 	}
 	fields := make(map[string]*Field)
+	defer rows.Close()
 	for rows.Next() {
 		f := &Field{}
 		if err := rows.Scan(&f.Name, &f.DataType); err != nil {
@@ -72,11 +65,13 @@ func (o *options) NewWorker(info string) task.Worker {
 		}
 		fields[f.Name] = f
 	}
-	rows.Close()
-
 	for k, v := range iOpts.Fields {
+		if _, found := fields[k]; !found {
+			return task.InvalidWorker("invalid column: '%s'", k)
+		}
 		fields[k].Name = v
 	}
+
 	var query string
 	// get query
 	if len(iOpts.Fields) > 0 {
@@ -100,11 +95,21 @@ func (o *options) NewWorker(info string) task.Worker {
 		query = string(b)
 	}
 
+	if query == "" {
+		return task.InvalidWorker("query path or field params required")
+	}
+
+	w, err := file.NewWriter(iOpts.Destination, o.FOpts)
+	if err != nil {
+		return task.InvalidWorker("writer: %s", err)
+	}
+
 	return &worker{
 		Meta:   task.NewMeta(),
-		db:     db,
+		db:     o.db,
 		Fields: fields,
 		Query:  query,
+		writer: w,
 	}
 }
 
@@ -114,38 +119,42 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		return task.Failed(err)
 	}
-	out, _ := file.NewWriter("./tmp.json", nil)
-	log.Println(w.Query)
-	log.Println(rows.Columns())
 	for rows.Next() {
+		if task.IsDone(ctx) {
+			w.writer.Abort()
+			return task.Interrupted()
+		}
 		row := make(map[string]interface{})
-		rows.MapScan(row)
+		if err := rows.MapScan(row); err != nil {
+			return task.Failf("mapscan %s", err)
+		}
 
 		r := w.Fields.convertRow(row)
 		b, err := jsoniter.Marshal(r)
 		if err != nil {
 			return task.Failed(err)
 		}
-		if err := out.WriteLine(b); err != nil {
+		if err := w.writer.WriteLine(b); err != nil {
 			return task.Failed(err)
 		}
 	}
 	if err := rows.Close(); err != nil {
 		return task.Failed(err)
 	}
-	if err := out.Close(); err != nil {
+
+	// write to file
+	if err := w.writer.Close(); err != nil {
 		return task.Failed(err)
 	}
 
-	// process results as needed
+	sts := w.writer.Stats()
+	w.SetMeta("file", sts.Path)
 
-	// load data into bigquery table or GCS
-	return task.Completed("data written")
+	return task.Completed("%d rows written to %s (%s)", sts.LineCnt, sts.Path, humanize.Bytes(uint64(sts.ByteCnt)))
 }
 
 func (m FieldMap) convertRow(data map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-
 	for key, value := range data {
 		name := m[key].Name
 		switch v := value.(type) {

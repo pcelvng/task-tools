@@ -1,14 +1,19 @@
 package main
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/jmoiron/sqlx"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 )
 
 const (
-	taskType = "dbSync"
+	taskType = "sql_read"
 	desc     = ``
 )
 
@@ -16,6 +21,7 @@ type options struct {
 	DBOptions `toml:"mysql"`
 
 	FOpts *file.Options
+	db    *sqlx.DB
 }
 
 type DBOptions struct {
@@ -36,6 +42,13 @@ func (o *options) Validate() error {
 	return errs.ErrOrNil()
 }
 
+// connectDB creates a connection to the database
+func (o *options) connectDB() (err error) {
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", o.Username, o.Password, o.Host, o.DBName)
+	o.db, err = sqlx.Open("mysql", dsn)
+	return err
+}
+
 func main() {
 	opts := &options{
 		FOpts: file.NewOptions(),
@@ -45,6 +58,11 @@ func main() {
 		Version(tools.Version)
 
 	app.Initialize()
+
+	// setup database connection
+	if err := opts.connectDB(); err != nil {
+		log.Fatal("db connect", err)
+	}
 
 	app.Run()
 }

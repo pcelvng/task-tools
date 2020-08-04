@@ -4,14 +4,16 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/DATA-DOG/go-sqlmock v1.4.1
 	github.com/buger/jsonparser v1.0.0
 	github.com/davecgh/go-spew v1.1.1
+	github.com/dustin/go-humanize v1.0.0
 	github.com/dustinevan/chron v1.0.0 // indirect
 	github.com/go-ini/ini v1.57.0 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/google/go-cmp v0.4.1
+	github.com/google/go-cmp v0.5.1
 	github.com/hydronica/toml v0.4.1
-	github.com/hydronica/trial v0.4.0
+	github.com/hydronica/trial v0.5.0
 	github.com/jarcoal/httpmock v1.0.4
 	github.com/jbsmith7741/go-tools v0.2.0
 	github.com/jbsmith7741/trial v0.3.1
