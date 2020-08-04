@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -46,24 +47,9 @@ func (o *options) NewWorker(info string) task.Worker {
 		return task.InvalidWorker(err.Error())
 	}
 
-	// pull info about table
-	s := strings.Split(iOpts.Table, ".")
-	if len(s) != 2 {
-		return task.InvalidWorker("table requires schema and table (schema.table)")
-	}
-	rows, err := o.db.Query("SELECT column_name, data_type\n FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", s[0], s[1])
-
+	fields, err := getTableInfo(o.db, iOpts.Table)
 	if err != nil {
 		return task.InvalidWorker(err.Error())
-	}
-	fields := make(map[string]*Field)
-	defer rows.Close()
-	for rows.Next() {
-		f := &Field{}
-		if err := rows.Scan(&f.Name, &f.DataType); err != nil {
-			return task.InvalidWorker(err.Error())
-		}
-		fields[f.Name] = f
 	}
 	for k, v := range iOpts.Fields {
 		if _, found := fields[k]; !found {
@@ -111,6 +97,45 @@ func (o *options) NewWorker(info string) task.Worker {
 		Query:  query,
 		writer: w,
 	}
+}
+
+func getTableInfo(db *sqlx.DB, table string) (map[string]*Field, error) {
+	// pull info about table
+	s := strings.Split(table, ".")
+	if len(s) != 2 {
+		return nil, errors.New("table requires schema and table (schema.table)")
+	}
+
+	rows, err := db.Query("SELECT column_name, data_type\n FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", s[0], s[1])
+	if err != nil {
+		return nil, err
+	}
+
+	fields := make(map[string]*Field)
+	defer rows.Close()
+	for rows.Next() {
+		var name, dType string
+
+		if err = rows.Scan(&name, &dType); err != nil {
+			return nil, err
+		}
+
+		if strings.Contains(dType, "char") || strings.Contains(dType, "text") {
+			dType = "string"
+		}
+
+		if strings.Contains(dType, "int") || strings.Contains(dType, "serial") {
+			dType = "int"
+		}
+
+		if strings.Contains(dType, "numeric") || strings.Contains(dType, "dec") ||
+			strings.Contains(dType, "double") || strings.Contains(dType, "real") ||
+			strings.Contains(dType, "fixed") || strings.Contains(dType, "float") {
+			dType = "float"
+		}
+		fields[name] = &Field{Name: name, DataType: dType}
+	}
+	return fields, rows.Close()
 }
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
@@ -161,12 +186,20 @@ func (m FieldMap) convertRow(data map[string]interface{}) map[string]interface{}
 		case []byte:
 			s := string(v)
 			switch m[key].DataType {
-			case "int", "tinyint", "mediumint":
-				i, err := strconv.Atoi(s)
+			case "int":
+				i, err := strconv.ParseInt(s, 10, 64)
 				if err != nil {
-					log.Println(err)
+					log.Printf("%s '%s' is not a valid int", key, s)
+					continue
 				}
 				result[name] = i
+			case "float":
+				f, err := strconv.ParseFloat(s, 64)
+				if err != nil {
+					log.Printf("%s '%s' is not a valid float", key, s)
+					continue
+				}
+				result[name] = f
 			default:
 				result[name] = s
 			}

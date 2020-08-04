@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/jmoiron/sqlx"
@@ -25,6 +26,7 @@ type options struct {
 }
 
 type DBOptions struct {
+	Type     string `toml:"type" commented:"true"`
 	Username string `toml:"username" commented:"true"`
 	Password string `toml:"password" commented:"true"`
 	Host     string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
@@ -44,7 +46,29 @@ func (o *options) Validate() error {
 
 // connectDB creates a connection to the database
 func (o *options) connectDB() (err error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", o.Username, o.Password, o.Host, o.DBName)
+	var dsn string
+	switch o.Type {
+	case "mysql":
+		dsn = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", o.Username, o.Password, o.Host, o.DBName)
+	case "postgres":
+		host, port := o.Host, ""
+		if v := strings.Split(o.Host, ":"); len(v) > 1 {
+			host, port = v[0], v[1]
+		}
+
+		dsn = fmt.Sprintf("host=%s dbname=%s sslmode=disable", host, o.DBName)
+		if o.Username != "" {
+			dsn += " user=" + o.Username
+		}
+		if o.Password != "" {
+			dsn += " password=" + o.Password
+		}
+		if port != "" {
+			dsn += " port=" + port
+		}
+	default:
+		return fmt.Errorf("unknown db type %s", o.Type)
+	}
 	o.db, err = sqlx.Open("mysql", dsn)
 	return err
 }
@@ -52,6 +76,13 @@ func (o *options) connectDB() (err error) {
 func main() {
 	opts := &options{
 		FOpts: file.NewOptions(),
+		DBOptions: DBOptions{
+			Type:     "mysql",
+			Username: "user",
+			Password: "pass",
+			Host:     "127.0.0.1:3306",
+			DBName:   "db",
+		},
 	}
 	app := bootstrap.NewWorkerApp(taskType, opts.NewWorker, opts).
 		Description(desc).
