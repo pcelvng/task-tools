@@ -3,6 +3,7 @@ module github.com/pcelvng/task-tools
 go 1.14
 
 require (
+	cloud.google.com/go/bigquery v1.0.1
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.4.1
 	github.com/buger/jsonparser v1.0.0
@@ -31,6 +32,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.4.0
+	google.golang.org/api v0.15.0
 	gopkg.in/dustinevan/chron.v0 v0.0.0
 	gopkg.in/ini.v1 v1.57.0 // indirect
 )
