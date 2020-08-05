@@ -30,7 +30,7 @@ type FieldMap map[string]string
 func (o *options) NewWorker(info string) task.Worker {
 	// unmarshal info string
 	iOpts := struct {
-		Table       string            `uri:"table" required:"true"`
+		Table       string            `uri:"table"`
 		QueryFile   string            `uri:"origin"` // path to query file
 		Fields      map[string]string `uri:"field"`
 		Destination string            `uri:"dest" required:"true"`
@@ -82,52 +82,6 @@ func (o *options) NewWorker(info string) task.Worker {
 		writer: w,
 	}
 }
-
-/*
-
-type Field struct {
-	DataType string
-	Name     string
-}
-
-func getTableInfo(db *sqlx.DB, table string) (map[string]*Field, error) {
-	// pull info about table
-	s := strings.Split(table, ".")
-	if len(s) != 2 {
-		return nil, errors.New("table requires schema and table (schema.table)")
-	}
-
-	rows, err := db.Query("SELECT column_name, data_type\n FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", s[0], s[1])
-	if err != nil {
-		return nil, err
-	}
-
-	fields := make(map[string]*Field)
-	defer rows.Close()
-	for rows.Next() {
-		var name, dType string
-
-		if err = rows.Scan(&name, &dType); err != nil {
-			return nil, err
-		}
-
-		if strings.Contains(dType, "char") || strings.Contains(dType, "text") {
-			dType = "string"
-		}
-
-		if strings.Contains(dType, "int") || strings.Contains(dType, "serial") {
-			dType = "int"
-		}
-
-		if strings.Contains(dType, "numeric") || strings.Contains(dType, "dec") ||
-			strings.Contains(dType, "double") || strings.Contains(dType, "real") ||
-			strings.Contains(dType, "fixed") || strings.Contains(dType, "float") {
-			dType = "float"
-		}
-		fields[name] = &Field{Name: name, DataType: dType}
-	}
-	return fields, rows.Close()
-} */
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	// pull Data from mysql database

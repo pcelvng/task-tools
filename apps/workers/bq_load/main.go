@@ -10,7 +10,17 @@ import (
 
 const (
 	taskType = "bq_load"
-	desc     = ``
+	desc     = `load a delimited json file into BigQuery 
+
+info params 
+ - origin: (required)  file to be loaded (gs://path/file.json)
+ - destination: (required) project.dataset.table to be insert into
+ - truncate: truncate the table (delete ALL and insert). Default behavior is to append data 
+ - delete: map field defines the column and values to delete before inserting (delete=id:10|date:2020-01-02)
+
+
+example 
+{"task":"bq_load", "info":"gs://my/data.json?destination=project.reports.impressions&delete=date:2020-01-02|id:11"}`
 )
 
 type options struct {
