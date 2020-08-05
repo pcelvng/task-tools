@@ -146,7 +146,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		w.dbDriver, w.Params.Table, w.records)
 }
 
-// Queries the database for the table schema for each column
+// QuerySchema queries the database for the table schema for each column
 // sets the worker's db value
 func (w *worker) QuerySchema() (err error) {
 	var t, s string // table and schema
