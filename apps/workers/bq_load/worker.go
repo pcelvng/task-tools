@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"cloud.google.com/go/bigquery"
@@ -13,39 +15,27 @@ import (
 )
 
 type worker struct {
+	task.Meta
 	options
 
 	Destination `uri:"dest_table" required:"true"`
-	File        string `uri:"origin" required:"true"`
-}
-
-type Destination struct {
-	Project string
-	Dataset string
-	Table   string
-}
-
-func (d *Destination) UnmarshalText(text []byte) error {
-	l := strings.Split(string(text), ".")
-	if len(l) != 3 || len(l[0]) == 0 || len(l[1]) == 0 || len(l[2]) == 0 {
-		return fmt.Errorf("invalid dest_table %s (project.dataset.table)" + string(text))
-	}
-
-	d.Project, d.Dataset, d.Table = l[0], l[1], l[2]
-	return nil
-}
-
-func (d Destination) String() string {
-	return d.Project + "." + d.Dataset + "." + d.Table
+	File        string            `uri:"origin" required:"true"`
+	Truncate    bool              `uri:"truncate"`
+	DeleteMap   map[string]string `uri:"delete"` // will replace the data by removing current data
 }
 
 func (o *options) NewWorker(info string) task.Worker {
 	w := &worker{
+		Meta:    task.NewMeta(),
 		options: *o,
 	}
 	err := uri.Unmarshal(info, w)
 	if err != nil {
 		return task.InvalidWorker(err.Error())
+	}
+
+	if len(w.DeleteMap) > 0 && w.Truncate {
+		return task.InvalidWorker("truncate and delete options must be selected independently")
 	}
 
 	return w
@@ -63,16 +53,36 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 	bqRef := bigquery.NewGCSReference(w.File)
 	bqRef.SourceFormat = bigquery.JSON
-	//bqRef.Schema = bqBidWinSchema()
 	bqRef.MaxBadRecords = 1
 
 	loader := client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(bqRef)
-	//loader.WriteDisposition = bigquery.WriteAppend
-	loader.WriteDisposition = bigquery.WriteTruncate
+	loader.WriteDisposition = bigquery.WriteAppend
+	if len(w.DeleteMap) > 0 {
+		q := delStatement(w.DeleteMap, w.Destination)
+		j, err := client.Query(q).Run(ctx)
+		if err != nil {
+			return task.Failf("delete statement: %s", err)
+		}
+		status, err := j.Wait(ctx)
+		if err != nil {
+			return task.Failf("delete wait: %s", err)
+		}
+		if status.Err() != nil {
+			return task.Failf("delete: %s", err)
+		}
+		status = j.LastStatus()
+		if qSts, ok := status.Statistics.Details.(*bigquery.QueryStatistics); ok {
+			w.SetMeta("rows_del", strconv.FormatInt(qSts.NumDMLAffectedRows, 10))
+		}
+	}
+
+	if w.Truncate {
+		loader.WriteDisposition = bigquery.WriteTruncate
+	}
 
 	job, err := loader.Run(ctx)
 	if err != nil {
-		return task.Failf("loader run", err)
+		return task.Failf("loader run: %s", err)
 	}
 	status, err := job.Wait(ctx)
 	if err == nil {
@@ -80,10 +90,19 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			return task.Failf("job completed with error: %v", status.Err())
 		}
 		if sts, ok := status.Statistics.Details.(*bigquery.LoadStatistics); ok {
+			w.SetMeta("rows_insert", strconv.FormatInt(sts.OutputRows, 10))
 			return task.Completed("%d rows (%s) loaded", sts.OutputRows, humanize.Bytes(uint64(sts.OutputBytes)))
 		}
-
 	}
 
 	return task.Completed("completed")
+}
+
+func delStatement(m map[string]string, d Destination) string {
+	s := make([]string, 0)
+	for k, v := range m {
+		s = append(s, k+" = "+v)
+	}
+	sort.Sort(sort.StringSlice(s))
+	return fmt.Sprintf("delete from `%s.%s.%s` where %s", d.Project, d.Dataset, d.Table, strings.Join(s, " and "))
 }
