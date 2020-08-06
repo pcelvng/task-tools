@@ -21,7 +21,9 @@ type worker struct {
 	Destination `uri:"dest_table" required:"true"`
 	File        string            `uri:"origin" required:"true"`
 	Truncate    bool              `uri:"truncate"`
+	Append      bool              `uri:"append"`
 	DeleteMap   map[string]string `uri:"delete"` // will replace the data by removing current data
+	delete      bool
 }
 
 func (o *options) NewWorker(info string) task.Worker {
@@ -34,8 +36,17 @@ func (o *options) NewWorker(info string) task.Worker {
 		return task.InvalidWorker(err.Error())
 	}
 
-	if len(w.DeleteMap) > 0 && w.Truncate {
+	// verify options
+	w.delete = len(w.DeleteMap) > 0
+	if w.delete && w.Truncate {
 		return task.InvalidWorker("truncate and delete options must be selected independently")
+	}
+
+	if !(w.delete || w.Truncate || w.Append) {
+		return task.InvalidWorker("insert rule required (append|truncate|delete)")
+	}
+	if w.delete {
+		w.Append = true
 	}
 
 	return w

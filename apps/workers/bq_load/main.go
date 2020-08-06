@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 
 	tools "github.com/pcelvng/task-tools"
@@ -49,7 +49,7 @@ type Destination struct {
 func (d *Destination) UnmarshalText(text []byte) error {
 	l := strings.Split(string(text), ".")
 	if len(l) != 3 || len(l[0]) == 0 || len(l[1]) == 0 || len(l[2]) == 0 {
-		return fmt.Errorf("invalid dest_table %s (project.dataset.table)" + string(text))
+		return errors.New("requires (project.dataset.table)")
 	}
 
 	d.Project, d.Dataset, d.Table = l[0], l[1], l[2]
