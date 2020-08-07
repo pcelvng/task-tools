@@ -127,6 +127,9 @@ func (m FieldMap) convertRow(data map[string]interface{}) map[string]interface{}
 	result := make(map[string]interface{})
 	for key, value := range data {
 		name := m[key]
+		if name == "" {
+			name = key
+		}
 		switch v := value.(type) {
 		case []byte:
 			s := string(v)
