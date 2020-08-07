@@ -15,7 +15,16 @@ import (
 
 const (
 	taskType = "sql_read"
-	desc     = ``
+	desc     = `extract data from a mysql or postgres table 
+
+info params
+ - origin: (alternative to field) - path to a file containing a sql query to extract the date  
+ - dest: (required) - file path to where the file should be written 
+ - table: (required with field) - table (schema.table) to read from 
+ - field: (alternative to origin) - list of columns to read from and the json field that should be used to write the values. 
+
+example 
+{"task":"sql_read","info":"?dest=./data.json&table=report.impressions&field=id:my_id|date:date"}`
 )
 
 type options struct {

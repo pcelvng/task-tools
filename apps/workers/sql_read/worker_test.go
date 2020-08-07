@@ -35,6 +35,10 @@ func TestNewWorker(t *testing.T) {
 			Input:    tFile + "?table=schema.table&dest=nop://",
 			Expected: "select * from fake_table;",
 		},
+		"lazy maps": {
+			Input:    "?table=schema.table&dest=nop://&field=id:|name:|value:fruit",
+			Expected: "select id, name, value from schema.table",
+		},
 		"no query": {
 			Input:     "?table=schema.table&dest=nop://",
 			ShouldErr: true,
@@ -112,6 +116,19 @@ func TestWorker_DoTask(t *testing.T) {
 			Expected: []string{
 				`{"fruit":"apple"}`,
 				`{"fruit":"banana"}`,
+			},
+		},
+		"lazy map": {
+			Input: input{
+				fields: FieldMap{"id": ""},
+				Rows: [][]driver.Value{
+					{1},
+					{2},
+				},
+			},
+			Expected: []string{
+				`{"id":1}`,
+				`{"id":2}`,
 			},
 		},
 		"write fail": {
