@@ -103,6 +103,7 @@ func newOptions() *options {
 
 type busOptions struct {
 	Bus       string   `uri:"scheme"`
+	Path      string   `uri:"path"`
 	Hosts     []string `uri:"host"`
 	ProjectID string   `uri:"project"`
 	JSONAuth  string   `uri:"jsonauth"`
@@ -120,6 +121,7 @@ type options struct {
 	EveryXHours int    // default skips 0 hours aka does all hours. Will always at least create a task for the start date.
 	OnHours     []bool // each key represents the hour and bool is if that value is turned on. (not specified means all hours are ON)
 	OffHours    []bool // each key represents the hour and bool is if that value is turned off.
+	meta        string
 }
 
 // setOnHours will parse onHours string and set
@@ -217,7 +219,7 @@ func loadOptions() (*options, error) {
 	flag.Parse()
 
 	if *version {
-		tools.String()
+		fmt.Println(tools.String())
 		os.Exit(0)
 	}
 
@@ -239,6 +241,10 @@ func loadOptions() (*options, error) {
 	if err := uri.Unmarshal(*outBus, &ops); err != nil {
 		return nil, err
 	}
+	if ops.Bus == "" {
+		ops.Bus = ops.Path
+	}
+
 	c.OutBus = ops.Bus
 	c.LookupdHosts = ops.Hosts
 	c.ProjectID = ops.ProjectID
@@ -250,10 +256,16 @@ func loadOptions() (*options, error) {
 	// populate template
 	c.TaskTemplate = *template
 	if fConf != nil {
-		tsk := task.Task{Type: c.TaskType, Meta: "workflow=*"}
-		if *job != "" {
-			tsk.Meta += "&job=" + *job
+		w := fConf.cache.Search(c.TaskType, *job)
+		if w == "" {
+			return nil, fmt.Errorf("no workflow found for %s:%s", c.TaskType, *job)
 		}
+		c.meta = "workflow=" + w
+
+		if *job != "" {
+			c.meta += "&job=" + *job
+		}
+		tsk := task.Task{Type: c.TaskType, Meta: c.meta}
 		if p := fConf.cache.Get(tsk); !p.IsEmpty() {
 			c.TaskTemplate = p.Template
 		}

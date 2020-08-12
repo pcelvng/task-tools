@@ -72,6 +72,23 @@ func (r Workflow) Parent() (p []Phase) {
 	return p
 }
 
+func (c *Cache) Search(task, job string) (path string) {
+	for key, w := range c.Workflows {
+		for _, p := range w.Phases {
+			if p.Task == task {
+				if job == "" {
+					return key
+				}
+				v, _ := url.ParseQuery(p.Rule)
+				if v.Get("job") == job {
+					return key
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // Get the Phase associated with the task t
 func (c *Cache) Get(t task.Task) Phase {
 	c.mutex.RLock()

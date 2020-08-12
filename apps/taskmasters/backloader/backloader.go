@@ -52,10 +52,7 @@ func (bl *backloader) backload() (int, error) {
 
 	cnt := 0
 	onHours := makeOnHrs(bl.config.OnHours, bl.config.OffHours)
-	meta := ""
-	if *job != "" {
-		meta += "workflow=*&job=" + *job
-	}
+
 	for {
 		// check if current hour is eligible
 		if onHours[atHour.Hour()] && checkEvery(startHour, atHour, bl.config.EveryXHours) {
@@ -66,7 +63,7 @@ func (bl *backloader) backload() (int, error) {
 			tsk := task.New(bl.config.TaskType, tskValue)
 
 			// add meta data
-			tsk.Meta = meta
+			tsk.Meta = bl.config.meta
 
 			// normalize topic
 			topic := bl.config.TaskType

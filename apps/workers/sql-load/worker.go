@@ -58,13 +58,13 @@ type DataSet struct {
 }
 
 type DbColumn struct {
-	Name       string // DB column name
-	DataType   string // DB data type
-	IsNullable string // DB YES or NO string values
-	Default    string // DB default function / value
-	TypeName   string // int64, float64, string
-	JsonKey    string // matching json key name
-	Nullable   bool   // bool value if column is nullable (true) or not (false)
+	Name       string  // DB column name
+	DataType   string  // DB data type
+	IsNullable string  // DB YES or NO string values
+	Default    *string // DB default function / value
+	TypeName   string  // int64, float64, string
+	JsonKey    string  // matching json key name
+	Nullable   bool    // bool value if column is nullable (true) or not (false)
 }
 
 type DbSchema []DbColumn
@@ -175,7 +175,6 @@ func (w *worker) QuerySchema() (err error) {
 	}
 
 	query := fmt.Sprintf(q, s, t)
-
 	rows, err := w.sqlDB.Query(query)
 	if err != nil {
 		return errors.Wrap(err, "query_schema: cannot get table columns")
@@ -183,12 +182,15 @@ func (w *worker) QuerySchema() (err error) {
 
 	c := DbColumn{}
 	for rows.Next() {
-		rows.Scan(
+		err := rows.Scan(
 			&c.Name,
 			&c.IsNullable,
 			&c.DataType,
 			&c.Default,
 		)
+		if err != nil {
+			log.Println(err)
+		}
 		w.ds.dbSchema = append(w.ds.dbSchema, c)
 	}
 
