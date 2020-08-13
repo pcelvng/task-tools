@@ -10,7 +10,7 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = backloader crontask files retry filewatcher nop sort2file deduper batcher http recap filecopy logger stats json2csv flowlord csv2json sql_load
+APPS = backloader crontask files retry filewatcher nop sort2file deduper batcher http recap filecopy logger stats json2csv flowlord csv2json sql-load sql-read bq-load
 
 all: $(APPS) 
 
