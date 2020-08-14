@@ -169,6 +169,11 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 			continue
 		}
 
+		// object is referring to itself
+		if objPth == objInfo.Key {
+			continue
+		}
+
 		sts := stat.New()
 		sts.IsDir = strings.HasSuffix(objInfo.Key, "/")
 		sts.SetCreated(objInfo.LastModified)

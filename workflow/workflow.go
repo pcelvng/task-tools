@@ -27,6 +27,21 @@ func (p Phase) IsEmpty() bool {
 	return p.Task == "" && p.Rule == "" && p.DependsOn == "" && p.Template == ""
 }
 
+// Job portion of the Task
+func (p Phase) Job() string {
+	s := strings.Split(p.Task, ":")
+	if len(s) > 1 {
+		return s[1]
+	}
+	return s[0]
+}
+
+// Topic portion of the Task
+func (p Phase) Topic() string {
+	s := strings.Split(p.Task, ":")
+	return s[0]
+}
+
 type Workflow struct {
 	Checksum string  // md5 hash for the file to check for changes
 	Phases   []Phase `toml:"phase"`
