@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pcelvng/task"
@@ -91,8 +93,10 @@ func (tm *taskMaster) Info() interface{} {
 		}
 		sts.Entries[j.Name] = ent
 	}
-	for k, v := range tm.Workflows {
-		sts.Workflow[k] = len(v.Phases)
+	if tm.Cache != nil {
+		for k, v := range tm.Workflows {
+			sts.Workflow[k] = len(v.Phases)
+		}
 	}
 	return sts
 }
@@ -217,14 +221,17 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	// start off any children tasks
 	if t.Result == task.CompleteResult {
 		for _, w := range tm.Children(*t) {
+			if !isReady(w.Rule, t.Meta) {
+				continue
+			}
 			taskTime := tmpl.InfoTime(t.Info)
 			info := tmpl.Meta(w.Template, meta)
+			rules, _ := url.ParseQuery(w.Rule)
 
 			if !taskTime.IsZero() {
 				info = tmpl.Parse(info, taskTime)
 			}
 			child := task.NewWithID(w.Task, info, t.ID)
-			rules, _ := url.ParseQuery(w.Rule)
 
 			child.Meta = "workflow=" + meta.Get("workflow")
 			if rules.Get("job") != "" {
@@ -237,6 +244,22 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		return nil
 	}
 	return fmt.Errorf("unknown result %q %s", t.Result, t.JSONString())
+}
+
+var regexMeta = regexp.MustCompile(`{meta:(\w+)}`)
+
+// isReady checks a task rule for any require fields and verifies
+// that all fields are included and valid
+func isReady(rule, meta string) bool {
+	rules, _ := url.ParseQuery(rule)
+	met, _ := url.ParseQuery(meta)
+	req := strings.Join(rules["require"], ",")
+	for _, m := range regexMeta.FindAllStringSubmatch(req, -1) {
+		if s := met.Get(m[1]); s == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func (tm *taskMaster) read(ctx context.Context) {
