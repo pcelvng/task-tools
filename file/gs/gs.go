@@ -65,17 +65,22 @@ func Stat(pth string, accessKey, secretKey string) (stat.Stats, error) {
 	}
 	bucket, objPth := parsePth(pth)
 
+	// check if we have access to the project
+	info, statErr := client.StatObject(bucket, objPth, minio.StatObjectOptions{})
 	donech := make(chan struct{})
 	defer close(donech)
 	count := 0
-	var info minio.ObjectInfo
+
+	// ls the path
 	for info = range client.ListObjects(bucket, objPth, false, donech) {
-		if info.Err != nil {
-			return stat.Stats{}, err
-		}
 		count++
 	}
-	if count > 1 {
+
+	// if no
+	if statErr != nil && count == 0 {
+		return stat.Stats{}, statErr
+	}
+	if ((statErr != nil || pth[len(pth)-1] == '/') && count > 0) || count > 1 {
 		return stat.Stats{
 			Path:  pth,
 			IsDir: true,
