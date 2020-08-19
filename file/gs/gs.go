@@ -64,25 +64,27 @@ func Stat(pth string, accessKey, secretKey string) (stat.Stats, error) {
 		return stat.Stats{}, errors.Wrap(err, "s3 client init")
 	}
 	bucket, objPth := parsePth(pth)
-	info, err := client.StatObject(bucket, objPth, minio.StatObjectOptions{})
-	// check if directory
-	if err != nil {
-		donech := make(chan struct{})
-		defer close(donech)
-		count := 0
-		for info := range client.ListObjects(bucket, objPth, false, donech) {
-			if info.Err != nil {
-				return stat.Stats{}, err
-			}
-			count++
-		}
-		if count > 0 {
-			return stat.Stats{
-				Path:  pth,
-				IsDir: true,
-			}, nil
-		}
-		return stat.Stats{}, err
+
+	// check if we have access to the project
+	info, statErr := client.StatObject(bucket, objPth, minio.StatObjectOptions{})
+	donech := make(chan struct{})
+	defer close(donech)
+	count := 0
+
+	// ls the path
+	for info = range client.ListObjects(bucket, objPth, false, donech) {
+		count++
+	}
+
+	// if no
+	if statErr != nil && count == 0 {
+		return stat.Stats{}, statErr
+	}
+	if ((statErr != nil || pth[len(pth)-1] == '/') && count > 0) || count > 1 {
+		return stat.Stats{
+			Path:  pth,
+			IsDir: true,
+		}, nil
 	}
 
 	return stat.Stats{

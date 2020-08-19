@@ -155,6 +155,26 @@ func TestTaskMaster_Process(t *testing.T) {
 				{Type: "task4", Info: "metafile.txt", ID: "UUID_task1", Meta: "workflow=f1.toml"},
 			},
 		},
+		"task6 requires file": {
+			Input: task.Task{
+				Type:   "task5",
+				ID:     "ID",
+				Meta:   "workflow=f1.toml&file=file.txt&job=t5",
+				Result: task.CompleteResult,
+			},
+			Expected: []task.Task{
+				{Type: "task6", Info: "file.txt", ID: "ID", Meta: "workflow=f1.toml"},
+			},
+		},
+		"task6 requires not ready": {
+			Input: task.Task{
+				Type:   "task5",
+				ID:     "ID",
+				Meta:   "workflow=f1.toml",
+				Result: task.CompleteResult,
+			},
+			Expected: []task.Task{},
+		},
 	}
 	trial.New(fn, cases).SubTest(t)
 }
@@ -181,6 +201,53 @@ func TestTaskMaster_Schedule(t *testing.T) {
 	if eq, diff := trial.Contains(producer.Messages["task1"], []string{`"type":"task1"`, `"meta":"workflow=f1.toml\u0026job=t2"`}); !eq {
 		t.Error(diff)
 	}
+}
+
+func TestIsReady(t *testing.T) {
+	type input struct {
+		rule string
+		meta string
+	}
+	fn := func(i trial.Input) (interface{}, error) {
+		in := i.Interface().(input)
+		return isReady(in.rule, in.meta), nil
+	}
+	cases := trial.Cases{
+		"no require": {
+			Input:    input{"", ""},
+			Expected: true,
+		},
+		"require 1": {
+			Input:    input{"require={meta:file}", "file=file.txt"},
+			Expected: true,
+		},
+		"require 2": {
+			Input: input{
+				rule: "require={meta:file}&require={meta:time}",
+				meta: "file=file.txt&time=now",
+			},
+			Expected: true,
+		},
+		"require w/ comma": {
+			Input: input{
+				rule: "require={meta:file},{meta:time}",
+				meta: "file=file.txt&time=now",
+			},
+			Expected: true,
+		},
+		"missing": {
+			Input:    input{"require={meta:file}", "file1=file.txt"},
+			Expected: false,
+		},
+		"missing 1": {
+			Input: input{
+				rule: "require={meta:file}&require={meta:time}",
+				meta: "file=file.txt",
+			},
+			Expected: false,
+		},
+	}
+	trial.New(fn, cases).Test(t)
 }
 
 func comparer(i1, i2 interface{}) (equal bool, diff string) {

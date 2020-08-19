@@ -10,7 +10,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/dustinevan/chron v1.0.0 // indirect
-	github.com/go-ini/ini v1.57.0 // indirect
+	github.com/go-ini/ini v1.58.0 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/google/go-cmp v0.5.1
 	github.com/hydronica/toml v0.4.1
@@ -32,6 +32,9 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.6.1
+	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de // indirect
+	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc // indirect
+	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed // indirect
 	google.golang.org/api v0.30.0
 	gopkg.in/dustinevan/chron.v0 v0.0.0
 	gopkg.in/ini.v1 v1.57.0 // indirect

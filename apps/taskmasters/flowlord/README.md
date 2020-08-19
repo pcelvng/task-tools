@@ -24,14 +24,14 @@ template = "?hour={yyyy}-{mm}-{dd}T{hh}"
 
 ### Phase 
 
- - task: the name of the topic this task will be sent to. It is also the unique name of the task
+ - task: the name of the topic this task will be sent to. It is also the unique name of the task. In Addition a job of a task can be added in the task name using a colon (:) as a separator (task:job)
  - dependsOn: 
    - the name of the parent task
    - this task will start after the parent task has completed successfully
    - if left blank this tasks will only start based on the rule
  - rule: rules on about the tasks that are encoded as query params 
-   - cron: schudule the task based on the cron pattern (see scheduling)
-   - job: additional name for tasks that share the same topic 
+   - cron: schedule the task based on the cron pattern (see scheduling)
+   - require: used in a child task saying to only start task if value is present
  - retry: the number of times a task is retried before being sent to failed_tasks
  - template: a URL string that is parsed and put into the task's info string when created
 
@@ -71,3 +71,15 @@ rule = "cron=0 0 1 * * *&Offset=-6"
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
 ```
 
+### require
+
+used to indicate a required field or value before starting a child process. 
+
+```
+[[Phase]]
+task = "child:job"
+rule = "require:{meta:file}"
+template = "{meta:file}" 
+dependsOn = "parent:job"
+```
+The example task 'child:job' will only start if the parent job has file data in it's meta field. 
