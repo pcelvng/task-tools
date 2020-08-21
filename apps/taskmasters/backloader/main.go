@@ -25,10 +25,8 @@ import (
 var sigChan = make(chan os.Signal, 1)
 
 func main() {
-	err := run()
-	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+	if err := run(); err != nil {
+		log.Fatal(err.Error())
 	}
 }
 
@@ -66,21 +64,27 @@ func run() error {
 }
 
 var (
-	tskType = flag.String("type", "", "REQUIRED; the task type")
-	at      = flag.String("at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
-	from    = flag.String("from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
-	to      = flag.String("to", "", "same format as 'from'; if not specified, will run the one hour specified by from. Allows special keyword 'now'.")
-	outBus  = flag.String("bus", "stdout", "one of 'stdout', 'file', 'nsq', 'pubsub'")
-	//	nsqdHosts   = flag.String("nsqd-hosts", "localhost:4150", "comma-separated list of nsqd hosts with port")
-	template    = flag.String("template", "{yyyy}-{mm}-{dd}T{hh}:00", "task template")
-	daily       = flag.Bool("daily", false, "sets hour to 00 and populates every 24 hours")
+	tskType  = flag.String("type", "", "REQUIRED; the task type")
+	job      = flag.String("job", "", "(optional: with config) workflow job")
+	template = flag.String("template", "{yyyy}-{mm}-{dd}T{hh}:00", "task template")
+	outBus   = flag.String("bus", "stdout", "one of 'stdout', 'file', 'nsq', 'pubsub'")
+
+	at    = flag.String("at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
+	from  = flag.String("from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
+	to    = flag.String("to", "", "same format as 'from'; if not specified, will run the one hour specified by from. Allows special keyword 'now'.")
+	daily = flag.Bool("daily", false, "sets hour to 00 and populates every 24 hours")
+
 	everyXHours = flag.Uint("every-x-hours", 0, "will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' options.")
 	onHours     = flag.String("on-hours", "", "comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15")
 	offHours    = flag.String("off-hours", "", "comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.")
-	version     = flag.Bool("version", false, "show version")
-	config      = flag.String("c", "", "(optional config path)")
-	dFmt        = "2006-01-02T15"
-	job         = flag.String("job", "", "(optional: with config) workflow job")
+
+	version = flag.Bool("version", false, "show version")
+	config  = flag.String("c", "", "(optional config path)")
+)
+
+const (
+	tFormat = "2006-01-02T15"
+	dFormat = "2006-01-02"
 )
 
 func init() {
@@ -92,6 +96,7 @@ func init() {
 type Config struct {
 	Workflow string       `toml:"workflow"`
 	File     file.Options `toml:"file"`
+	Bus      bus.Options  `toml:"bus"`
 	cache    *workflow.Cache
 }
 
@@ -179,10 +184,11 @@ func parseHours(hrsStr string) (hrs []bool, err error) {
 
 func (c *options) dateRangeStrings(start, end string) error {
 	// parse start
-	s, err := time.Parse(dFmt, start)
+	s, err := time.Parse(tFormat, start)
 	if err != nil {
-		log.Println("cannot parse start")
-		return err
+		if s, err = time.Parse(dFormat, start); err != nil {
+			return err
+		}
 	}
 
 	// truncate to hour and assign
@@ -195,14 +201,15 @@ func (c *options) dateRangeStrings(start, end string) error {
 	}
 
 	// parse end (if provided)
-	e, err := time.Parse(dFmt, end)
+	e, err := time.Parse(tFormat, end)
 	if err != nil {
-		return err
+		if e, err = time.Parse(dFormat, end); err != nil {
+			return err
+		}
 	}
 
 	// round to hour and assign
 	c.End = e.Truncate(time.Hour)
-
 	return nil
 }
 
@@ -223,6 +230,7 @@ func loadOptions() (*options, error) {
 		os.Exit(0)
 	}
 
+	c := newOptions()
 	var fConf *Config
 	if *config != "" {
 		fConf = &Config{}
@@ -234,10 +242,12 @@ func loadOptions() (*options, error) {
 		if err != nil {
 			return nil, err
 		}
+		c.Options = &fConf.Bus
+		c.Bus = "" // don't use bus info from the config force using the flag
+		c.OutBus = ""
 	}
-	ops := busOptions{}
-	c := newOptions()
 
+	ops := busOptions{}
 	if err := uri.Unmarshal(*outBus, &ops); err != nil {
 		return nil, err
 	}
@@ -246,9 +256,15 @@ func loadOptions() (*options, error) {
 	}
 
 	c.OutBus = ops.Bus
-	c.LookupdHosts = ops.Hosts
-	c.ProjectID = ops.ProjectID
-	c.JSONAuth = ops.JSONAuth
+	if len(ops.Hosts) > 0 {
+		c.LookupdHosts = ops.Hosts
+	}
+	if ops.ProjectID != "" {
+		c.ProjectID = ops.ProjectID
+	}
+	if ops.JSONAuth != "" {
+		c.JSONAuth = ops.JSONAuth
+	}
 
 	// load config
 	c.TaskType = *tskType
@@ -290,7 +306,7 @@ func loadOptions() (*options, error) {
 		to = *at
 	}
 
-	now := time.Now().Format(dFmt) // 2017-01-03T01
+	now := time.Now().Format(tFormat) // 2017-01-03T01
 	if from == "now" {
 		from = now
 	}
