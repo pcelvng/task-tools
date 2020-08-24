@@ -17,7 +17,7 @@ func newBackloader(conf *options) (*backloader, error) {
 	}
 
 	// create producer
-	p, err := bus.NewProducer(conf.Options)
+	p, err := bus.NewProducer(&conf.Bus)
 	if err != nil {
 		return nil, err
 	}
@@ -38,9 +38,9 @@ type backloader struct {
 // task will be sent.
 func (bl *backloader) backload() (int, error) {
 	// backload loop
-	startHour := bl.config.Start
-	atHour := bl.config.Start
-	endHour := bl.config.End
+	startHour := bl.config.start
+	atHour := bl.config.start
+	endHour := bl.config.end
 
 	// define positive or negative incrementer
 	// depending on the direction of start to end
@@ -51,22 +51,22 @@ func (bl *backloader) backload() (int, error) {
 	}
 
 	cnt := 0
-	onHours := makeOnHrs(bl.config.OnHours, bl.config.OffHours)
+	onHours := makeOnHrs(bl.config.onHours, bl.config.offHours)
 
 	for {
 		// check if current hour is eligible
-		if onHours[atHour.Hour()] && checkEvery(startHour, atHour, bl.config.EveryXHours) {
+		if onHours[atHour.Hour()] && checkEvery(startHour, atHour, bl.config.everyXHours) {
 			// task value
-			tskValue := tmpl.Parse(bl.config.TaskTemplate, atHour)
+			tskValue := tmpl.Parse(bl.config.taskTemplate, atHour)
 
 			// create task
-			tsk := task.New(bl.config.TaskType, tskValue)
+			tsk := task.New(bl.config.taskType, tskValue)
 
 			// add meta data
 			tsk.Meta = bl.config.meta
 
 			// normalize topic
-			topic := bl.config.TaskType
+			topic := bl.config.taskType
 
 			// send task to task bus
 			if err := bl.busProducer.Send(topic, tsk.JSONBytes()); err != nil {

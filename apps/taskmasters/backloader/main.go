@@ -22,7 +22,28 @@ import (
 	"github.com/pcelvng/task-tools/workflow"
 )
 
-var sigChan = make(chan os.Signal, 1)
+const (
+	tFormat = "2006-01-02T15"
+	dFormat = "2006-01-02"
+)
+
+type options struct {
+	Workflow string       `toml:"workflow"`
+	File     file.Options `toml:"file"`
+	Bus      bus.Options  `toml:"bus"`
+	cache    *workflow.Cache
+
+	start time.Time // start of backload
+	end   time.Time // end of backload
+
+	taskType     string
+	taskTemplate string
+
+	everyXHours int    // default skips 0 hours aka does all hours. Will always at least create a task for the start date.
+	onHours     []bool // each key represents the hour and bool is if that value is turned on. (not specified means all hours are ON)
+	offHours    []bool // each key represents the hour and bool is if that value is turned off.
+	meta        string
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -30,12 +51,57 @@ func main() {
 	}
 }
 
+type flags struct {
+	version bool
+	config  string
+
+	taskType     string
+	job          string
+	taskTemplate string
+	bus          string
+
+	at    string
+	from  string
+	to    string
+	daily bool
+
+	everyXHours int
+	onHours     string
+	offHours    string
+}
+
 func run() error {
-	// signal handling - capture signal early.
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	// setup flags
+	f := flags{}
+	version := flag.Bool("version", false, "show version")
+	flag.BoolVar(version, "v", false, "show version")
+	flag.StringVar(&f.config, "c", "", "(optional config path)")
+
+	flag.StringVar(&f.taskType, "type", "", "REQUIRED; the task type")
+	flag.StringVar(&f.taskType, "t", "", "alias of 'type'")
+	flag.StringVar(&f.job, "job", "", "(optional: with config) workflow job")
+	flag.StringVar(&f.taskTemplate, "template", "{yyyy}-{mm}-{dd}T{hh}:00", "task template")
+	flag.StringVar(&f.bus, "bus", "stdout", "one of 'stdout', 'file', 'nsq', 'pubsub'")
+	flag.StringVar(&f.bus, "b", "", "alias of 'bus'")
+
+	var at, from, to string
+	flag.StringVar(&at, "at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
+	flag.StringVar(&from, "from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
+	flag.StringVar(&to, "to", "", "same format as 'from'; if not specified, will run the one hour specified by from. Allows special keyword 'now'.")
+	flag.BoolVar(&f.daily, "daily", false, "sets hour to 00 and populates every 24 hours")
+
+	flag.IntVar(&f.everyXHours, "every-x-hours", 0, "will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' fions.")
+	flag.StringVar(&f.onHours, "on-hours", "", "comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15")
+	flag.StringVar(&f.offHours, "off-hours", "", "comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.")
+
+	flag.Parse()
+	if *version {
+		fmt.Println(tools.String())
+		os.Exit(0)
+	}
 
 	// app config
-	appConf, err := loadOptions()
+	appConf, err := loadOptions(f)
 	if err != nil {
 		return err
 	}
@@ -52,6 +118,10 @@ func run() error {
 		doneChan <- err
 	}()
 
+	// signal handling - capture signal early.
+	var sigChan = make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
 	select {
 	case blErr := <-doneChan:
 		return blErr
@@ -63,47 +133,108 @@ func run() error {
 	return nil
 }
 
-var (
-	tskType  = flag.String("type", "", "REQUIRED; the task type")
-	job      = flag.String("job", "", "(optional: with config) workflow job")
-	template = flag.String("template", "{yyyy}-{mm}-{dd}T{hh}:00", "task template")
-	outBus   = flag.String("bus", "stdout", "one of 'stdout', 'file', 'nsq', 'pubsub'")
-
-	at    = flag.String("at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
-	from  = flag.String("from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
-	to    = flag.String("to", "", "same format as 'from'; if not specified, will run the one hour specified by from. Allows special keyword 'now'.")
-	daily = flag.Bool("daily", false, "sets hour to 00 and populates every 24 hours")
-
-	everyXHours = flag.Uint("every-x-hours", 0, "will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' options.")
-	onHours     = flag.String("on-hours", "", "comma separated list of hours to indicate which hours of a day to back-load during a 24 period (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. Example: '0,4,15' - will only generate tasks on hours 0, 4 and 15")
-	offHours    = flag.String("off-hours", "", "comma separated list of hours to indicate which hours of a day to NOT create a task (each value must be between 0-23). Order doesn't matter. Duplicates don't matter. If used will trump 'on-hours' values. Example: '2,9,16' - will generate tasks for all hours except 2, 9 and 16.")
-
-	version = flag.Bool("version", false, "show version")
-	config  = flag.String("c", "", "(optional config path)")
-)
-
-const (
-	tFormat = "2006-01-02T15"
-	dFormat = "2006-01-02"
-)
-
-func init() {
-	flag.StringVar(tskType, "t", "", "alias of 'type'")
-	flag.StringVar(outBus, "b", "", "alias of 'bus'")
-	flag.BoolVar(version, "v", false, "show version")
-}
-
-type Config struct {
-	Workflow string       `toml:"workflow"`
-	File     file.Options `toml:"file"`
-	Bus      bus.Options  `toml:"bus"`
-	cache    *workflow.Cache
-}
-
-func newOptions() *options {
-	return &options{
-		Options: bus.NewOptions(""),
+func loadOptions(f flags) (*options, error) {
+	opt := &options{
+		taskType:     f.taskType,
+		taskTemplate: f.taskTemplate,
+		everyXHours:  f.everyXHours,
 	}
+
+	if f.config != "" {
+		_, err := toml.DecodeFile(f.config, opt)
+		if err != nil {
+			return nil, err
+		}
+		opt.cache, err = workflow.New(opt.Workflow, &opt.File)
+		if err != nil {
+			return nil, err
+		}
+
+		opt.Bus.Bus = "" // don't use bus info from the config force using the flag
+		opt.Bus.OutBus = ""
+	}
+
+	// setup bus URI from the flag
+	bOpts := busOptions{}
+	if err := uri.Unmarshal(f.bus, &bOpts); err != nil {
+		return nil, err
+	}
+	if bOpts.Bus == "" {
+		bOpts.Bus = bOpts.Path
+	}
+
+	opt.Bus.OutBus = bOpts.Bus
+	if len(bOpts.Hosts) > 0 {
+		opt.Bus.LookupdHosts = bOpts.Hosts
+	}
+	if bOpts.ProjectID != "" {
+		opt.Bus.ProjectID = bOpts.ProjectID
+	}
+	if bOpts.JSONAuth != "" {
+		opt.Bus.JSONAuth = bOpts.JSONAuth
+	}
+
+	// populate template
+	if opt.cache != nil {
+		w := opt.cache.Search(opt.taskType, f.job)
+		if w == "" {
+			return nil, fmt.Errorf("no workflow found for %s:%s", opt.taskType, f.job)
+		}
+		opt.meta = "workflow=" + w
+
+		if f.job != "" {
+			opt.meta += "&job=" + f.job
+		}
+		tsk := task.Task{Type: opt.taskType, Meta: opt.meta}
+		if p := opt.cache.Get(tsk); !p.IsEmpty() {
+			opt.taskTemplate = p.Template
+		}
+	}
+
+	if err := opt.setOnHours(f.onHours); err != nil {
+		return nil, err
+	}
+
+	if err := opt.setOffHours(f.offHours); err != nil {
+		return nil, err
+	}
+	if f.daily {
+		opt.setOnHours("0")
+		opt.setOffHours("")
+	}
+
+	if f.at != "" {
+		f.from = f.at
+		f.to = f.at
+	}
+
+	now := time.Now().Format(tFormat) // 2017-01-03T01
+	if f.from == "now" {
+		f.from = now
+	}
+
+	if f.to == "now" {
+		f.to = now
+	}
+
+	if err := opt.dateRangeStrings(f.from, f.to); err != nil {
+		return nil, err
+	}
+
+	return opt, opt.validate()
+}
+
+func (c *options) validate() error {
+	// TaskType is required
+	if c.taskType == "" {
+		return errors.New("flag '-type' or '-t' required")
+	}
+
+	if c.everyXHours < 0 {
+		return errors.New("flag 'every-x-hours` must not be negative")
+	}
+
+	return nil
 }
 
 type busOptions struct {
@@ -114,21 +245,6 @@ type busOptions struct {
 	JSONAuth  string   `uri:"jsonauth"`
 }
 
-type options struct {
-	*bus.Options
-
-	Start time.Time // start of backload
-	End   time.Time // end of backload
-
-	TaskType     string
-	TaskTemplate string
-
-	EveryXHours int    // default skips 0 hours aka does all hours. Will always at least create a task for the start date.
-	OnHours     []bool // each key represents the hour and bool is if that value is turned on. (not specified means all hours are ON)
-	OffHours    []bool // each key represents the hour and bool is if that value is turned off.
-	meta        string
-}
-
 // setOnHours will parse onHours string and set
 // OnHours value.
 func (c *options) setOnHours(onHours string) error {
@@ -136,8 +252,7 @@ func (c *options) setOnHours(onHours string) error {
 	if err != nil {
 		return err
 	}
-
-	c.OnHours = hrs
+	c.onHours = hrs
 	return nil
 }
 
@@ -149,7 +264,7 @@ func (c *options) setOffHours(offHours string) error {
 		return err
 	}
 
-	c.OffHours = hrs
+	c.offHours = hrs
 	return nil
 }
 
@@ -192,11 +307,11 @@ func (c *options) dateRangeStrings(start, end string) error {
 	}
 
 	// truncate to hour and assign
-	c.Start = s.Truncate(time.Hour)
+	c.start = s.Truncate(time.Hour)
 
 	// start and end are equal if end not provided
 	if end == "" {
-		c.End = c.Start
+		c.end = c.start
 		return nil
 	}
 
@@ -209,115 +324,6 @@ func (c *options) dateRangeStrings(start, end string) error {
 	}
 
 	// round to hour and assign
-	c.End = e.Truncate(time.Hour)
+	c.end = e.Truncate(time.Hour)
 	return nil
-}
-
-func (c *options) validate() error {
-	// TaskType is required
-	if c.TaskType == "" {
-		return errors.New("flag '-type' or '-t' required")
-	}
-
-	return nil
-}
-
-func loadOptions() (*options, error) {
-	flag.Parse()
-
-	if *version {
-		fmt.Println(tools.String())
-		os.Exit(0)
-	}
-
-	c := newOptions()
-	var fConf *Config
-	if *config != "" {
-		fConf = &Config{}
-		_, err := toml.DecodeFile(*config, fConf)
-		if err != nil {
-			return nil, err
-		}
-		fConf.cache, err = workflow.New(fConf.Workflow, &fConf.File)
-		if err != nil {
-			return nil, err
-		}
-		c.Options = &fConf.Bus
-		c.Bus = "" // don't use bus info from the config force using the flag
-		c.OutBus = ""
-	}
-
-	ops := busOptions{}
-	if err := uri.Unmarshal(*outBus, &ops); err != nil {
-		return nil, err
-	}
-	if ops.Bus == "" {
-		ops.Bus = ops.Path
-	}
-
-	c.OutBus = ops.Bus
-	if len(ops.Hosts) > 0 {
-		c.LookupdHosts = ops.Hosts
-	}
-	if ops.ProjectID != "" {
-		c.ProjectID = ops.ProjectID
-	}
-	if ops.JSONAuth != "" {
-		c.JSONAuth = ops.JSONAuth
-	}
-
-	// load config
-	c.TaskType = *tskType
-
-	// populate template
-	c.TaskTemplate = *template
-	if fConf != nil {
-		w := fConf.cache.Search(c.TaskType, *job)
-		if w == "" {
-			return nil, fmt.Errorf("no workflow found for %s:%s", c.TaskType, *job)
-		}
-		c.meta = "workflow=" + w
-
-		if *job != "" {
-			c.meta += "&job=" + *job
-		}
-		tsk := task.Task{Type: c.TaskType, Meta: c.meta}
-		if p := fConf.cache.Get(tsk); !p.IsEmpty() {
-			c.TaskTemplate = p.Template
-		}
-	}
-	c.EveryXHours = int(*everyXHours)
-
-	if err := c.setOnHours(*onHours); err != nil {
-		return nil, err
-	}
-
-	if err := c.setOffHours(*offHours); err != nil {
-		return nil, err
-	}
-	if *daily {
-		c.setOnHours("0")
-		c.setOffHours("")
-	}
-	from := *from
-	to := *to
-	if *at != "" {
-		from = *at
-		to = *at
-	}
-
-	now := time.Now().Format(tFormat) // 2017-01-03T01
-	if from == "now" {
-		from = now
-	}
-
-	if to == "now" {
-		to = now
-	}
-
-	if err := c.dateRangeStrings(from, to); err != nil {
-		return nil, err
-	}
-
-	return c, nil
 }
