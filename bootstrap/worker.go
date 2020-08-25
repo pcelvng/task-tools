@@ -51,6 +51,7 @@ type Worker struct {
 
 type Info struct {
 	AppName       string             `json:"app_name"`
+	Version       string             `json:"version"`
 	LauncherStats task.LauncherStats `json:"launcher,omitempty"`
 	ProducerStats *info.Producer     `json:"producer,omitempty"`
 	ConsumerStats *info.Consumer     `json:"consumer,omitempty"`
@@ -59,6 +60,7 @@ type Info struct {
 // InfoStats for the Worker app
 func (w *Worker) InfoStats() Info {
 	w.Info.AppName = w.tskType
+	w.Info.Version = w.version
 
 	if w.consumer != nil {
 		cs := w.consumer.Info()
