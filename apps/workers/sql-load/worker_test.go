@@ -343,7 +343,7 @@ func TestNewWorker(t *testing.T) {
 			myw := wrkr.(*worker)
 			o.Params = myw.Params
 			o.Count = len(myw.flist)
-			o.DeleteStmt = myw.delete
+			o.DeleteStmt = myw.delQuery
 		}
 
 		return o, nil

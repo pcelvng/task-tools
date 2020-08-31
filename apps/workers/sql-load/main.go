@@ -24,15 +24,15 @@ type options struct {
 
 var (
 	taskType    = "sql_load"
-	description = `sql_load app is a generic worker to load a file from local, gs or s3, with a format of newline delimited json, 
-into a configured sql connection. 
+	description = `is a generic worker to load a newline delimited json into a sql databse. 
 Initially only postgresql will be supported, but later support can be added for mysql, etc...
 
 info query params:
-table_name : required, the table name should be given in the info string so the app knows where to attempt to insert the data.
-delete : allows insert into  pre-existing data by deleting previous data. 
+table_name : (required), the table to be inserted into
+delete : allows insert into pre-existing data by deleting previous data. 
     - provide a list of delete key:values to be used in the delete statement
     - "?delete=date:2020-07-01|id:7"
+truncate: allows insert into pre-existing table by truncating before insertion
 fields : allows mapping different json key values to different database column names
     - provide a list of field name mapping {json key name}:{DB column name} to be mapped 
     - ?fields=jsonKey:dbColumnName
