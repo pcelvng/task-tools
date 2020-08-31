@@ -24,6 +24,8 @@ type InfoURI struct {
 	SkipErr   bool              `uri:"skip_err"`              // if bad records are found they are skipped and logged instead of throwing an error
 	DeleteMap map[string]string `uri:"delete"`                // map used to build the delete query statement
 	FieldsMap map[string]string `uri:"fields"`                // map json key values to different db names
+	Truncate  bool              `uri:"truncate"`              // truncate the table rather than delete
+
 }
 
 type worker struct {
@@ -32,10 +34,10 @@ type worker struct {
 
 	Params InfoURI
 
-	flist   []string // list of full path file(s)
-	records int64    // inserted records
-	ds      *DataSet // the processing data for loading
-	delete  string   // query statement built from DeleteMap
+	flist    []string // list of full path file(s)
+	records  int64    // inserted records
+	ds       *DataSet // the processing data for loading
+	delQuery string   // query statement built from DeleteMap
 
 	fileReadTime time.Duration
 	queryRunTime time.Duration
@@ -103,8 +105,13 @@ func (o *options) newWorker(info string) task.Worker {
 	if len(w.flist) == 0 {
 		return task.InvalidWorker("no files found in path %s", w.Params.FilePath)
 	}
-
-	w.setDeleteQuery()
+	if len(w.Params.DeleteMap) > 0 && w.Params.Truncate {
+		return task.InvalidWorker("truncate can not be used with a delete fields")
+	}
+	w.delQuery = DeleteQuery(w.Params.DeleteMap, w.Params.Table)
+	if w.Params.Truncate {
+		w.delQuery = fmt.Sprintf("delete from %s", w.Params.Table)
+	}
 	return w
 }
 
@@ -127,8 +134,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	for _, row := range w.ds.insertRows {
 		b.AddRow(row)
 	}
-
-	b.Delete(w.delete)
+	b.Delete(w.delQuery)
 	start = time.Now()
 	stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
 	if err != nil {
@@ -393,12 +399,12 @@ func (ds *DataSet) AddRow() (err error) {
 	return nil
 }
 
-func (w *worker) setDeleteQuery() {
-	if len(w.Params.DeleteMap) == 0 {
-		return
+func DeleteQuery(m map[string]string, table string) string {
+	if len(m) == 0 {
+		return ""
 	}
 	s := make([]string, 0)
-	for k, v := range w.Params.DeleteMap {
+	for k, v := range m {
 		isString := true
 		_, err := strconv.ParseInt(v, 10, 64)
 		if err == nil {
@@ -417,7 +423,7 @@ func (w *worker) setDeleteQuery() {
 	}
 
 	sort.Sort(sort.StringSlice(s))
-	w.delete = fmt.Sprintf("delete from %s where %s", w.Params.Table, strings.Join(s, " and "))
+	return fmt.Sprintf("delete from %s where %s", table, strings.Join(s, " and "))
 }
 
 // findDbColumn will return the schema, and true if the name was found in the
