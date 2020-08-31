@@ -24,8 +24,7 @@ type InfoURI struct {
 	SkipErr   bool              `uri:"skip_err"`              // if bad records are found they are skipped and logged instead of throwing an error
 	DeleteMap map[string]string `uri:"delete"`                // map used to build the delete query statement
 	FieldsMap map[string]string `uri:"fields"`                // map json key values to different db names
-	Truncate  bool              `uri:"truncate"`              // truncate the table rather than delete
-
+	Truncate  bool              `uri:"truncate"`              // truncate the table before insert
 }
 
 type worker struct {
