@@ -143,10 +143,11 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	w.queryRunTime = time.Now().Sub(start)
 	if stats.Removed > 0 {
 		w.SetMeta("removed_records", fmt.Sprintf("%d", stats.Removed))
-		w.SetMeta("insert_records", fmt.Sprintf("%d", w.records))
-		w.SetMeta("file_process_time", fmt.Sprintf("%v", w.fileReadTime))
-		w.SetMeta("query_run_time", fmt.Sprintf("%v", w.queryRunTime))
 	}
+
+	w.SetMeta("insert_records", fmt.Sprintf("%d", w.records))
+	w.SetMeta("file_process_time", fmt.Sprintf("%v", w.fileReadTime))
+	w.SetMeta("query_run_time", fmt.Sprintf("%v", w.queryRunTime))
 
 	return task.Completed("database load completed %s table: %s records: %d",
 		w.dbDriver, w.Params.Table, w.records)

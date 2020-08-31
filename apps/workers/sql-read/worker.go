@@ -45,12 +45,13 @@ func (o *options) NewWorker(info string) task.Worker {
 		if s := strings.Split(iOpts.Table, "."); len(s) != 2 {
 			return task.InvalidWorker("invalid table %s (schema.table)", iOpts.Table)
 		}
-		var cols string
+		var cols []string
 		for k := range iOpts.Fields {
-			cols += k + ", "
+			cols = append(cols, k)
 		}
-		cols = strings.TrimRight(cols, ", ")
-		query = fmt.Sprintf("select %s from %s", cols, iOpts.Table)
+
+		query = fmt.Sprintf("select %s from %s",
+			strings.Join(cols, ", "), iOpts.Table)
 	}
 
 	if iOpts.QueryFile != "" {
