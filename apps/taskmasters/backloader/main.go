@@ -84,10 +84,9 @@ func run() error {
 	flag.StringVar(&f.bus, "bus", "stdout", "one of 'stdout', 'file', 'nsq', 'pubsub'")
 	flag.StringVar(&f.bus, "b", "", "alias of 'bus'")
 
-	var at, from, to string
-	flag.StringVar(&at, "at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
-	flag.StringVar(&from, "from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
-	flag.StringVar(&to, "to", "", "same format as 'from'; if not specified, will run the one hour specified by from. Allows special keyword 'now'.")
+	flag.StringVar(&f.at, "at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
+	flag.StringVar(&f.from, "from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
+	flag.StringVar(&f.to, "to", "", "same format as 'from'; if not specified, will run the one hour specified by from. Allows special keyword 'now'.")
 	flag.BoolVar(&f.daily, "daily", false, "sets hour to 00 and populates every 24 hours")
 
 	flag.IntVar(&f.everyXHours, "every-x-hours", 0, "will generate a task every x hours. Includes the first hour. Can be combined with 'on-hours' and 'off-hours' fions.")
