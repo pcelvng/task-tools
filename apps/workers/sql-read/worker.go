@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"sort"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -49,7 +50,7 @@ func (o *options) NewWorker(info string) task.Worker {
 		for k := range iOpts.Fields {
 			cols = append(cols, k)
 		}
-
+		sort.Strings(cols) // we must sort the slice as a map is random order (cannot test)
 		query = fmt.Sprintf("select %s from %s",
 			strings.Join(cols, ", "), iOpts.Table)
 	}
