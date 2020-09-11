@@ -6,6 +6,7 @@ import (
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/pcelvng/task-tools/file"
 )
 
 const (
@@ -25,6 +26,8 @@ example
 
 type options struct {
 	BqAuth string `toml:"bq_auth" comment:"file path to service file"`
+
+	Fopts file.Options `toml:"file"`
 }
 
 func (o *options) Validate() error {
