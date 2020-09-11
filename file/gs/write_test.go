@@ -397,7 +397,7 @@ func ExampleWriter_CopyTmpFile() {
 
 	fmt.Println(n)                      // output: 20
 	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.Checksum)      // output: c57894a47304e4082679f4649441fa7a
+	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(w.objSts.Size)          // output: 20
 	fmt.Println(w.objSts.Path)          // output: write/test.txt
 	fmt.Println(w.objSts.Created != "") // output: true
@@ -410,7 +410,7 @@ func ExampleWriter_CopyTmpFile() {
 	// Output:
 	// 20
 	// <nil>
-	// c57894a47304e4082679f4649441fa7a
+	// 54f30d75cf7374c7e524a4530dbc93c2
 	// 20
 	// write/test.txt
 	// true
@@ -462,7 +462,7 @@ func ExampleWriter_SetObjSts() {
 	err := w.setObjSts()
 
 	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.Checksum)      // output: c57894a47304e4082679f4649441fa7a
+	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
 	fmt.Println(w.objSts.Size)          // output: 20
 	fmt.Println(w.objSts.Path)          // output: write/test.txt
 	fmt.Println(w.objSts.Created != "") // output: true
@@ -472,7 +472,7 @@ func ExampleWriter_SetObjSts() {
 
 	// Output:
 	// <nil>
-	// c57894a47304e4082679f4649441fa7a
+	// 54f30d75cf7374c7e524a4530dbc93c2
 	// 20
 	// write/test.txt
 	// true

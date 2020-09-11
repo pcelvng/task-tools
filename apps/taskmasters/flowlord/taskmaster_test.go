@@ -198,7 +198,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 	for _, e := range tm.cron.Entries() {
 		e.Job.Run()
 	}
-	if eq, diff := trial.Contains(producer.Messages["task1"], []string{`"type":"task1"`, `"meta":"workflow=f1.toml\u0026job=t2"`}); !eq {
+	if eq, diff := trial.Contains(producer.Messages["task1"], []string{`"type":"task1"`, `"meta":"workflow=f1.toml&job=t2"`}); !eq {
 		t.Error(diff)
 	}
 }
