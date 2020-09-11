@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +13,9 @@ import (
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"google.golang.org/api/option"
+
+	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/file/buf"
 )
 
 type worker struct {
@@ -61,11 +65,15 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		return task.Failf("bigquery client init %s", err)
 	}
+	//r, err := processFile(w.File, w.Fopts)
+	r, err := file.NewReader(w.File, &w.Fopts)
+	if err != nil {
+		return task.Failf("problem with file: %s", err)
+	}
 
-	bqRef := bigquery.NewGCSReference(w.File)
+	bqRef := bigquery.NewReaderSource(r)
 	bqRef.SourceFormat = bigquery.JSON
 	bqRef.MaxBadRecords = 1
-
 	loader := client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(bqRef)
 	loader.WriteDisposition = bigquery.WriteAppend
 	if len(w.DeleteMap) > 0 {
@@ -116,4 +124,25 @@ func delStatement(m map[string]string, d Destination) string {
 	}
 	sort.Sort(sort.StringSlice(s))
 	return fmt.Sprintf("delete from `%s.%s.%s` where %s", d.Project, d.Dataset, d.Table, strings.Join(s, " and "))
+}
+
+func processFile(path string, fOpts file.Options) (io.Reader, error) {
+	r, err := file.NewReader(path, &fOpts)
+	if err != nil {
+		return nil, err
+	}
+	writer, err := buf.NewBuffer(&buf.Options{UseFileBuf: true})
+	if err != nil {
+		return nil, err
+	}
+	scanner := file.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		writer.WriteLine([]byte(line))
+	}
+	if err := scanner.Err(); err != nil {
+		writer.Abort()
+		return nil, err
+	}
+	return writer, writer.Close()
 }

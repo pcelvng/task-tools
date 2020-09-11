@@ -327,8 +327,8 @@ func (tm *TaskMaster) HandleRequest(w http.ResponseWriter, r *http.Request) {
 
 	b, err := json.MarshalIndent(tm.runner.Info(), "", "  ")
 	s := fmt.Sprintf(`{
-	"app_name":"%s",
-	"version":"%s",`, tm.appName, tm.version)
+  "app_name":"%s",
+  "version":"%s",`, tm.appName, tm.version)
 	if b != nil && err == nil {
 		// Replace the first { in the json string with the { + application name
 		b = bytes.Replace(b, []byte(`{`), []byte(s), 1)

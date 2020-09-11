@@ -16,7 +16,8 @@ all: $(APPS)
 
 $(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
-	go build ${GOFLAGS} -o $@ ./apps/*/$*
+	GOOS=linux go build ${GOFLAGS} -o $@ ./apps/*/$*
+	go build ${GOFLAGS} -o ${BLDDIR}/local/$(@F) ./apps/*/$*
 
 $(APPS): %: $(BLDDIR)/%
 
@@ -30,3 +31,7 @@ install: $(APPS)
 	install -m 755 -d ${DESTDIR}${BINDIR}
 	for APP in $^ ; do install -m 755 ${BLDDIR}/$$APP ${DESTDIR}${BINDIR}/$$APP${EXT} ; done
 	rm -rf build
+
+docker: $(APPS)
+	docker build -t hydronica/task-tools:${version} .
+	docker push hydronica/task-tools:${version}

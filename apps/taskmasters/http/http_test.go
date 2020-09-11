@@ -67,7 +67,7 @@ func TestHandleBodyRequestValues(t *testing.T) {
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	urlUnescapeBody, _ := url.QueryUnescape(string(body))
 
-	assert.Contains(t, urlUnescapeBody, `{"type":"batcher","info":"?from=2018-05-01T00\u0026task-type=fb-hourly-loader\u0026to=2018-05-01T00"`)
+	assert.Contains(t, urlUnescapeBody, `{"type":"batcher","info":"?from=2018-05-01T00&task-type=fb-hourly-loader&to=2018-05-01T00"`)
 }
 
 func TestQueryParamsRequest(t *testing.T) {
