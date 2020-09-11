@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	tFormat = "2006-01-02T15"
-	dFormat = "2006-01-02"
+	tFormat     = "2006-01-02T15"
+	dFormat     = "2006-01-02"
+	defTemplate = "{yyyy}-{mm}-{dd}T{hh}"
 )
 
 type options struct {
@@ -80,7 +81,7 @@ func run() error {
 	flag.StringVar(&f.taskType, "type", "", "REQUIRED; the task type")
 	flag.StringVar(&f.taskType, "t", "", "alias of 'type'")
 	flag.StringVar(&f.job, "job", "", "(optional: with config) workflow job")
-	flag.StringVar(&f.taskTemplate, "template", "{yyyy}-{mm}-{dd}T{hh}:00", "task template")
+	flag.StringVar(&f.taskTemplate, "template", defTemplate, "task template")
 	flag.StringVar(&f.bus, "bus", "stdout", "one of 'stdout', 'file', 'nsq', 'pubsub'")
 	flag.StringVar(&f.bus, "b", "", "alias of 'bus'")
 
@@ -174,7 +175,9 @@ func loadOptions(f flags) (*options, error) {
 	}
 
 	// populate template
-	if opt.cache != nil {
+	if f.taskTemplate != defTemplate {
+		opt.taskTemplate = f.taskTemplate
+	} else if opt.cache != nil {
 		w := opt.cache.Search(opt.taskType, f.job)
 		if w == "" {
 			return nil, fmt.Errorf("no workflow found for %s:%s", opt.taskType, f.job)
