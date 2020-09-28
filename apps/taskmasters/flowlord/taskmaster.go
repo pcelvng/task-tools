@@ -195,26 +195,29 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	// attempt to return
 	if t.Result == task.ErrResult {
 		p := tm.Get(*t)
+
 		r := meta.Get("retry")
 		i, _ := strconv.Atoi(r)
-		if p.Task != "" { // the task should have a workflow phase
-			if p.Retry > i {
-				t = task.NewWithID(t.Type, t.Info, t.ID)
-				i++
-				meta.Set("retry", strconv.Itoa(i))
-				t.Meta = meta.Encode()
-				if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
-					return err
-				}
-			} else if tm.failedTopic != "-" {
-				// send to the retry failed topic if retries > p.Retry
-				meta.Set("retry", "failed")
-				t.Meta = meta.Encode()
-				tm.producer.Send(tm.failedTopic, t.JSONBytes())
-				if tm.slack != nil {
-					b, _ := json.MarshalIndent(t, "", "  ")
-					tm.slack.Notify(string(b), slack.Critical)
-				}
+		// the task should have a workflow phase
+		if p.Task == "" {
+			return nil
+		}
+		if p.Retry > i {
+			t = task.NewWithID(t.Type, t.Info, t.ID)
+			i++
+			meta.Set("retry", strconv.Itoa(i))
+			t.Meta = meta.Encode()
+			if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
+				return err
+			}
+		} else if tm.failedTopic != "-" {
+			// send to the retry failed topic if retries > p.Retry
+			meta.Set("retry", "failed")
+			t.Meta = meta.Encode()
+			tm.producer.Send(tm.failedTopic, t.JSONBytes())
+			if tm.slack != nil {
+				b, _ := json.MarshalIndent(t, "", "  ")
+				tm.slack.Notify(string(b), slack.Critical)
 			}
 		}
 
