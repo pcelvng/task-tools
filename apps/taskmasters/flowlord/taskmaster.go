@@ -189,15 +189,20 @@ func (tm *taskMaster) schedule() (err error) {
 // Process the given task
 // 1. check if the task needs to be retried
 // 2. start any downstream tasks
-// Send retry failed tasks to tm.failedTopic
+// Send retry failed tasks to tm.failedTopic (only if the phase exists in the workflow)
 func (tm *taskMaster) Process(t *task.Task) error {
 	meta, _ := url.ParseQuery(t.Meta)
 	// attempt to return
 	if t.Result == task.ErrResult {
-		w := tm.Get(*t)
+		p := tm.Get(*t)
+
 		r := meta.Get("retry")
 		i, _ := strconv.Atoi(r)
-		if w.Retry > i {
+		// the task should have a workflow phase
+		if p.Task == "" {
+			return nil
+		}
+		if p.Retry > i {
 			t = task.NewWithID(t.Type, t.Info, t.ID)
 			i++
 			meta.Set("retry", strconv.Itoa(i))
@@ -206,7 +211,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				return err
 			}
 		} else if tm.failedTopic != "-" {
-			// send to the retry failed topic if retries > w.Retry
+			// send to the retry failed topic if retries > p.Retry
 			meta.Set("retry", "failed")
 			t.Meta = meta.Encode()
 			tm.producer.Send(tm.failedTopic, t.JSONBytes())
@@ -215,29 +220,30 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				tm.slack.Notify(string(b), slack.Critical)
 			}
 		}
+
 		return nil
 	}
 
 	// start off any children tasks
 	if t.Result == task.CompleteResult {
-		for _, w := range tm.Children(*t) {
-			if !isReady(w.Rule, t.Meta) {
+		for _, p := range tm.Children(*t) {
+			if !isReady(p.Rule, t.Meta) {
 				continue
 			}
 			taskTime := tmpl.InfoTime(t.Info)
-			info := tmpl.Meta(w.Template, meta)
-			rules, _ := url.ParseQuery(w.Rule)
+			info := tmpl.Meta(p.Template, meta)
+			rules, _ := url.ParseQuery(p.Rule)
 
 			if !taskTime.IsZero() {
 				info = tmpl.Parse(info, taskTime)
 			}
-			child := task.NewWithID(w.Task, info, t.ID)
+			child := task.NewWithID(p.Task, info, t.ID)
 
 			child.Meta = "workflow=" + meta.Get("workflow")
 			if rules.Get("job") != "" {
 				child.Meta += "&job=" + rules.Get("job")
 			}
-			if err := tm.producer.Send(w.Task, child.JSONBytes()); err != nil {
+			if err := tm.producer.Send(p.Task, child.JSONBytes()); err != nil {
 				return err
 			}
 		}
