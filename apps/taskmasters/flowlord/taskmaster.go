@@ -189,7 +189,7 @@ func (tm *taskMaster) schedule() (err error) {
 // Process the given task
 // 1. check if the task needs to be retried
 // 2. start any downstream tasks
-// Send retry failed tasks to tm.failedTopic
+// Send retry failed tasks to tm.failedTopic (only if the phase exists in the workflow)
 func (tm *taskMaster) Process(t *task.Task) error {
 	meta, _ := url.ParseQuery(t.Meta)
 	// attempt to return
@@ -197,24 +197,27 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		w := tm.Get(*t)
 		r := meta.Get("retry")
 		i, _ := strconv.Atoi(r)
-		if w.Retry > i {
-			t = task.NewWithID(t.Type, t.Info, t.ID)
-			i++
-			meta.Set("retry", strconv.Itoa(i))
-			t.Meta = meta.Encode()
-			if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
-				return err
-			}
-		} else if tm.failedTopic != "-" {
-			// send to the retry failed topic if retries > w.Retry
-			meta.Set("retry", "failed")
-			t.Meta = meta.Encode()
-			tm.producer.Send(tm.failedTopic, t.JSONBytes())
-			if tm.slack != nil {
-				b, _ := json.MarshalIndent(t, "", "  ")
-				tm.slack.Notify(string(b), slack.Critical)
+		if w.Task != "" { // the task should have a workflow phase
+			if w.Retry > i {
+				t = task.NewWithID(t.Type, t.Info, t.ID)
+				i++
+				meta.Set("retry", strconv.Itoa(i))
+				t.Meta = meta.Encode()
+				if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
+					return err
+				}
+			} else if tm.failedTopic != "-" {
+				// send to the retry failed topic if retries > w.Retry
+				meta.Set("retry", "failed")
+				t.Meta = meta.Encode()
+				tm.producer.Send(tm.failedTopic, t.JSONBytes())
+				if tm.slack != nil {
+					b, _ := json.MarshalIndent(t, "", "  ")
+					tm.slack.Notify(string(b), slack.Critical)
+				}
 			}
 		}
+
 		return nil
 	}
 
