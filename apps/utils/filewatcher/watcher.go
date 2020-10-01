@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -72,7 +74,7 @@ func (w *watcher) close() error {
 
 // closeWatchers closes all the current watchers (rules)
 func closeWatchers(list []*watcher) error {
-	for i, _ := range list {
+	for i := range list {
 		err := list[i].close()
 		if err != nil {
 			return err
@@ -127,7 +129,7 @@ func getPaths(pathTmpl string, start chron.Hour, lookback int) []string {
 		uniquePaths[path] = nil
 	}
 
-	for k, _ := range uniquePaths {
+	for k := range uniquePaths {
 		paths = append(paths, k)
 	}
 	return paths
@@ -146,7 +148,7 @@ func (w watcher) currentFiles(paths ...string) fileList {
 			continue
 		}
 		// iterate over the list to setup the new complete fileList
-		for i, _ := range list {
+		for i := range list {
 			if list[i].IsDir {
 				continue
 			}
@@ -163,8 +165,24 @@ func (w *watcher) sendFiles(files fileList) {
 	json := jsoniter.ConfigFastest
 
 	for _, f := range files {
-		b, _ := json.Marshal(f)
-		w.producer.Send(w.appOpt.FilesTopic, b)
+		if w.appOpt.FilesTopic != "-" {
+			b, _ := json.Marshal(f)
+			w.producer.Send(w.appOpt.FilesTopic, b)
+		}
+
+		if w.appOpt.InfoTopic != "" {
+			t := tmpl.PathTime(f.Path)
+			info := tmpl.Parse(w.rule.InfoTemplate, t)
+			info = strings.Replace(info, "{WATCH_FILE}", f.Path, -1)
+
+			tsk := task.New(w.appOpt.InfoTopic, info)
+			meta := task.NewMeta()
+			meta.SetMeta("job", "filewatcher")
+			tsk.Meta = meta.GetMeta().Encode()
+			b, _ := json.Marshal(tsk)
+			w.producer.Send(w.appOpt.InfoTopic, b)
+		}
+
 	}
 }
 
