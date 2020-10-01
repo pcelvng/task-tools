@@ -22,12 +22,15 @@ type worker struct {
 	task.Meta
 	options
 
-	Destination `uri:"dest_table" required:"true"`
-	File        string            `uri:"origin" required:"true"`
-	Truncate    bool              `uri:"truncate"`
-	Append      bool              `uri:"append"`
-	DeleteMap   map[string]string `uri:"delete"` // will replace the data by removing current data
-	delete      bool
+	Destination `uri:"dest_table" required:"true"` // BQ table to load data into
+
+	File      string            `uri:"origin" required:"true"`   // if not GCS ref must be file, can be folder (for GCS)
+	FromGCS   bool              `uri:"from_gcs" default:"false"` // load from GCS ref, can use wildcards *
+	Truncate  bool              `uri:"truncate"`                 //remove all data in table before insert
+	Append    bool              `uri:"append"`                   // append data to table
+	DeleteMap map[string]string `uri:"delete"`                   // map of fields with value to check and delete
+
+	delete bool
 }
 
 func (o *options) NewWorker(info string) task.Worker {
@@ -65,16 +68,26 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		return task.Failf("bigquery client init %s", err)
 	}
+
 	//r, err := processFile(w.File, w.Fopts)
-	r, err := file.NewReader(w.File, &w.Fopts)
-	if err != nil {
-		return task.Failf("problem with file: %s", err)
+
+	var loader *bigquery.Loader
+
+	if w.FromGCS { // load from Google Cloud Storage
+		gcsRef := bigquery.NewGCSReference(w.File)
+		gcsRef.SourceFormat = bigquery.JSON
+		loader = client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(gcsRef)
+	} else { // load from file reader
+		r, err := file.NewReader(w.File, &w.Fopts)
+		if err != nil {
+			return task.Failf("problem with file: %s", err)
+		}
+		bqRef := bigquery.NewReaderSource(r)
+		bqRef.SourceFormat = bigquery.JSON
+		bqRef.MaxBadRecords = 1
+		loader = client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(bqRef)
 	}
 
-	bqRef := bigquery.NewReaderSource(r)
-	bqRef.SourceFormat = bigquery.JSON
-	bqRef.MaxBadRecords = 1
-	loader := client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(bqRef)
 	loader.WriteDisposition = bigquery.WriteAppend
 	if len(w.DeleteMap) > 0 {
 		q := delStatement(w.DeleteMap, w.Destination)
@@ -106,7 +119,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	status, err := job.Wait(ctx)
 	if err == nil {
 		if status.Err() != nil {
-			return task.Failf("job completed with error: %v", status.Err())
+			return task.Failf("job completed with error: %v", status.Errors)
 		}
 		if sts, ok := status.Statistics.Details.(*bigquery.LoadStatistics); ok {
 			w.SetMeta("rows_insert", strconv.FormatInt(sts.OutputRows, 10))
