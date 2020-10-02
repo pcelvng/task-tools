@@ -170,17 +170,17 @@ func (w *watcher) sendFiles(files fileList) {
 			w.producer.Send(w.appOpt.FilesTopic, b)
 		}
 
-		if w.appOpt.InfoTopic != "" {
+		if w.appOpt.TaskTopic != "" {
 			t := tmpl.PathTime(f.Path)
-			info := tmpl.Parse(w.rule.InfoTemplate, t)
+			info := tmpl.Parse(w.rule.TaskTemplate, t)
 			info = strings.Replace(info, "{WATCH_FILE}", f.Path, -1)
 
-			tsk := task.New(w.appOpt.InfoTopic, info)
+			tsk := task.New(w.appOpt.TaskTopic, info)
 			meta := task.NewMeta()
 			meta.SetMeta("job", "filewatcher")
 			tsk.Meta = meta.GetMeta().Encode()
 			b, _ := json.Marshal(tsk)
-			w.producer.Send(w.appOpt.InfoTopic, b)
+			w.producer.Send(w.appOpt.TaskTopic, b)
 		}
 
 	}

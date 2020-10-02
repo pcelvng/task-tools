@@ -20,7 +20,7 @@ use {WATCH_FILE} for templating file path into the info string for a new task
 
 example rule:
 	frequency = "1h"
-	info_template = "{WATCH_FILE}?&param=other-param&dest=gs://folder/{HOUR_SLUG}/file.json"
+	task_template = "{WATCH_FILE}?&param=other-param&dest=gs://folder/{HOUR_SLUG}/file.json"
 	lookback = 24
 	path_template = "gs://folder/{HOUR_SLUG}/*.json"`
 )
@@ -31,7 +31,7 @@ type options struct {
 	AccessKey  string  `toml:"access_key" desc:"secret token for S3/GCS access "`
 	SecretKey  string  `toml:"secret_key" desc:"secret key for S3/GCS access "`
 	FilesTopic string  `toml:"files_topic" desc:"topic override (default is files) disable with -"`
-	InfoTopic  string  `toml:"info_topic" desc:"topic to send new task"`
+	TaskTopic  string  `toml:"task_topic" desc:"topic to send new task"`
 	Rules      []*Rule `toml:"rule"`
 }
 
@@ -39,7 +39,7 @@ type Rule struct {
 	HourLookback int    `toml:"lookback" desc:"the number of hours for looking back for files in previous directory default: 24"`
 	PathTemplate string `toml:"path_template" desc:"source file path pattern to match (supports glob style matching)"`
 	Frequency    string `toml:"frequency" desc:"the wait time between checking for new files in the path_template"`
-	InfoTemplate string `toml:"info_template" desc:"the template for the info string to send to the info_topic"`
+	TaskTemplate string `toml:"task_template" desc:"the template for the info string to send to the info_topic"`
 }
 
 func (o options) Validate() error {
@@ -65,7 +65,7 @@ func main() {
 				HourLookback: 24,
 				PathTemplate: "gs://folder/{HOUR_SLUG}/*.json",
 				Frequency:    "1h",
-				InfoTemplate: "{FILE_PATH}?&param=other-param&dest=gs://folder/{HOUR_SLUG}/file.json",
+				TaskTemplate: "{FILE_PATH}?&param=other-param&dest=gs://folder/{HOUR_SLUG}/file.json",
 			},
 		},
 	}
