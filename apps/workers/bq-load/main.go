@@ -20,8 +20,11 @@ info params
  - delete: map field defines the column and values to delete before inserting (delete=id:10|date:2020-01-02)
 
 
-example 
-{"task":"bq_load", "info":"gs://my/data.json?destination=project.reports.impressions&delete=date:2020-01-02|id:11"}`
+example for file reader:
+{"task":"bq_load", "info":"gs://my/data.json?dest_table=project.reports.impressions&delete=date:2020-01-02|id:11"}
+
+example for GCS reference:
+{"task":"bq_load", "info":"gs://folder/*.json?dest_table=project.reports.impressions&from_gcs=true&append=true"}`
 )
 
 type options struct {

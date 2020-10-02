@@ -88,7 +88,7 @@ func TestTaskMaster_Process(t *testing.T) {
 				ID:     "UUID_task1",
 				Meta:   "retry=3&workflow=f1.toml"},
 			Expected: []task.Task{
-				task.Task{
+				{
 					Type:   "task1",
 					Info:   "?date=2019-12-12",
 					ID:     "UUID_task1",
