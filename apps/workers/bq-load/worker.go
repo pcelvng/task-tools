@@ -24,11 +24,11 @@ type worker struct {
 
 	Destination `uri:"dest_table" required:"true"` // BQ table to load data into
 
-	File      string            `uri:"origin" required:"true"`   // if not GCS ref must be file, can be folder (for GCS)
-	FromGCS   bool              `uri:"from_gcs" default:"false"` // load from GCS ref, can use wildcards *
-	Truncate  bool              `uri:"truncate"`                 //remove all data in table before insert
-	Append    bool              `uri:"append"`                   // append data to table
-	DeleteMap map[string]string `uri:"delete"`                   // map of fields with value to check and delete
+	File      string            `uri:"origin" required:"true"`      // if not GCS ref must be file, can be folder (for GCS)
+	FromGCS   bool              `uri:"direct_load" default:"false"` // load directly from GCS ref, can use wildcards *
+	Truncate  bool              `uri:"truncate"`                    //remove all data in table before insert
+	Append    bool              `uri:"append"`                      // append data to table
+	DeleteMap map[string]string `uri:"delete"`                      // map of fields with value to check and delete
 
 	delete bool
 }
