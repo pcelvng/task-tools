@@ -20,7 +20,7 @@
   - `path_template` (rule options)
     - the base path template to be searched for file changes
     - `tmpl.Parse` is used to parse the `path_template`
-  - `task_template`
+  - `task_template` (rule option)
     - the template for the info string to send to the task_topic
     - should be a uri object
     - `origin[?query]`
