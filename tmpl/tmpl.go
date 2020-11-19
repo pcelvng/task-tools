@@ -29,6 +29,7 @@ var (
 // {MM}   (month - two digits: ie 12)
 // {DD}   (day - two digits: ie 13)
 // {HH}   (hour - two digits: ie 00)
+// {min}   (minute - two digits: ie 00)
 // {TS}   (timestamp in the format 20060102T150405)
 // {SLUG} (alias of HOUR_SLUG)
 // {HOUR_SLUG} (date hour slug, shorthand for {YYYY}/{MM}/{DD}/{HH})
@@ -90,6 +91,9 @@ func Parse(s string, t time.Time) string {
 
 	hour := fmt.Sprintf("%02d", t.Hour())
 	s = regHour.ReplaceAllString(s, hour)
+
+	min := fmt.Sprintf("%02d", t.Minute())
+	s = strings.ReplaceAll(s, "{min}", min)
 
 	// {HOST}
 	if h, err := os.Hostname(); err == nil {
