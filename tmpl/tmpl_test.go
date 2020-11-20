@@ -44,9 +44,19 @@ func TestParse(t *testing.T) {
 			expected: "03",
 		},
 		{
+			template: "{min}",
+			time:     tm,
+			expected: "17",
+		},
+		{
 			template: "{YYYY}/{MM}/{DD}/{HH}",
 			time:     tm,
 			expected: "2018/01/02/03",
+		},
+		{
+			template: "{YYYY}/{MM}/{DD}/{HH}/{min}",
+			time:     tm,
+			expected: "2018/01/02/03/17",
 		},
 		{
 			template: "{yyyy}/{mm}/{dd}/{hh}",
