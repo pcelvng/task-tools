@@ -9,16 +9,27 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var (
-	regYear      = regexp.MustCompile(`{(Y|y){4}}`)
-	regYearShort = regexp.MustCompile(`{(Y|y){2}}`)
-	regMonth     = regexp.MustCompile(`{(M|m){2}}`)
-	regDay       = regexp.MustCompile(`{(D|d){2}}`)
-	regHour      = regexp.MustCompile(`{(H|h){2}}`)
-	regHost      = regexp.MustCompile(`(?i){host}`)
+	regYear             = regexp.MustCompile(`{(Y|y){4}}`)
+	regYearShort        = regexp.MustCompile(`{(Y|y){2}}`)
+	regMonth            = regexp.MustCompile(`{(M|m){2}}`)
+	regDay              = regexp.MustCompile(`{(D|d){2}}`)
+	regHour             = regexp.MustCompile(`{(H|h){2}}`)
+	regHost             = regexp.MustCompile(`(?i){host}`)
+	regPod              = regexp.MustCompile(`(?i){pod}`)
+	hostName     string = "hostname"
 )
+
+func init() {
+	h, err := os.Hostname()
+	if err == nil {
+		hostName = h
+	}
+}
 
 // Parse will parse a template string according to the provided
 // instance of time.Time. It supports the following
@@ -36,6 +47,8 @@ var (
 // {DAY_SLUG} (date day slug, shorthand for {YYYY}/{MM}/{DD})
 // {MONTH_SLUG} (date month slug, shorthand for {YYYY}/{MM})
 // {HOST} (os hostname)
+// {POD}  kubernetes unique pod name
+// {UUID} creates an 8 character unique id
 //
 // Template values are case sensitive.
 //
@@ -96,8 +109,20 @@ func Parse(s string, t time.Time) string {
 	s = strings.ReplaceAll(s, "{min}", min)
 
 	// {HOST}
-	if h, err := os.Hostname(); err == nil {
-		s = regHost.ReplaceAllString(s, h)
+	s = regHost.ReplaceAllString(s, hostName)
+
+	// {POD} - only keep the unique node-pod ids
+	v := strings.Split(hostName, "-")
+	if len(v) > 1 {
+		v = v[len(v)-2:]
+	}
+	h := strings.Join(v, "-")
+	s = regPod.ReplaceAllString(s, h)
+
+	// {UUID}
+	if strings.Contains(strings.ToLower(s), "{uuid}") {
+		id := strings.Split(uuid.New().String(), "-")[0]
+		s = strings.Replace(s, "{uuid}", id, 1)
 	}
 
 	return s + end
