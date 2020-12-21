@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	"github.com/pkg/errors"
@@ -25,6 +26,7 @@ import (
 
 type taskMaster struct {
 	initTime    time.Time
+	nextUpdate  time.Time
 	path        string
 	dur         time.Duration
 	producer    bus.Producer
@@ -38,9 +40,10 @@ type taskMaster struct {
 }
 
 type stats struct {
-	RunTime  string            `json:"runtime"`
-	Workflow map[string]int    `json:"workflow"`
-	Entries  map[string]cEntry `json:"job"`
+	RunTime    string            `json:"runtime"`
+	NextUpdate string            `json:"next_cache_update"`
+	Workflow   map[string]int    `json:"workflow"`
+	Entries    map[string]cEntry `json:"job"`
 }
 
 type cEntry struct {
@@ -76,9 +79,10 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 
 func (tm *taskMaster) Info() interface{} {
 	sts := stats{
-		RunTime:  time.Now().Sub(tm.initTime).String(),
-		Entries:  make(map[string]cEntry),
-		Workflow: make(map[string]int),
+		RunTime:    gtools.PrintDuration(time.Now().Sub(tm.initTime)),
+		NextUpdate: tm.nextUpdate.Format("2006-01-02T15:04:05"),
+		Entries:    make(map[string]cEntry),
+		Workflow:   make(map[string]int),
 	}
 
 	for _, e := range tm.cron.Entries() {
@@ -105,6 +109,7 @@ func (tm *taskMaster) Info() interface{} {
 // if any changes have been made to the workflow files
 func (tm *taskMaster) AutoUpdate() {
 	for {
+
 		files, err := tm.Cache.Refresh()
 		if err != nil {
 			log.Println("error reloading workflow files", err)
@@ -122,6 +127,7 @@ func (tm *taskMaster) AutoUpdate() {
 				tcron.Stop()
 			}
 		}
+		tm.nextUpdate = time.Now().Add(tm.dur)
 		<-time.Tick(tm.dur)
 	}
 }
