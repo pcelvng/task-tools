@@ -3,6 +3,7 @@ package tmpl
 import (
 	"net/url"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	hostName = "test-hostname-abcdefghij-12345"
 	tm, _ := time.Parse(time.RFC3339, "2018-01-02T03:17:34Z")
 	tmZero := time.Time{}
 	cases := []struct {
@@ -93,6 +95,16 @@ func TestParse(t *testing.T) {
 			time:     trial.Time("2006-01-02", "2018-05-10"),
 			expected: "path/2018/05/10#{yyyy}/{mm}",
 		},
+		{
+			template: "path/{host}.log",
+			time:     tm,
+			expected: "path/" + hostName + ".log",
+		},
+		{
+			template: "path/{POD}.json",
+			time:     tm,
+			expected: "path/abcdefghij-12345.json",
+		},
 	}
 	for _, test := range cases {
 		result := Parse(test.template, test.time)
@@ -154,6 +166,15 @@ func TestPathTime(t *testing.T) {
 		} else {
 			t.Logf("PASS: %q", test.msg)
 		}
+	}
+}
+
+func TestParseUUID(t *testing.T) {
+	path := "path/to/file-{uuid}.json"
+	s := Parse(path, trial.TimeDay("2020-02-10"))
+	regMatch := regexp.MustCompile(`path\/to\/file-[0-9a-f]{8}[.]json`)
+	if !regMatch.MatchString(s) {
+		t.Errorf("FAIL: expected a random uuid: %s", s)
 	}
 }
 
@@ -238,6 +259,7 @@ func TestParseMeta(t *testing.T) {
 
 func TestHostSlug(t *testing.T) {
 	h, _ := os.Hostname()
+	hostName = h
 
 	tmp := "{HOST}"
 	if r1 := Parse(tmp, time.Now()); r1 != h {
