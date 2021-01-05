@@ -33,7 +33,12 @@ func (p Phase) Job() string {
 	if len(s) > 1 {
 		return s[1]
 	}
-	return s[0]
+
+	r, _ := url.ParseQuery(p.Rule)
+	if j := r.Get("job"); j != "" {
+		return j
+	}
+	return ""
 }
 
 // Topic portion of the Task
