@@ -43,13 +43,14 @@ type stats struct {
 	RunTime    string            `json:"runtime"`
 	NextUpdate string            `json:"next_cache_update"`
 	Workflow   map[string]int    `json:"workflow"`
-	Entries    map[string]cEntry `json:"job"`
+	Entries    map[string]cEntry `json:"cron"`
 }
 
 type cEntry struct {
 	Next     time.Time
 	Prev     time.Time
 	Schedule string
+	Child    []string `json:"Child,omitempty"`
 }
 
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
@@ -94,8 +95,11 @@ func (tm *taskMaster) Info() interface{} {
 			Next:     e.Next,
 			Prev:     e.Prev,
 			Schedule: j.Schedule,
+			Child:    make([]string, 0),
 		}
-		sts.Entries[j.Name] = ent
+		k := j.Topic + ":" + j.Name
+		ent.Child = tm.getAllChildren(j.Topic, j.Workflow, j.Name)
+		sts.Entries[k] = ent
 	}
 	if tm.Cache != nil {
 		for k, v := range tm.Workflows {
@@ -103,6 +107,17 @@ func (tm *taskMaster) Info() interface{} {
 		}
 	}
 	return sts
+}
+
+func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
+	for _, c := range tm.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
+		job := c.Task + ":" + c.Job()
+		if children := tm.getAllChildren(c.Task, workflow, c.Job()); len(children) > 0 {
+			job += " ➞ " + strings.Join(children, " ➞ ")
+		}
+		s = append(s, job)
+	}
+	return s
 }
 
 // AutoUpdate will create a go routine to auto update the cached files
@@ -185,7 +200,6 @@ func (tm *taskMaster) schedule() (err error) {
 			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
 				return errors.Wrapf(err, "invalid rule for %s:%s %s", path, w.Task, w.Rule)
 			}
-			log.Printf("cron: task:%s, rule:%s, info:%s\t %v \n", w.Task, j.Schedule, w.Template, rules)
 		}
 	}
 	tm.cron.Start()
