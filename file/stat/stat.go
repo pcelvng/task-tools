@@ -58,6 +58,8 @@ type Stats struct {
 
 	IsDir bool `json:"-"`
 
+	Files int64 `json:"-"`
+
 	mu sync.Mutex
 }
 

@@ -18,4 +18,4 @@ RUN rm -rf /tmp/*
 RUN echo -e "#!/bin/sh \n ls -Alhp \$1" > /usr/bin/ll
 RUN chmod +x /usr/bin/ll
 
-COPY build/ /usr/bin/
+COPY build/* /usr/bin/
