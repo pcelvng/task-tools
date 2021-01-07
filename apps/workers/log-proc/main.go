@@ -47,7 +47,7 @@ func (o *options) newWorker(info string) task.Worker {
 
 	jqreader, err := file.NewReader(w.JqConfig, &o.File)
 	if err != nil {
-		return task.InvalidWorker("jq config: $s", err)
+		return task.InvalidWorker("jq config: %s", err)
 	}
 	jqlogic, err := ioutil.ReadAll(jqreader)
 	if err != nil {
