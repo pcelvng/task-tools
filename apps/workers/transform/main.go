@@ -18,9 +18,22 @@ import (
 	"github.com/pcelvng/task-tools/file"
 )
 
+const (
+	taskType    = "transform"
+	description = `modify json data using jq syntax
+
+	info params:
+ - origin: (required) - glob path to a file(s) to transform (extract) 
+ - dest:   (required) - file path to where the resulting data will be written 
+ - jq:     (required) - file path to a jq definition file
+
+example 
+{"task":"transform","info":"gs://path/to/file/*/*.gz?dest=gs://path/dest/output.gz&jq=./conf.jq"}`
+)
+
 type options struct {
+	Threads int `toml:"threads"`
 	File    file.Options
-	Threads int
 }
 
 func main() {
@@ -28,9 +41,9 @@ func main() {
 		Threads: 1,
 	}
 
-	app := bootstrap.NewWorkerApp("log-proc", opts.newWorker, opts).
+	app := bootstrap.NewWorkerApp(taskType, opts.newWorker, opts).
 		Version(tools.String()).
-		Description("").
+		Description(description).
 		Initialize()
 
 	app.Run()
@@ -62,9 +75,14 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("writer error: %s", err)
 	}
 
-	if w.query, err = gojq.Parse(string(jqlogic)); err != nil {
+	query, err := gojq.Parse(string(jqlogic))
+	if err != nil {
 		return task.InvalidWorker("invalid jq: %s", err)
 	}
+	if w.code, err = gojq.Compile(query); err != nil {
+		return task.InvalidWorker("invalid jq-compile: %s", err)
+	}
+
 	return w
 }
 
@@ -78,11 +96,11 @@ func (o options) Validate() error {
 type worker struct {
 	Path     string `uri:"origin" required:"true"`
 	Dest     string `uri:"dest" required:"true"`
-	JqConfig string `uri:"jq_file" required:"true"`
+	JqConfig string `uri:"jq" required:"true"`
 
 	reader file.Reader
 	writer file.Writer
-	query  *gojq.Query
+	code   *gojq.Code
 
 	options
 }
@@ -138,12 +156,12 @@ func (w *worker) process(line []byte) error {
 	if err := json.Unmarshal(line, &data); err != nil {
 		return err
 	}
-	v, ok := w.query.Run(data).Next()
+	result, ok := w.code.Run(data).Next()
 	if !ok {
-		return v.(error)
+		return result.(error)
 	}
 
-	b, err := json.Marshal(v)
+	b, err := gojq.Marshal(result)
 	if err != nil {
 		return err
 	}
