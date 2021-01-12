@@ -111,6 +111,14 @@ func TestGlob_Local(t *testing.T) {
 			Input:    "test/*/*.txt",
 			Expected: []string{"./test/f3/file5.txt", "./test/f5/file-6.txt"},
 		},
+		"file": {
+			Input:    "test/file2.txt",
+			Expected: []string{"./test/file2.txt"},
+		},
+		"nop/file": {
+			Input:    "nop://file.txt", //NOTE nop is hard-coded to return file.txt
+			Expected: []string{"nop://file.txt"},
+		},
 	}
 	trial.New(fn, cases).SubTest(t)
 

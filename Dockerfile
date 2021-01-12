@@ -5,7 +5,7 @@ RUN apk add ca-certificates
 RUN apk add curl
 
 #confd
-ADD https://github.com/kelseyhightower/confd/releases/download/v0.16.0/confd-0.16.0-linux-amd64 /usr/bin/confd
+ADD https://github.com/jbsmith7741/confd/releases/download/v0.16.0-vault/confd-0.16.0-vault-darwin-amd64 /usr/bin/confd
 RUN chmod +x /usr/bin/confd
 
 #gojq
