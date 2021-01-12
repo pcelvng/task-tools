@@ -250,6 +250,8 @@ github.com/jarcoal/httpmock v1.0.6/go.mod h1:ATjnClrvW/3tijVmpL/va5Z3aAyGvqU3gCT
 github.com/jbsmith7741/go-tools v0.2.0/go.mod h1:UIlRAZ6aTSLlVI+owNLWbVS9e/Rywzahvurv/PUVBKg=
 github.com/jbsmith7741/go-tools v0.4.0 h1:UpKLVkPQRZEvxec110Nh0f+GeOiRSHo5oCpw/eD3AHs=
 github.com/jbsmith7741/go-tools v0.4.0/go.mod h1:8v8ffjiI3qOs6epawzxmPB7AOKoNNxZHKPl2VUWXoyY=
+github.com/jbsmith7741/go-tools v0.4.1 h1:qqHI0imezT1SLCd43df4sBZ44b4bndfo0W9R9B53/kA=
+github.com/jbsmith7741/go-tools v0.4.1/go.mod h1:8v8ffjiI3qOs6epawzxmPB7AOKoNNxZHKPl2VUWXoyY=
 github.com/jbsmith7741/trial v0.3.1 h1:JZ0/w3lhfH4iacf9R2DnZWtTMa/Uf4O13gnuMLTub/M=
 github.com/jbsmith7741/trial v0.3.1/go.mod h1:M4FQWUgVpPY2+i53L2nSB0AyPc86kSTIigcr9Q7XQlY=
 github.com/jbsmith7741/uri v0.4.0/go.mod h1:Ctt8YJ5gCFx5BX/FMFg5VkwuI9buBcvsITIiSMH+TeA=

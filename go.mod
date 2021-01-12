@@ -18,7 +18,7 @@ require (
 	github.com/hydronica/trial v0.5.0
 	github.com/itchyny/gojq v0.12.0
 	github.com/jarcoal/httpmock v1.0.6
-	github.com/jbsmith7741/go-tools v0.4.0
+	github.com/jbsmith7741/go-tools v0.4.1
 	github.com/jbsmith7741/trial v0.3.1
 	github.com/jbsmith7741/uri v0.4.1
 	github.com/jmoiron/sqlx v1.2.0
