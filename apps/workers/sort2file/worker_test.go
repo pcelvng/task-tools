@@ -372,16 +372,16 @@ func ExampleDoTaskReadLineErr() {
 	defer os.Unsetenv("TZ")
 
 	ctx, _ := context.WithCancel(context.Background())
-	info := `nop://readline_err/?date-field=0&dest-template=nop://{HH}.csv&sep=,`
+	info := `nop://readline_err?date-field=0&dest-template=nop://{HH}.csv&sep=,`
 	wkr := newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: issue at line 1: readline_err (nop://readline_err/)
+	fmt.Println(msg)    // output: issue at line 1: readline_err (nop://readline_err)
 
 	// Output:
 	// error
-	// issue at line 1: readline_err (nop://readline_err/)
+	// issue at line 1: readline_err (nop://readline_err)
 }
 
 func ExampleWorker_DoTaskDirSrc() {

@@ -1,6 +1,6 @@
 [[Phase]]
 task = "task1"
-rule = "cron=0 * * * * *&offset=-4h&job=t2"
+rule = "cron=0 * * * *&offset=-4h&job=t2"
 retry = 3
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
 
@@ -27,7 +27,7 @@ template = "{meta:file}"
 
 [[Phase]]
 task = "task1"
-rule = "cron=0 * * * * *&offset=-4h&job=t4"
+rule = "cron=0 * * * *&offset=-4h&job=t4"
 retry = 3
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
 
