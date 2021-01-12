@@ -2,8 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	//	"encoding/json"
 	"io/ioutil"
 	"log"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/itchyny/gojq"
 	"github.com/jbsmith7741/uri"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pcelvng/task"
 
 	tools "github.com/pcelvng/task-tools"
@@ -26,20 +26,18 @@ const (
  - origin: (required) - glob path to a file(s) to transform (extract) 
  - dest:   (required) - file path to where the resulting data will be written 
  - jq:     (required) - file path to a jq definition file
+ - threads: - number of threads to process files (default: 2)
 
 example 
 {"task":"transform","info":"gs://path/to/file/*/*.gz?dest=gs://path/dest/output.gz&jq=./conf.jq"}`
 )
 
 type options struct {
-	Threads int `toml:"threads"`
-	File    file.Options
+	File file.Options
 }
 
 func main() {
-	opts := &options{
-		Threads: 1,
-	}
+	opts := &options{}
 
 	app := bootstrap.NewWorkerApp(taskType, opts.newWorker, opts).
 		Version(tools.String()).
@@ -56,6 +54,10 @@ func (o *options) newWorker(info string) task.Worker {
 
 	if err := uri.Unmarshal(info, w); err != nil {
 		return task.InvalidWorker("uri error: %s", err)
+	}
+
+	if w.Threads < 1 {
+		return task.InvalidWorker("invalid threads %d (min: 1)", w.Threads)
 	}
 
 	jqreader, err := file.NewReader(w.JqConfig, &o.File)
@@ -87,9 +89,6 @@ func (o *options) newWorker(info string) task.Worker {
 }
 
 func (o options) Validate() error {
-	if o.Threads < 1 {
-		return fmt.Errorf("threads > 0")
-	}
 	return nil
 }
 
@@ -97,6 +96,7 @@ type worker struct {
 	Path     string `uri:"origin" required:"true"`
 	Dest     string `uri:"dest" required:"true"`
 	JqConfig string `uri:"jq" required:"true"`
+	Threads  int    `uri:"threads" default:"2"`
 
 	reader file.Reader
 	writer file.Writer
@@ -106,7 +106,7 @@ type worker struct {
 }
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
-	in := make(chan []byte, w.Threads)
+	in := make(chan []byte, 200)
 	errChan := make(chan error)
 	log.Printf("threads: %d", w.Threads)
 
@@ -153,7 +153,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 func (w *worker) process(line []byte) error {
 	data := make(map[string]interface{})
-	if err := json.Unmarshal(line, &data); err != nil {
+	if err := jsoniter.Unmarshal(line, &data); err != nil {
 		return err
 	}
 	result, ok := w.code.Run(data).Next()
@@ -161,7 +161,7 @@ func (w *worker) process(line []byte) error {
 		return result.(error)
 	}
 
-	b, err := gojq.Marshal(result)
+	b, err := jsoniter.ConfigCompatibleWithStandardLibrary.Marshal(result)
 	if err != nil {
 		return err
 	}
