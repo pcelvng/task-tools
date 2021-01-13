@@ -49,7 +49,7 @@ type stats struct {
 type cEntry struct {
 	Next     time.Time
 	Prev     time.Time
-	Schedule string
+	Schedule []string
 	Child    []string `json:"Child,omitempty"`
 }
 
@@ -94,10 +94,22 @@ func (tm *taskMaster) Info() interface{} {
 		ent := cEntry{
 			Next:     e.Next,
 			Prev:     e.Prev,
-			Schedule: j.Schedule,
+			Schedule: []string{j.Schedule + "?offset=" + gtools.PrintDuration(j.Offset)},
 			Child:    make([]string, 0),
 		}
 		k := j.Topic + ":" + j.Name
+
+		// check if for multi-scheduled entries
+		if e, found := sts.Entries[k]; found {
+			if e.Prev.After(ent.Prev) {
+				ent.Prev = e.Prev // keep the last run time
+			}
+			if e.Next.Before(ent.Next) {
+				ent.Next = e.Next // keep the next run time
+			}
+			ent.Schedule = append(ent.Schedule, e.Schedule...)
+		}
+		// add children
 		ent.Child = tm.getAllChildren(j.Topic, j.Workflow, j.Name)
 		sts.Entries[k] = ent
 	}

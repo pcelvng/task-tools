@@ -175,6 +175,9 @@ func ListFiles(pth string) ([]stat.Stats, error) {
 	if errMode != nil && errMode.Host == "err" {
 		return nil, errors.New(errMode.Host)
 	}
+	if pth[len(pth)-1] == '/' {
+		pth += "file.txt"
+	}
 	sts.SetPath(pth)
 
 	return []stat.Stats{sts}, nil

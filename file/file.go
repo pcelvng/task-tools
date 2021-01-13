@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/pcelvng/task-tools/file/gs"
 	"github.com/pcelvng/task-tools/file/local"
@@ -257,35 +258,50 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 	return local.Stat(path)
 }
 
-// Glob will only match to files and will
-// not match recursively. Only files directly in pthDir
-// are candidates for matching.
+// Glob will match to files and folder
 //
 // Supports the same globing patterns as provided in *nix
 // terminals.
 //
-// Globing in directories is not supported.
-// ie - s3://bucket/path/*/files.txt will not work
+// Globing in directories is  supported.
+// ie - s3://bucket/path/*/files.txt will work
+// s3://bucket/path/dir[0-5]*/*.txt will work
 // but s3://bucket/path/to/*.txt will work.
 func Glob(pth string, opt *Options) ([]stat.Stats, error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
 	pthDir, pattern := path.Split(pth)
+	folders := []string{pthDir}
+	// check pthDir for pattern matches
+	if strings.ContainsAny(pthDir, "[]*?") {
+		f, err := matchFolder(pthDir, opt)
+		if err != nil {
+			return nil, err
+		}
+		folders = make([]string, len(f))
+		for i, v := range f {
+			folders[i] = v.Path
+		}
+	}
+	allSts := make([]stat.Stats, 0)
 
 	// get all files in dir
-	allSts, err := List(pthDir, opt)
-	if err != nil {
-		return nil, err
+	for _, f := range folders {
+		sts, err := List(f, opt)
+		if err != nil {
+			return nil, err
+		}
+		allSts = append(allSts, sts...)
 	}
 
 	// filter out files that don't match the glob pattern
 	glbSts := make([]stat.Stats, 0)
 	for _, sts := range allSts {
+		_, fName := path.Split(sts.Path)
 		if sts.IsDir {
 			continue
 		}
-		_, fName := path.Split(sts.Path)
 		isMatch, err := filepath.Match(pattern, fName)
 		if err != nil {
 			return nil, err
@@ -295,8 +311,44 @@ func Glob(pth string, opt *Options) ([]stat.Stats, error) {
 			glbSts = append(glbSts, sts)
 		}
 	}
-
 	return glbSts, nil
+}
+
+func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
+	pthDir, pattern := path.Split(strings.TrimRight(pth, "/"))
+	paths := []string{pthDir}
+
+	// check pthDir for pattern matches
+	if strings.ContainsAny(pthDir, "[]*?") {
+		pthDir, pattern = path.Split(strings.TrimRight(pthDir, "/"))
+		sts, err := matchFolder(pthDir, opt)
+		if err != nil {
+			return nil, err
+		}
+		paths = make([]string, 0)
+		for _, f := range sts {
+			paths = append(paths, f.Path)
+		}
+	}
+	for _, p := range paths {
+		sts, err := List(p, opt)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range sts {
+			if !f.IsDir {
+				continue
+			}
+			_, fName := path.Split(strings.TrimRight(f.Path, "/"))
+			if isMatch, err := filepath.Match(pattern, fName); err != nil {
+				return nil, err
+			} else if isMatch {
+				folders = append(folders, f)
+			}
+		}
+	}
+
+	return folders, nil
 }
 
 // parseScheme will return the pth scheme (if exists).
