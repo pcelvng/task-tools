@@ -10,14 +10,14 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = backloader crontask files retry filewatcher nop sort2file deduper batcher http recap filecopy logger stats json2csv flowlord csv2json sql-load sql-read bq-load
+APPS = backloader crontask files retry filewatcher sort2file deduper batcher http recap filecopy logger stats json2csv flowlord csv2json sql-load sql-read bq-load transform
 
 all: $(APPS) 
 
 $(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
-	GOOS=linux go build ${GOFLAGS} -o $@ ./apps/*/$*
-	go build ${GOFLAGS} -o ${BLDDIR}/local/$(@F) ./apps/*/$*
+	GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./apps/*/$*
+	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./apps/*/$*
 
 $(APPS): %: $(BLDDIR)/%
 
