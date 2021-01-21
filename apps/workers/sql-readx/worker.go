@@ -31,13 +31,24 @@ type FieldMap map[string]string
 func (o *options) NewWorker(info string) task.Worker {
 	// unmarshal info string
 	iOpts := struct {
+		Exec        string            `uri:"exec"`
 		Table       string            `uri:"table"`
 		QueryFile   string            `uri:"origin"` // path to query file
 		Fields      map[string]string `uri:"field"`
-		Destination string            `uri:"dest" required:"true"`
+		Destination string            `uri:"dest"`
 	}{}
 	if err := uri.Unmarshal(info, &iOpts); err != nil {
 		return task.InvalidWorker(err.Error())
+	}
+	if iOpts.Exec != "" {
+		return &executer{
+			db:    o.db,
+			Query: iOpts.Exec,
+		}
+	}
+
+	if iOpts.Destination == "" {
+		return task.InvalidWorker("destination required for query")
 	}
 
 	var query string

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -28,7 +29,15 @@ func TestNewWorker(t *testing.T) {
 			return nil, errors.New(s)
 		}
 
-		return w.(*worker).Query, nil
+		switch v := w.(type) {
+		case *worker:
+			return v.Query, nil
+		case *executer:
+			return v.Query, nil
+		default:
+			return nil, fmt.Errorf("unknown worker type: %T", w)
+		}
+
 	}
 	cases := trial.Cases{
 		"default": {
@@ -54,6 +63,10 @@ func TestNewWorker(t *testing.T) {
 		"writer err": {
 			Input:       tFile + "?table=schema.table&dest=nop://init_err",
 			ExpectedErr: errors.New("writer: "),
+		},
+		"exec statement": {
+			Input:    "?exec=Create table report.test_y2020m10 partition of report.test for values from ('2020-10-01') to ('2020-11-01')",
+			Expected: "Create table report.test_y2020m10 partition of report.test for values from ('2020-10-01') to ('2020-11-01')",
 		},
 	}
 	trial.New(fn, cases).Timeout(3 * time.Second).SubTest(t)
