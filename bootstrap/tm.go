@@ -248,8 +248,8 @@ func (tm *TaskMaster) genConfig() {
 	}
 
 	fmt.Printf("# '%v' taskmaster options\n", tm.AppName())
-	fmt.Print(string(appOptB))
 	fmt.Print(string(statsOptB))
+	fmt.Print(string(appOptB))
 	fmt.Print(string(wkrOptB))
 	fmt.Print(string(fileOptB))
 	fmt.Print(string(pgOptB))
