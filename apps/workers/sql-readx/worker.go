@@ -26,33 +26,61 @@ type worker struct {
 	Query  string
 }
 
+type executer struct {
+	task.Meta
+	db    *sqlx.DB
+	Query string
+}
+
 type FieldMap map[string]string
 
 func (o *options) NewWorker(info string) task.Worker {
 	// unmarshal info string
 	iOpts := struct {
-		Exec        string            `uri:"exec"`
+		Exec        bool              `uri:"exec"`
 		Table       string            `uri:"table"`
 		QueryFile   string            `uri:"origin"` // path to query file
+		Query       string            `uri:"query"`
 		Fields      map[string]string `uri:"field"`
 		Destination string            `uri:"dest"`
 	}{}
 	if err := uri.Unmarshal(info, &iOpts); err != nil {
 		return task.InvalidWorker(err.Error())
 	}
-	if iOpts.Exec != "" {
+
+	query := iOpts.Query
+	// setup query values
+	if iOpts.Query == "" && iOpts.QueryFile != "" {
+		r, err := file.NewReader(iOpts.QueryFile, o.FOpts)
+		if err != nil {
+			return task.InvalidWorker(err.Error())
+		}
+		b, err := ioutil.ReadAll(r)
+		if err != nil {
+			return task.InvalidWorker(err.Error())
+		}
+		query = string(b)
+	}
+
+	if iOpts.Exec {
+		if query == "" {
+			return task.InvalidWorker("query in url or path required")
+		}
+		for k, v := range iOpts.Fields {
+			// wrap key in bracket to prevent injection {key}
+			query = strings.Replace(query, "{"+k+"}", v, -1)
+		}
 		return &executer{
 			db:    o.db,
-			Query: iOpts.Exec,
+			Query: query,
 		}
 	}
 
 	if iOpts.Destination == "" {
-		return task.InvalidWorker("destination required for query")
+		return task.InvalidWorker("destination required for read query")
 	}
 
-	var query string
-	// get query
+	// generate query from fields
 	if len(iOpts.Fields) > 0 {
 		if s := strings.Split(iOpts.Table, "."); len(s) != 2 {
 			return task.InvalidWorker("invalid table %s (schema.table)", iOpts.Table)
@@ -64,18 +92,6 @@ func (o *options) NewWorker(info string) task.Worker {
 		sort.Strings(cols) // we must sort the slice as a map is random order (cannot test)
 		query = fmt.Sprintf("select %s from %s",
 			strings.Join(cols, ", "), iOpts.Table)
-	}
-
-	if iOpts.QueryFile != "" {
-		r, err := file.NewReader(iOpts.QueryFile, o.FOpts)
-		if err != nil {
-			return task.InvalidWorker(err.Error())
-		}
-		b, err := ioutil.ReadAll(r)
-		if err != nil {
-			return task.InvalidWorker(err.Error())
-		}
-		query = string(b)
 	}
 
 	if query == "" {
@@ -94,6 +110,24 @@ func (o *options) NewWorker(info string) task.Worker {
 		Query:  query,
 		writer: w,
 	}
+}
+
+func (w *executer) DoTask(ctx context.Context) (task.Result, string) {
+	tx, err := w.db.BeginTx(ctx, nil)
+	if err != nil {
+		return task.Failed(err)
+	}
+	r, err := w.db.ExecContext(ctx, w.Query)
+	if err != nil {
+		tx.Rollback()
+		return task.Failed(err)
+	}
+	if err = tx.Commit(); err != nil {
+		return task.Failed(err)
+	}
+	id, _ := r.LastInsertId()
+	rows, _ := r.RowsAffected()
+	return task.Completed("done %d with %d rows affected", id, rows)
 }
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {

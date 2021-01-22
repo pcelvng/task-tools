@@ -14,21 +14,28 @@ import (
 )
 
 const (
-	taskType = "sql_read"
-	desc     = `extract data from a mysql or postgres table 
+	taskType = "sql_readx"
+	desc     = `extract data from a mysql or postgres table or execute a command
 
 info params
- - origin: (alternative to field) - path to a file containing a sql query to extract the date  
- - dest: (required) - file path to where the file should be written 
+ - origin: (alternative to query) - path to a file containing a sql statement
+ - query: (instead of file) - statement to execute
+ - exec: execute statement instead of running as a query
+ - dest: (required for query) - file path to where the file should be written 
  - table: (required with field) - table (schema.table) to read from 
- - field: (alternative to origin) - list of columns to read from and the json field that should be used to write the values. 
+ - field: - map of columns of fields. 
+	Query: list of columns to read from and the json field that should be used to write the values. 
+	Exec: key to be replaced with value in statment. NOTE: key are wrapped with brackets {key} -> value
 
 example 
-{"task":"sql_read","info":"?dest=./data.json&table=report.impressions&field=id:my_id|date:date"}`
+{"task":"sql_readx","info":"?dest=./data.json&table=report.impressions&field=id:my_id|date:date"}
+{"task":"sql_readx","info":"./query.sql?dest=./data.json"}
+{"task":"sql_readx","info":"./query.sql?exec&field=date:2020-01-01"}
+`
 )
 
 type options struct {
-	DBOptions `toml:"mysql"`
+	DBOptions `toml:"sql"`
 
 	FOpts *file.Options `toml:"file"`
 	db    *sqlx.DB

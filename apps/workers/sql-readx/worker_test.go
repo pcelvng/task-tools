@@ -65,8 +65,16 @@ func TestNewWorker(t *testing.T) {
 			ExpectedErr: errors.New("writer: "),
 		},
 		"exec statement": {
-			Input:    "?exec=Create table report.test_y2020m10 partition of report.test for values from ('2020-10-01') to ('2020-11-01')",
-			Expected: "Create table report.test_y2020m10 partition of report.test for values from ('2020-10-01') to ('2020-11-01')",
+			Input:    "?exec&query=my query",
+			Expected: "my query",
+		},
+		"exec with fields": {
+			Input:    "?exec&query={time} and {table}&field=time:2020-01-01|table:test.table",
+			Expected: "2020-01-01 and test.table",
+		},
+		"missing query": {
+			Input:     "?exec",
+			ShouldErr: true,
 		},
 	}
 	trial.New(fn, cases).Timeout(3 * time.Second).SubTest(t)
