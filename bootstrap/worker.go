@@ -307,8 +307,8 @@ func (w *Worker) genConfig() {
 	}
 
 	fmt.Printf("# '%v' worker options\n", w.TaskType())
-	fmt.Print(string(appOptB))
 	fmt.Print(string(statsOptB))
+	fmt.Print(string(appOptB))
 	fmt.Print(string(wkrOptB))
 	fmt.Print(string(fileOptB))
 	fmt.Print(string(pgOptB))
