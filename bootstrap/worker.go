@@ -570,7 +570,7 @@ func (w *Worker) Log(format string, v ...interface{}) {
 }
 
 func newWkrOptions(tskType string) *wkrOptions {
-	bOpt := task.NewBusOptions("") // nsq default for bootstrapping
+	bOpt := task.NewBusOptions("stdio") // stdio default for bootstrapping
 	bOpt.InTopic = tskType
 	bOpt.InChannel = tskType
 

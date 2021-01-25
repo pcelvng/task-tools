@@ -531,7 +531,7 @@ func (tm *TaskMaster) Log(format string, v ...interface{}) {
 }
 
 func newTMOptions(appName string) *tmOptions {
-	bOpt := task.NewBusOptions("") // nsq default for bootstrapping
+	bOpt := task.NewBusOptions("stdio") // stdio default for bootstrapping
 	bOpt.InTopic = appName
 	bOpt.InChannel = appName
 

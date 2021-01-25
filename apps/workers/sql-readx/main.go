@@ -7,6 +7,8 @@ import (
 
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/jmoiron/sqlx"
+
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 
 	tools "github.com/pcelvng/task-tools"
