@@ -49,6 +49,7 @@ func main() {
 
 func (o *options) newWorker(info string) task.Worker {
 	w := &worker{
+		Meta:    task.NewMeta(),
 		options: *o,
 	}
 
@@ -93,6 +94,8 @@ func (o options) Validate() error {
 }
 
 type worker struct {
+	task.Meta
+
 	Path     string `uri:"origin" required:"true"`
 	Dest     string `uri:"dest" required:"true"`
 	JqConfig string `uri:"jq" required:"true"`
@@ -148,6 +151,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	}
 	osts, _ := file.Stat(w.Dest, &w.File)
 
+	w.SetMeta("file", w.Dest)
 	return task.Completed("%d files processed with %d lines and %s", w.reader.Stats().Files, sts.LineCnt, humanize.IBytes(uint64(osts.Size)))
 }
 
