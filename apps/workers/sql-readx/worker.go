@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"sort"
 	"strings"
 
@@ -113,6 +114,7 @@ func (o *options) NewWorker(info string) task.Worker {
 }
 
 func (w *executer) DoTask(ctx context.Context) (task.Result, string) {
+	log.Println(w.Query)
 	tx, err := w.db.BeginTx(ctx, nil)
 	if err != nil {
 		return task.Failed(err)

@@ -8,6 +8,9 @@ import (
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/jmoiron/sqlx"
 
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
@@ -62,11 +65,14 @@ func (o *options) Validate() error {
 
 // connectDB creates a connection to the database
 func (o *options) connectDB() (err error) {
+	var driverName string
 	var dsn string
 	switch o.Type {
 	case "mysql":
 		dsn = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", o.Username, o.Password, o.Host, o.DBName)
+		driverName = "mysql"
 	case "postgres":
+		driverName = "postgres"
 		host, port := o.Host, ""
 		if v := strings.Split(o.Host, ":"); len(v) > 1 {
 			host, port = v[0], v[1]
@@ -85,7 +91,7 @@ func (o *options) connectDB() (err error) {
 	default:
 		return fmt.Errorf("unknown db type %s", o.Type)
 	}
-	o.db, err = sqlx.Open("mysql", dsn)
+	o.db, err = sqlx.Open(driverName, dsn)
 	return err
 }
 
@@ -108,7 +114,7 @@ func main() {
 
 	// setup database connection
 	if err := opts.connectDB(); err != nil {
-		log.Fatal("db connect", err)
+		log.Fatal("db connect: ", err)
 	}
 
 	app.Run()
