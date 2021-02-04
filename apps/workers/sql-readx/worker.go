@@ -7,6 +7,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	_ "github.com/go-sql-driver/mysql"
@@ -113,12 +114,13 @@ func (o *options) NewWorker(info string) task.Worker {
 	}
 }
 
-func (w *executer) DoTask(ctx context.Context) (task.Result, string) {
+func (w *executer) DoTask(ctx context.Context) (result task.Result, f string) {
 	log.Println(w.Query)
 	tx, err := w.db.BeginTx(ctx, nil)
 	if err != nil {
 		return task.Failed(err)
 	}
+	start := time.Now()
 	r, err := tx.ExecContext(ctx, w.Query)
 	if err != nil {
 		tx.Rollback()
@@ -127,8 +129,12 @@ func (w *executer) DoTask(ctx context.Context) (task.Result, string) {
 	if err = tx.Commit(); err != nil {
 		return task.Failed(err)
 	}
+	end := time.Now()
 	id, _ := r.LastInsertId()
 	rows, _ := r.RowsAffected()
+
+	w.SetMeta("query_run_time", end.Sub(start).String())
+
 	return task.Completed("done %d with %d rows affected", id, rows)
 }
 
