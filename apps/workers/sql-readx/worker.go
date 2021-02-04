@@ -119,7 +119,7 @@ func (w *executer) DoTask(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		return task.Failed(err)
 	}
-	r, err := w.db.ExecContext(ctx, w.Query)
+	r, err := tx.ExecContext(ctx, w.Query)
 	if err != nil {
 		tx.Rollback()
 		return task.Failed(err)
