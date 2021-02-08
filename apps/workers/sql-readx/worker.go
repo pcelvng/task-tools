@@ -132,6 +132,10 @@ func (w *executer) DoTask(ctx context.Context) (task.Result, string) {
 	end := time.Now()
 	id, _ := r.LastInsertId()
 	rows, _ := r.RowsAffected()
+	
+	if w.Meta == nil {
+		w.Meta = task.NewMeta()
+	}
 
 	w.SetMeta("query_run_time", end.Sub(start).String())
 

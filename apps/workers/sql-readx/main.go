@@ -91,7 +91,7 @@ func (o *options) connectDB() (err error) {
 	default:
 		return fmt.Errorf("unknown db type %s", o.Type)
 	}
-	o.db, err = sqlx.Open(driverName, dsn)
+	o.db, err = sqlx.Connect(driverName, dsn)
 	return err
 }
 
