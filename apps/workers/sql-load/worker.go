@@ -266,7 +266,7 @@ func (w *worker) QuerySchema() (err error) {
 	return nil
 }
 
-// ReadFiles uses a fields list and file.Options to read files and process data into a Dataset
+// ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
 func (ds *DataSet) ReadFiles(files []string, fOpts *file.Options, skipErr bool) (err error) {
 
