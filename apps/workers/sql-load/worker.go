@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -129,24 +130,39 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		return task.Failed(fmt.Errorf("readfiles error %w", err))
 	}
 	w.fileReadTime = time.Now().Sub(start)
+	retry := 0
 
 	if w.Params.ExecQuery && w.dbDriver == "postgres" {
 		q, err := w.ds.RawQuery(w.Params.Table, w.delQuery)
 		if err != nil {
 			return task.Failed(err)
 		}
+		var txErr error
+		var tx *sql.Tx
 
 		start = time.Now()
-		tx := w.sqlxDB.MustBeginTx(context.Background(), &sql.TxOptions{})
-		// uncomment the next 2 lines to output the exec query to file for debugging
-		// os.Remove("./tmp.sql")
-		// ioutil.WriteFile("./tmp.sql", []byte(q), 0644)
-		_, err = tx.ExecContext(ctx, q)
-		if err != nil {
-			tx.Rollback()
-			return task.Failed(fmt.Errorf("exec error %w", err))
+		for {
+			if retry > 2 { // we will retry the transaction 3 times only
+				break
+			}
+			tx, txErr = w.sqlxDB.BeginTx(ctx, &sql.TxOptions{})
+			if txErr != nil {
+				return task.Failed(fmt.Errorf("failed to start transaction %w", err))
+			}
+			_, txErr = tx.ExecContext(ctx, q)
+			if txErr != nil {
+				tx.Rollback()
+				retry++
+			} else {
+				tx.Commit()
+				break
+			}
 		}
-		tx.Commit()
+
+		if txErr != nil {
+			return task.Failed(fmt.Errorf("transaction failed %w", txErr))
+		}
+
 		w.queryRunTime = time.Now().Sub(start)
 	} else {
 		b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
@@ -170,8 +186,8 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	w.SetMeta("file_process_time", fmt.Sprintf("%v", w.fileReadTime))
 	w.SetMeta("query_run_time", fmt.Sprintf("%v", w.queryRunTime))
 
-	return task.Completed("database load completed %s table: %s records: %d",
-		w.dbDriver, w.Params.Table, len(w.ds.insertRows))
+	return task.Completed("database load completed %s table: %s records: %d tried: %d",
+		w.dbDriver, w.Params.Table, len(w.ds.insertRows), retry+1)
 }
 
 // QuerySchema queries the database for the table schema for each column
@@ -487,6 +503,17 @@ func (ds *DataSet) findInsertKey(name string) bool {
 	return false
 }
 
+func RandString(n int) string {
+	rand.Seed(time.Now().UTC().UnixNano())
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz")
+
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
 // RawQuery will take DataSet data and build a query string with a temp table for inserting
 // this is to test improving the loading times for the the insert statements
 // at the moment this is only tested with postgres
@@ -494,7 +521,7 @@ func (ds *DataSet) RawQuery(tableName, deleteQuery string) (q string, err error)
 	var qry, fields bytes.Buffer
 
 	// replace any dots in the name so this can be a session temp table
-	t := strings.Replace(tableName, ".", "_", -1)
+	t := strings.Replace(tableName, ".", "_", -1) + "_" + RandString(10)
 
 	for i, f := range ds.insertCols {
 		fields.WriteString(f)
@@ -503,9 +530,10 @@ func (ds *DataSet) RawQuery(tableName, deleteQuery string) (q string, err error)
 		}
 	}
 
+	qry.WriteString("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n")
 	qry.WriteString("create temp table " + t + " as table " + tableName + " with no data;\n")
 	qry.WriteString("insert into " + t + "(" + fields.String() + ")\n")
-	qry.WriteString("VALUES \n")
+	qry.WriteString("  VALUES \n")
 
 	for i, rs := range ds.insertRows {
 		var f bytes.Buffer
@@ -559,6 +587,6 @@ func (ds *DataSet) RawQuery(tableName, deleteQuery string) (q string, err error)
 	}
 
 	qry.WriteString("insert into " + tableName + "(" + fields.String() + ")\n select " + fields.String() + " from " + t + ";")
-
+	qry.WriteString("COMMIT;")
 	return qry.String(), nil
 }
