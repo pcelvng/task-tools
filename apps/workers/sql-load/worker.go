@@ -272,7 +272,6 @@ func (ds *DataSet) ReadFiles(files []string, fOpts *file.Options, skipErr bool) 
 
 	// read each file
 	for i := range files {
-		log.Println("reading file", files[i])
 		r, e := file.NewReader(files[i], fOpts) // create a new file reader
 		if e != nil {
 			err = fmt.Errorf("new reader error %w", err)
