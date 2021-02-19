@@ -107,7 +107,7 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("no files found in path %s", w.Params.FilePath)
 	}
 	if len(w.Params.DeleteMap) > 0 && w.Params.Truncate {
-		return task.InvalidWorker("truncate can not be used with a delete fields")
+		return task.InvalidWorker("truncate can not be used with delete fields")
 	}
 	w.delQuery = DeleteQuery(w.Params.DeleteMap, w.Params.Table)
 	if w.Params.Truncate {
@@ -133,7 +133,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	retry := 0
 
 	if w.Params.ExecQuery && w.dbDriver == "postgres" {
-		q, err := w.ds.RawQuery(w.Params.Table, w.delQuery)
+		q, err := w.ds.RawQuery(w.Params.Table, w.delQuery, w.Params.Truncate)
 		if err != nil {
 			return task.Failed(err)
 		}
@@ -516,7 +516,7 @@ func RandString(n int) string {
 // RawQuery will take DataSet data and build a query string with a temp table for inserting
 // this is to test improving the loading times for the the insert statements
 // at the moment this is only tested with postgres
-func (ds *DataSet) RawQuery(tableName, deleteQuery string) (q string, err error) {
+func (ds *DataSet) RawQuery(tableName, deleteQuery string, truncate bool) (q string, err error) {
 	var qry, fields bytes.Buffer
 
 	// replace any dots in the name so this can be a session temp table
@@ -583,6 +583,9 @@ func (ds *DataSet) RawQuery(tableName, deleteQuery string) (q string, err error)
 
 	if deleteQuery != "" {
 		qry.WriteString(deleteQuery + ";\n")
+	}
+	if truncate {
+		qry.WriteString("delete from " + tableName + ";")
 	}
 
 	qry.WriteString("insert into " + tableName + "(" + fields.String() + ")\n select " + fields.String() + " from " + t + ";")
