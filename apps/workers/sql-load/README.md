@@ -14,7 +14,7 @@
     * provide a list of field name mapping {json key name}:{DB column name} to be mapped 
     * `?fields=jsonKeyName:dbColumnName`
   * `cached_insert` : will create a temp table for insert
-    * this temp table data will then be inserted into the [`table_name`]
+    * this temp table data will then be inserted into the `table`
 
 Example tasks:
 
