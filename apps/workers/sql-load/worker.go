@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +18,6 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pkg/errors"
 )
 
 type InfoURI struct {
@@ -25,7 +27,7 @@ type InfoURI struct {
 	DeleteMap map[string]string `uri:"delete"`                // map used to build the delete query statement
 	FieldsMap map[string]string `uri:"fields"`                // map json key values to different db names
 	Truncate  bool              `uri:"truncate"`              // truncate the table rather than delete
-
+	ExecQuery bool              `uri:"exec_query"`            // this will attempt to load the query data though a temp table (postgres only)
 }
 
 type worker struct {
@@ -35,7 +37,6 @@ type worker struct {
 	Params InfoURI
 
 	flist    []string // list of full path file(s)
-	records  int64    // inserted records
 	ds       *DataSet // the processing data for loading
 	delQuery string   // query statement built from DeleteMap
 
@@ -64,7 +65,7 @@ type DbColumn struct {
 	DataType   string  // DB data type
 	IsNullable string  // DB YES or NO string values
 	Default    *string // DB default function / value
-	TypeName   string  // int64, float64, string
+	TypeName   string  // string, int, float
 	JsonKey    string  // matching json key name
 	Nullable   bool    // bool value if column is nullable (true) or not (false)
 }
@@ -106,7 +107,7 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("no files found in path %s", w.Params.FilePath)
 	}
 	if len(w.Params.DeleteMap) > 0 && w.Params.Truncate {
-		return task.InvalidWorker("truncate can not be used with a delete fields")
+		return task.InvalidWorker("truncate can not be used with delete fields")
 	}
 	w.delQuery = DeleteQuery(w.Params.DeleteMap, w.Params.Table)
 	if w.Params.Truncate {
@@ -124,33 +125,69 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 	// read the files for loading, verify columns types
 	start := time.Now()
-	err = w.ReadFiles()
+	err = w.ds.ReadFiles(w.flist, w.fileOpts, w.Params.SkipErr)
 	if err != nil {
-		return task.Failed(errors.Wrap(err, "readfiles error"))
+		return task.Failed(fmt.Errorf("readfiles error %w", err))
 	}
 	w.fileReadTime = time.Now().Sub(start)
-	b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
+	retry := 0
 
-	for _, row := range w.ds.insertRows {
-		b.AddRow(row)
-	}
-	b.Delete(w.delQuery)
-	start = time.Now()
-	stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
-	if err != nil {
-		return task.Failed(errors.Wrap(err, "commit to db failed"))
-	}
-	w.queryRunTime = time.Now().Sub(start)
-	if stats.Removed > 0 {
-		w.SetMeta("removed_records", fmt.Sprintf("%d", stats.Removed))
+	if w.Params.ExecQuery && w.dbDriver == "postgres" {
+		q, err := w.ds.RawQuery(w.Params.Table, w.delQuery, w.Params.Truncate)
+		if err != nil {
+			return task.Failed(err)
+		}
+		var txErr error
+		var tx *sql.Tx
+
+		start = time.Now()
+		for {
+			if retry > 2 { // we will retry the transaction 3 times only
+				break
+			}
+			tx, txErr = w.sqlxDB.BeginTx(ctx, &sql.TxOptions{})
+			if txErr != nil {
+				return task.Failed(fmt.Errorf("failed to start transaction %w", err))
+			}
+			_, txErr = tx.ExecContext(ctx, q)
+			if txErr != nil {
+				tx.Rollback()
+				retry++
+			} else {
+				tx.Commit()
+				break
+			}
+		}
+
+		if txErr != nil {
+			return task.Failed(fmt.Errorf("transaction failed %w", txErr))
+		}
+
+		w.queryRunTime = time.Now().Sub(start)
+	} else {
+		b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
+
+		for _, row := range w.ds.insertRows {
+			b.AddRow(row)
+		}
+		b.Delete(w.delQuery)
+		start = time.Now()
+		stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
+		if err != nil {
+			return task.Failed(fmt.Errorf("commit to db failed %w", err))
+		}
+		w.queryRunTime = time.Now().Sub(start)
+		if stats.Removed > 0 {
+			w.SetMeta("removed_records", fmt.Sprintf("%d", stats.Removed))
+		}
 	}
 
-	w.SetMeta("insert_records", fmt.Sprintf("%d", w.records))
+	w.SetMeta("insert_records", fmt.Sprintf("%d", len(w.ds.insertRows)))
 	w.SetMeta("file_process_time", fmt.Sprintf("%v", w.fileReadTime))
 	w.SetMeta("query_run_time", fmt.Sprintf("%v", w.queryRunTime))
 
-	return task.Completed("database load completed %s table: %s records: %d",
-		w.dbDriver, w.Params.Table, w.records)
+	return task.Completed("database load completed %s table: %s records: %d tried: %d",
+		w.dbDriver, w.Params.Table, len(w.ds.insertRows), retry+1)
 }
 
 // QuerySchema queries the database for the table schema for each column
@@ -171,7 +208,7 @@ func (w *worker) QuerySchema() (err error) {
 			s = n[0]
 			t = n[1]
 		} else {
-			return errors.New("query_schema: cannot parse table name")
+			return fmt.Errorf("query_schema: cannot parse table name")
 		}
 	}
 
@@ -184,7 +221,7 @@ func (w *worker) QuerySchema() (err error) {
 	query := fmt.Sprintf(q, s, t)
 	rows, err := w.sqlDB.Query(query)
 	if err != nil {
-		return errors.Wrap(err, "query_schema: cannot get table columns")
+		return fmt.Errorf("query_schema: cannot get table columns %w", err)
 	}
 
 	c := DbColumn{}
@@ -206,7 +243,7 @@ func (w *worker) QuerySchema() (err error) {
 	}
 
 	if len(w.ds.dbSchema) == 0 {
-		return errors.New("db schema was not loaded")
+		return fmt.Errorf("db schema was not loaded")
 	}
 
 	for idx, c := range w.ds.dbSchema {
@@ -229,14 +266,15 @@ func (w *worker) QuerySchema() (err error) {
 	return nil
 }
 
-// ReadFiles uses the workers file list (flist) and file options to read each file
-// it then builds the cols and rows for all file(s)
-func (w *worker) ReadFiles() (err error) {
+// ReadFiles uses a files list and file.Options to read files and process data into a Dataset
+// it will build the cols and rows for each file
+func (ds *DataSet) ReadFiles(files []string, fOpts *file.Options, skipErr bool) (err error) {
+
 	// read each file
-	for i := range w.flist {
-		r, e := file.NewReader(w.flist[i], w.fileOpts) // create a new file reader
+	for i := range files {
+		r, e := file.NewReader(files[i], fOpts) // create a new file reader
 		if e != nil {
-			err = errors.Wrap(e, "new reader error")
+			err = fmt.Errorf("new reader error %w", err)
 			continue
 		}
 
@@ -247,29 +285,28 @@ func (w *worker) ReadFiles() (err error) {
 				if e == io.EOF {
 					break
 				}
-				err = errors.Wrap(e, "readline error: "+r.Stats().Path)
+				err = fmt.Errorf("readline error %v - %w", r.Stats().Path, err)
 				continue
 			}
 
-			// get the json object from the line that was read from the file
-			e = json.Unmarshal(line, &w.ds.jRow)
+			e = json.Unmarshal(line, &ds.jRow)
 			if e != nil {
-				err = errors.Wrap(e, "json.unmarshal error")
-				continue
+				err = fmt.Errorf("json unmarshal error %w", err)
+				return
 			}
-			w.ds.verified = false // the new json data has not been verified yet
+			ds.verified = false // the new json data has not been verified yet
 
-			e = w.ds.AddRow()
+			e = ds.AddRow()
 			if e != nil {
-				err = errors.Wrap(e, "add row error")
-				continue
+				err = fmt.Errorf("add row error %v - %w", r.Stats().Path, err)
+				return
 			}
-			w.records++
 		}
+
 		r.Close() // close the reader
 	}
 
-	if w.Params.SkipErr {
+	if skipErr {
 		if err != nil {
 			log.Println("skipping error records", err)
 			err = nil
@@ -296,7 +333,7 @@ func NewDataSet() *DataSet {
 // it will also check the json jRow key values against the cols list
 func (ds *DataSet) VerifyRow() (err error) {
 	if len(ds.jRow) == 0 {
-		return errors.New("no data found in json jRow object")
+		return fmt.Errorf("no data found in json jRow object")
 	}
 
 	// for the json record, add the json data keys
@@ -383,9 +420,8 @@ func (ds *DataSet) AddRow() (err error) {
 				if x == float64(int64(x)) {
 					ds.jRow[f.JsonKey] = int64(x)
 				} else {
-					return errors.New(
-						fmt.Sprintf("add_row: cannot convert number value to int64 for %s value: %v type: %s",
-							f.Name, v, ds.insertMeta[k].DataType))
+					return fmt.Errorf("add_row: cannot convert number value to int64 for %s value: %v type: %s",
+						f.Name, v, ds.insertMeta[k].DataType)
 				}
 			}
 		}
@@ -464,4 +500,95 @@ func (ds *DataSet) findInsertKey(name string) bool {
 		}
 	}
 	return false
+}
+
+func RandString(n int) string {
+	rand.Seed(time.Now().UTC().UnixNano())
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz")
+
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+// RawQuery will take DataSet data and build a query string with a temp table for inserting
+// this is to test improving the loading times for the the insert statements
+// at the moment this is only tested with postgres
+func (ds *DataSet) RawQuery(tableName, deleteQuery string, truncate bool) (q string, err error) {
+	var qry, fields bytes.Buffer
+
+	// replace any dots in the name so this can be a session temp table
+	t := strings.Replace(tableName, ".", "_", -1) + "_" + RandString(10)
+
+	for i, f := range ds.insertCols {
+		fields.WriteString(f)
+		if i < len(ds.insertCols)-1 {
+			fields.WriteString(",")
+		}
+	}
+
+	qry.WriteString("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n")
+	qry.WriteString("create temp table " + t + " as table " + tableName + " with no data;\n")
+	qry.WriteString("insert into " + t + "(" + fields.String() + ")\n")
+	qry.WriteString("  VALUES \n")
+
+	for i, rs := range ds.insertRows {
+		var f bytes.Buffer
+		f.WriteString("(")
+		for ir, r := range rs {
+			switch x := r.(type) {
+			case int64:
+				f.WriteString(strconv.FormatInt(x, 10))
+			case int:
+				f.WriteString(strconv.Itoa(x))
+			case float64:
+				f.WriteString(strconv.FormatFloat(x, 'f', -1, 64))
+			case string:
+				f.WriteString("'")
+				f.WriteString(strings.Replace(x, "'", "''", -1))
+				f.WriteString("'")
+			case bool:
+				if x {
+					f.WriteString("true")
+				} else {
+					f.WriteString("false")
+				}
+			default:
+				if x == nil {
+					f.WriteString("NULL")
+				} else {
+					return "", fmt.Errorf("exec_query: non-nil default type error value[%v] type[%T]\n", x, x)
+				}
+			}
+
+			if ir < len(rs)-1 {
+				f.WriteString(",")
+			}
+		}
+
+		f.WriteString(")")
+
+		if i == len(ds.insertRows)-1 {
+			f.WriteString(";")
+		} else {
+			f.WriteString(",")
+		}
+
+		f.WriteString("\n")
+
+		qry.WriteString(f.String())
+	}
+
+	if deleteQuery != "" {
+		qry.WriteString(deleteQuery + ";\n")
+	}
+	if truncate {
+		qry.WriteString("delete from " + tableName + ";\n")
+	}
+
+	qry.WriteString("insert into " + tableName + "(" + fields.String() + ")\n select " + fields.String() + " from " + t + ";")
+	qry.WriteString("COMMIT;")
+	return qry.String(), nil
 }
