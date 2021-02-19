@@ -585,7 +585,7 @@ func (ds *DataSet) RawQuery(tableName, deleteQuery string, truncate bool) (q str
 		qry.WriteString(deleteQuery + ";\n")
 	}
 	if truncate {
-		qry.WriteString("delete from " + tableName + ";")
+		qry.WriteString("delete from " + tableName + ";\n")
 	}
 
 	qry.WriteString("insert into " + tableName + "(" + fields.String() + ")\n select " + fields.String() + " from " + t + ";")
