@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	tools "github.com/pcelvng/task-tools"
@@ -31,7 +33,7 @@ var (
 Initially only postgresql will be supported, but later support can be added for mysql, etc...
 
 info query params:
-table_name : (required), the table to be inserted into
+table: (required), the name of the table to be inserted into i.e., schema.table_name
 delete : allows insert into pre-existing data by deleting previous data. 
     - provide a list of delete key:values to be used in the delete statement
     - "?delete=date:2020-07-01|id:7"
@@ -46,6 +48,10 @@ Example task:
 {"type":"sql_load","info":"gs://bucket/path/of/files/to/load/?table=schema.table_name"}
 {"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7&fields=jsonKeyValue:dbColumnName"}`
 )
+
+func init() {
+	rand.Seed(time.Now().UTC().UnixNano())
+}
 
 func main() {
 	var err error
