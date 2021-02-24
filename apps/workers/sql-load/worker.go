@@ -315,7 +315,7 @@ func (ds *DataSet) ReadFiles(files []string, fOpts *file.Options, skipErr bool) 
 		}
 
 		c.WaitAllDone()
-		fmt.Println("processed file", r.Stats().Path)
+		log.Println("processed file", r.Stats().Path)
 		r.Close() // close the reader
 	}
 
