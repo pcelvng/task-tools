@@ -248,8 +248,6 @@ github.com/jarcoal/httpmock v1.0.5/go.mod h1:ATjnClrvW/3tijVmpL/va5Z3aAyGvqU3gCT
 github.com/jarcoal/httpmock v1.0.6 h1:e81vOSexXU3mJuJ4l//geOmKIt+Vkxerk1feQBC8D0g=
 github.com/jarcoal/httpmock v1.0.6/go.mod h1:ATjnClrvW/3tijVmpL/va5Z3aAyGvqU3gCT8nX0Txik=
 github.com/jbsmith7741/go-tools v0.2.0/go.mod h1:UIlRAZ6aTSLlVI+owNLWbVS9e/Rywzahvurv/PUVBKg=
-github.com/jbsmith7741/go-tools v0.4.0 h1:UpKLVkPQRZEvxec110Nh0f+GeOiRSHo5oCpw/eD3AHs=
-github.com/jbsmith7741/go-tools v0.4.0/go.mod h1:8v8ffjiI3qOs6epawzxmPB7AOKoNNxZHKPl2VUWXoyY=
 github.com/jbsmith7741/go-tools v0.4.1 h1:qqHI0imezT1SLCd43df4sBZ44b4bndfo0W9R9B53/kA=
 github.com/jbsmith7741/go-tools v0.4.1/go.mod h1:8v8ffjiI3qOs6epawzxmPB7AOKoNNxZHKPl2VUWXoyY=
 github.com/jbsmith7741/trial v0.3.1 h1:JZ0/w3lhfH4iacf9R2DnZWtTMa/Uf4O13gnuMLTub/M=
@@ -432,6 +430,8 @@ github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9de
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
+github.com/zenthangplus/goccm v0.0.0-20200608171100-39e9e08b694a h1:zxtrEyAn+PXzLBBXUrjamhu1+ZdkOt0nltXvCWh7JvY=
+github.com/zenthangplus/goccm v0.0.0-20200608171100-39e9e08b694a/go.mod h1:PPYr3s9FhH/9fs7kfozlHKs2VXzk4Foyzb3Mke/Bg0U=
 go.etcd.io/bbolt v1.3.3/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738/go.mod h1:dnLIgRNXwCJa5e+c6mIZCrds/GIG4ncV9HhK5PX7jPg=
 go.opencensus.io v0.20.1/go.mod h1:6WKK9ahsWS3RSO+PY9ZHZUfv2irvY6gN279GOPZjmmk=
