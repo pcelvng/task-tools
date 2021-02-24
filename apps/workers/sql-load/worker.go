@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jbsmith7741/uri"
@@ -23,13 +24,13 @@ import (
 )
 
 type InfoURI struct {
-	FilePath   string            `uri:"origin"`                // file path to load one file or a list of files in that path (not recursive)
-	Table      string            `uri:"table" required:"true"` // insert table name i.e., "schema.table_name"
-	SkipErr    bool              `uri:"skip_err"`              // if bad records are found they are skipped and logged instead of throwing an error
-	DeleteMap  map[string]string `uri:"delete"`                // map used to build the delete query statement
-	FieldsMap  map[string]string `uri:"fields"`                // map json key values to different db names
-	Truncate   bool              `uri:"truncate"`              // truncate the table rather than delete
-	TempInsert bool              `uri:"cached_insert"`         // this will attempt to load the query data though a temp table (postgres only)
+	FilePath     string            `uri:"origin"`                // file path to load one file or a list of files in that path (not recursive)
+	Table        string            `uri:"table" required:"true"` // insert table name i.e., "schema.table_name"
+	SkipErr      bool              `uri:"skip_err"`              // if bad records are found they are skipped and logged instead of throwing an error
+	DeleteMap    map[string]string `uri:"delete"`                // map used to build the delete query statement
+	FieldsMap    map[string]string `uri:"fields"`                // map json key values to different db names
+	Truncate     bool              `uri:"truncate"`              // truncate the table rather than delete
+	CachedInsert bool              `uri:"cached_insert"`         // this will attempt to load the query data though a temp table (postgres only)
 }
 
 type worker struct {
@@ -53,15 +54,16 @@ type Columns []string
 type Rows []Row // all rows to be inserted
 
 type DataSet struct {
-	dbSchema    DbSchema          // the database schema for each column
-	verified    bool              // has the jRow data been verified with the db columns
-	insertCols  []string          // the actual db column names, must match dbrows
-	insertRows  Rows              // all rows to be inserted
+	dbSchema   DbSchema // the database schema for each column
+	verified   bool     // has the jRow data been verified with the db columns
+	insertCols []string // the actual db column names, must match dbrows
+	//insertRows  Rows              // all rows to be inserted
+	rowCount    int32
 	insertMeta  []DbColumn        // Meta data for the insert rows and columns
 	fieldsMap   map[string]string // a copy of the fieldsMap from the worker uri params
 	ignoredCols map[string]bool   // a list of db fields that were not inserted into
 
-	err error      // any error found with the dataset
+	//err error      // any error found with the dataset
 	mux sync.Mutex // needed to thread add row
 }
 
@@ -129,21 +131,27 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	}
 
 	// read the files for loading, verify columns types
-	start := time.Now()
-	err = w.ds.ReadFiles(w.flist, w.fileOpts, w.Params.SkipErr)
-	if err != nil {
-		return task.Failed(fmt.Errorf("readfiles error %w", err))
-	}
-	w.fileProcTime = time.Now().Sub(start)
+
+	errChan := make(chan error)
+	rowChan := make(chan Row, 100)
+	go w.ds.ReadFiles(ctx, w.flist, w.fileOpts, errChan, rowChan)
+	go func() {
+		for e := range errChan {
+			log.Println(e)
+		}
+	}()
+	//w.fileProcTime = time.Now().Sub(start)
 	retry := 0
 
-	if w.Params.TempInsert && w.dbDriver == "postgres" {
+	if w.Params.CachedInsert && w.dbDriver == "postgres" {
 		start := time.Now()
-		q, err := w.ds.QueryString(w.Params.Table, w.delQuery, w.Params.Truncate)
+		q, err := w.ds.QueryString(rowChan, w.Params.Table, w.delQuery, w.Params.Truncate)
 		if err != nil {
 			return task.Failed(err)
 		}
-
+		if task.IsDone(ctx) {
+			return task.Interrupted()
+		}
 		w.queryBuildTime = time.Now().Sub(start)
 
 		var txErr error
@@ -177,7 +185,8 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		start := time.Now()
 		b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
 
-		for _, row := range w.ds.insertRows {
+		for row := range rowChan {
+			atomic.AddInt32(&w.ds.rowCount, 1)
 			b.AddRow(row)
 		}
 		b.Delete(w.delQuery)
@@ -194,12 +203,12 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	}
 
 	w.SetMeta("query_build_time", fmt.Sprintf("%v", w.queryBuildTime))
-	w.SetMeta("insert_records", fmt.Sprintf("%d", len(w.ds.insertRows)))
+	w.SetMeta("insert_records", fmt.Sprintf("%d", w.ds.rowCount))
 	w.SetMeta("file_process_time", fmt.Sprintf("%v", w.fileProcTime))
 	w.SetMeta("query_run_time", fmt.Sprintf("%v", w.queryRunTime))
 
 	return task.Completed("database load completed %s table: %s records: %d tried: %d",
-		w.dbDriver, w.Params.Table, len(w.ds.insertRows), retry+1)
+		w.dbDriver, w.Params.Table, w.ds.rowCount, retry+1)
 }
 
 // QuerySchema queries the database for the table schema for each column
@@ -280,24 +289,31 @@ func (w *worker) QuerySchema() (err error) {
 
 // ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
-func (ds *DataSet) ReadFiles(files []string, fOpts *file.Options, skipErr bool) (err error) {
+func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Options, errChan chan error, rowChan chan Row) {
 	// read each file
 	for i := range files {
-		r, e := file.NewReader(files[i], fOpts) // create a new file reader
-		if e != nil {
-			err = fmt.Errorf("new reader error %w", err)
+		r, err := file.NewReader(files[i], fOpts) // create a new file reader
+		if err != nil {
+			errChan <- fmt.Errorf("new reader error %w", err)
 			continue
 		}
 		rec := 0
 		c := goccm.New(20)
 		// read the lines of the file
 		for {
+			if task.IsDone(ctx) {
+				defer func() {
+					c.WaitAllDone()
+					close(rowChan)
+				}()
+				return
+			}
 			line, e := r.ReadLine()
 			if e != nil {
 				if e == io.EOF {
 					break
 				}
-				err = fmt.Errorf("readline error %v - %w", r.Stats().Path, err)
+				errChan <- fmt.Errorf("readline error %v - %w", r.Stats().Path, err)
 				continue
 			}
 			c.Wait()
@@ -307,7 +323,13 @@ func (ds *DataSet) ReadFiles(files []string, fOpts *file.Options, skipErr bool) 
 				if e != nil {
 					err = fmt.Errorf("json unmarshal error %w", e)
 				} else {
-					ds.AddRow(j)
+					r, err := ds.AddRow(j)
+					if err != nil {
+						errChan <- err
+					}
+					if r != nil {
+						rowChan <- r
+					}
 					rec++
 				}
 				c.Done()
@@ -315,24 +337,26 @@ func (ds *DataSet) ReadFiles(files []string, fOpts *file.Options, skipErr bool) 
 		}
 
 		c.WaitAllDone()
+		close(rowChan)
+		close(errChan)
 		log.Println("processed file", r.Stats().Path)
 		r.Close() // close the reader
 	}
 
-	if skipErr {
+	/*if skipErr {
 		if err != nil {
 			log.Println("skipping error records", err)
 			err = nil
 		}
 	}
 
-	return err
+	return err*/
 }
 
 func NewDataSet() *DataSet {
 	return &DataSet{
-		dbSchema:    make(DbSchema, 0),
-		insertRows:  make(Rows, 0),
+		dbSchema: make(DbSchema, 0),
+		//	insertRows:  make(Rows, 0),
 		insertCols:  make([]string, 0),
 		insertMeta:  make([]DbColumn, 0),
 		ignoredCols: make(map[string]bool),
@@ -367,12 +391,13 @@ func (ds *DataSet) VerifyRow(j Jsondata) (err error) {
 		}
 	}
 
-	ds.defaultUpdate()
+	//ds.defaultUpdate()
 
 	ds.verified = true
 	return nil
 }
 
+/*
 // defaultUpdate checks the size of the data values compared to the column values
 // if there are more columns than data values, run back though all the data records
 // and add default values to the insert rows (nil or zero value)
@@ -385,7 +410,7 @@ func (ds *DataSet) defaultUpdate() (err error) {
 		colsCount := len(ds.insertCols)
 		// there are more columns to insert than data values in the row
 		if colsCount > rowValues {
-			// start at the new row value, add to the slice untill row values count matches the column count
+			// start at the new row value, add to the slice until row values count matches the column count
 			for idx := rowValues; idx < colsCount; idx++ {
 				if ds.insertMeta[idx].Nullable {
 					ds.insertRows[idr] = append(ds.insertRows[idr], nil)
@@ -403,25 +428,24 @@ func (ds *DataSet) defaultUpdate() (err error) {
 
 	return nil
 }
-
-// Takes the insert columns and the json byte data (jRow) and adds to the Dataset rows slice
+*/
+// AddRow Takes the insert columns and the json byte data (jRow) and adds to the Dataset rows slice
 // an error is returned if the row cannot be added to the DataSet rows
-func (ds *DataSet) AddRow(j Jsondata) (err error) {
+func (ds *DataSet) AddRow(j Jsondata) (row Row, err error) {
 	ds.mux.Lock()
 	defer ds.mux.Unlock()
 
 	if ds.verified == false {
 		err = ds.VerifyRow(j)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	row := make(Row, len(ds.insertCols))
+	row = make(Row, len(ds.insertCols))
 
 	for k, f := range ds.insertMeta {
-		v, _ := j[f.JsonKey] // get the json record
-
+		v := j[f.JsonKey]
 		switch x := v.(type) {
 		case string:
 			if ds.insertMeta[k].TypeName == "int" {
@@ -433,22 +457,19 @@ func (ds *DataSet) AddRow(j Jsondata) (err error) {
 		case float64:
 			// convert a float to an int if the schema is an int type
 			if ds.insertMeta[k].TypeName == "int" {
-				if x == float64(int64(x)) {
-					j[f.JsonKey] = int64(x)
-				} else {
+				if x != float64(int64(x)) {
 					err = fmt.Errorf("add_row: cannot convert number value to int64 for %s value: %v type: %s",
 						f.Name, v, ds.insertMeta[k].DataType)
 				}
+				j[f.JsonKey] = int64(x)
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("add row  %w", err)
+			return nil, fmt.Errorf("add row  %w", err)
 		}
 		row[k] = j[f.JsonKey]
 	}
-
-	ds.insertRows = append(ds.insertRows, row)
-	return nil
+	return row, nil
 }
 
 func DeleteQuery(m map[string]string, table string) string {
@@ -528,9 +549,8 @@ func RandString(n int) string {
 // QueryString will take DataSet data and build a query string with a temp table for inserting,
 // this is to test improving the loading times for the the insert statements,
 // at the moment this is only tested and works with postgres
-func (ds *DataSet) QueryString(tableName, deleteQuery string, truncate bool) (q string, err error) {
+func (ds *DataSet) QueryString(rowChan chan Row, tableName, deleteQuery string, truncate bool) (q string, err error) {
 	c := goccm.New(20)
-	var fields bytes.Buffer
 
 	type Query struct {
 		bytes.Buffer
@@ -540,22 +560,8 @@ func (ds *DataSet) QueryString(tableName, deleteQuery string, truncate bool) (q 
 
 	qry := Query{}
 
-	// replace any dots in the name so this can be a session temp table
-	t := strings.Replace(tableName, ".", "_", -1) + "_" + RandString(10)
-
-	for i, f := range ds.insertCols {
-		fields.WriteString(f)
-		if i < len(ds.insertCols)-1 {
-			fields.WriteString(",")
-		}
-	}
-
-	qry.WriteString("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n")
-	qry.WriteString("create temp table " + t + " as table " + tableName + " with no data;\n")
-	qry.WriteString("insert into " + t + "(" + fields.String() + ")\n")
-	qry.WriteString("  VALUES \n")
-
-	for _, rs := range ds.insertRows {
+	for rs := range rowChan {
+		atomic.AddInt32(&ds.rowCount, 1)
 		c.Wait()
 		go func(row Row) {
 			var f bytes.Buffer
@@ -582,7 +588,7 @@ func (ds *DataSet) QueryString(tableName, deleteQuery string, truncate bool) (q 
 					if x == nil {
 						f.WriteString("NULL")
 					} else {
-						ds.err = fmt.Errorf("exec_query: non-nil default type error value[%v] type[%T]\n", x, x)
+						log.Printf("exec_query: non-nil default type error value[%v] type[%T]\n", x, x)
 					}
 				}
 
@@ -605,6 +611,15 @@ func (ds *DataSet) QueryString(tableName, deleteQuery string, truncate bool) (q 
 	qry.Truncate(qry.Len() - 2)
 	qry.WriteString(";\n")
 
+	// replace any dots in the name so this can be a session temp table
+	t := strings.Replace(tableName, ".", "_", -1) + "_" + RandString(10)
+	fields := strings.Join(ds.insertCols, ",")
+
+	header := "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n" +
+		"create temp table " + t + " as table " + tableName + " with no data;\n" +
+		"insert into " + t + "(" + fields + ")\n" +
+		"  VALUES \n"
+
 	if deleteQuery != "" {
 		qry.WriteString(deleteQuery + ";\n")
 	}
@@ -612,7 +627,7 @@ func (ds *DataSet) QueryString(tableName, deleteQuery string, truncate bool) (q 
 		qry.WriteString("delete from " + tableName + ";\n")
 	}
 
-	qry.WriteString("insert into " + tableName + "(" + fields.String() + ")\n select " + fields.String() + " from " + t + ";")
+	qry.WriteString("insert into " + tableName + "(" + fields + ")\n select " + fields + " from " + t + ";\n")
 	qry.WriteString("COMMIT;")
-	return qry.String(), nil
+	return header + qry.String(), nil
 }
