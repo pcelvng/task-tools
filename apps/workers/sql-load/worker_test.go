@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,163 +15,100 @@ func TestDefaultUpdate(t *testing.T) {
 
 }
 
-type Tester struct {
-	ds   *DataSet
-	jRow Jsondata
-}
-
-func TestVerifyRow(t *testing.T) {
+func TestPrepareMeta(t *testing.T) {
+	type input struct {
+		fields map[string]string
+		schema []DbColumn
+	}
+	type output struct {
+		schema  []DbColumn
+		columns []string
+	}
 	fn := func(in trial.Input) (interface{}, error) {
-		i := in.Interface().(Tester)
-		err := i.ds.VerifyRow(i.jRow)
+		i := in.Interface().(input)
+		o := output{}
+		o.schema, o.columns = PrepareMeta(i.schema, i.fields)
 
 		// because we are dealing with a map for the jRow data
 		// we need to sort the output, not required in actual processing
-		sort.Strings(i.ds.insertCols)
-		if i.ds.insertMeta != nil {
-			sort.SliceStable(i.ds.insertMeta, func(a, b int) bool {
-				return i.ds.insertMeta[a].Name < i.ds.insertMeta[b].Name
-			})
-		}
+		sort.Strings(o.columns)
 
-		return i, err
+		return o, nil
 	}
 
 	// testing cases
 	cases := trial.Cases{
-		"empty_dataset_err": {
-			Input:       Tester{
-				ds: &DataSet{},
-				jRow: make(Jsondata),
-			},
-			ExpectedErr: errors.New("no data found in json jRow object"),
-		},
-		"initial_missing_key": { // missing keys in the json will be ignored
-			Input: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					fieldsMap:   map[string]string{},
-					ignoredCols: map[string]bool{},
+		"no field map": { // missing keys in the json will be ignored
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1"}, {Name: "C2"},
 				},
+				fields: map[string]string{},
 			},
-			Expected: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					insertCols:  []string{"column1"},
-					insertMeta:  []DbColumn{{Name: "column1", IsNullable: "NO", JsonKey: "column1", DataType: "bigint", TypeName: "int"}},
-					verified:    true,
-					ignoredCols: map[string]bool{},
-					fieldsMap:   map[string]string{},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "C1"},
+					{Name: "C2", JsonKey: "C2"},
 				},
+				columns: []string{"C1", "C2"},
 			},
 		},
-		"missing_db_column_ignored": { // missing keys in the json will be ignored
-			Input: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					fieldsMap:   map[string]string{},
-					ignoredCols: map[string]bool{},
+		"transpose fields": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1"}, {Name: "C2"},
 				},
+				fields: map[string]string{"C1": "J1", "C2": "J2"},
 			},
-			Expected: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					insertCols:  []string{"column1"},
-					insertMeta:  []DbColumn{{Name: "column1", IsNullable: "NO", JsonKey: "column1", DataType: "bigint", TypeName: "int"}},
-					verified:    true,
-					ignoredCols: map[string]bool{},
-					fieldsMap:   map[string]string{},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "J1"},
+					{Name: "C2", JsonKey: "J2"},
 				},
+				columns: []string{"C1", "C2"},
 			},
 		},
-		"initial_all_keys": { // missing keys in the json will be ignored
-			Input: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					fieldsMap:   map[string]string{},
-					ignoredCols: map[string]bool{},
+		"Partial json mapping": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1"}, {Name: "C2"},
 				},
+				fields: map[string]string{"C1": "J1", "C3": "J2"},
 			},
-			Expected: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					insertCols:  []string{"column1"},
-					insertMeta:  []DbColumn{{Name: "column1", IsNullable: "NO", JsonKey: "column1", DataType: "bigint", TypeName: "int"}},
-					verified:    true,
-					ignoredCols: map[string]bool{},
-					fieldsMap:   map[string]string{},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "J1"},
+					{Name: "C2", JsonKey: "C2"},
 				},
+				columns: []string{"C1", "C2"},
 			},
 		},
-		// any fields missing from the json string are ignored, even if they are nullable
-		// either the DB must handle the missing data, or the field is added in a later record
-		"missing_non_nullable_field": { // missing keys in the json will be ignored
-			Input: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					fieldsMap:   map[string]string{},
-					ignoredCols: map[string]bool{},
+		"Ignore Funcs": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1", Default: trial.StringP("new()")}, {Name: "C2"},
 				},
+				fields: map[string]string{},
 			},
-			Expected: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					insertCols:  []string{"column1"},
-					insertMeta:  []DbColumn{{Name: "column1", IsNullable: "NO", JsonKey: "column1", DataType: "bigint", TypeName: "int"}},
-					verified:    true,
-					ignoredCols: map[string]bool{},
-					fieldsMap:   map[string]string{},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C2", JsonKey: "C2"},
 				},
+				columns: []string{"C2"},
 			},
 		},
-		"insert_columns_already_set": { // missing keys in the json will be ignored
-			Input: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					fieldsMap:   map[string]string{},
-					ignoredCols: map[string]bool{},
+		"Ignore -": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1"}, {Name: "C2"}, {Name: "C3"},
 				},
+				fields: map[string]string{"C2": "-"},
 			},
-			Expected: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					insertCols:  []string{"column1"},
-					insertMeta:  []DbColumn{{Name: "column1", IsNullable: "NO", JsonKey: "column1", DataType: "bigint", TypeName: "int"}},
-					verified:    true,
-					ignoredCols: map[string]bool{},
-					fieldsMap:   map[string]string{},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "C1"}, {Name: "C3", JsonKey: "C3"},
 				},
-			},
-		},
-		"all_nil_data": { // missing keys in the json will be ignored
-			Input: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					fieldsMap:   map[string]string{},
-					ignoredCols: map[string]bool{},
-				},
-			},
-			Expected: Tester{
-				jRow: Jsondata{"column1": "column1datastring"},
-				ds: &DataSet{
-					dbSchema:    DbSchema{{Name: "column1", IsNullable: "NO", DataType: "bigint", TypeName: "int"}, {Name: "column2", IsNullable: "YES"}},
-					insertCols:  []string{"column1"},
-					insertMeta:  []DbColumn{{Name: "column1", IsNullable: "NO", JsonKey: "column1", DataType: "bigint", TypeName: "int"}},
-					verified:    true,
-					ignoredCols: map[string]bool{},
-					fieldsMap:   map[string]string{},
-				},
+				columns: []string{"C1", "C3"},
 			},
 		},
 	}
@@ -180,6 +116,7 @@ func TestVerifyRow(t *testing.T) {
 	trial.New(fn, cases).Test(t)
 }
 
+/*
 func TestAddRow(t *testing.T) {
 	fn := func(in trial.Input) (interface{}, error) {
 		i := in.Interface().(Tester)
@@ -346,7 +283,7 @@ func TestAddRow(t *testing.T) {
 
 	trial.New(fn, cases).Test(t)
 }
-
+*/
 func TestNewWorker(t *testing.T) {
 	type input struct {
 		*options
