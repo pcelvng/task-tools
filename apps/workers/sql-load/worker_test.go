@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
@@ -293,4 +294,80 @@ func TestNewWorker(t *testing.T) {
 	os.Remove(f2)
 	os.Remove("./tmp")
 	os.Remove("./tmp1")
+}
+
+func TestCreateInserts(t *testing.T) {
+	type input struct {
+		table     string
+		columns   []string
+		rows      []Row
+		batchSize int
+	}
+	fn := func(in trial.Input) (interface{}, error) {
+		inChan := make(chan Row)
+		outChan := make(chan string)
+		i := in.Interface().(input)
+		go func() {
+			for _, r := range i.rows {
+				inChan <- r
+			}
+			close(inChan)
+		}()
+		result := make([]string, 0)
+		go func() {
+			for s := range outChan {
+				result = append(result, s)
+			}
+		}()
+		CreateInserts(inChan, outChan, i.table, i.columns, i.batchSize)
+		time.Sleep(10 * time.Millisecond)
+		return result, nil
+	}
+
+	cases := trial.Cases{
+		"basic": {
+			Input: input{
+				table:     "test",
+				columns:   []string{"ab", "cd", "ef"},
+				rows:      []Row{Row{1, 2, 3}},
+				batchSize: 1,
+			},
+			Expected: []string{"insert into test(ab,cd,ef)\n  VALUES \n(1,2,3);\n"},
+		},
+		"2 batches": {
+			Input: input{
+				table:     "test",
+				columns:   []string{"ab", "cd", "ef"},
+				rows:      []Row{{1, 2, 3}, {1, 2, 3}},
+				batchSize: 1,
+			},
+			Expected: []string{
+				"insert into test(ab,cd,ef)\n  VALUES \n(1,2,3);\n",
+				"insert into test(ab,cd,ef)\n  VALUES \n(1,2,3);\n",
+			},
+		},
+		"4 lines": {
+			Input: input{
+				table:     "test",
+				columns:   []string{"ab", "cd", "ef"},
+				rows:      []Row{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(ab,cd,ef)\n  VALUES \n(1,2,3),\n(4,5,6),\n(7,8,9),\n(10,11,12);\n",
+			},
+		},
+		"conversion": {
+			Input: input{
+				table:     "test",
+				columns:   []string{"a", "b", "c"},
+				rows:      []Row{{int64(1), "2", 3.2}, {true, false, nil}},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(a,b,c)\n  VALUES \n(1,'2',3.2),\n(true,false,NULL);\n",
+			},
+		},
+	}
+	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)
 }

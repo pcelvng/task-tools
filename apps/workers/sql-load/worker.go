@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -44,8 +43,7 @@ type worker struct {
 	ds       *DataSet // the processing data for loading
 	delQuery string   // query statement built from DeleteMap
 
-	queryBuildTime time.Duration // query building time
-	queryRunTime   time.Duration // query running time
+	queryRunTime time.Duration // query running time
 }
 
 type Jsondata map[string]interface{}
@@ -55,6 +53,7 @@ type DataSet struct {
 	dbSchema   []DbColumn // the database schema for each column
 	insertCols []string   // the actual db column names, must match dbrows
 	rowCount   int32
+	skipCount  int
 
 	err error
 
@@ -118,7 +117,8 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		return task.Failed(err)
 	}
-
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer cancelFn()
 	// read the files for loading, verify columns types
 
 	rowChan := make(chan Row, 100)
@@ -129,23 +129,53 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 	if w.Params.CachedInsert && w.dbDriver == "postgres" {
 		start := time.Now()
-		q, err := w.ds.QueryString(rowChan, w.Params.Table, w.delQuery, w.Params.Truncate)
-		if err != nil {
-			return task.Failed(err)
+
+		// create table
+		tempTable := strings.Replace(w.Params.Table, ".", "_", -1) + "_" + RandString(10)
+		createTempTable := "create temp table " + tempTable + " as table " + w.Params.Table + " with no data;\n"
+
+		defer func() {
+			if _, err := w.sqlxDB.Exec("drop table if exists " + tempTable); err != nil {
+				log.Println(err)
+			}
+		}()
+
+		// create batched inserts
+		outChan := make(chan string, 10)
+		go CreateInserts(rowChan, outChan, tempTable, w.ds.insertCols, 1000)
+
+		first := true
+		// load data into temp table
+		for s := range outChan {
+			if first {
+				s = createTempTable + s
+				first = false
+			}
+			if _, err := w.sqlxDB.ExecContext(ctx, s); err != nil {
+				cancelFn()
+				return task.Failed(err)
+			}
 		}
-		if task.IsDone(ctx) {
-			return task.Interrupted()
-		}
+
 		if w.ds.err != nil {
 			return task.Failed(w.ds.err)
 		}
-		w.queryBuildTime = time.Now().Sub(start)
 
+		//finalize and transfer data
 		var txErr error
 		var tx *sql.Tx
 
 		start = time.Now()
-		for {
+		q := "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"
+
+		if w.delQuery != "" {
+			q += w.delQuery + ";\n"
+		} else if w.Params.Truncate {
+			q += "delete from " + w.Params.Table + ";\n"
+		}
+		fields := strings.Join(w.ds.insertCols, ",")
+		q += "insert into " + w.Params.Table + "(" + fields + ")\n select " + fields + " from " + tempTable + ";\n" + "COMMIT;"
+		for ; retry <= 2; retry++ {
 			if retry > 2 { // we will retry the transaction 3 times only
 				break
 			}
@@ -177,7 +207,6 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			b.AddRow(row)
 		}
 		b.Delete(w.delQuery)
-		w.queryBuildTime = time.Now().Sub(start)
 		start = time.Now()
 		stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
 		if err != nil {
@@ -189,10 +218,12 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		}
 	}
 
-	w.SetMeta("query_build_time", fmt.Sprintf("%v", gtools.PrintDuration(w.queryBuildTime)))
 	w.SetMeta("insert_records", fmt.Sprintf("%d", w.ds.rowCount))
 	w.SetMeta("query_run_time", fmt.Sprintf("%v", gtools.PrintDuration(w.queryRunTime)))
 	w.SetMeta("db_lock_attempt", strconv.Itoa(retry))
+	if w.Params.SkipErr {
+		w.SetMeta("skipped_rows", strconv.Itoa(w.ds.skipCount))
+	}
 
 	return task.Completed("database load completed %s table: %s records: %d",
 		w.dbDriver, w.Params.Table, w.ds.rowCount)
@@ -295,6 +326,7 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 				break
 			case e := <-errChan:
 				if skipErrors {
+					ds.skipCount++
 					log.Println(e)
 				} else {
 					ds.err = e
@@ -322,6 +354,7 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 				if row, err := MakeRow(ds.dbSchema, j); err != nil {
 					errChan <- err
 				} else if row != nil {
+					atomic.AddInt32(&ds.rowCount, 1)
 					rowChan <- row
 				}
 			}(line)
@@ -452,30 +485,19 @@ func RandString(n int) string {
 	return string(b)
 }
 
-// QueryString will take DataSet data and build a query string with a temp table for inserting,
-// this is to test improving the loading times for the the insert statements,
-// at the moment this is only tested and works with postgres
-func (ds *DataSet) QueryString(rowChan chan Row, tableName, deleteQuery string, truncate bool) (q string, err error) {
-
-	type Query struct {
-		bytes.Buffer
-
-		mux sync.Mutex
+func CreateInserts(rowChan chan Row, outChan chan string, tableName string, cols []string, batchSize int) {
+	if batchSize < 0 {
+		batchSize = 1
 	}
 
-	qry := Query{}
+	fields := strings.Join(cols, ",")
+	header := "insert into " + tableName + "(" + fields + ")\n" + "  VALUES \n"
 
-	// replace any dots in the name so this can be a session temp table
-	t := strings.Replace(tableName, ".", "_", -1) + "_" + RandString(10)
-	fields := strings.Join(ds.insertCols, ",")
-	qry.WriteString("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n" +
-		"create temp table " + t + " as table " + tableName + " with no data;\n" +
-		"insert into " + t + "(" + fields + ")\n" +
-		"  VALUES \n")
-
+	var f bytes.Buffer
+	var rowCount int
+	f.WriteString(header)
 	for row := range rowChan {
-		atomic.AddInt32(&ds.rowCount, 1)
-		var f bytes.Buffer
+		// create row
 		f.WriteString("(")
 		for ir, r := range row {
 			switch x := r.(type) {
@@ -507,25 +529,25 @@ func (ds *DataSet) QueryString(rowChan chan Row, tableName, deleteQuery string, 
 				f.WriteString(",")
 			}
 		}
-
 		f.WriteString("),\n")
+		rowCount++
 
-		qry.mux.Lock()
-		qry.WriteString(f.String())
-		qry.mux.Unlock()
+		// check limit and reset buffer
+		if rowCount >= batchSize {
+			f.Truncate(f.Len() - 2)
+			f.WriteString(";\n")
+			outChan <- f.String()
+			f.Reset()
+			f.WriteString(header)
+			rowCount = 0
+		}
 	}
 
-	qry.Truncate(qry.Len() - 2)
-	qry.WriteString(";\n")
-
-	if deleteQuery != "" {
-		qry.WriteString(deleteQuery + ";\n")
+	// finish partial rows
+	if rowCount > 0 {
+		f.Truncate(f.Len() - 2)
+		f.WriteString(";\n")
+		outChan <- f.String()
 	}
-	if truncate {
-		qry.WriteString("delete from " + tableName + ";\n")
-	}
-
-	qry.WriteString("insert into " + tableName + "(" + fields + ")\n select " + fields + " from " + t + ";\n")
-	qry.WriteString("COMMIT;")
-	return qry.String(), nil
+	close(outChan)
 }
