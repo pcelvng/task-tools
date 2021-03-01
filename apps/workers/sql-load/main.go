@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/db"
@@ -19,8 +18,8 @@ type options struct {
 	Postgres bootstrap.DBOptions `toml:"postgres"`
 	MySQL    bootstrap.DBOptions `toml:"mysql"`
 
-	sqlDB  *sql.DB
-	sqlxDB *sqlx.DB // used for running direct exec command
+	sqlDB *sql.DB
+	//	sqlxDB *sqlx.DB // used for running direct exec command
 
 	producer bus.Producer
 	fileOpts *file.Options
@@ -82,9 +81,6 @@ func main() {
 			log.Fatalf("cannot connect to Postgres Instance %+v", opts.Postgres)
 		}
 	}
-
-	// create a sqlx DB for running direct exec commands
-	opts.sqlxDB = sqlx.NewDb(opts.sqlDB, opts.dbDriver)
 
 	app.Run()
 }

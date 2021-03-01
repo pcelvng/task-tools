@@ -25,13 +25,14 @@ import (
 )
 
 type InfoURI struct {
-	FilePath     string            `uri:"origin"`                // file path to load one file or a list of files in that path (not recursive)
-	Table        string            `uri:"table" required:"true"` // insert table name i.e., "schema.table_name"
-	SkipErr      bool              `uri:"skip_err"`              // if bad records are found they are skipped and logged instead of throwing an error
-	DeleteMap    map[string]string `uri:"delete"`                // map used to build the delete query statement
-	FieldsMap    map[string]string `uri:"fields"`                // map json key values to different db names
-	Truncate     bool              `uri:"truncate"`              // truncate the table rather than delete
-	CachedInsert bool              `uri:"cached_insert"`         // this will attempt to load the query data though a temp table (postgres only)
+	FilePath     string            `uri:"origin"`                    // file path to load one file or a list of files in that path (not recursive)
+	Table        string            `uri:"table" required:"true"`     // insert table name i.e., "schema.table_name"
+	SkipErr      bool              `uri:"skip_err"`                  // if bad records are found they are skipped and logged instead of throwing an error
+	DeleteMap    map[string]string `uri:"delete"`                    // map used to build the delete query statement
+	FieldsMap    map[string]string `uri:"fields"`                    // map json key values to different db names
+	Truncate     bool              `uri:"truncate"`                  // truncate the table rather than delete
+	CachedInsert bool              `uri:"cached_insert"`             // this will attempt to load the query data though a temp table (postgres only)
+	BatchSize    int               `uri:"batch_size" default:"1000"` // number of rows to insert at once
 }
 
 type worker struct {
@@ -136,14 +137,14 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		createTempTable := "create temp table " + tempTable + " as table " + w.Params.Table + " with no data;\n"
 
 		defer func() {
-			if _, err := w.sqlxDB.Exec("drop table if exists " + tempTable); err != nil {
+			if _, err := w.sqlDB.Exec("drop table if exists " + tempTable); err != nil {
 				log.Println(err)
 			}
 		}()
 
 		// create batched inserts
 		outChan := make(chan string, 10)
-		go CreateInserts(rowChan, outChan, tempTable, w.ds.insertCols, 1000)
+		go CreateInserts(rowChan, outChan, tempTable, w.ds.insertCols, w.Params.BatchSize)
 
 		first := true
 		// load data into temp table
@@ -152,7 +153,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 				s = createTempTable + s
 				first = false
 			}
-			if _, err := w.sqlxDB.ExecContext(ctx, s); err != nil {
+			if _, err := w.sqlDB.ExecContext(ctx, s); err != nil {
 				cancelFn()
 				return task.Failed(err)
 			}
@@ -180,7 +181,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			if retry > 2 { // we will retry the transaction 3 times only
 				break
 			}
-			tx, txErr = w.sqlxDB.BeginTx(ctx, &sql.TxOptions{})
+			tx, txErr = w.sqlDB.BeginTx(ctx, &sql.TxOptions{})
 			if txErr != nil {
 				return task.Failed(fmt.Errorf("failed to start transaction %w", err))
 			}
@@ -221,7 +222,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 	w.SetMeta("insert_records", fmt.Sprintf("%d", w.ds.rowCount))
 	w.SetMeta("query_run_time", fmt.Sprintf("%v", gtools.PrintDuration(w.queryRunTime)))
-	w.SetMeta("db_lock_attempt", strconv.Itoa(retry))
+	w.SetMeta("transaction_attempt", strconv.Itoa(retry))
 	if w.Params.SkipErr {
 		w.SetMeta("skipped_rows", strconv.Itoa(w.ds.skipCount))
 	}
