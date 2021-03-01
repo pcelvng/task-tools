@@ -142,12 +142,12 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		}()
 
 		// create batched inserts
-		outChan := make(chan string, 10)
-		go CreateInserts(rowChan, outChan, tempTable, w.ds.insertCols, w.Params.BatchSize)
+		queryChan := make(chan string, 10)
+		go CreateInserts(rowChan, queryChan, tempTable, w.ds.insertCols, w.Params.BatchSize)
 
 		first := true
 		// load data into temp table
-		for s := range outChan {
+		for s := range queryChan {
 			if first {
 				s = createTempTable + s
 				first = false
@@ -316,7 +316,7 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
-		go func() {
+		go func() { // unmarshaler
 			defer wg.Done()
 			for b := range dataIn {
 				var j Jsondata
@@ -374,8 +374,9 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 		r.Close() // close the reader
 		if ds.err != nil {
 			break
-		}
-	}
+		} // readline
+	} // read file
+
 	close(dataIn)
 	wg.Wait()
 	select {
@@ -500,7 +501,7 @@ func RandString(n int) string {
 	return string(b)
 }
 
-func CreateInserts(rowChan chan Row, outChan chan string, tableName string, cols []string, batchSize int) {
+func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, cols []string, batchSize int) {
 	if batchSize < 0 {
 		batchSize = 1
 	}
@@ -551,7 +552,7 @@ func CreateInserts(rowChan chan Row, outChan chan string, tableName string, cols
 		if rowCount >= batchSize {
 			f.Truncate(f.Len() - 2)
 			f.WriteString(";\n")
-			outChan <- f.String()
+			queryChan <- f.String()
 			f.Reset()
 			f.WriteString(header)
 			rowCount = 0
@@ -562,7 +563,7 @@ func CreateInserts(rowChan chan Row, outChan chan string, tableName string, cols
 	if rowCount > 0 {
 		f.Truncate(f.Len() - 2)
 		f.WriteString(";\n")
-		outChan <- f.String()
+		queryChan <- f.String()
 	}
-	close(outChan)
+	close(queryChan)
 }

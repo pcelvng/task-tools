@@ -308,6 +308,7 @@ func TestCreateInserts(t *testing.T) {
 	fn := func(in trial.Input) (interface{}, error) {
 		inChan := make(chan Row)
 		outChan := make(chan string)
+		doneChan := make(chan struct{})
 		i := in.Interface().(input)
 		go func() {
 			for _, r := range i.rows {
@@ -320,9 +321,10 @@ func TestCreateInserts(t *testing.T) {
 			for s := range outChan {
 				result = append(result, s)
 			}
+			close(doneChan)
 		}()
 		CreateInserts(inChan, outChan, i.table, i.columns, i.batchSize)
-		time.Sleep(10 * time.Millisecond)
+		<-doneChan
 		return result, nil
 	}
 
