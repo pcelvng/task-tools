@@ -8,10 +8,10 @@ import (
 	"io"
 	"log"
 	"math/rand"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,7 +21,6 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/zenthangplus/goccm"
 )
 
 type InfoURI struct {
@@ -313,40 +312,13 @@ func (w *worker) QuerySchema() (err error) {
 // it will build the cols and rows for each file
 func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Options, rowChan chan Row, skipErrors bool) {
 	errChan := make(chan error, 20)
-	// read each file
-	for i := range files {
-		r, err := file.NewReader(files[i], fOpts) // create a new file reader
-		if err != nil {
-			errChan <- fmt.Errorf("new reader error %w", err)
-			continue
-		}
-		c := goccm.New(20)
-		// read the lines of the file
-		for {
-			select {
-			case <-ctx.Done():
-				break
-			case e := <-errChan:
-				if skipErrors {
-					ds.skipCount++
-					log.Println(e)
-				} else {
-					ds.err = e
-					break
-				}
-			default:
-			}
-			line, e := r.ReadLine()
-			if e != nil {
-				if e == io.EOF {
-					break
-				}
-				errChan <- fmt.Errorf("readline error %v - %w", r.Stats().Path, err)
-				continue
-			}
-			c.Wait()
-			go func(b []byte) {
-				defer c.Done()
+	dataIn := make(chan []byte, 20)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for b := range dataIn {
 				var j Jsondata
 				if e := json.Unmarshal(b, &j); e != nil {
 					errChan <- fmt.Errorf("json unmarshal error %w %q", e, string(b))
@@ -354,25 +326,48 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 				}
 
 				if row, err := MakeRow(ds.dbSchema, j); err != nil {
-					_, f := filepath.Split(files[i])
-					errChan <- fmt.Errorf("%w in %s", err, f)
+					errChan <- fmt.Errorf("%w", err)
 				} else if row != nil {
 					atomic.AddInt32(&ds.rowCount, 1)
 					rowChan <- row
 				}
-			}(line)
+			}
+		}()
+	}
+
+	// read each file
+	for i := range files {
+		r, err := file.NewReader(files[i], fOpts) // create a new file reader
+		if err != nil {
+			ds.err = fmt.Errorf("new reader error %w", err)
+			break
 		}
 
-		c.WaitAllDone()
-		select {
-		case e := <-errChan:
-			if skipErrors {
-				log.Println(e)
-				ds.skipCount++
-			} else {
-				ds.err = e
+		// read the lines of the file
+	loop:
+		for {
+			select {
+			case <-ctx.Done():
+				break loop
+			case e := <-errChan:
+				if skipErrors {
+					ds.skipCount++
+					log.Println(e)
+				} else {
+					ds.err = e
+					break loop
+				}
+			default:
+				line, e := r.ReadLine()
+				if e != nil {
+					if e == io.EOF {
+						break loop
+					}
+					errChan <- fmt.Errorf("readline error %v - %w", r.Stats().Path, err)
+					continue
+				}
+				dataIn <- line
 			}
-		default:
 		}
 
 		log.Println("processed file", r.Stats().Path)
@@ -380,6 +375,18 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 		if ds.err != nil {
 			break
 		}
+	}
+	close(dataIn)
+	wg.Wait()
+	select {
+	case e := <-errChan:
+		if skipErrors {
+			log.Println(e)
+			ds.skipCount++
+		} else {
+			ds.err = e
+		}
+	default:
 	}
 	close(rowChan)
 	close(errChan)
