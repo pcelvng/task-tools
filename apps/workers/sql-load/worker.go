@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -352,7 +353,8 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 				}
 
 				if row, err := MakeRow(ds.dbSchema, j); err != nil {
-					errChan <- err
+					_, f := filepath.Split(files[i])
+					errChan <- fmt.Errorf("%w in %s", err, f)
 				} else if row != nil {
 					atomic.AddInt32(&ds.rowCount, 1)
 					rowChan <- row
@@ -365,16 +367,21 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 		case e := <-errChan:
 			if skipErrors {
 				log.Println(e)
+				ds.skipCount++
 			} else {
 				ds.err = e
 			}
 		default:
 		}
-		close(rowChan)
-		close(errChan)
+
 		log.Println("processed file", r.Stats().Path)
 		r.Close() // close the reader
+		if ds.err != nil {
+			break
+		}
 	}
+	close(rowChan)
+	close(errChan)
 }
 
 func NewDataSet() *DataSet {
