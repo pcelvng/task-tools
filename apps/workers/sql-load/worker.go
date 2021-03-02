@@ -77,8 +77,7 @@ func (o *options) newWorker(info string) task.Worker {
 	w := &worker{
 		options: *o,
 		Meta:    task.NewMeta(),
-		//flist:   make([]string, 0),
-		ds: NewDataSet(),
+		ds:      NewDataSet(),
 	}
 
 	if err := uri.Unmarshal(info, &w.Params); err != nil {
@@ -87,7 +86,7 @@ func (o *options) newWorker(info string) task.Worker {
 
 	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
 	if err != nil {
-		return task.InvalidWorker("files %v", err)
+		return task.InvalidWorker("%v", err)
 	}
 	w.fReader = r
 

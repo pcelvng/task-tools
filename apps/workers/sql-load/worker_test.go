@@ -216,8 +216,6 @@ func TestNewWorker(t *testing.T) {
 
 	type output struct {
 		Params     InfoURI
-		Invalid    bool
-		Msg        string
 		Count      int
 		DeleteStmt string
 	}
@@ -233,7 +231,9 @@ func TestNewWorker(t *testing.T) {
 	w.WriteLine([]byte(`{"test":"value1","testing":"value2","number":123}`))
 	w.Close()
 
-	d1, _ := filepath.Abs(f2)
+	s, _ := filepath.Abs(f2)
+	d1, _ := filepath.Split(s)
+	d1 += "*"
 
 	f3 := "./tmp1"
 	os.Mkdir(f3, 0755)
@@ -245,21 +245,20 @@ func TestNewWorker(t *testing.T) {
 		wrkr := i.options.newWorker(i.Info)
 		o := output{}
 		// if task is invalid set values
-		o.Invalid, o.Msg = task.IsInvalidWorker(wrkr)
+		if invalid, msg := task.IsInvalidWorker(wrkr); invalid {
+			return nil, errors.New(msg)
+		}
 
 		// if the test isn't for a invalid worker set count and params
-		if !o.Invalid {
-			myw := wrkr.(*worker)
-			o.Params = myw.Params
-			if myw.fReader != nil {
-				o.Count = int(myw.fReader.Stats().Files)
-			}
-			o.DeleteStmt = myw.delQuery
+		myw := wrkr.(*worker)
+		o.Params = myw.Params
+		if myw.fReader != nil {
+			o.Count = int(myw.fReader.Stats().Files)
 		}
+		o.DeleteStmt = myw.delQuery
 
 		return o, nil
 	}
-
 	// testing cases
 	cases := trial.Cases{
 		"valid_worker": {
@@ -270,36 +269,23 @@ func TestNewWorker(t *testing.T) {
 					Table:     "schema.table_name",
 					BatchSize: 1000,
 				},
-				Invalid: false,
-				Msg:     "",
-				Count:   1,
+				Count: 2,
 			},
 		},
 
 		"table_required": {
-			Input: input{options: &options{}, Info: "nothing"},
-			Expected: output{
-				Invalid: true,
-				Msg:     "params uri.unmarshal: table is required",
-			},
+			Input:       input{options: &options{}, Info: "nothing"},
+			ExpectedErr: errors.New("params uri.unmarshal: table is required"),
 		},
 
 		"invalid_path": {
-			Input: input{options: &options{}, Info: "missingfile.json?table=schema.table_name"},
-			Expected: output{
-				Invalid: true,
-				Msg:     "filepath os: stat missingfile.json: no such file or directory",
-			},
+			Input:       input{options: &options{}, Info: "missingfile.json?table=schema.table_name"},
+			ExpectedErr: errors.New("no files found for missingfile.json"),
 		},
 
 		"invalid_worker": {
-			Input: input{options: &options{}, Info: d2 + "?table=schema.table_name"},
-			Expected: output{
-				Params:  InfoURI{},
-				Invalid: true,
-				Msg:     "no files found in path " + d2,
-				Count:   0,
-			},
+			Input:       input{options: &options{}, Info: d2 + "?table=schema.table_name"},
+			ExpectedErr: errors.New("no files found for " + d2),
 		},
 
 		"valid_path_with_delete": {
@@ -312,8 +298,7 @@ func TestNewWorker(t *testing.T) {
 					DeleteMap: map[string]string{"date(hour_utc)": "2020-07-09", "id": "1572", "amt": "65.2154"},
 				},
 				DeleteStmt: "delete from schema.table_name where amt = 65.2154 and date(hour_utc) = '2020-07-09' and id = 1572",
-				Invalid:    false,
-				Count:      1,
+				Count:      2,
 			},
 		},
 	}

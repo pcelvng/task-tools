@@ -11,18 +11,20 @@ import (
 func NewGlobReader(path string, opts *Options) (_ Reader, err error) {
 	r := &GlobReader{
 		path: path,
-		opts: *opts,
 		sts: stat.Stats{
 			Path: path,
 		},
+	}
+	if opts != nil {
+		r.opts = *opts
 	}
 	if r.files, err = Glob(path, opts); err != nil {
 		return nil, err
 	}
 	if err := r.nextFile(); err != nil {
-		return nil, fmt.Errorf("no files (%d) found for %s", len(r.files), path)
+		return nil, fmt.Errorf("no files found for %s", path)
 	}
-
+	r.sts.Files = int64(len(r.files))
 	return r, nil
 }
 
@@ -54,7 +56,6 @@ func (g *GlobReader) nextFile() (err error) {
 	}
 	g.reader, err = NewReader(g.files[g.fileIndex].Path, &g.opts)
 	g.fileIndex++
-	g.sts.Files = int64(g.fileIndex)
 
 	return err
 }
@@ -103,7 +104,6 @@ func (g *GlobReader) Stats() stat.Stats {
 		sts.ByteCnt += s.ByteCnt
 		sts.LineCnt += s.LineCnt
 		sts.Size += s.Size
-		sts.Files++
 	}
 	return sts
 }
