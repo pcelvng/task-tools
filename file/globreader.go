@@ -75,7 +75,10 @@ func (g *GlobReader) Read(p []byte) (n int, err error) {
 }
 
 func (g *GlobReader) Close() error {
-	return g.reader.Close()
+	if g.reader != nil {
+		return g.reader.Close()
+	}
+	return nil
 }
 
 func (g *GlobReader) ReadLine() (b []byte, err error) {
