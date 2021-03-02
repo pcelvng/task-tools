@@ -121,7 +121,6 @@ func TestGlob_Local(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
-
 }
 
 func TestGlob_S3(t *testing.T) {

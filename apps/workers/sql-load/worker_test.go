@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/file/mock"
 )
 
 func TestDefaultUpdate(t *testing.T) {
@@ -64,8 +66,8 @@ func TestPrepareMeta(t *testing.T) {
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "C1", JsonKey: "J1"},
-					{Name: "C2", JsonKey: "J2"},
+					{Name: "C1", JsonKey: "J1", Default: trial.StringP("")},
+					{Name: "C2", JsonKey: "J2", Default: trial.StringP("")},
 				},
 				columns: []string{"C1", "C2"},
 			},
@@ -73,14 +75,14 @@ func TestPrepareMeta(t *testing.T) {
 		"Partial json mapping": {
 			Input: input{
 				schema: []DbColumn{
-					{Name: "C1"}, {Name: "C2"},
+					{Name: "C1", Nullable: true}, {Name: "C2", Nullable: true},
 				},
 				fields: map[string]string{"C1": "J1", "C3": "J2"},
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "C1", JsonKey: "J1"},
-					{Name: "C2", JsonKey: "C2"},
+					{Name: "C1", JsonKey: "J1", Nullable: true},
+					{Name: "C2", JsonKey: "C2", Nullable: true},
 				},
 				columns: []string{"C1", "C2"},
 			},
@@ -113,6 +115,24 @@ func TestPrepareMeta(t *testing.T) {
 				columns: []string{"C1", "C3"},
 			},
 		},
+		"add defaults when in fieldMap": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "id", Nullable: false, TypeName: "int"},
+					{Name: "name", Nullable: false, TypeName: "string"},
+					{Name: "value", Nullable: false, TypeName: "float"},
+				},
+				fields: map[string]string{"id": "json_id", "name": "jName", "value": "jvalue"},
+			},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "id", JsonKey: "json_id", Default: trial.StringP("0"), Nullable: false, TypeName: "int"},
+					{Name: "name", JsonKey: "jName", Default: trial.StringP(""), Nullable: false, TypeName: "string"},
+					{Name: "value", JsonKey: "jvalue", Default: trial.StringP("0.0"), Nullable: false, TypeName: "float"},
+				},
+				columns: []string{"id", "name", "value"},
+			},
+		},
 	}
 
 	trial.New(fn, cases).Test(t)
@@ -122,7 +142,7 @@ func TestMakeRow(t *testing.T) {
 	schema := []DbColumn{
 		{Name: "id", JsonKey: "id"},
 		{Name: "name", JsonKey: "name", Nullable: true},
-		{Name: "count", JsonKey: "count", TypeName: "int", Nullable: true},
+		{Name: "count", JsonKey: "count", TypeName: "int", Default: trial.StringP("0")},
 		{Name: "percent", JsonKey: "percent", TypeName: "float", Nullable: true},
 		{Name: "num", JsonKey: "num", TypeName: "int", Nullable: true},
 	}
@@ -162,9 +182,10 @@ func TestMakeRow(t *testing.T) {
 		},
 		"nulls": {
 			Input: map[string]interface{}{
-				"id": "1234",
+				"id":    "1234",
+				"count": "10",
 			},
-			Expected: Row{"1234", nil, nil, nil, nil},
+			Expected: Row{"1234", nil, int64(10), nil, nil},
 		},
 		"missing required": {
 			Input:       map[string]interface{}{},
@@ -176,6 +197,12 @@ func TestMakeRow(t *testing.T) {
 				"num": 2.4,
 			},
 			ExpectedErr: errors.New("cannot convert number"),
+		},
+		"defaults": {
+			Input: map[string]interface{}{
+				"id": "1234",
+			},
+			Expected: Row{"1234", nil, "0", nil, nil},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
@@ -189,8 +216,6 @@ func TestNewWorker(t *testing.T) {
 
 	type output struct {
 		Params     InfoURI
-		Invalid    bool
-		Msg        string
 		Count      int
 		DeleteStmt string
 	}
@@ -206,7 +231,9 @@ func TestNewWorker(t *testing.T) {
 	w.WriteLine([]byte(`{"test":"value1","testing":"value2","number":123}`))
 	w.Close()
 
-	d1, _ := filepath.Abs(f2)
+	s, _ := filepath.Abs(f2)
+	d1, _ := filepath.Split(s)
+	d1 += "*"
 
 	f3 := "./tmp1"
 	os.Mkdir(f3, 0755)
@@ -218,19 +245,20 @@ func TestNewWorker(t *testing.T) {
 		wrkr := i.options.newWorker(i.Info)
 		o := output{}
 		// if task is invalid set values
-		o.Invalid, o.Msg = task.IsInvalidWorker(wrkr)
+		if invalid, msg := task.IsInvalidWorker(wrkr); invalid {
+			return nil, errors.New(msg)
+		}
 
 		// if the test isn't for a invalid worker set count and params
-		if !o.Invalid {
-			myw := wrkr.(*worker)
-			o.Params = myw.Params
-			o.Count = len(myw.flist)
-			o.DeleteStmt = myw.delQuery
+		myw := wrkr.(*worker)
+		o.Params = myw.Params
+		if myw.fReader != nil {
+			o.Count = int(myw.fReader.Stats().Files)
 		}
+		o.DeleteStmt = myw.delQuery
 
 		return o, nil
 	}
-
 	// testing cases
 	cases := trial.Cases{
 		"valid_worker": {
@@ -241,36 +269,23 @@ func TestNewWorker(t *testing.T) {
 					Table:     "schema.table_name",
 					BatchSize: 1000,
 				},
-				Invalid: false,
-				Msg:     "",
-				Count:   1,
+				Count: 2,
 			},
 		},
 
 		"table_required": {
-			Input: input{options: &options{}, Info: "nothing"},
-			Expected: output{
-				Invalid: true,
-				Msg:     "params uri.unmarshal: table is required",
-			},
+			Input:       input{options: &options{}, Info: "nothing"},
+			ExpectedErr: errors.New("params uri.unmarshal: table is required"),
 		},
 
 		"invalid_path": {
-			Input: input{options: &options{}, Info: "missingfile.json?table=schema.table_name"},
-			Expected: output{
-				Invalid: true,
-				Msg:     "filepath os: stat missingfile.json: no such file or directory",
-			},
+			Input:       input{options: &options{}, Info: "missingfile.json?table=schema.table_name"},
+			ExpectedErr: errors.New("no files found for missingfile.json"),
 		},
 
 		"invalid_worker": {
-			Input: input{options: &options{}, Info: d2 + "?table=schema.table_name"},
-			Expected: output{
-				Params:  InfoURI{},
-				Invalid: true,
-				Msg:     "no files found in path " + d2,
-				Count:   0,
-			},
+			Input:       input{options: &options{}, Info: d2 + "?table=schema.table_name"},
+			ExpectedErr: errors.New("no files found for " + d2),
 		},
 
 		"valid_path_with_delete": {
@@ -283,8 +298,7 @@ func TestNewWorker(t *testing.T) {
 					DeleteMap: map[string]string{"date(hour_utc)": "2020-07-09", "id": "1572", "amt": "65.2154"},
 				},
 				DeleteStmt: "delete from schema.table_name where amt = 65.2154 and date(hour_utc) = '2020-07-09' and id = 1572",
-				Invalid:    false,
-				Count:      1,
+				Count:      2,
 			},
 		},
 	}
@@ -371,6 +385,85 @@ func TestCreateInserts(t *testing.T) {
 			Expected: []string{
 				"insert into test(a,b,c)\n  VALUES \n(1,'2',3.2),\n(true,false,NULL);\n",
 			},
+		},
+	}
+	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)
+}
+
+func TestReadFiles(t *testing.T) {
+	c := trial.CaptureLog()
+	defer c.ReadAll()
+
+	type input struct {
+		lines      []string
+		skipErrors bool
+	}
+	type out struct {
+		rowCount  int32
+		skipCount int
+	}
+	fn := func(in trial.Input) (interface{}, error) {
+		i := in.Interface().(input)
+		ds := DataSet{
+			dbSchema: []DbColumn{
+				{Name: "id", JsonKey: "id"},
+				{Name: "name", JsonKey: "name", Nullable: true},
+				{Name: "count", JsonKey: "count", TypeName: "int", Nullable: true}},
+		}
+		reader := mock.NewReader("nop").AddLines(i.lines...)
+
+		rowChan := make(chan Row)
+		doneChan := make(chan struct{})
+		go func() {
+			for range rowChan {
+			}
+			close(doneChan)
+		}()
+		ds.ReadFiles(context.Background(), reader, rowChan, i.skipErrors)
+		<-doneChan
+		return out{rowCount: ds.rowCount, skipCount: ds.skipCount}, ds.err // number of rows or error
+	}
+	cases := trial.Cases{
+		"valid data": {
+			Input: input{
+				lines: []string{
+					`{"id":1, "name":"apple", "count":10}`,
+					`{"id":1, "name":"banana", "count":3}`,
+				},
+			},
+			Expected: out{rowCount: 2},
+		},
+		"invalid row": {
+			Input: input{
+				lines: []string{
+					`"id":1, "name":"apple", "count":10}`,
+					`{"id":1, "name":"banana", "count":3}`,
+				},
+			},
+			ShouldErr: true,
+		},
+		"all invalid": {
+			Input: input{
+				lines: []string{
+					`{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`,
+					`{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`,
+					`{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`, `{`,
+				},
+			},
+			ShouldErr: true,
+		},
+		"skip invalids": {
+			Input: input{
+				lines: []string{
+					`{`, `{`, `{`, `{`, `{`,
+					`{"id":1, "name":"apple", "count":10}`,
+					`{"id":1, "name":"banana", "count":3}`,
+					`{"id":1, "name":"apple", "count":10}`,
+					`{"id":1, "name":"banana", "count":3}`,
+				},
+				skipErrors: true,
+			},
+			Expected: out{skipCount: 5, rowCount: 4},
 		},
 	}
 	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)

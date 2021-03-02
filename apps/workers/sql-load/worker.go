@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,7 +39,8 @@ type worker struct {
 
 	Params InfoURI
 
-	flist    []string // list of full path file(s)
+	//flist    []string // list of full path file(s)
+	fReader  file.Reader
 	ds       *DataSet // the processing data for loading
 	delQuery string   // query statement built from DeleteMap
 
@@ -77,7 +77,6 @@ func (o *options) newWorker(info string) task.Worker {
 	w := &worker{
 		options: *o,
 		Meta:    task.NewMeta(),
-		flist:   make([]string, 0),
 		ds:      NewDataSet(),
 	}
 
@@ -85,23 +84,12 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("params uri.unmarshal: %v", err)
 	}
 
-	f, err := file.Stat(w.Params.FilePath, w.fileOpts)
+	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
 	if err != nil {
-		return task.InvalidWorker("filepath os: %v", err)
+		return task.InvalidWorker("%v", err)
 	}
-	// app will load one file or a directory of files (only one folder deep)
-	if f.IsDir {
-		list, _ := file.List(w.Params.FilePath, w.fileOpts)
-		for i := range list {
-			w.flist = append(w.flist, list[i].Path)
-		}
-	} else {
-		w.flist = append(w.flist, w.Params.FilePath)
-	}
+	w.fReader = r
 
-	if len(w.flist) == 0 {
-		return task.InvalidWorker("no files found in path %s", w.Params.FilePath)
-	}
 	if len(w.Params.DeleteMap) > 0 && w.Params.Truncate {
 		return task.InvalidWorker("truncate can not be used with delete fields")
 	}
@@ -125,7 +113,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	rowChan := make(chan Row, 100)
 	w.ds.dbSchema, w.ds.insertCols = PrepareMeta(w.ds.dbSchema, w.Params.FieldsMap)
 
-	go w.ds.ReadFiles(ctx, w.flist, w.fileOpts, rowChan, w.Params.SkipErr)
+	go w.ds.ReadFiles(ctx, w.fReader, rowChan, w.Params.SkipErr)
 	retry := 0
 
 	if w.Params.CachedInsert && w.dbDriver == "postgres" {
@@ -310,14 +298,14 @@ func (w *worker) QuerySchema() (err error) {
 
 // ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
-func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Options, rowChan chan Row, skipErrors bool) {
+func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
 	errChan := make(chan error, 20)
 	dataIn := make(chan []byte, 20)
-	var wg sync.WaitGroup
+	var activeThreads int32
 	for i := 0; i < 20; i++ {
-		wg.Add(1)
+		activeThreads++
 		go func() { // unmarshaler
-			defer wg.Done()
+			defer func() { atomic.AddInt32(&activeThreads, -1) }()
 			for b := range dataIn {
 				var j Jsondata
 				if e := json.Unmarshal(b, &j); e != nil {
@@ -335,59 +323,51 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 		}()
 	}
 
-	// read each file
-	for i := range files {
-		r, err := file.NewReader(files[i], fOpts) // create a new file reader
-		if err != nil {
-			ds.err = fmt.Errorf("new reader error %w", err)
-			break
-		}
-
-		// read the lines of the file
-	loop:
-		for {
-			select {
-			case <-ctx.Done():
+	// read the lines of the file
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
+		case err := <-errChan:
+			if skipErrors {
+				ds.skipCount++
+				log.Println(err)
+			} else {
+				ds.err = err
 				break loop
-			case e := <-errChan:
-				if skipErrors {
-					ds.skipCount++
-					log.Println(e)
-				} else {
-					ds.err = e
+			}
+		default:
+			line, err := files.ReadLine()
+			if err != nil {
+				if err == io.EOF {
 					break loop
 				}
-			default:
-				line, e := r.ReadLine()
-				if e != nil {
-					if e == io.EOF {
-						break loop
-					}
-					errChan <- fmt.Errorf("readline error %v - %w", r.Stats().Path, err)
-					continue
-				}
-				dataIn <- line
+				errChan <- fmt.Errorf("readline error %v - %w", files.Stats().Path, err)
+				continue
 			}
+			dataIn <- line
 		}
-
-		log.Println("processed file", r.Stats().Path)
-		r.Close() // close the reader
-		if ds.err != nil {
-			break
-		} // readline
-	} // read file
+	}
+	files.Close() // close the reader
+	sts := files.Stats()
+	log.Printf("processed %d files at %s", sts.Files, sts.Path)
 
 	close(dataIn)
-	wg.Wait()
-	select {
-	case e := <-errChan:
-		if skipErrors {
-			log.Println(e)
-			ds.skipCount++
-		} else {
-			ds.err = e
+	for {
+		select {
+		case e := <-errChan:
+			if skipErrors {
+				log.Println(e)
+				ds.skipCount++
+			} else {
+				ds.err = e
+			}
+		default:
 		}
-	default:
+		if i := atomic.LoadInt32(&activeThreads); i == 0 {
+			break
+		}
 	}
 	close(rowChan)
 	close(errChan)
@@ -411,6 +391,16 @@ func PrepareMeta(dbSchema []DbColumn, fieldMap map[string]string) (meta []DbColu
 		jKey := k.Name
 		if v := fieldMap[k.Name]; v != "" {
 			jKey = v
+			if k.Default == nil && !k.Nullable {
+				var s string
+				switch k.TypeName {
+				case "int":
+					s = "0"
+				case "float":
+					s = "0.0"
+				}
+				k.Default = &s
+			}
 		}
 		// skip designated fields
 		if jKey == "-" {
@@ -436,7 +426,10 @@ func MakeRow(dbSchema []DbColumn, j Jsondata) (row Row, err error) {
 	for k, f := range dbSchema {
 		v, found := j[f.JsonKey]
 		if !found && !f.Nullable {
-			return nil, fmt.Errorf("%v is required", f.JsonKey)
+			if f.Default == nil {
+				return nil, fmt.Errorf("%v is required", f.JsonKey)
+			}
+			j[f.JsonKey] = *f.Default
 		}
 		switch x := v.(type) {
 		case string:

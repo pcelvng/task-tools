@@ -19,7 +19,6 @@ type options struct {
 	MySQL    bootstrap.DBOptions `toml:"mysql"`
 
 	sqlDB *sql.DB
-	//	sqlxDB *sqlx.DB // used for running direct exec command
 
 	producer bus.Producer
 	fileOpts *file.Options
@@ -38,14 +37,15 @@ delete : allows insert into pre-existing data by deleting previous data.
     - "?delete=date:2020-07-01|id:7"
 truncate: allows insert into pre-existing table by truncating before insertion
 fields : allows mapping different json key values to different database column names
-    - provide a list of field name mapping {json key name}:{DB column name} to be mapped 
-    - ?fields=jsonKey:dbColumnName
-
+    - provide a list of field name mapping {DB column name}:{json key name} to be mapped 
+    - ?fields=dbColumnName:jsonkey
+cached_insert: improves insert times by caching data into a temp table
+batch_size: (default:1000) number of rows to insert at a time (higher number increases memory usage) 
 Example task:
  
 {"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7"}
 {"type":"sql_load","info":"gs://bucket/path/of/files/to/load/?table=schema.table_name"}
-{"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7&fields=jsonKeyValue:dbColumnName"}`
+{"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7&fields=dbColumnName:jsonKeyValue"}`
 )
 
 func init() {
