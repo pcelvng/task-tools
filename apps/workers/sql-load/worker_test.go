@@ -375,3 +375,7 @@ func TestCreateInserts(t *testing.T) {
 	}
 	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)
 }
+
+func TestReadFiles(t *testing.T) {
+
+}

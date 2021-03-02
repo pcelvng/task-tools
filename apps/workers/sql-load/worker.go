@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -313,11 +312,11 @@ func (w *worker) QuerySchema() (err error) {
 func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Options, rowChan chan Row, skipErrors bool) {
 	errChan := make(chan error, 20)
 	dataIn := make(chan []byte, 20)
-	var wg sync.WaitGroup
+	var activeThreads int32
 	for i := 0; i < 20; i++ {
-		wg.Add(1)
+		activeThreads++
 		go func() { // unmarshaler
-			defer wg.Done()
+			defer func() { atomic.AddInt32(&activeThreads, -1) }()
 			for b := range dataIn {
 				var j Jsondata
 				if e := json.Unmarshal(b, &j); e != nil {
@@ -378,16 +377,20 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files []string, fOpts *file.Op
 	} // read file
 
 	close(dataIn)
-	wg.Wait()
-	select {
-	case e := <-errChan:
-		if skipErrors {
-			log.Println(e)
-			ds.skipCount++
-		} else {
-			ds.err = e
+	for {
+		select {
+		case e := <-errChan:
+			if skipErrors {
+				log.Println(e)
+				ds.skipCount++
+			} else {
+				ds.err = e
+			}
+		default:
 		}
-	default:
+		if i := atomic.LoadInt32(&activeThreads); i == 0 {
+			break
+		}
 	}
 	close(rowChan)
 	close(errChan)
