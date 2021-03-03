@@ -40,7 +40,7 @@ fields : allows mapping different json key values to different database column n
     - provide a list of field name mapping {DB column name}:{json key name} to be mapped 
     - ?fields=dbColumnName:jsonkey
 cached_insert: improves insert times by caching data into a temp table
-batch_size: (default:1000) number of rows to insert at a time (higher number increases memory usage) 
+batch_size: (default:10000) number of rows to insert at a time (higher number increases memory usage) 
 Example task:
  
 {"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7"}

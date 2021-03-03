@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"sort"
@@ -23,14 +22,14 @@ import (
 )
 
 type InfoURI struct {
-	FilePath     string            `uri:"origin"`                    // file path to load one file or a list of files in that path (not recursive)
-	Table        string            `uri:"table" required:"true"`     // insert table name i.e., "schema.table_name"
-	SkipErr      bool              `uri:"skip_err"`                  // if bad records are found they are skipped and logged instead of throwing an error
-	DeleteMap    map[string]string `uri:"delete"`                    // map used to build the delete query statement
-	FieldsMap    map[string]string `uri:"fields"`                    // map json key values to different db names
-	Truncate     bool              `uri:"truncate"`                  // truncate the table rather than delete
-	CachedInsert bool              `uri:"cached_insert"`             // this will attempt to load the query data though a temp table (postgres only)
-	BatchSize    int               `uri:"batch_size" default:"1000"` // number of rows to insert at once
+	FilePath     string            `uri:"origin"`                     // file path to load one file or a list of files in that path (not recursive)
+	Table        string            `uri:"table" required:"true"`      // insert table name i.e., "schema.table_name"
+	SkipErr      bool              `uri:"skip_err"`                   // if bad records are found they are skipped and logged instead of throwing an error
+	DeleteMap    map[string]string `uri:"delete"`                     // map used to build the delete query statement
+	FieldsMap    map[string]string `uri:"fields"`                     // map json key values to different db names
+	Truncate     bool              `uri:"truncate"`                   // truncate the table rather than delete
+	CachedInsert bool              `uri:"cached_insert"`              // this will attempt to load the query data though a temp table (postgres only)
+	BatchSize    int               `uri:"batch_size" default:"10000"` // number of rows to insert at once
 }
 
 type worker struct {
@@ -324,8 +323,9 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan cha
 	}
 
 	// read the lines of the file
+	scanner := file.NewScanner(files)
 loop:
-	for {
+	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
 			break loop
@@ -338,16 +338,11 @@ loop:
 				break loop
 			}
 		default:
-			line, err := files.ReadLine()
-			if err != nil {
-				if err == io.EOF {
-					break loop
-				}
-				errChan <- fmt.Errorf("readline error %v - %w", files.Stats().Path, err)
-				continue
-			}
-			dataIn <- line
+			dataIn <- scanner.Bytes()
 		}
+	}
+	if scanner.Err() != nil {
+		ds.err = scanner.Err()
 	}
 	files.Close() // close the reader
 	sts := files.Stats()
@@ -496,7 +491,7 @@ func RandString(n int) string {
 
 func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, cols []string, batchSize int) {
 	if batchSize < 0 {
-		batchSize = 1
+		batchSize = 10000
 	}
 
 	fields := strings.Join(cols, ",")
