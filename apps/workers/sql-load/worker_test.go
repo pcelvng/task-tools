@@ -267,7 +267,7 @@ func TestNewWorker(t *testing.T) {
 				Params: InfoURI{
 					FilePath:  d1,
 					Table:     "schema.table_name",
-					BatchSize: 1000,
+					BatchSize: 10000,
 				},
 				Count: 2,
 			},
@@ -294,7 +294,7 @@ func TestNewWorker(t *testing.T) {
 				Params: InfoURI{
 					FilePath:  d1,
 					Table:     "schema.table_name",
-					BatchSize: 1000,
+					BatchSize: 10000,
 					DeleteMap: map[string]string{"date(hour_utc)": "2020-07-09", "id": "1572", "amt": "65.2154"},
 				},
 				DeleteStmt: "delete from schema.table_name where amt = 65.2154 and date(hour_utc) = '2020-07-09' and id = 1572",
