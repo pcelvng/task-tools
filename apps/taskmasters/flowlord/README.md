@@ -17,23 +17,24 @@ template = "?date={yyyy}-{mm}-{dd}"
 [[Phase]]
 task = "task1"
 dependsOn = "topic_name"
-rule = ""
+rule = "retry_delay=30s"
 retry = 3
 template = "?hour={yyyy}-{mm}-{dd}T{hh}"
 ```
 
 ### Phase 
 
- - task: the name of the topic this task will be sent to. It is also the unique name of the task. In Addition a job of a task can be added in the task name using a colon (:) as a separator (task:job)
- - dependsOn: 
+ - **task**: the name of the topic this task will be sent to. It is also the unique name of the task. In Addition a job of a task can be added in the task name using a colon (:) as a separator (task:job)
+ - **dependsOn**: 
    - the name of the parent task
    - this task will start after the parent task has completed successfully
    - if left blank this tasks will only start based on the rule
- - rule: rules on about the tasks that are encoded as query params 
-   - cron: schedule the task based on the cron pattern (see scheduling)
-   - require: used in a child task saying to only start task if value is present
- - retry: the number of times a task is retried before being sent to failed_tasks
- - template: a URL string that is parsed and put into the task's info string when created
+ - **rule**: rules on about the tasks that are encoded as query params 
+   - _cron_: schedule the task based on the cron pattern (see scheduling)
+   - _require_: used in a child task saying to only start task if value is present
+   - _retry_delay_: duration to wait before retrying the task
+ - **retry**: the number of times a task is retried before being sent to failed_tasks
+ - **template**: a URL string that is parsed and put into the task's info string when created
 
 ### Template 
 templating is used to create dynamic tasks based on the time run or previous jobs run. templates are designated with surrounding brackets `{}`

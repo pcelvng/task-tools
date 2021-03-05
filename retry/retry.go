@@ -229,7 +229,7 @@ func (r *Retryer) close() error {
 	return nil
 }
 
-// genJitter will return a time.Duration representing extra
+// jitterPercent will return a time.Duration representing extra
 // 'jitter' to be added to the wait time. Jitter is important
 // in retry events since the original cause of failure can be
 // due to too many jobs being processed at a time.

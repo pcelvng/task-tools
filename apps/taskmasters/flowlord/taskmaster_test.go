@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"regexp"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
@@ -13,6 +16,7 @@ import (
 )
 
 func TestTaskMaster_Process(t *testing.T) {
+	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
 	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", nil)
 	if err != nil {
 		t.Fatal("cache init", err)
@@ -31,6 +35,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		tm.producer = producer
 		nop.FakeMsg = tsk.JSONBytes()
 		err = tm.Process(&tsk)
+		time.Sleep(100 * time.Millisecond)
 		result := make([]task.Task, 0)
 		for _, msgs := range producer.Messages {
 			for _, msg := range msgs {
@@ -39,6 +44,9 @@ func TestTaskMaster_Process(t *testing.T) {
 					return nil, err
 				}
 				v.Created = ""
+				if s := delayRegex.FindStringSubmatch(v.Meta); len(s) > 1 {
+					v.Meta = strings.Replace(v.Meta, s[1], "XX", 1)
+				}
 				result = append(result, v)
 			}
 		}
@@ -62,7 +70,7 @@ func TestTaskMaster_Process(t *testing.T) {
 					Type: "task1",
 					Info: "?date=2019-12-12",
 					ID:   "UUID_task1_attempt0",
-					Meta: "retry=1&workflow=f1.toml"},
+					Meta: "delayed=XXms&retry=1&workflow=f1.toml"},
 			},
 		},
 		"task1 attempt 2": {
@@ -77,7 +85,7 @@ func TestTaskMaster_Process(t *testing.T) {
 					Type: "task1",
 					Info: "?date=2019-12-12",
 					ID:   "UUID_task1_attempt2",
-					Meta: "retry=3&workflow=f1.toml"},
+					Meta: "delayed=XXms&retry=3&workflow=f1.toml"},
 			},
 		},
 		"task1 no retry": {

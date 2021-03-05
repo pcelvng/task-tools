@@ -285,12 +285,14 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 	if err != nil {
 		return "", errors.Wrapf(err, "read-all: %s", path)
 	}
-
-	if _, err := toml.Decode(string(b), &data); err != nil {
+	d := Workflow{
+		Checksum: data.Checksum,
+	}
+	if _, err := toml.Decode(string(b), &d); err != nil {
 		return "", errors.Wrapf(err, "decode: %s", string(b))
 	}
 
-	c.Workflows[f] = data
+	c.Workflows[f] = d
 
 	return f, nil
 }

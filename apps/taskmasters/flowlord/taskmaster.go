@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -23,6 +24,10 @@ import (
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
+
+func init() {
+	rand.Seed(time.Now().Unix())
+}
 
 type taskMaster struct {
 	initTime    time.Time
@@ -224,9 +229,11 @@ func (tm *taskMaster) schedule() (err error) {
 // Send retry failed tasks to tm.failedTopic (only if the phase exists in the workflow)
 func (tm *taskMaster) Process(t *task.Task) error {
 	meta, _ := url.ParseQuery(t.Meta)
-	// attempt to return
+
+	// attempt to retry
 	if t.Result == task.ErrResult {
 		p := tm.Get(*t)
+		rules, _ := url.ParseQuery(p.Rule)
 
 		r := meta.Get("retry")
 		i, _ := strconv.Atoi(r)
@@ -235,13 +242,23 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			return nil
 		}
 		if p.Retry > i {
+			var delay time.Duration
+			if s := rules.Get("retry_delay"); s != "" {
+				delay, _ = time.ParseDuration(s)
+				delay = delay + jitterPercent(delay, 40)
+				meta.Set("delayed", gtools.PrintDuration(delay))
+			}
 			t = task.NewWithID(t.Type, t.Info, t.ID)
 			i++
 			meta.Set("retry", strconv.Itoa(i))
 			t.Meta = meta.Encode()
-			if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
-				return err
-			}
+			go func() {
+				time.Sleep(delay)
+				if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
+					log.Println(err)
+				}
+			}()
+			return nil
 		} else if tm.failedTopic != "-" {
 			// send to the retry failed topic if retries > p.Retry
 			meta.Set("retry", "failed")
@@ -320,4 +337,26 @@ func (tm *taskMaster) read(ctx context.Context) {
 			log.Println(err)
 		}
 	}
+}
+
+// jitterPercent will return a time.Duration representing extra
+// 'jitter' to be added to the wait time. Jitter is important
+// in retry events since the original cause of failure can be
+// due to too many jobs being processed at a time.
+//
+// By adding some jitter the retry events won't all happen
+// at once but will get staggered to prevent the problem
+// from happening again.
+//
+// 'p' is a percentage of the wait time. Duration returned
+// is a random duration between 0 and p. 'p' should be a value
+// between 0-100.
+func jitterPercent(wait time.Duration, p int64) time.Duration {
+	// p == 40
+	if wait == 0 {
+		return 0
+	}
+	maxJitter := (int64(wait) * p) / 100
+
+	return time.Duration(rand.Int63n(maxJitter))
 }

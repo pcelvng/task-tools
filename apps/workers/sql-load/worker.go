@@ -132,12 +132,12 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		queryChan := make(chan string, 10)
 		go CreateInserts(rowChan, queryChan, tempTable, w.ds.insertCols, w.Params.BatchSize)
 
-		first := true
+		tableCreated := false
 		// load data into temp table
 		for s := range queryChan {
-			if first {
+			if !tableCreated {
 				s = createTempTable + s
-				first = false
+				tableCreated = true
 			}
 			if _, err := w.sqlDB.ExecContext(ctx, s); err != nil {
 				cancelFn()
@@ -147,6 +147,10 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 		if w.ds.err != nil {
 			return task.Failed(w.ds.err)
+		}
+
+		if !tableCreated {
+			return task.Completed("no data to load for %s", w.Params.Table)
 		}
 
 		//finalize and transfer data
