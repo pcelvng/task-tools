@@ -80,23 +80,30 @@ func (stats *taskStats) Add(tsk task.Task) {
 	stats.ExecTimes.Add(end.Sub(start))
 }
 
+var (
+	dayRegex  = regexp.MustCompile(`(?:day|date)[=:](\d{4}-\d{2}-\d{2})`)
+	hourRegex = regexp.MustCompile(`(?:hour|hour_utc)[=:](\d{4}-\d{2}-\d{2}T\d{2})`)
+)
+
 func taskTime(tsk task.Task) time.Time {
 	type getTime struct {
-		PathTime pathTime  `uri:"path"`
-		Day      time.Time `uri:"day"`
-		Date     day       `uri:"date"`
-		Hour     time.Time `uri:"hour"`
+		PathTime pathTime `uri:"path"`
 	}
 	var t getTime
 	uri.Unmarshal(tsk.Info, &t)
-
-	if !t.Hour.IsZero() {
-		return t.Hour
-	} else if !t.Day.IsZero() {
-		return t.Day
-	} else if !time.Time(t.Date).IsZero() {
-		return time.Time(t.Date)
-	} else if !(time.Time)(t.PathTime).IsZero() {
+	if v := hourRegex.FindStringSubmatch(tsk.Info); len(v) > 1 {
+		t, err := time.Parse("2006-01-02T15", v[1])
+		if err == nil {
+			return t
+		}
+	}
+	if v := dayRegex.FindStringSubmatch(tsk.Info); len(v) > 1 {
+		t, err := time.Parse("2006-01-02", v[1])
+		if err == nil {
+			return t
+		}
+	}
+	if !(time.Time)(t.PathTime).IsZero() {
 		return time.Time(t.PathTime)
 	}
 	return time.Time{}
@@ -108,16 +115,6 @@ func (p *pathTime) UnmarshalText(b []byte) error {
 	t := tmpl.PathTime(string(b))
 	*p = pathTime(t)
 	return nil
-}
-
-type day time.Time
-
-func (d *day) UnmarshalText(b []byte) error {
-	t, err := time.Parse("2006-01-02", string(b))
-	if err == nil {
-		*d = day(t)
-	}
-	return err
 }
 
 var regWord = regexp.MustCompile(`^[A-z]*$`)
