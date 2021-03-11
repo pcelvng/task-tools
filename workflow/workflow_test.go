@@ -286,6 +286,14 @@ func TestCache_FilePath(t *testing.T) {
 			Input:    []string{"./path", "./path/sub/file.toml"},
 			Expected: "sub/file.toml",
 		},
+		"embedded": {
+			Input:    []string{"./path", "root/folder/path/file.toml"},
+			Expected: "file.toml",
+		},
+		"embedded sub": {
+			Input:    []string{"./path", "root/path/sub/file.toml"},
+			Expected: "sub/file.toml",
+		},
 	}
 	trial.New(fn, cases).SubTest(t)
 }

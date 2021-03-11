@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -32,6 +33,7 @@ func init() {
 type taskMaster struct {
 	initTime    time.Time
 	nextUpdate  time.Time
+	lastUpdate  time.Time
 	path        string
 	dur         time.Duration
 	producer    bus.Producer
@@ -42,13 +44,16 @@ type taskMaster struct {
 	*workflow.Cache
 	cron  *cron.Cron
 	slack *slack.Slack
+
+	refreshChan chan struct{}
 }
 
 type stats struct {
-	RunTime    string            `json:"runtime"`
-	NextUpdate string            `json:"next_cache_update"`
-	Workflow   map[string]int    `json:"workflow"`
-	Entries    map[string]cEntry `json:"cron"`
+	RunTime    string `json:"runtime"`
+	NextUpdate string `json:"next_update"`
+	LastUpdate string `json:"last_update"`
+
+	Workflow map[string]map[string]cEntry `json:"workflow"`
 }
 
 type cEntry struct {
@@ -69,7 +74,7 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	if err != nil {
 		log.Fatal("consumer init", err)
 	}
-	return &taskMaster{
+	tm := &taskMaster{
 		initTime:    time.Now(),
 		path:        opts.Workflow,
 		doneTopic:   opts.DoneTopic,
@@ -80,15 +85,18 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 		cron:        cron.New(cron.WithSeconds()),
 		dur:         opts.Refresh,
 		slack:       opts.Slack,
+		refreshChan: make(chan struct{}),
 	}
+	http.HandleFunc("/refresh", tm.refreshCache)
+	return tm
 }
 
 func (tm *taskMaster) Info() interface{} {
 	sts := stats{
 		RunTime:    gtools.PrintDuration(time.Now().Sub(tm.initTime)),
 		NextUpdate: tm.nextUpdate.Format("2006-01-02T15:04:05"),
-		Entries:    make(map[string]cEntry),
-		Workflow:   make(map[string]int),
+		LastUpdate: tm.lastUpdate.Format("2006-01-02T15:04:05"),
+		Workflow:   make(map[string]map[string]cEntry),
 	}
 
 	for _, e := range tm.cron.Entries() {
@@ -104,8 +112,14 @@ func (tm *taskMaster) Info() interface{} {
 		}
 		k := j.Topic + ":" + j.Name
 
+		w, found := sts.Workflow[j.Workflow]
+		if !found {
+			w = make(map[string]cEntry)
+			sts.Workflow[j.Workflow] = w
+		}
+
 		// check if for multi-scheduled entries
-		if e, found := sts.Entries[k]; found {
+		if e, found := w[k]; found {
 			if e.Prev.After(ent.Prev) {
 				ent.Prev = e.Prev // keep the last run time
 			}
@@ -116,14 +130,14 @@ func (tm *taskMaster) Info() interface{} {
 		}
 		// add children
 		ent.Child = tm.getAllChildren(j.Topic, j.Workflow, j.Name)
-		sts.Entries[k] = ent
-	}
-	if tm.Cache != nil {
-		for k, v := range tm.Workflows {
-			sts.Workflow[k] = len(v.Phases)
-		}
+		w[k] = ent
 	}
 	return sts
+}
+
+func (tm *taskMaster) refreshCache(w http.ResponseWriter, _ *http.Request) {
+	tm.refreshChan <- struct{}{}
+	w.Write([]byte("cache refreshed"))
 }
 
 func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
@@ -140,8 +154,14 @@ func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 // AutoUpdate will create a go routine to auto update the cached files
 // if any changes have been made to the workflow files
 func (tm *taskMaster) AutoUpdate() {
-	for {
-
+	go func() {
+		tm.refreshChan <- struct{}{}
+		ticker := time.NewTicker(tm.dur)
+		for range ticker.C {
+			tm.refreshChan <- struct{}{}
+		}
+	}()
+	for range tm.refreshChan {
 		files, err := tm.Cache.Refresh()
 		if err != nil {
 			log.Println("error reloading workflow files", err)
@@ -159,8 +179,8 @@ func (tm *taskMaster) AutoUpdate() {
 				tcron.Stop()
 			}
 		}
-		tm.nextUpdate = time.Now().Add(tm.dur)
-		<-time.Tick(tm.dur)
+		tm.lastUpdate = time.Now()
+		tm.nextUpdate = tm.lastUpdate.Add(tm.dur)
 	}
 }
 

@@ -299,8 +299,11 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 
 // filePath returns a filePath consist of all unique part
 // after the path set in the cache
-func (c *Cache) filePath(p string) string {
-	s := strings.TrimLeft(strings.Replace(p, c.path, "", 1), "/")
+func (c *Cache) filePath(p string) (s string) {
+	path := strings.TrimLeft(c.path, ".")
+	if i := strings.LastIndex(p, path); i != -1 {
+		s = strings.TrimLeft(p[i+len(path):], "/")
+	}
 	if s == "" {
 		_, s = filepath.Split(p)
 	}
