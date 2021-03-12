@@ -187,16 +187,36 @@ func TestInfoTime(t *testing.T) {
 			Input:    "?day=2020-03-05",
 			Expected: trial.TimeDay("2020-03-05"),
 		},
+		"day map": {
+			Input:    "?map=day:2020-03-05",
+			Expected: trial.TimeDay("2020-03-05"),
+		},
 		"date": {
 			Input:    "?date=2020-03-05",
+			Expected: trial.TimeDay("2020-03-05"),
+		},
+		"date map": {
+			Input:    "?map=date:2020-03-05",
 			Expected: trial.TimeDay("2020-03-05"),
 		},
 		"hour": {
 			Input:    "?date=something&hour=2020-03-05T11",
 			Expected: trial.TimeHour("2020-03-05T11"),
 		},
+		"hour extended": {
+			Input:    "?date=something&hour=2020-03-05T11:12:15Z",
+			Expected: trial.TimeHour("2020-03-05T11"),
+		},
+		"hour map": {
+			Input:    "?date=something&map=hour_utc:2020-03-05T11",
+			Expected: trial.TimeHour("2020-03-05T11"),
+		},
 		"time": {
 			Input:    "?time=2020-03-05T11:15:22Z",
+			Expected: trial.Time(time.RFC3339, "2020-03-05T11:15:22Z"),
+		},
+		"timestamp map": {
+			Input:    "?map=timestamp:2020-03-05T11:15:22Z",
 			Expected: trial.Time(time.RFC3339, "2020-03-05T11:15:22Z"),
 		},
 		"path": {

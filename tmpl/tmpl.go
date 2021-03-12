@@ -2,6 +2,7 @@ package tmpl
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -184,11 +185,18 @@ func PathTime(pth string) time.Time {
 	return time.Time{}
 }
 
-// InfoTime with attempting to pull a timestamp from a info string
+var (
+	dayRegex       = regexp.MustCompile(`(?:day|date)[=:](\d{4}-\d{2}-\d{2})`)
+	hourRegex      = regexp.MustCompile(`(?:hour|hour_utc)[=:](\d{4}-\d{2}-\d{2}T\d{2})`)
+	timestampRegex = regexp.MustCompile(`time(?:stamp)?[=:](\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`)
+)
+
+// InfoTime will attempting to pull a timestamp from a info string
 // through the query params and file path and name
 // Order of priority and supported formats
 // ?day=2006-01-02
 // ?hour=2006-01-02T15
+// ?time=2005-01-02T15:04:05Z
 // file name 20060102T150405.txt
 // path layout 2006/01/02/15 or "2006/01/02 or "2006/01
 func InfoTime(info string) time.Time {
@@ -196,31 +204,27 @@ func InfoTime(info string) time.Time {
 	if err != nil {
 		return time.Time{}
 	}
-	vals := u.Query()
-	if s := vals.Get("day"); s != "" {
-		tm, err := time.Parse("2006-01-02", s)
+
+	if v := dayRegex.FindStringSubmatch(info); len(v) > 1 {
+		t, err := time.Parse("2006-01-02", v[1])
 		if err == nil {
-			return tm
+			return t
 		}
 	}
-	if s := vals.Get("date"); s != "" {
-		tm, err := time.Parse("2006-01-02", s)
+	if v := hourRegex.FindStringSubmatch(info); len(v) > 1 {
+		t, err := time.Parse("2006-01-02T15", v[1])
 		if err == nil {
-			return tm
+			return t
 		}
 	}
-	if s := vals.Get("hour"); s != "" {
-		tm, err := time.Parse("2006-01-02T15", s)
+	if v := timestampRegex.FindStringSubmatch(info); len(v) > 1 {
+		t, err := time.Parse(time.RFC3339, v[1])
 		if err == nil {
-			return tm
+			return t
 		}
+		log.Println(err)
 	}
-	if s := vals.Get("time"); s != "" {
-		tm, err := time.Parse(time.RFC3339, s)
-		if err == nil {
-			return tm
-		}
-	}
+
 	return PathTime(u.Path)
 }
 

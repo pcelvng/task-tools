@@ -45,7 +45,7 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMas
 		options = &NilValidator{}
 	}
 
-	return &TaskMaster{
+	tm := &TaskMaster{
 		appName:    appName,
 		tmOpt:      newTMOptions(appName),
 		appOpt:     options,
@@ -53,6 +53,8 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMas
 		lgr:        log.New(os.Stderr, "", log.LstdFlags),
 		statusPort: &statsOptions{HttpPort: 0},
 	}
+	tm.infoFn = tm.HandleRequest
+	return tm
 }
 
 func (tm *TaskMaster) AppOpt() interface{} {
@@ -78,6 +80,7 @@ type TaskMaster struct {
 	postgres *sql.DB     // postgres connection
 
 	statusPort *statsOptions // health status options (currently http port for requests)
+	infoFn     func(w http.ResponseWriter, r *http.Request)
 }
 
 // Initialize is non-blocking and will perform application startup
@@ -350,7 +353,7 @@ func (tm *TaskMaster) start() {
 	}
 	log.Printf("starting http status server on port %d", tm.HttpPort())
 
-	http.HandleFunc("/", tm.HandleRequest)
+	http.HandleFunc("/", tm.infoFn)
 	go func() {
 		err := http.ListenAndServe(":"+strconv.Itoa(tm.HttpPort()), nil)
 		log.Fatal("http health service failed", err)
@@ -359,7 +362,7 @@ func (tm *TaskMaster) start() {
 
 // SetHandler will overwrite the current HandleRequest function on root requests
 func (tm *TaskMaster) SetHandler(fn func(http.ResponseWriter, *http.Request)) {
-	http.HandleFunc("/", fn)
+	tm.infoFn = fn
 }
 
 // Run until the application is complete and then exit.

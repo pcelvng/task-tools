@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -65,7 +64,7 @@ func (s durStats) String() string {
 }
 
 func (stats *taskStats) Add(tsk task.Task) {
-	tm := taskTime(tsk)
+	tm := tmpl.InfoTime(tsk.Info)
 	if tsk.Result == task.ErrResult {
 		stats.ErrorCount++
 		stats.ErrorTimes = append(stats.ErrorTimes, tm)
@@ -80,44 +79,12 @@ func (stats *taskStats) Add(tsk task.Task) {
 	stats.ExecTimes.Add(end.Sub(start))
 }
 
-func taskTime(tsk task.Task) time.Time {
-	type getTime struct {
-		PathTime pathTime  `uri:"path"`
-		Day      time.Time `uri:"day"`
-		Date     day       `uri:"date"`
-		Hour     time.Time `uri:"hour"`
-	}
-	var t getTime
-	uri.Unmarshal(tsk.Info, &t)
-
-	if !t.Hour.IsZero() {
-		return t.Hour
-	} else if !t.Day.IsZero() {
-		return t.Day
-	} else if !time.Time(t.Date).IsZero() {
-		return time.Time(t.Date)
-	} else if !(time.Time)(t.PathTime).IsZero() {
-		return time.Time(t.PathTime)
-	}
-	return time.Time{}
-}
-
 type pathTime time.Time
 
 func (p *pathTime) UnmarshalText(b []byte) error {
 	t := tmpl.PathTime(string(b))
 	*p = pathTime(t)
 	return nil
-}
-
-type day time.Time
-
-func (d *day) UnmarshalText(b []byte) error {
-	t, err := time.Parse("2006-01-02", string(b))
-	if err == nil {
-		*d = day(t)
-	}
-	return err
 }
 
 var regWord = regexp.MustCompile(`^[A-z]*$`)
