@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -65,7 +64,7 @@ func (s durStats) String() string {
 }
 
 func (stats *taskStats) Add(tsk task.Task) {
-	tm := taskTime(tsk)
+	tm := tmpl.InfoTime(tsk.Info)
 	if tsk.Result == task.ErrResult {
 		stats.ErrorCount++
 		stats.ErrorTimes = append(stats.ErrorTimes, tm)
@@ -78,35 +77,6 @@ func (stats *taskStats) Add(tsk task.Task) {
 	end, _ := time.Parse(time.RFC3339, tsk.Ended)
 	start, _ := time.Parse(time.RFC3339, tsk.Started)
 	stats.ExecTimes.Add(end.Sub(start))
-}
-
-var (
-	dayRegex  = regexp.MustCompile(`(?:day|date)[=:](\d{4}-\d{2}-\d{2})`)
-	hourRegex = regexp.MustCompile(`(?:hour|hour_utc)[=:](\d{4}-\d{2}-\d{2}T\d{2})`)
-)
-
-func taskTime(tsk task.Task) time.Time {
-	type getTime struct {
-		PathTime pathTime `uri:"path"`
-	}
-	var t getTime
-	uri.Unmarshal(tsk.Info, &t)
-	if v := hourRegex.FindStringSubmatch(tsk.Info); len(v) > 1 {
-		t, err := time.Parse("2006-01-02T15", v[1])
-		if err == nil {
-			return t
-		}
-	}
-	if v := dayRegex.FindStringSubmatch(tsk.Info); len(v) > 1 {
-		t, err := time.Parse("2006-01-02", v[1])
-		if err == nil {
-			return t
-		}
-	}
-	if !(time.Time)(t.PathTime).IsZero() {
-		return time.Time(t.PathTime)
-	}
-	return time.Time{}
 }
 
 type pathTime time.Time

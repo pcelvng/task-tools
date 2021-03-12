@@ -50,8 +50,8 @@ type taskMaster struct {
 
 type stats struct {
 	RunTime    string `json:"runtime"`
-	NextUpdate string `json:"next_update"`
-	LastUpdate string `json:"last_update"`
+	NextUpdate string `json:"next_cache"`
+	LastUpdate string `json:"last_cache"`
 
 	Workflow map[string]map[string]cEntry `json:"workflow"`
 }

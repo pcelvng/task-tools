@@ -61,7 +61,7 @@ func doneTopic(scanner *bufio.Scanner) []string {
 			topic += ":" + j
 		}
 		if *path {
-			topic += "\t" + rootPath(tsk.Info, taskTime(tsk))
+			topic += "\t" + rootPath(tsk.Info, tmpl.InfoTime(tsk.Info))
 		}
 		if v, found := data[topic]; !found {
 			data[topic] = stats
