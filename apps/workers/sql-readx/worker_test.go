@@ -73,8 +73,8 @@ func TestNewWorker(t *testing.T) {
 			Expected: "2020-01-01 and test.table",
 		},
 		"query with fields": {
-			Input:    "?query=select * from table&field=abc:date&dest=./output",
-			Expected: "select * from table",
+			Input:    "?query=select * from {table}&field=table:schema.data&dest=./output",
+			Expected: "select * from schema.data",
 		},
 		"missing query": {
 			Input:     "?exec",

@@ -64,13 +64,17 @@ func (o *options) NewWorker(info string) task.Worker {
 		query = string(b)
 	}
 
+	if query != "" {
+		//replace templated values in query
+		for k, v := range iOpts.Fields {
+			query = strings.Replace(query, "{"+k+"}", v, -1)
+		}
+		iOpts.Fields = make(map[string]string) // deleting map prevents any renaming of fields when a query is provided.
+	}
+
 	if iOpts.Exec {
 		if query == "" {
 			return task.InvalidWorker("query in url or path required")
-		}
-		for k, v := range iOpts.Fields {
-			// wrap key in bracket to prevent injection {key}
-			query = strings.Replace(query, "{"+k+"}", v, -1)
 		}
 		return &executer{
 			db:    o.db,
