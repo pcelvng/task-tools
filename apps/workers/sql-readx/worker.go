@@ -64,13 +64,17 @@ func (o *options) NewWorker(info string) task.Worker {
 		query = string(b)
 	}
 
+	if query != "" {
+		//replace templated values in query
+		for k, v := range iOpts.Fields {
+			query = strings.Replace(query, "{"+k+"}", v, -1)
+		}
+		iOpts.Fields = make(map[string]string) // deleting map prevents any renaming of fields when a query is provided.
+	}
+
 	if iOpts.Exec {
 		if query == "" {
 			return task.InvalidWorker("query in url or path required")
-		}
-		for k, v := range iOpts.Fields {
-			// wrap key in bracket to prevent injection {key}
-			query = strings.Replace(query, "{"+k+"}", v, -1)
 		}
 		return &executer{
 			db:    o.db,
@@ -83,7 +87,7 @@ func (o *options) NewWorker(info string) task.Worker {
 	}
 
 	// generate query from fields
-	if len(iOpts.Fields) > 0 {
+	if len(iOpts.Fields) > 0 && query == "" {
 		if s := strings.Split(iOpts.Table, "."); len(s) != 2 {
 			return task.InvalidWorker("invalid table %s (schema.table)", iOpts.Table)
 		}
@@ -132,7 +136,7 @@ func (w *executer) DoTask(ctx context.Context) (task.Result, string) {
 	end := time.Now()
 	id, _ := r.LastInsertId()
 	rows, _ := r.RowsAffected()
-	
+
 	if w.Meta == nil {
 		w.Meta = task.NewMeta()
 	}
