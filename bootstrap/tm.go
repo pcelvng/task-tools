@@ -41,6 +41,8 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMas
 	// signal handling - be ready to capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
 	if options == nil {
 		options = &NilValidator{}
 	}

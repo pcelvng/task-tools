@@ -26,7 +26,7 @@ require (
 	github.com/lib/pq v1.10.0
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/nsqio/go-nsq v1.0.8
-	github.com/pcelvng/task v0.5.3
+	github.com/pcelvng/task v0.5.5
 	github.com/pelletier/go-toml v1.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.10.0
