@@ -26,6 +26,21 @@ func TestTaskMaster_generate(t *testing.T) {
 	}
 
 	trial.New(fn, map[string]trial.Case{
+		"batch 2 days with meta": {
+			Input: testOpts{
+				info:  "?task-type=test&meta=job:job_name&from=2021-04-01T00&for=48h&day#?date={yyyy}-{mm}-{dd}",
+				topic: "test",
+			},
+			Expected: producerResponse(`"meta":"batcher=true&job=job_name"`, `"meta":"batcher=true&job=job_name"`),
+		},
+
+		"batch 2 days task": {
+			Input: testOpts{
+				info:  "?task-type=test&from=2021-04-01T00&for=48h&day#?date={yyyy}-{mm}-{dd}",
+				topic: "test",
+			},
+			Expected: producerResponse(`{"type":"test","info":"?date=2021-04-01"`, `{"type":"test","info":"?date=2021-04-02"`),
+		},
 		"batch 2 hours task": {
 			Input: testOpts{
 				info:  "?task-type=test&from=2018-05-10T00&for=2h#?date={yyyy}-{mm}-{dd}T{hh}",
@@ -60,7 +75,7 @@ func TestTaskMaster_generate(t *testing.T) {
 			},
 			ShouldErr: true,
 		},
-	}).EqualFn(trial.ContainsFn).Test(t)
+	}).EqualFn(trial.Contains).Test(t)
 }
 
 func producerResponse(args ...string) []string {
