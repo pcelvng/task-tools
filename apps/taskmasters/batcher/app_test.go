@@ -28,7 +28,7 @@ func TestTaskMaster_generate(t *testing.T) {
 	trial.New(fn, map[string]trial.Case{
 		"batch 2 days with meta": {
 			Input: testOpts{
-				info:  "?task-type=test&meta=job:job_name&from=2021-04-01T00&for=48h&day#?date={yyyy}-{mm}-{dd}",
+				info:  "?task-type=test&meta=job:job_name&from=2021-04-01T00&for=48h&daily#?date={yyyy}-{mm}-{dd}",
 				topic: "test",
 			},
 			Expected: producerResponse(`"meta":"batcher=true&job=job_name"`, `"meta":"batcher=true&job=job_name"`),
@@ -36,7 +36,7 @@ func TestTaskMaster_generate(t *testing.T) {
 
 		"batch 2 days task": {
 			Input: testOpts{
-				info:  "?task-type=test&from=2021-04-01T00&for=48h&day#?date={yyyy}-{mm}-{dd}",
+				info:  "?task-type=test&from=2021-04-01T00&for=48h&daily#?date={yyyy}-{mm}-{dd}",
 				topic: "test",
 			},
 			Expected: producerResponse(`{"type":"test","info":"?date=2021-04-01"`, `{"type":"test","info":"?date=2021-04-02"`),

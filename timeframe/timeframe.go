@@ -11,7 +11,7 @@ type TimeFrame struct {
 	Start       time.Time `uri:"from" required:"true" format:"2006-01-02T15"`
 	End         time.Time `uri:"to" format:"2006-01-02T15"`
 	EveryXHours int       `uri:"every-x-hours" default:"1"`
-	Day         bool      `uri:"day"`
+	Daily       bool      `uri:"daily"`
 	OnHours     []int     `uri:"on-hours"`
 	OffHours    []int     `uri:"off-hours"`
 }
@@ -37,7 +37,7 @@ func (tf TimeFrame) Validate() error {
 func (tf TimeFrame) Generate() []time.Time {
 	times := make([]time.Time, 0)
 	dur := time.Hour
-	if tf.Day {
+	if tf.Daily {
 		tf.EveryXHours = 24
 	}
 

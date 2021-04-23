@@ -53,8 +53,7 @@ func main() {
 }
 
 type flags struct {
-	version bool
-	config  string
+	config string
 
 	taskType     string
 	job          string
@@ -285,14 +284,13 @@ func parseHours(hrsStr string) (hrs []bool, err error) {
 	for _, hour := range strings.Split(hrsStr, ",") {
 		hr, err := strconv.Atoi(hour)
 		if err != nil {
-			return hrs, errors.New(
-				fmt.Sprintf("invalid hour value '%v'", hour))
+			return hrs, fmt.Errorf("invalid hour value '%v' %w", hour, err)
+
 		}
 		if 0 <= hr && hr <= 23 {
 			hrs[hr] = true
 		} else {
-			return hrs, errors.New(
-				fmt.Sprintf("invalid hour value '%v' must be int between 0 and 23", hour))
+			return hrs, fmt.Errorf("invalid hour value '%v' must be int between 0 and 23", hour)
 		}
 	}
 

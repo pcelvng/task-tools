@@ -20,6 +20,7 @@ const (
 
 Example:
 {"type":"batcher","info":"?type=topic&from=2006-01-02T15&for=-24h#s3://path/{yyyy}/{mm}/{dd}/{hh}.json.gz?options"}
+{"type":"batcher","info":"?task-type=topic&daily&meta=job:test_job&from=2021-04-01T00&for=-2160h#gs://path/{yyyy}/{mm}/{dd}/none.json.gz?template_value=test"}
 `
 )
 
