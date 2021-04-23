@@ -11,7 +11,7 @@ const (
 
 	task-type - the downstream task type (required)
 	from - the start time of the first task to be created (required)
-    day - run task for each day (every 24 hours)
+	daily - run task for each day (every 24 hours)
 	*** pick a duration modifier *** 
 	 to - the end time of the last task to be created
 	 for - the duration that should be run     
