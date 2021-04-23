@@ -287,13 +287,11 @@ func parseHours(hrsStr string) (hrs []bool, err error) {
 			return hrs, fmt.Errorf("invalid hour value '%v' %w", hour, err)
 
 		}
-		if 0 <= hr && hr <= 23 {
-			hrs[hr] = true
-		} else {
+		if hr < 0 || hr > 23 {
 			return hrs, fmt.Errorf("invalid hour value '%v' must be int between 0 and 23", hour)
 		}
+		hrs[hr] = true
 	}
-
 	return hrs, nil
 }
 
