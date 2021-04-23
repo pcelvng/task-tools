@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -29,6 +30,15 @@ type stats struct {
 	Requests     map[string]int `json:"requests"`
 }
 
+type infoOpts struct {
+	TaskType string            `uri:"task-type" required:"true"`
+	Topic    string            `uri:"topic"`
+	For      duration          `uri:"for"`
+	Template string            `uri:"fragment" required:"true"`
+	Meta     map[string]string `uri:"meta"`
+	timeframe.TimeFrame
+}
+
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	return &taskMaster{
 		initTime: time.Now(),
@@ -40,7 +50,7 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 }
 
 func (tm *taskMaster) Info() interface{} {
-	tm.RunTime = time.Now().Sub(tm.initTime).String()
+	tm.RunTime = time.Since(tm.initTime).String()
 	return tm.stats
 }
 
@@ -92,24 +102,23 @@ func (tm *taskMaster) read(ctx context.Context) {
 	close(tm.done)
 }
 
-type infoOpts struct {
-	TaskType string   `uri:"task-type" required:"true"`
-	Topic    string   `uri:"topic"`
-	For      duration `uri:"for"`
-	Template string   `uri:"fragment" required:"true"`
-	timeframe.TimeFrame
-}
-
 func (tm *taskMaster) generate(info string) error {
 	var iOpts infoOpts
 	if err := uri.Unmarshal(info, &iOpts); err != nil {
-		return err
+		return fmt.Errorf("uri unmarshal %w", err)
 	}
+
+	if iOpts.Meta == nil {
+		iOpts.Meta = make(map[string]string)
+	}
+
+	iOpts.Meta["batcher"] = "true"
+
 	if iOpts.End.IsZero() {
 		if iOpts.For == 0 {
 			return errors.New("end date required (see for/to)")
 		}
-		iOpts.End.Time = iOpts.Start.Add(iOpts.For.Duration())
+		iOpts.End = iOpts.Start.Add(iOpts.For.Duration())
 	}
 	if iOpts.Topic == "" {
 		iOpts.Topic = iOpts.TaskType
@@ -120,11 +129,12 @@ func (tm *taskMaster) generate(info string) error {
 	tm.Requests[iOpts.Topic]++
 	tm.LastReceived = info
 	for _, t := range iOpts.Generate() {
-		tsk := task.Task{
-			Type:    iOpts.TaskType,
-			Created: time.Now().UTC().Format(time.RFC3339),
-			Info:    tmpl.Parse(iOpts.Template, t),
+		tsk := task.New(iOpts.TaskType, tmpl.Parse(iOpts.Template, t))
+		m := task.NewMeta()
+		for k, v := range iOpts.Meta {
+			m.SetMeta(k, v)
 		}
+		tsk.Meta = m.GetMeta().Encode()
 		if err := tm.producer.Send(iOpts.Topic, tsk.JSONBytes()); err != nil {
 			return err
 		}

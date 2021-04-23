@@ -101,11 +101,7 @@ func checkEvery(startDate, atDate time.Time, every int) bool {
 
 	diff := startDate.Sub(atDate)
 	hrsDiff := int(diff / (time.Hour)) // assures a discrete hour value
-	if (hrsDiff % every) == 0 {
-		return true
-	}
-
-	return false
+	return (hrsDiff % every) == 0
 }
 
 // makeOnHrs will reconcile the config OnHours and

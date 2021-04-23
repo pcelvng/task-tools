@@ -2,43 +2,18 @@ package timeframe
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
 )
 
 type TimeFrame struct {
-	Start       hour  `uri:"from" required:"true"`
-	End         hour  `uri:"to"`
-	EveryXHours int   `uri:"every-x-hours" default:"1"`
-	OnHours     []int `uri:"on-hours"`
-	OffHours    []int `uri:"off-hours"`
-}
-
-type hour struct {
-	time.Time
-}
-
-func (h *hour) UnmarshalJSON(b []byte) error {
-	return h.UnmarshalText(b)
-}
-func (h *hour) UnmarshalText(b []byte) error {
-	s := strings.Trim(string(b), `"`)
-	t, err := time.Parse("2006-01-02T15", s)
-	if err != nil {
-		return err
-	}
-	h.Time = t
-	return nil
-}
-
-func (h hour) MarshalText() ([]byte, error) {
-	return []byte(h.String()), nil
-}
-
-func (h hour) String() string {
-	return h.Format("2006-01-02T15")
+	Start       time.Time `uri:"from" required:"true" format:"2006-01-02T15"`
+	End         time.Time `uri:"to" format:"2006-01-02T15"`
+	EveryXHours int       `uri:"every-x-hours" default:"1"`
+	Daily       bool      `uri:"daily"`
+	OnHours     []int     `uri:"on-hours"`
+	OffHours    []int     `uri:"off-hours"`
 }
 
 func (tf TimeFrame) Validate() error {
@@ -62,21 +37,25 @@ func (tf TimeFrame) Validate() error {
 func (tf TimeFrame) Generate() []time.Time {
 	times := make([]time.Time, 0)
 	dur := time.Hour
+	if tf.Daily {
+		tf.EveryXHours = 24
+	}
+
 	if tf.EveryXHours > 0 {
 		dur = time.Hour * time.Duration(tf.EveryXHours)
 	}
 
 	hours := makeOnHrs(tf.OnHours, tf.OffHours)
 	check := func(t time.Time) bool {
-		return t.Before(tf.End.Time) || t.Equal(tf.End.Time)
+		return t.Before(tf.End) || t.Equal(tf.End)
 	}
-	if tf.End.Before(tf.Start.Time) {
+	if tf.End.Before(tf.Start) {
 		check = func(t time.Time) bool {
-			return t.After(tf.End.Time) || t.Equal(tf.End.Time)
+			return t.After(tf.End) || t.Equal(tf.End)
 		}
 		dur *= -1
 	}
-	for t := tf.Start.Time; check(t); t = t.Add(dur) {
+	for t := tf.Start; check(t); t = t.Add(dur) {
 		if hours[t.Hour()] {
 			times = append(times, t)
 		}
