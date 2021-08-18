@@ -62,11 +62,14 @@ type statsOptions struct {
 }
 
 type DBOptions struct {
-	Username string `toml:"username" commented:"true"`
-	Password string `toml:"password" commented:"true"`
-	Host     string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
-	DBName   string `toml:"dbname"`
-	Serializable bool      `toml:"serializable" comment:"set isolation level to serializable, required for proper writing to database" commented:"true"`
+	Username        string `toml:"username" commented:"true"`
+	Password        string `toml:"password" commented:"true"`
+	Host            string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
+	DBName          string `toml:"dbname"`
+	Serializable    bool   `toml:"serializable" comment:"set isolation level to serializable, required for proper writing to database" commented:"true"`
+	MaxConns        int    `toml:"max_conns"`
+	MaxIdleConns    int    `toml:"max_idle_conns"`
+	MaxConnLifeMins int    `toml:"max_life_min"`
 }
 
 // newConsumer is a convenience method that will use

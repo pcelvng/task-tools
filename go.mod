@@ -1,12 +1,13 @@
 module github.com/pcelvng/task-tools
 
-go 1.15
+go 1.16
 
 require (
 	cloud.google.com/go/bigquery v1.17.0
 	cloud.google.com/go/pubsub v1.10.2 // indirect
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
+	github.com/apache/calcite-avatica-go/v5 v5.0.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.0.0

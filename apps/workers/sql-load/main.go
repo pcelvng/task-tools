@@ -17,6 +17,7 @@ import (
 type options struct {
 	Postgres bootstrap.DBOptions `toml:"postgres"`
 	MySQL    bootstrap.DBOptions `toml:"mysql"`
+	Phoenix  bootstrap.DBOptions `toml:"phoenix"`
 
 	sqlDB *sql.DB
 
@@ -40,7 +41,8 @@ fields : allows mapping different json key values to different database column n
     - provide a list of field name mapping {DB column name}:{json key name} to be mapped 
     - ?fields=dbColumnName:jsonkey
 cached_insert: improves insert times by caching data into a temp table
-batch_size: (default:10000) number of rows to insert at a time (higher number increases memory usage) 
+batch_size: (default:10000) number of rows to insert at a time (higher number increases memory usage)
+field_value: allows you to set a value for a specific field (column) name i.e., ?LOAD_DATE={timestamp}
 Example task:
  
 {"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7"}
@@ -55,30 +57,39 @@ func init() {
 func main() {
 	var err error
 
-	opts := &options{}
-	app := bootstrap.NewWorkerApp(taskType, opts.newWorker, opts).
+	o := &options{}
+	app := bootstrap.NewWorkerApp(taskType, o.newWorker, o).
 		Version(tools.String()).
 		Description(description).
 		FileOpts()
 
 	app.Initialize()
 
-	opts.producer = app.NewProducer()
-	opts.fileOpts = app.GetFileOpts()
+	o.producer = app.NewProducer()
+	o.fileOpts = app.GetFileOpts()
 
-	if opts.MySQL.Host != "" {
-		opts.dbDriver = "mysql"
-		opts.sqlDB, err = db.MySQL(opts.MySQL.Username, opts.MySQL.Password, opts.MySQL.Host, opts.MySQL.DBName)
+	if o.Phoenix.Host != "" {
+		o.dbDriver = "avatica"
+		o.sqlDB, err = db.Phoenix(o.Phoenix.Host, o.Phoenix.MaxConns, o.Phoenix.MaxIdleConns, o.Phoenix.MaxConnLifeMins)
 		if err != nil {
-			log.Fatalf("cannot connect to MySQL Instance %+v", opts.MySQL)
+			log.Fatalf("cannot connect to phoenix / avatica instance %+v error:%s", o.Phoenix, err.Error())
+		}
+
+	}
+
+	if o.MySQL.Host != "" {
+		o.dbDriver = "mysql"
+		o.sqlDB, err = db.MySQL(o.MySQL.Username, o.MySQL.Password, o.MySQL.Host, o.MySQL.DBName)
+		if err != nil {
+			log.Fatalf("cannot connect to MySQL Instance %+v error:%s", o.MySQL, err.Error())
 		}
 	}
 
-	if opts.Postgres.Host != "" {
-		opts.dbDriver = "postgres"
-		opts.sqlDB, err = db.Postgres(opts.Postgres.Username, opts.Postgres.Password, opts.Postgres.Host, opts.Postgres.DBName)
+	if o.Postgres.Host != "" {
+		o.dbDriver = "postgres"
+		o.sqlDB, err = db.Postgres(o.Postgres.Username, o.Postgres.Password, o.Postgres.Host, o.Postgres.DBName)
 		if err != nil {
-			log.Fatalf("cannot connect to Postgres Instance %+v", opts.Postgres)
+			log.Fatalf("cannot connect to Postgres Instance %+v error:%s", o.Postgres, err.Error())
 		}
 	}
 
@@ -86,8 +97,8 @@ func main() {
 }
 
 func (o *options) Validate() error {
-	if o.MySQL.Host == "" && o.Postgres.Host == "" {
-		return errors.New("host is required for at least one DB connection (mysql or postgresql)")
+	if o.MySQL.Host == "" && o.Postgres.Host == "" && o.Phoenix.Host == "" {
+		return errors.New("host is required for at least one DB connection")
 	}
 	return nil
 }

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/url"
 	"os/user"
+	"time"
 
+	_ "github.com/apache/calcite-avatica-go/v5"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	"github.com/pcelvng/task-tools/db/batch"
@@ -54,6 +56,35 @@ type BatchLoader interface {
 	Commit(ctx context.Context, tableName string, cols ...string) (batch.Stats, error)
 }
 
+// Phoenix is a convenience initializer to obtain a Phoenix / Avatica connection
+func Phoenix(server string, maxConns, maxIdleConns, maxConnLifeMins int) (*sql.DB, error) {
+	if maxConns == 0 {
+		maxConns = 30
+	}
+	if maxIdleConns == 0 {
+		maxIdleConns = 5
+	}
+	if maxConnLifeMins == 0 {
+		maxConnLifeMins = 5
+	}
+
+	db, err := sql.Open("avatica", server)
+	if err != nil {
+		return nil, err
+	}
+
+	db.SetMaxOpenConns(maxConns)
+	db.SetMaxIdleConns(maxIdleConns)
+	db.SetConnMaxLifetime(time.Minute * time.Duration(maxConnLifeMins))
+
+	// ping
+	if err = db.Ping(); err != nil {
+		return nil, err
+	}
+
+	return db, err
+}
+
 // MySQL is a convenience initializer to obtain a MySQL DB connection.
 //
 // Note that this connection has an option to set transaction isolation level to
@@ -77,7 +108,7 @@ func MySQL(un, pass, host, dbName string) (*sql.DB, error) {
 //
 // Note that this connection will set the default transaction isolation level to
 // 'serializable' to enforce more true atomic batch loading.
-func MySQLTx(un, pass, host, dbName string, serializable bool ) (*sql.DB, error) {
+func MySQLTx(un, pass, host, dbName string, serializable bool) (*sql.DB, error) {
 	connStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", un, pass, host, dbName)
 	if serializable {
 		connStr += "&tx_isolation=serializable"

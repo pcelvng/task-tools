@@ -1,0 +1,323 @@
+package main
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"sort"
+	"testing"
+
+	"github.com/hydronica/trial"
+	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/file"
+)
+
+func TestDefaultUpdate(t *testing.T) {
+
+}
+
+func TestPrepareMeta(t *testing.T) {
+	type input struct {
+		params InfoURI
+		schema []DbColumn
+	}
+	type output struct {
+		schema  []DbColumn
+		columns []string
+	}
+	fn := func(in trial.Input) (interface{}, error) {
+		i := in.Interface().(input)
+		o := output{}
+		o.schema, o.columns = PrepareMeta(i.schema, i.params)
+
+		// because we are dealing with a map for the jRow data
+		// we need to sort the output, not required in actual processing
+		sort.Strings(o.columns)
+
+		return o, nil
+	}
+
+	// testing cases
+	cases := trial.Cases{
+		"no field map": { // missing keys in the json will be ignored
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1"}, {Name: "C2"},
+				},
+				params: InfoURI{
+					FieldsMap: make(map[string]string),
+				},
+			},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "C1"},
+					{Name: "C2", JsonKey: "C2"},
+				},
+				columns: []string{"C1", "C2"},
+			},
+		},
+		"transpose fields": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1"}, {Name: "C2"},
+				},
+				params: InfoURI{
+					FieldsMap: map[string]string{"C1": "J1", "C2": "J2"},
+				},
+			},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "J1", Default: trial.StringP("")},
+					{Name: "C2", JsonKey: "J2", Default: trial.StringP("")},
+				},
+				columns: []string{"C1", "C2"},
+			},
+		},
+		"Partial json mapping": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1", Nullable: true}, {Name: "C2", Nullable: true},
+				},
+				params: InfoURI{
+					FieldsMap: map[string]string{"C1": "J1", "C3": "J2"},
+				},
+			},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "J1", Nullable: true},
+					{Name: "C2", JsonKey: "C2", Nullable: true},
+				},
+				columns: []string{"C1", "C2"},
+			},
+		},
+		"Ignore Funcs": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1", Default: trial.StringP("new()")}, {Name: "C2"},
+				},
+				params: InfoURI{
+					FieldsMap: map[string]string{},
+				},
+			},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C2", JsonKey: "C2"},
+				},
+				columns: []string{"C2"},
+			},
+		},
+		"Ignore -": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "C1"}, {Name: "C2"}, {Name: "C3"},
+				},
+				params: InfoURI{
+					FieldsMap: map[string]string{"C2": "-"},
+				},
+			},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "C1", JsonKey: "C1"}, {Name: "C3", JsonKey: "C3"},
+				},
+				columns: []string{"C1", "C3"},
+			},
+		},
+		"add defaults when in fieldMap": {
+			Input: input{
+				schema: []DbColumn{
+					{Name: "id", Nullable: false, TypeName: "int"},
+					{Name: "name", Nullable: false, TypeName: "string"},
+					{Name: "value", Nullable: false, TypeName: "float"},
+				},
+				params: InfoURI{
+					FieldsMap: map[string]string{"id": "json_id", "name": "jName", "value": "jvalue"},
+				},
+			},
+			Expected: output{
+				schema: []DbColumn{
+					{Name: "id", JsonKey: "json_id", Default: trial.StringP("0"), Nullable: false, TypeName: "int"},
+					{Name: "name", JsonKey: "jName", Default: trial.StringP(""), Nullable: false, TypeName: "string"},
+					{Name: "value", JsonKey: "jvalue", Default: trial.StringP("0.0"), Nullable: false, TypeName: "float"},
+				},
+				columns: []string{"id", "name", "value"},
+			},
+		},
+	}
+
+	trial.New(fn, cases).Test(t)
+}
+
+func TestMakeRow(t *testing.T) {
+	schema := []DbColumn{
+		{Name: "id", JsonKey: "id"},
+		{Name: "name", JsonKey: "name", Nullable: true},
+		{Name: "count", JsonKey: "count", TypeName: "int", Default: trial.StringP("0")},
+		{Name: "percent", JsonKey: "percent", TypeName: "float", Nullable: true},
+		{Name: "num", JsonKey: "num", TypeName: "int", Nullable: true},
+	}
+	fn := func(in trial.Input) (interface{}, error) {
+		return MakeRow(schema, in.Interface().(map[string]interface{}))
+	}
+	cases := trial.Cases{
+		"full row": {
+			Input: map[string]interface{}{
+				"id":      "1234",
+				"name":    "apple",
+				"count":   10,
+				"percent": 0.24,
+				"num":     2,
+			},
+			Expected: Row{"1234", "apple", 10, 0.24, 2},
+		},
+		"strings": {
+			Input: map[string]interface{}{
+				"id":      "1234",
+				"name":    "apple",
+				"count":   "10",
+				"percent": "0.24",
+				"num":     "2",
+			},
+			Expected: Row{"1234", "apple", int64(10), 0.24, int64(2)},
+		},
+		"float to int": {
+			Input: map[string]interface{}{
+				"id":      "1234",
+				"name":    "apple",
+				"count":   10,
+				"percent": 0.24,
+				"num":     2.00,
+			},
+			Expected: Row{"1234", "apple", 10, 0.24, int64(2)},
+		},
+		"nulls": {
+			Input: map[string]interface{}{
+				"id":    "1234",
+				"count": "10",
+			},
+			Expected: Row{"1234", nil, int64(10), nil, nil},
+		},
+		"missing required": {
+			Input:       map[string]interface{}{},
+			ExpectedErr: errors.New("id is required"),
+		},
+		"truncate float": {
+			Input: map[string]interface{}{
+				"id":  "1234",
+				"num": 2.4,
+			},
+			ExpectedErr: errors.New("cannot convert number"),
+		},
+		"defaults": {
+			Input: map[string]interface{}{
+				"id": "1234",
+			},
+			Expected: Row{"1234", nil, "0", nil, nil},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestNewWorker(t *testing.T) {
+	type input struct {
+		*options
+		Info string
+	}
+
+	type output struct {
+		Params     InfoURI
+		Count      int
+		DeleteStmt string
+	}
+
+	// create a test folder and files
+	f1 := "./tmp/temp1.json"
+	w, _ := file.NewWriter(f1, &file.Options{})
+	w.WriteLine([]byte(`{"test":"value1","testing":"value2","number":123}`))
+	w.Close()
+
+	f2 := "./tmp/temp2.json"
+	w, _ = file.NewWriter(f2, &file.Options{})
+	w.WriteLine([]byte(`{"test":"value1","testing":"value2","number":123}`))
+	w.Close()
+
+	s, _ := filepath.Abs(f2)
+	d1, _ := filepath.Split(s)
+	d1 += "*"
+
+	f3 := "./tmp1"
+	os.Mkdir(f3, 0755)
+	d2, _ := filepath.Abs(f3)
+
+	fn := func(in trial.Input) (interface{}, error) {
+		// set input
+		i := in.Interface().(input)
+		i.options.dbDriver = "postgres"
+		wrkr := i.options.newWorker(i.Info)
+		o := output{}
+		// if task is invalid set values
+		if invalid, msg := task.IsInvalidWorker(wrkr); invalid {
+			return nil, errors.New(msg)
+		}
+
+		// if the test isn't for a invalid worker set count and params
+		myw := wrkr.(*workerPostgres)
+		o.Params = myw.Params
+		if myw.fReader != nil {
+			o.Count = int(myw.fReader.Stats().Files)
+		}
+		o.DeleteStmt = myw.delQuery
+
+		return o, nil
+	}
+	// testing cases
+	cases := trial.Cases{
+		"valid_worker": {
+			Input: input{options: &options{}, Info: d1 + "?table=schema.table_name"},
+			Expected: output{
+				Params: InfoURI{
+					FilePath:  d1,
+					Table:     "schema.table_name",
+					BatchSize: 10000,
+				},
+				Count: 2,
+			},
+		},
+
+		"table_required": {
+			Input:       input{options: &options{}, Info: "nothing"},
+			ExpectedErr: errors.New("params uri.unmarshal: table is required"),
+		},
+
+		"invalid_path": {
+			Input:       input{options: &options{}, Info: "missingfile.json?table=schema.table_name"},
+			ExpectedErr: errors.New("no files found for missingfile.json"),
+		},
+
+		"invalid_worker": {
+			Input:       input{options: &options{}, Info: d2 + "?table=schema.table_name"},
+			ExpectedErr: errors.New("no files found for " + d2),
+		},
+
+		"valid_path_with_delete": {
+			Input: input{options: &options{}, Info: d1 + "?table=schema.table_name&delete=date(hour_utc):2020-07-09|id:1572|amt:65.2154"},
+			Expected: output{
+				Params: InfoURI{
+					FilePath:  d1,
+					Table:     "schema.table_name",
+					BatchSize: 10000,
+					DeleteMap: map[string]string{"date(hour_utc)": "2020-07-09", "id": "1572", "amt": "65.2154"},
+				},
+				DeleteStmt: "delete from schema.table_name where amt = 65.2154 and date(hour_utc) = '2020-07-09' and id = 1572",
+				Count:      2,
+			},
+		},
+	}
+
+	trial.New(fn, cases).Test(t)
+
+	// cleanup
+	os.Remove(f1)
+	os.Remove(f2)
+	os.Remove("./tmp")
+	os.Remove("./tmp1")
+}
