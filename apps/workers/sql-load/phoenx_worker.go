@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jbsmith7741/uri"
@@ -59,12 +58,6 @@ func (o *options) newPhoenix(info string) task.Worker {
 func (w *workerPhoenix) DoTask(ctx context.Context) (task.Result, string) {
 	var err error
 
-	w.sqlDB, err = connectPhoenix(w.Phoenix.Host, 0, 0, 0)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	defer w.sqlDB.Close()
-
 	err = w.QuerySchema()
 	if err != nil {
 		return task.Failed(fmt.Errorf("could not query table schema %w", err))
@@ -79,19 +72,25 @@ func (w *workerPhoenix) DoTask(ctx context.Context) (task.Result, string) {
 
 	go w.ds.ReadFiles(ctx, w.fReader, rowChan, w.Params.SkipErr)
 
+	db, err := connectPhoenix(w.Phoenix.Host, 0, 0, 0)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
 	// run the delete / truncate query if provided
 	var q string
 	if w.delQuery != "" {
-		q += w.delQuery + ";\n"
+		q += w.delQuery + "\n"
 	} else if w.Params.Truncate {
-		q += "delete from " + w.Params.Table + ";\n"
+		q += "delete from " + w.Params.Table + "\n"
 	}
 	if q != "" {
-		_, err = w.sqlDB.ExecContext(ctx, q)
+		_, err = db.ExecContext(ctx, q)
 		if err != nil {
 			return task.Failf("delete / truncate error %v", err)
 		}
 	}
+	w.sqlDB.Close()
 
 	sqlStmt := bytes.NewBuffer([]byte("UPSERT INTO " + w.Params.Table + "("))
 	sqlVals := bytes.NewBuffer([]byte(" VALUES("))
@@ -118,7 +117,7 @@ func (w *workerPhoenix) DoTask(ctx context.Context) (task.Result, string) {
 	}
 
 	start := time.Now()
-	err = runLoad(ctx, w.sqlDB, rowChan, stmt, w.Params.BatchSize)
+	err = runLoad(ctx, w.Phoenix.Host, rowChan, stmt, w.Params.BatchSize)
 	if err != nil {
 		return task.Failed(err)
 	}
@@ -132,33 +131,42 @@ func (w *workerPhoenix) DoTask(ctx context.Context) (task.Result, string) {
 		w.dbDriver, w.Params.Table, w.ds.rowCount)
 }
 
-func runLoad(ctx context.Context, db *sql.DB, rowChan chan Row, query string, limit int) error {
+func runLoad(ctx context.Context, host string, rowChan chan Row, query string, limit int) error {
 	var err error
-	var wg sync.WaitGroup
+	var db *sql.DB
 	var s *sql.Stmt
 	var start time.Time
-
-	count := 0
+	var count, totalCount int
+	var totalTime float64
 
 	// process loop to batch rows to load into the database
 	for {
+		db, err = connectPhoenix(host, 0, 0, 0)
+		if err != nil {
+			err = fmt.Errorf("error connecting phoenix %w", err)
+			break
+		}
+
 		start = time.Now()
 		// create new sql statement for the batch
 		s, err = db.Prepare(query)
 		if err != nil {
-			return fmt.Errorf("sql db prepare error %w", err)
+			err = fmt.Errorf("sql db prepare error %w", err)
+			break
 		}
 		count = 0
 		// if the rowChan finishes or the count == limit close the batch in it's own go routine
 		for r := range rowChan {
 			if ctx.Err() != nil {
-				return ctx.Err()
+				err = ctx.Err()
+				break
 			}
 			count++
 
 			_, err = s.ExecContext(ctx, r...)
 			if err != nil {
-				return fmt.Errorf("query exec error %w", err)
+				err = fmt.Errorf("query exec error %w", err)
+				break
 			}
 
 			if count == limit {
@@ -166,32 +174,30 @@ func runLoad(ctx context.Context, db *sql.DB, rowChan chan Row, query string, li
 			}
 		}
 
+		if err != nil {
+			break
+		}
+
 		// there are no more rows to process
 		if count == 0 {
 			break
 		}
 
-		// run the close statement in a go routine so the next batch can be started
-		wg.Add(1)
-		go func(sq *sql.Stmt, started time.Time, c int) {
-			defer wg.Done()
-			e := sq.Close()
-			if e != nil {
-				log.Println("error on statement close", e)
-				return
-			}
-			log.Println("batch time", time.Since(started), "row count", c)
-		}(s, start, count)
+		err = s.Close() // close the batch to write to the database
 		if err != nil {
-			return err
+			err = fmt.Errorf("error on statement close %w", err)
+			break
 		}
 
+		totalCount += count
+		totalTime += time.Since(start).Seconds()
+
+		fmt.Println("closing batch durtaion", time.Since(start).String(), "rows per second", float64(count)/time.Since(start).Seconds(), "average", float64(totalCount)/totalTime)
+		db.Close()
 	}
 
-	// wait for all batches to finish processing
-	wg.Wait()
-
-	return nil
+	db.Close()
+	return err
 }
 
 // QuerySchema updates the table schema (dbSchema) information in the worker DataSet
