@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
 	"log"
 	"math/rand"
@@ -30,6 +31,8 @@ type InfoURI struct {
 	Truncate     bool              `uri:"truncate"`                   // truncate the table rather than delete
 	CachedInsert bool              `uri:"cached_insert"`              // this will attempt to load the query data though a temp table (postgres only)
 	BatchSize    int               `uri:"batch_size" default:"10000"` // number of rows to insert at once
+	CSV          bool              `uri:"csv" default:"false"`        // parse csv data instead of json data
+	Delimiter    string            `uri:"delimiter" default:","`      // csv delimiter, default is a comma
 }
 
 type worker struct {
@@ -46,7 +49,8 @@ type worker struct {
 	queryRunTime time.Duration // query running time
 }
 
-type Jsondata map[string]interface{}
+type JsonData map[string]interface{}
+type CsvData []string
 type Row []interface{} // each row to be inserted
 
 type DataSet struct {
@@ -55,9 +59,12 @@ type DataSet struct {
 	rowCount   int32
 	skipCount  int
 
+	csvData   bool // is the dataset for csv data (not json)
+	delimiter rune // csv delimiter value default is comma
+
 	err error
 
-	//mux sync.Mutex // needed to thread add row
+	//mux sync.RWMutex // needed to thread add row
 }
 
 type DbColumn struct {
@@ -66,7 +73,7 @@ type DbColumn struct {
 	IsNullable string  // DB YES or NO string values
 	Default    *string // DB default function / value
 	TypeName   string  // string, int, float
-	JsonKey    string  // matching json key name
+	FieldKey   string  // matching json or csv header key name
 	Nullable   bool    // bool value if column is nullable (true) or not (false)
 }
 
@@ -76,12 +83,13 @@ func (o *options) newWorker(info string) task.Worker {
 	w := &worker{
 		options: *o,
 		Meta:    task.NewMeta(),
-		ds:      NewDataSet(),
 	}
 
 	if err := uri.Unmarshal(info, &w.Params); err != nil {
 		return task.InvalidWorker("params uri.unmarshal: %v", err)
 	}
+
+	w.ds = NewDataSet(w.Params.CSV, []rune(w.Params.Delimiter)[0])
 
 	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
 	if err != nil {
@@ -189,7 +197,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			return task.Failed(fmt.Errorf("transaction failed %w", txErr))
 		}
 
-		w.queryRunTime = time.Now().Sub(start)
+		w.queryRunTime = time.Since(start)
 	} else {
 		start := time.Now()
 		b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
@@ -204,7 +212,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		if err != nil {
 			return task.Failed(fmt.Errorf("commit to db failed %w", err))
 		}
-		w.queryRunTime = time.Now().Sub(start)
+		w.queryRunTime = time.Since(start)
 		if stats.Removed > 0 {
 			w.SetMeta("removed_records", fmt.Sprintf("%d", stats.Removed))
 		}
@@ -269,8 +277,8 @@ func (w *worker) QuerySchema() (err error) {
 			log.Println(err)
 		}
 		w.ds.dbSchema = append(w.ds.dbSchema, c)
-	}
 
+	}
 	if rows.Err() != nil {
 		return rows.Err()
 	}
@@ -304,32 +312,66 @@ func (w *worker) QuerySchema() (err error) {
 func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
 	errChan := make(chan error, 20)
 	dataIn := make(chan []byte, 20)
+	var header []string
+	var hBytes []byte
 	var activeThreads int32
+
+	// read the first data bytes to capture the header for csv data
+
 	for i := 0; i < 20; i++ {
 		activeThreads++
-		go func() { // unmarshaler
-			defer func() { atomic.AddInt32(&activeThreads, -1) }()
-			for b := range dataIn {
-				var j Jsondata
-				if e := json.Unmarshal(b, &j); e != nil {
-					errChan <- fmt.Errorf("json unmarshal error %w %q", e, string(b))
-					return
-				}
+		go func() { // csv data parsing
+			for b := range dataIn { // should block until it gets data
+				if ds.csvData {
+					if bytes.Equal(b, hBytes) {
+						continue // another header row was found skip
+					}
+					fmt.Println("threads header debug", header)
+					if row, e := MakeCsvRow(ds.dbSchema, b, header, ds.delimiter); e != nil {
+						fmt.Println("debug error")
+						errChan <- fmt.Errorf("csv read error %w %q", e, string(b))
+					} else if row != nil {
+						fmt.Println("sending row")
+						atomic.AddInt32(&ds.rowCount, 1)
+						rowChan <- row
+					}
+				} else { // json data parsing
+					var j JsonData
+					if e := json.Unmarshal(b, &j); e != nil {
+						errChan <- fmt.Errorf("json unmarshal error %w %q", e, string(b))
+						return
+					}
 
-				if row, err := MakeRow(ds.dbSchema, j); err != nil {
-					errChan <- fmt.Errorf("%w", err)
-				} else if row != nil {
-					atomic.AddInt32(&ds.rowCount, 1)
-					rowChan <- row
+					if row, err := MakeRow(ds.dbSchema, j); err != nil {
+						errChan <- fmt.Errorf("%w", err)
+					} else if row != nil {
+						atomic.AddInt32(&ds.rowCount, 1)
+						rowChan <- row
+					}
 				}
 			}
 		}()
 	}
 
 	// read the lines of the file
+	h := true
 	scanner := file.NewScanner(files)
 loop:
 	for scanner.Scan() {
+
+		if ds.csvData && h {
+			var err error
+			hBytes = scanner.Bytes()
+			header, err = MakeCsvHeader(hBytes, ds.delimiter)
+			if err != nil {
+				ds.err = fmt.Errorf("csv header read error %w %q", err, string(hBytes))
+				return
+			}
+			h = false
+			fmt.Println("debug set header", header)
+			continue
+		}
+
 		select {
 		case <-ctx.Done():
 			break loop
@@ -372,10 +414,12 @@ loop:
 	close(errChan)
 }
 
-func NewDataSet() *DataSet {
+func NewDataSet(csv bool, delim rune) *DataSet {
 	return &DataSet{
 		dbSchema:   make([]DbColumn, 0),
 		insertCols: make([]string, 0),
+		csvData:    csv,
+		delimiter:  delim,
 	}
 }
 
@@ -411,32 +455,88 @@ func PrepareMeta(dbSchema []DbColumn, fieldMap map[string]string) (meta []DbColu
 			continue
 		}
 		cols = append(cols, k.Name) // db column names
-		k.JsonKey = jKey
+		k.FieldKey = jKey
 		meta = append(meta, k)
 	}
 
 	return meta, cols
 }
 
-// MakeRow Takes the insert columns and the json byte data (jRow) and adds to the Dataset rows slice
-// an error is returned if the row cannot be added to the DataSet rows
-func MakeRow(dbSchema []DbColumn, j Jsondata) (row Row, err error) {
+// MakeCsvHeader creates a string slice based on the first row of the file
+// I think we will have a problem if there are multiple files with header rows
+func MakeCsvHeader(line []byte, delim rune) (header []string, err error) {
+	reader := csv.NewReader(bytes.NewReader(line)) // push a csv record line into a csv reader to parse
+	reader.Comma = delim
+	header, err = reader.Read()
+	if err != nil {
+		err = fmt.Errorf("header csv read  %w", err)
+	}
+	return header, err
+}
+
+// MakeCsvRow creates a Row from byte slice data
+func MakeCsvRow(dbSchema []DbColumn, line []byte, header []string, delim rune) (row Row, err error) {
 	row = make(Row, len(dbSchema))
+	reader := csv.NewReader(bytes.NewReader(line)) // push a csv record line into a csv reader to parse
+	reader.Comma = delim
+
+	r, err := reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("csv read  %w", err)
+	}
+
 	for k, f := range dbSchema {
-		v, found := j[f.JsonKey]
+		var found bool // was the field found
+		var idx int    // the index of the field
+
+		// look for field in header
+		for i, h := range header {
+			found = false
+			if h == f.FieldKey {
+				found = true
+				idx = i
+				break
+			}
+		}
+
+		// if the field was not found in the header set to default value
 		if !found && !f.Nullable {
 			if f.Default == nil {
-				return nil, fmt.Errorf("%v is required", f.JsonKey)
+				return nil, fmt.Errorf("%v is required", f.FieldKey)
 			}
-			j[f.JsonKey] = *f.Default
+			row[k] = *f.Default
+		} else if f.TypeName == "int" {
+			s := strings.Split(r[idx], ".")
+			row[k], err = strconv.ParseInt(s[0], 10, 64)
+		} else if f.TypeName == "float" {
+			row[k], err = strconv.ParseFloat(r[idx], 64)
+		} else {
+			row[k] = r[idx]
+		}
+	}
+
+	return row, err
+}
+
+// MakeRow Takes the insert columns and the json byte data (jRow) and adds to the Dataset rows slice
+// an error is returned if the row cannot be added to the DataSet rows
+func MakeRow(dbSchema []DbColumn, j JsonData) (row Row, err error) {
+	row = make(Row, len(dbSchema))
+	for k, f := range dbSchema {
+		v, found := j[f.FieldKey]
+		if !found && !f.Nullable {
+			if f.Default == nil {
+				return nil, fmt.Errorf("%v is required", f.FieldKey)
+			}
+			j[f.FieldKey] = *f.Default
 		}
 		switch x := v.(type) {
 		case string:
 			if dbSchema[k].TypeName == "int" {
-				j[f.JsonKey], err = strconv.ParseInt(x, 10, 64)
+				j[f.FieldKey], err = strconv.ParseInt(x, 10, 64)
 			}
 			if dbSchema[k].TypeName == "float" {
-				j[f.JsonKey], err = strconv.ParseFloat(x, 64)
+				j[f.FieldKey], err = strconv.ParseFloat(x, 64)
 			}
 		case float64:
 			// convert a float to an int if the schema is an int type
@@ -445,13 +545,13 @@ func MakeRow(dbSchema []DbColumn, j Jsondata) (row Row, err error) {
 					err = fmt.Errorf("add_row: cannot convert number value to int64 for %s value: %v type: %s",
 						f.Name, v, dbSchema[k].DataType)
 				}
-				j[f.JsonKey] = int64(x)
+				j[f.FieldKey] = int64(x)
 			}
 		}
 		if err != nil {
 			return nil, fmt.Errorf("add row  %w", err)
 		}
-		row[k] = j[f.JsonKey]
+		row[k] = j[f.FieldKey]
 	}
 	return row, nil
 }
@@ -479,7 +579,7 @@ func DeleteQuery(m map[string]string, table string) string {
 		}
 	}
 
-	sort.Sort(sort.StringSlice(s))
+	sort.Strings(s)
 	return fmt.Sprintf("delete from %s where %s", table, strings.Join(s, " and "))
 }
 

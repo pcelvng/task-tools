@@ -51,8 +51,8 @@ func TestPrepareMeta(t *testing.T) {
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "C1", JsonKey: "C1"},
-					{Name: "C2", JsonKey: "C2"},
+					{Name: "C1", FieldKey: "C1"},
+					{Name: "C2", FieldKey: "C2"},
 				},
 				columns: []string{"C1", "C2"},
 			},
@@ -66,8 +66,8 @@ func TestPrepareMeta(t *testing.T) {
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "C1", JsonKey: "J1", Default: trial.StringP("")},
-					{Name: "C2", JsonKey: "J2", Default: trial.StringP("")},
+					{Name: "C1", FieldKey: "J1", Default: trial.StringP("")},
+					{Name: "C2", FieldKey: "J2", Default: trial.StringP("")},
 				},
 				columns: []string{"C1", "C2"},
 			},
@@ -81,8 +81,8 @@ func TestPrepareMeta(t *testing.T) {
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "C1", JsonKey: "J1", Nullable: true},
-					{Name: "C2", JsonKey: "C2", Nullable: true},
+					{Name: "C1", FieldKey: "J1", Nullable: true},
+					{Name: "C2", FieldKey: "C2", Nullable: true},
 				},
 				columns: []string{"C1", "C2"},
 			},
@@ -96,7 +96,7 @@ func TestPrepareMeta(t *testing.T) {
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "C2", JsonKey: "C2"},
+					{Name: "C2", FieldKey: "C2"},
 				},
 				columns: []string{"C2"},
 			},
@@ -110,7 +110,7 @@ func TestPrepareMeta(t *testing.T) {
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "C1", JsonKey: "C1"}, {Name: "C3", JsonKey: "C3"},
+					{Name: "C1", FieldKey: "C1"}, {Name: "C3", FieldKey: "C3"},
 				},
 				columns: []string{"C1", "C3"},
 			},
@@ -126,9 +126,9 @@ func TestPrepareMeta(t *testing.T) {
 			},
 			Expected: output{
 				schema: []DbColumn{
-					{Name: "id", JsonKey: "json_id", Default: trial.StringP("0"), Nullable: false, TypeName: "int"},
-					{Name: "name", JsonKey: "jName", Default: trial.StringP(""), Nullable: false, TypeName: "string"},
-					{Name: "value", JsonKey: "jvalue", Default: trial.StringP("0.0"), Nullable: false, TypeName: "float"},
+					{Name: "id", FieldKey: "json_id", Default: trial.StringP("0"), Nullable: false, TypeName: "int"},
+					{Name: "name", FieldKey: "jName", Default: trial.StringP(""), Nullable: false, TypeName: "string"},
+					{Name: "value", FieldKey: "jvalue", Default: trial.StringP("0.0"), Nullable: false, TypeName: "float"},
 				},
 				columns: []string{"id", "name", "value"},
 			},
@@ -138,13 +138,65 @@ func TestPrepareMeta(t *testing.T) {
 	trial.New(fn, cases).Test(t)
 }
 
+func TestMakeCsvHeader(t *testing.T) {
+	fn := func(in trial.Input) (interface{}, error) {
+		return MakeCsvHeader(in.Interface().([]byte), []rune(",")[0])
+	}
+	cases := trial.Cases{
+		"strings_header": {
+			Input:    []byte(`"first","second","third","fourth"`),
+			Expected: []string{"first", "second", "third", "fourth"},
+		},
+		"just_values_header": {
+			Input:    []byte(`first,second,third,fourth`),
+			Expected: []string{"first", "second", "third", "fourth"},
+		},
+		"mixed_values_header": {
+			Input:    []byte(`"first",second,"third",fourth`),
+			Expected: []string{"first", "second", "third", "fourth"},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestMakeCsvRow(t *testing.T) {
+	schema := []DbColumn{
+		{Name: "id", FieldKey: "id"},
+		{Name: "name", FieldKey: "name", Nullable: true},
+		{Name: "count", FieldKey: "count", TypeName: "int", Default: trial.StringP("0")},
+		{Name: "percent", FieldKey: "percent", TypeName: "float", Nullable: true},
+		{Name: "num", FieldKey: "num", TypeName: "int", Nullable: true},
+	}
+
+	fn := func(in trial.Input) (interface{}, error) {
+		header := []string{"id", "name", "count", "percent", "num"}
+		return MakeCsvRow(schema, in.Interface().([]byte), header, []rune(",")[0])
+	}
+	cases := trial.Cases{
+		"test_csv": {
+			Input:    []byte(`"av1","myname",654321,0.145,123`),
+			Expected: Row{"av1", "myname", int64(654321), 0.145, int64(123)},
+		},
+		"strings_csv": {
+			Input:    []byte(`"av1","myname","654321","0.145","123"`),
+			Expected: Row{"av1", "myname", int64(654321), 0.145, int64(123)},
+		},
+		"float_to_int_csv": {
+			Input:    []byte(`"av1","myname","654321","0.145","123.01"`),
+			Expected: Row{"av1", "myname", int64(654321), 0.145, int64(123)},
+		},
+	}
+
+	trial.New(fn, cases).SubTest(t)
+}
+
 func TestMakeRow(t *testing.T) {
 	schema := []DbColumn{
-		{Name: "id", JsonKey: "id"},
-		{Name: "name", JsonKey: "name", Nullable: true},
-		{Name: "count", JsonKey: "count", TypeName: "int", Default: trial.StringP("0")},
-		{Name: "percent", JsonKey: "percent", TypeName: "float", Nullable: true},
-		{Name: "num", JsonKey: "num", TypeName: "int", Nullable: true},
+		{Name: "id", FieldKey: "id"},
+		{Name: "name", FieldKey: "name", Nullable: true},
+		{Name: "count", FieldKey: "count", TypeName: "int", Default: trial.StringP("0")},
+		{Name: "percent", FieldKey: "percent", TypeName: "float", Nullable: true},
+		{Name: "num", FieldKey: "num", TypeName: "int", Nullable: true},
 	}
 	fn := func(in trial.Input) (interface{}, error) {
 		return MakeRow(schema, in.Interface().(map[string]interface{}))
@@ -406,9 +458,9 @@ func TestReadFiles(t *testing.T) {
 		i := in.Interface().(input)
 		ds := DataSet{
 			dbSchema: []DbColumn{
-				{Name: "id", JsonKey: "id"},
-				{Name: "name", JsonKey: "name", Nullable: true},
-				{Name: "count", JsonKey: "count", TypeName: "int", Nullable: true}},
+				{Name: "id", FieldKey: "id"},
+				{Name: "name", FieldKey: "name", Nullable: true},
+				{Name: "count", FieldKey: "count", TypeName: "int", Nullable: true}},
 		}
 		reader := mock.NewReader("nop").AddLines(i.lines...)
 
@@ -467,4 +519,66 @@ func TestReadFiles(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)
+}
+
+func TestCSVReadFiles(t *testing.T) {
+	c := trial.CaptureLog()
+	defer c.ReadAll()
+
+	type input struct {
+		lines      []string
+		skipErrors bool
+	}
+	type out struct {
+		rowCount  int32
+		skipCount int
+	}
+	fn := func(in trial.Input) (interface{}, error) {
+		i := in.Interface().(input)
+		ds := DataSet{
+			csvData:   true,
+			delimiter: rune(','),
+			dbSchema: []DbColumn{
+				{Name: "id", FieldKey: "id"},
+				{Name: "name", FieldKey: "name", Nullable: true},
+				{Name: "count", FieldKey: "count", TypeName: "int", Nullable: true}},
+		}
+
+		reader := mock.NewReader("nop").AddLines(i.lines...)
+
+		rowChan := make(chan Row)
+		doneChan := make(chan struct{})
+		go func() {
+			for range rowChan {
+			}
+			close(doneChan)
+		}()
+		ds.ReadFiles(context.Background(), reader, rowChan, i.skipErrors)
+		<-doneChan
+		return out{rowCount: ds.rowCount, skipCount: ds.skipCount}, ds.err // number of rows or error
+	}
+	cases := trial.Cases{
+		"invalid row": {
+			Input: input{
+				lines: []string{
+					`"id","name","count"`,
+					`"1a","banana",3`,
+					`2b,appl"e,4`,
+				},
+			},
+			ShouldErr: true,
+		},
+		"valid_csv_data": {
+			Input: input{
+				lines: []string{
+					`"id","name","count"`,
+					`"1a","banana","3"`,
+					`"id","name","count"`, // simulate another file with a header row
+					`2b,apple,4`,
+				},
+			},
+			Expected: out{rowCount: 2},
+		},
+	}
+	trial.New(fn, cases).Timeout(6 * time.Second).SubTest(t)
 }

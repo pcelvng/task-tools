@@ -31,6 +31,8 @@ var (
 Initially only postgresql will be supported, but later support can be added for mysql, etc...
 
 info query params:
+csv: (default:false) if true csv data is parsed, default is json data (first row must contain field names)
+delimiter: (default:,) the csv delimiter, default is a comma
 table: (required), the name of the table to be inserted into i.e., schema.table_name
 delete : allows insert into pre-existing data by deleting previous data. 
     - provide a list of delete key:values to be used in the delete statement
