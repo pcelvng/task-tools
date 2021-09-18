@@ -170,19 +170,19 @@ func TestMakeCsvRow(t *testing.T) {
 
 	fn := func(in trial.Input) (interface{}, error) {
 		header := []string{"id", "name", "count", "percent", "num"}
-		return MakeCsvRow(schema, in.Interface().([]byte), header, []rune(",")[0])
+		return MakeCsvRow(schema, []byte(in.Interface().(string)), header, []rune(",")[0])
 	}
 	cases := trial.Cases{
 		"test_csv": {
-			Input:    []byte(`"av1","myname",654321,0.145,123`),
+			Input:    `"av1","myname",654321,0.145,123`,
 			Expected: Row{"av1", "myname", int64(654321), 0.145, int64(123)},
 		},
 		"strings_csv": {
-			Input:    []byte(`"av1","myname","654321","0.145","123"`),
+			Input:    `"av1","myname","654321","0.145","123"`,
 			Expected: Row{"av1", "myname", int64(654321), 0.145, int64(123)},
 		},
 		"float_to_int_csv": {
-			Input:    []byte(`"av1","myname","654321","0.145","123.01"`),
+			Input:    `"av1","myname","654321","0.145","123.01"`,
 			Expected: Row{"av1", "myname", int64(654321), 0.145, int64(123)},
 		},
 	}
@@ -320,6 +320,7 @@ func TestNewWorker(t *testing.T) {
 					FilePath:  d1,
 					Table:     "schema.table_name",
 					BatchSize: 10000,
+					Delimiter: ",",
 				},
 				Count: 2,
 			},
@@ -348,6 +349,7 @@ func TestNewWorker(t *testing.T) {
 					Table:     "schema.table_name",
 					BatchSize: 10000,
 					DeleteMap: map[string]string{"date(hour_utc)": "2020-07-09", "id": "1572", "amt": "65.2154"},
+					Delimiter: ",",
 				},
 				DeleteStmt: "delete from schema.table_name where amt = 65.2154 and date(hour_utc) = '2020-07-09' and id = 1572",
 				Count:      2,
@@ -399,7 +401,7 @@ func TestCreateInserts(t *testing.T) {
 			Input: input{
 				table:     "test",
 				columns:   []string{"ab", "cd", "ef"},
-				rows:      []Row{Row{1, 2, 3}},
+				rows:      []Row{{1, 2, 3}},
 				batchSize: 1,
 			},
 			Expected: []string{"insert into test(ab,cd,ef)\n  VALUES \n(1,2,3);\n"},
@@ -536,7 +538,7 @@ func TestCSVReadFiles(t *testing.T) {
 	fn := func(in trial.Input) (interface{}, error) {
 		i := in.Interface().(input)
 		ds := DataSet{
-			csvData:   true,
+			csv:       true,
 			delimiter: rune(','),
 			dbSchema: []DbColumn{
 				{Name: "id", FieldKey: "id"},
@@ -548,6 +550,7 @@ func TestCSVReadFiles(t *testing.T) {
 
 		rowChan := make(chan Row)
 		doneChan := make(chan struct{})
+		// consume and discard output data
 		go func() {
 			for range rowChan {
 			}

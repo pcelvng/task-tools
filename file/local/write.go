@@ -124,10 +124,13 @@ func (w *Writer) Close() error {
 	// location.
 	w.bfr.Close()
 	_, err := w.copyAndClean()
+	if err != nil {
+		return err
+	}
 
 	// set created date
-	s, err := Stat(w.sts.Path) 
-	w.sts = s 
+	s, err := Stat(w.sts.Path)
+	w.sts = s
 
 	return err
 }

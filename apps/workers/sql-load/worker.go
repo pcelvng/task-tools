@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/inhies/go-bytesize"
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/uri"
 	jsoniter "github.com/json-iterator/go"
@@ -59,7 +60,7 @@ type DataSet struct {
 	rowCount   int32
 	skipCount  int
 
-	csvData   bool // is the dataset for csv data (not json)
+	csv       bool // is the dataset for csv data (not json)
 	delimiter rune // csv delimiter value default is comma
 
 	err error
@@ -89,6 +90,12 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("params uri.unmarshal: %v", err)
 	}
 
+	// assume if csv is in the file name, the loading type is csv
+	if strings.Contains(w.Params.FilePath, "csv") {
+		w.Params.CSV = true
+		log.Println("loading csv file(s)", w.Params.FilePath)
+	}
+
 	w.ds = NewDataSet(w.Params.CSV, []rune(w.Params.Delimiter)[0])
 
 	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
@@ -104,6 +111,7 @@ func (o *options) newWorker(info string) task.Worker {
 	if w.Params.Truncate {
 		w.delQuery = fmt.Sprintf("delete from %s", w.Params.Table)
 	}
+
 	return w
 }
 
@@ -316,22 +324,18 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan cha
 	var hBytes []byte
 	var activeThreads int32
 
-	// read the first data bytes to capture the header for csv data
-
 	for i := 0; i < 20; i++ {
 		activeThreads++
-		go func() { // csv data parsing
-			for b := range dataIn { // should block until it gets data
-				if ds.csvData {
+		go func() { // process row function
+			defer func() { atomic.AddInt32(&activeThreads, -1) }()
+			for b := range dataIn {
+				if ds.csv { // csv data parsing
 					if bytes.Equal(b, hBytes) {
 						continue // another header row was found skip
 					}
-					fmt.Println("threads header debug", header)
 					if row, e := MakeCsvRow(ds.dbSchema, b, header, ds.delimiter); e != nil {
-						fmt.Println("debug error")
 						errChan <- fmt.Errorf("csv read error %w %q", e, string(b))
 					} else if row != nil {
-						fmt.Println("sending row")
 						atomic.AddInt32(&ds.rowCount, 1)
 						rowChan <- row
 					}
@@ -354,21 +358,20 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan cha
 	}
 
 	// read the lines of the file
-	h := true
+	csvHeader := true // csv header data needs to be set
 	scanner := file.NewScanner(files)
 loop:
 	for scanner.Scan() {
-
-		if ds.csvData && h {
-			var err error
+		// read the first data bytes to capture the header for csv data
+		if ds.csv && csvHeader {
 			hBytes = scanner.Bytes()
-			header, err = MakeCsvHeader(hBytes, ds.delimiter)
+			header, err := MakeCsvHeader(hBytes, ds.delimiter)
 			if err != nil {
 				ds.err = fmt.Errorf("csv header read error %w %q", err, string(hBytes))
-				return
+				break loop
 			}
-			h = false
-			fmt.Println("debug set header", header)
+			csvHeader = false
+			log.Println("csv header built, fields", len(header))
 			continue
 		}
 
@@ -392,7 +395,8 @@ loop:
 	}
 	files.Close() // close the reader
 	sts := files.Stats()
-	log.Printf("processed %d files at %s", sts.Files, sts.Path)
+	b := bytesize.New(float64(sts.ByteCnt))
+	log.Printf("processed %d files at %s, size %s", sts.Files, sts.Path, b.String())
 
 	close(dataIn)
 	for {
@@ -418,7 +422,7 @@ func NewDataSet(csv bool, delim rune) *DataSet {
 	return &DataSet{
 		dbSchema:   make([]DbColumn, 0),
 		insertCols: make([]string, 0),
-		csvData:    csv,
+		csv:        csv,
 		delimiter:  delim,
 	}
 }
@@ -463,7 +467,6 @@ func PrepareMeta(dbSchema []DbColumn, fieldMap map[string]string) (meta []DbColu
 }
 
 // MakeCsvHeader creates a string slice based on the first row of the file
-// I think we will have a problem if there are multiple files with header rows
 func MakeCsvHeader(line []byte, delim rune) (header []string, err error) {
 	reader := csv.NewReader(bytes.NewReader(line)) // push a csv record line into a csv reader to parse
 	reader.Comma = delim
