@@ -333,6 +333,7 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan cha
 					if bytes.Equal(b, hBytes) {
 						continue // another header row was found skip
 					}
+
 					if row, e := MakeCsvRow(ds.dbSchema, b, header, ds.delimiter); e != nil {
 						errChan <- fmt.Errorf("csv read error %w %q", e, string(b))
 					} else if row != nil {
@@ -357,6 +358,7 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan cha
 		}()
 	}
 
+	var err error
 	// read the lines of the file
 	csvHeader := true // csv header data needs to be set
 	scanner := file.NewScanner(files)
@@ -365,7 +367,7 @@ loop:
 		// read the first data bytes to capture the header for csv data
 		if ds.csv && csvHeader {
 			hBytes = scanner.Bytes()
-			header, err := MakeCsvHeader(hBytes, ds.delimiter)
+			header, err = MakeCsvHeader(hBytes, ds.delimiter)
 			if err != nil {
 				ds.err = fmt.Errorf("csv header read error %w %q", err, string(hBytes))
 				break loop
