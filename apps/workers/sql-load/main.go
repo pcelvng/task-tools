@@ -31,6 +31,8 @@ var (
 Initially only postgresql will be supported, but later support can be added for mysql, etc...
 
 info query params:
+file_type: (default:json) a file path i.e., /folder/filename.csv will default to parse delimited data
+delimiter: (default:,) the csv delimiter, default is a comma, you can use "tab" or "\t"
 table: (required), the name of the table to be inserted into i.e., schema.table_name
 delete : allows insert into pre-existing data by deleting previous data. 
     - provide a list of delete key:values to be used in the delete statement
@@ -45,7 +47,9 @@ Example task:
  
 {"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7"}
 {"type":"sql_load","info":"gs://bucket/path/of/files/to/load/?table=schema.table_name"}
-{"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7&fields=dbColumnName:jsonKeyValue"}`
+{"type":"sql_load","info":"gs://bucket/path/to/file.json?table=schema.table_name&delete=date:2020-07-01|id:7&fields=dbColumnName:jsonKeyValue"}
+
+{"type":"sql_load","info":"gs://bucket/path/of/files/to/load/*.tsv?table=schema.table_name&file_type=csv&delimiter=tab"}`
 )
 
 func init() {

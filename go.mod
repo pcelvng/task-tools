@@ -18,6 +18,7 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/hydronica/toml v0.4.2
 	github.com/hydronica/trial v0.5.0
+	github.com/inhies/go-bytesize v0.0.0-20210819104631-275770b98743
 	github.com/itchyny/gojq v0.12.3
 	github.com/itchyny/timefmt-go v0.1.3 // indirect
 	github.com/jarcoal/httpmock v1.0.8
