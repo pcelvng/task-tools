@@ -318,6 +318,7 @@ func TestNewWorker(t *testing.T) {
 			Expected: output{
 				Params: InfoURI{
 					FilePath:  d1,
+					FileType:  "json",
 					Table:     "schema.table_name",
 					BatchSize: 10000,
 					Delimiter: ",",
@@ -346,6 +347,7 @@ func TestNewWorker(t *testing.T) {
 			Expected: output{
 				Params: InfoURI{
 					FilePath:  d1,
+					FileType:  "json",
 					Table:     "schema.table_name",
 					BatchSize: 10000,
 					DeleteMap: map[string]string{"date(hour_utc)": "2020-07-09", "id": "1572", "amt": "65.2154"},
@@ -529,6 +531,7 @@ func TestCSVReadFiles(t *testing.T) {
 
 	type input struct {
 		lines      []string
+		delimiter  string
 		skipErrors bool
 	}
 	type out struct {
@@ -537,9 +540,12 @@ func TestCSVReadFiles(t *testing.T) {
 	}
 	fn := func(in trial.Input) (interface{}, error) {
 		i := in.Interface().(input)
+		if i.delimiter == "" {
+			i.delimiter = ","
+		}
 		ds := DataSet{
 			csv:       true,
-			delimiter: rune(','),
+			delimiter: []rune(i.delimiter)[0],
 			dbSchema: []DbColumn{
 				{Name: "id", FieldKey: "id"},
 				{Name: "name", FieldKey: "name", Nullable: true},
@@ -578,6 +584,18 @@ func TestCSVReadFiles(t *testing.T) {
 					`"1a","banana","3"`,
 					`"id","name","count"`, // simulate another file with a header row
 					`2b,apple,4`,
+				},
+			},
+			Expected: out{rowCount: 2},
+		},
+		"tab_delimited": {
+			Input: input{
+				delimiter: "\t",
+				lines: []string{
+					`"id"` + "\t" + `"name"` + "\t" + `"count"`,
+					`"1a"` + "\t" + `"banana"` + "\t" + `"3"`,
+					`"id"` + "\t" + `"name"` + "\t" + `"count"`, // simulate another file with a header row
+					`2b` + "\t" + `apple` + "\t" + `4`,
 				},
 			},
 			Expected: out{rowCount: 2},

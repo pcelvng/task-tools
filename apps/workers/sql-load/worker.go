@@ -32,7 +32,7 @@ type InfoURI struct {
 	Truncate     bool              `uri:"truncate"`                   // truncate the table rather than delete
 	CachedInsert bool              `uri:"cached_insert"`              // this will attempt to load the query data though a temp table (postgres only)
 	BatchSize    int               `uri:"batch_size" default:"10000"` // number of rows to insert at once
-	CSV          bool              `uri:"csv" default:"false"`        // parse csv data instead of json data
+	FileType     string            `uri:"file_type" default:"json"`   // parse csv delimited data instead of json data
 	Delimiter    string            `uri:"delimiter" default:","`      // csv delimiter, default is a comma
 }
 
@@ -90,13 +90,17 @@ func (o *options) newWorker(info string) task.Worker {
 		return task.InvalidWorker("params uri.unmarshal: %v", err)
 	}
 
-	// assume if csv is in the file name, the loading type is csv
-	if strings.Contains(w.Params.FilePath, "csv") {
-		w.Params.CSV = true
+	if strings.Contains(w.Params.Delimiter, "tab") {
+		w.Params.Delimiter = "\t"
+	}
+
+	// assume if .csv is at the end of the file path, the loading type is csv
+	if strings.HasSuffix(w.Params.FilePath, ".csv") {
+		w.Params.FileType = "csv"
 		log.Println("loading csv file(s)", w.Params.FilePath)
 	}
 
-	w.ds = NewDataSet(w.Params.CSV, []rune(w.Params.Delimiter)[0])
+	w.ds = NewDataSet(w.Params.FileType == "csv", []rune(w.Params.Delimiter)[0])
 
 	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
 	if err != nil {
