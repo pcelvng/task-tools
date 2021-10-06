@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"regexp"
 	"sort"
 	"strings"
@@ -265,4 +266,37 @@ func comparer(i1, i2 interface{}) (equal bool, diff string) {
 		exp.Created = act.Created
 	}
 	return trial.Equal(act, exp)
+}
+
+func TestValidatePhase(t *testing.T) {
+	fn := func(i trial.Input) (interface{}, error) {
+		s := validatePhase(i.Interface().(workflow.Phase))
+		if s != "" {
+			return nil, errors.New(s)
+		}
+		return s, nil
+	}
+	cases := trial.Cases{
+		"empty phase": {
+			Input:       workflow.Phase{},
+			ExpectedErr: errors.New("invalid phase"),
+		},
+		"valid cron phase": {
+			Input: workflow.Phase{
+				Rule: "cron=* * * * * *",
+			},
+		},
+		"unknown rule": {
+			Input:     workflow.Phase{Rule: "abcedfg"},
+			ShouldErr: true,
+		},
+		"dependsOn and rule": {
+			Input: workflow.Phase{
+				Rule:      "cron=abc",
+				DependsOn: "task1",
+			},
+			ShouldErr: true,
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
 }
