@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"flag"
+	"log"
 	"os"
 	"time"
 
@@ -62,11 +63,11 @@ type statsOptions struct {
 }
 
 type DBOptions struct {
-	Username string `toml:"username" commented:"true"`
-	Password string `toml:"password" commented:"true"`
-	Host     string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
-	DBName   string `toml:"dbname"`
-	Serializable bool      `toml:"serializable" comment:"set isolation level to serializable, required for proper writing to database" commented:"true"`
+	Username     string `toml:"username" commented:"true"`
+	Password     string `toml:"password" commented:"true"`
+	Host         string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
+	DBName       string `toml:"dbname"`
+	Serializable bool   `toml:"serializable" comment:"set isolation level to serializable, required for proper writing to database" commented:"true"`
 }
 
 // newConsumer is a convenience method that will use
@@ -84,7 +85,10 @@ func newConsumer(bOpt bus.Options, topic, channel string) bus.Consumer {
 		bOpt.InChannel = channel
 	}
 
-	consumer, _ := bus.NewConsumer(&bOpt)
+	consumer, err := bus.NewConsumer(&bOpt)
+	if err != nil {
+		log.Fatalf("NewConsumer Error: %v", err)
+	}
 	return consumer
 }
 
@@ -92,7 +96,10 @@ func newConsumer(bOpt bus.Options, topic, channel string) bus.Consumer {
 // to create a new producer instance. Note that bOpt is
 // now a copy of the original config since it's not a pointer.
 func newProducer(bOpt bus.Options) bus.Producer {
-	producer, _ := bus.NewProducer(&bOpt)
+	producer, err := bus.NewProducer(&bOpt)
+	if err != nil {
+		log.Fatalf("NewProducer error: %v", err)
+	}
 	return producer
 }
 

@@ -285,6 +285,7 @@ func TestValidatePhase(t *testing.T) {
 			Input: workflow.Phase{
 				Rule: "cron=* * * * * *",
 			},
+			Expected: "",
 		},
 		"unknown rule": {
 			Input:     workflow.Phase{Rule: "abcedfg"},
