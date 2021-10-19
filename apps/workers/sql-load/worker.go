@@ -322,7 +322,7 @@ func (w *worker) QuerySchema() (err error) {
 // ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
 func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
-	errChan := make(chan error, 20)
+	errChan := make(chan error)
 	dataIn := make(chan []byte, 20)
 	var header []string
 	var hBytes []byte

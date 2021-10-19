@@ -3,8 +3,10 @@ module github.com/pcelvng/task-tools
 go 1.15
 
 require (
+	cloud.google.com/go v0.97.0 // indirect
 	cloud.google.com/go/bigquery v1.17.0
-	cloud.google.com/go/pubsub v1.10.2 // indirect
+	cloud.google.com/go/datacatalog v1.0.0 // indirect
+	cloud.google.com/go/pubsub v1.17.0 // indirect
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/buger/jsonparser v1.1.1
@@ -14,8 +16,9 @@ require (
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/google/go-cmp v0.5.5
-	github.com/google/uuid v1.2.0
+	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/go-cmp v0.5.6
+	github.com/google/uuid v1.3.0
 	github.com/hydronica/toml v0.4.2
 	github.com/hydronica/trial v0.5.0
 	github.com/inhies/go-bytesize v0.0.0-20210819104631-275770b98743
@@ -39,11 +42,13 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b // indirect
-	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/net v0.0.0-20210421230115-4e50805a0758 // indirect
-	golang.org/x/sys v0.0.0-20210423082822-04245dca01da // indirect
-	google.golang.org/api v0.45.0
-	google.golang.org/genproto v0.0.0-20210422153429-2279cbceda62 // indirect
+	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f // indirect
+	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1 // indirect
+	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
+	golang.org/x/text v0.3.7 // indirect
+	google.golang.org/api v0.58.0
+	google.golang.org/genproto v0.0.0-20211019152133-63b7e35f4404 // indirect
+	google.golang.org/grpc v1.41.0 // indirect
 	gopkg.in/dustinevan/chron.v0 v0.0.0
 	gopkg.in/ini.v1 v1.62.0 // indirect
 )

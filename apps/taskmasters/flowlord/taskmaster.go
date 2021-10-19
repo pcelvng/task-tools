@@ -57,10 +57,11 @@ type stats struct {
 }
 
 type cEntry struct {
-	Next     time.Time
-	Prev     time.Time
-	Schedule []string
-	Child    []string `json:"Child,omitempty"`
+	Next     *time.Time `json:"Next,omitempty"`
+	Prev     *time.Time `json:"Prev,omitempty"`
+	Warning  string     `json:"warning,omitempty"`
+	Schedule []string   `json:"Schedule,omitempty"`
+	Child    []string   `json:"Child,omitempty"`
 }
 
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
@@ -91,6 +92,16 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	return tm
 }
 
+// pName creates the phase task name
+// topic:job
+// topic
+func pName(topic, job string) string {
+	if job == "" {
+		return topic
+	}
+	return topic + ":" + job
+}
+
 func (tm *taskMaster) Info() interface{} {
 	sts := stats{
 		RunTime:    gtools.PrintDuration(time.Now().Sub(tm.initTime)),
@@ -99,18 +110,28 @@ func (tm *taskMaster) Info() interface{} {
 		Workflow:   make(map[string]map[string]cEntry),
 	}
 
+	// create a copy of all workflows
+	wCache := make(map[string]map[string]workflow.Phase) // [file][task:job]Phase
+	for key, w := range tm.Cache.Workflows {
+		phases := make(map[string]workflow.Phase)
+		for _, j := range w.Phases {
+			phases[pName(j.Topic(), j.Job())] = j
+		}
+		wCache[key] = phases
+	}
+
 	for _, e := range tm.cron.Entries() {
 		j, ok := e.Job.(*job)
 		if !ok {
 			continue
 		}
 		ent := cEntry{
-			Next:     e.Next,
-			Prev:     e.Prev,
+			Next:     &e.Next,
+			Prev:     &e.Prev,
 			Schedule: []string{j.Schedule + "?offset=" + gtools.PrintDuration(j.Offset)},
 			Child:    make([]string, 0),
 		}
-		k := j.Topic + ":" + j.Name
+		k := pName(j.Topic, j.Name)
 
 		w, found := sts.Workflow[j.Workflow]
 		if !found {
@@ -120,10 +141,10 @@ func (tm *taskMaster) Info() interface{} {
 
 		// check if for multi-scheduled entries
 		if e, found := w[k]; found {
-			if e.Prev.After(ent.Prev) {
+			if e.Prev.After(*ent.Prev) {
 				ent.Prev = e.Prev // keep the last run time
 			}
-			if e.Next.Before(ent.Next) {
+			if e.Next.Before(*ent.Next) {
 				ent.Next = e.Next // keep the next run time
 			}
 			ent.Schedule = append(ent.Schedule, e.Schedule...)
@@ -131,7 +152,46 @@ func (tm *taskMaster) Info() interface{} {
 		// add children
 		ent.Child = tm.getAllChildren(j.Topic, j.Workflow, j.Name)
 		w[k] = ent
+
+		// remove entries from wCache
+		delete(wCache[j.Workflow], k)
+		for _, v := range ent.Child {
+			delete(wCache[j.Workflow], v)
+		}
 	}
+
+	// Add non cron based tasks
+	for f, w := range wCache {
+		for _, v := range w {
+			k := pName(v.Topic(), v.Job())
+			// check for parents
+			for v.DependsOn != "" {
+				if t, found := wCache[f][v.DependsOn]; found {
+					k = v.DependsOn
+					v = t
+				} else {
+					break
+				}
+
+			}
+
+			children := tm.getAllChildren(v.Topic(), f, v.Job())
+			// todo: remove children from Cache
+			if _, found := sts.Workflow[f]; !found {
+				sts.Workflow[f] = make(map[string]cEntry)
+			}
+			warning := validatePhase(v)
+			if v.DependsOn != "" {
+				warning += "parent task not found: " + v.DependsOn
+			}
+			sts.Workflow[f][k] = cEntry{
+				Schedule: make([]string, 0),
+				Warning:  warning,
+				Child:    children,
+			}
+		}
+	}
+
 	return sts
 }
 
@@ -204,6 +264,29 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 			return nil
 		}
 	}
+}
+
+func validatePhase(p workflow.Phase) string {
+
+	if p.DependsOn == "" {
+		if p.Rule == "" {
+			return "invalid phase: rule and dependsOn are blank"
+		}
+		// verify at least one valid rule is there
+		rules, _ := url.ParseQuery(p.Rule)
+		if rules.Get("cron") == "" {
+			return fmt.Sprintf("no valid rule found: %v", p.Rule)
+		}
+
+		return ""
+
+	}
+	// DependsOn != ""
+	if p.Rule != "" {
+		return fmt.Sprintf("ignored rule: %v", p.Rule)
+	}
+
+	return ""
 }
 
 // schedule the tasks and refresh the schedule when updated
