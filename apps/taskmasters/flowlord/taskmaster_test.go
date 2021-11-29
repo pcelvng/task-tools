@@ -24,9 +24,9 @@ func TestTaskMaster_Process(t *testing.T) {
 	}
 	consumer, err := nop.NewConsumer("")
 	if err != nil {
-		t.Fatal("consumer", err)
+		t.Fatal("doneConsumer", err)
 	}
-	tm := taskMaster{consumer: consumer, Cache: cache}
+	tm := taskMaster{doneConsumer: consumer, Cache: cache}
 	fn := func(v trial.Input) (interface{}, error) {
 		tsk := v.Interface().(task.Task)
 		producer, err := nop.NewProducer("")
@@ -196,9 +196,9 @@ func TestTaskMaster_Schedule(t *testing.T) {
 	consumer, err := nop.NewConsumer("")
 	producer, err := nop.NewProducer("")
 	if err != nil {
-		t.Fatal("consumer", err)
+		t.Fatal("doneConsumer", err)
 	}
-	tm := taskMaster{consumer: consumer, producer: producer, Cache: cache, cron: cron.New()}
+	tm := taskMaster{doneConsumer: consumer, producer: producer, Cache: cache, cron: cron.New()}
 	// verify task1 was scheduled correctly
 	if err := tm.schedule(); err != nil {
 		t.Fatal(err)

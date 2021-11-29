@@ -30,6 +30,7 @@ type options struct {
 	Workflow    string        `toml:"workflow" comment:"path to workflow file or directory"`
 	Refresh     time.Duration `toml:"refresh" comment:"the workflow changes refresh duration value default is 15 min"`
 	DoneTopic   string        `toml:"done_topic" comment:"default is done"`
+	FileTopic   string        `toml:"file_topic" comment:"file topic for file watching"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
 	Slack       *slack.Slack  `toml:"slack"`
 	File        *file.Options `toml:"file"`

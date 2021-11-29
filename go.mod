@@ -20,7 +20,7 @@ require (
 	github.com/google/go-cmp v0.5.6
 	github.com/google/uuid v1.3.0
 	github.com/hydronica/toml v0.4.2
-	github.com/hydronica/trial v0.5.0
+	github.com/hydronica/trial v0.6.2
 	github.com/inhies/go-bytesize v0.0.0-20210819104631-275770b98743
 	github.com/itchyny/gojq v0.12.3
 	github.com/itchyny/timefmt-go v0.1.3 // indirect
