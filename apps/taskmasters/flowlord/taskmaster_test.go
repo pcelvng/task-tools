@@ -37,6 +37,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		nop.FakeMsg = tsk.JSONBytes()
 		err = tm.Process(&tsk)
 		time.Sleep(100 * time.Millisecond)
+		tm.producer.Stop()
 		result := make([]task.Task, 0)
 		for _, msgs := range producer.Messages {
 			for _, msg := range msgs {
@@ -185,7 +186,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{},
 		},
 	}
-	trial.New(fn, cases).SubTest(t)
+	trial.New(fn, cases).Test(t)
 }
 
 func TestTaskMaster_Schedule(t *testing.T) {

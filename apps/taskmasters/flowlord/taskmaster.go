@@ -160,8 +160,38 @@ func (tm *taskMaster) Info() interface{} {
 
 		// remove entries from wCache
 		delete(wCache[j.Workflow], k)
-		for _, v := range ent.Child {
-			delete(wCache[j.Workflow], v)
+		for _, child := range ent.Child {
+			for _, v := range strings.Split(child, " ➞ ") {
+				delete(wCache[j.Workflow], v)
+				fmt.Println("delete ", v)
+			}
+		}
+	}
+
+	// add files based tasks
+
+	for _, f := range tm.files {
+		wPath := f.workflowFile
+		w, found := sts.Workflow[wPath]
+		if !found {
+			w = make(map[string]cEntry)
+			sts.Workflow[wPath] = w
+		}
+		k := pName(f.Topic(), f.Job())
+		ent := cEntry{
+			Schedule: []string{f.SrcPattern},
+			Child:    tm.getAllChildren(f.Topic(), f.workflowFile, f.Job()),
+		}
+		w[k] = ent
+
+		// remove entries from wCache
+		delete(wCache[f.workflowFile], k)
+		fmt.Println("delete ", k)
+		for _, child := range ent.Child {
+			for _, v := range strings.Split(child, " ➞ ") {
+				delete(wCache[f.workflowFile], v)
+				fmt.Println("delete ", v)
+			}
 		}
 	}
 
@@ -207,7 +237,7 @@ func (tm *taskMaster) refreshCache(w http.ResponseWriter, _ *http.Request) {
 
 func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 	for _, c := range tm.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
-		job := c.Task + ":" + c.Job()
+		job := strings.Trim(c.Task+":"+c.Job(), ":")
 		if children := tm.getAllChildren(c.Task, workflow, c.Job()); len(children) > 0 {
 			job += " ➞ " + strings.Join(children, " ➞ ")
 		}
@@ -317,6 +347,7 @@ func (tm *taskMaster) schedule() (err error) {
 
 				//todo: Create a cron job for a task that is cron and files
 			}
+			fmt.Println(tm.files)
 
 			if rules.Get("cron") == "" {
 				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)
@@ -462,12 +493,14 @@ func (tm *taskMaster) readDone(ctx context.Context) {
 		}
 	}
 }
+
 func (tm *taskMaster) readFiles(ctx context.Context) {
 	if tm.filesConsumer == nil {
+		log.Println("no files consumer")
 		return
 	}
 	for {
-		b, done, err := tm.doneConsumer.Msg()
+		b, done, err := tm.filesConsumer.Msg()
 		if done || task.IsDone(ctx) {
 			log.Println("stopping files Consumer")
 			return
@@ -477,7 +510,9 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 			return
 		}
 		s := unmarshalStat(b)
-		tm.matchFile(s)
+		if err := tm.matchFile(s); err != nil {
+			log.Println("files: ", err)
+		}
 	}
 }
 
