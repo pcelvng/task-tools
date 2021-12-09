@@ -347,7 +347,6 @@ func (tm *taskMaster) schedule() (err error) {
 
 				//todo: Create a cron job for a task that is cron and files
 			}
-			fmt.Println(tm.files)
 
 			if rules.Get("cron") == "" {
 				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)

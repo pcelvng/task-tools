@@ -31,6 +31,7 @@ template = "?hour={yyyy}-{mm}-{dd}T{hh}"
    - if left blank this tasks will only start based on the rule
  - **rule**: rules on about the tasks that are encoded as query params 
    - _cron_: schedule the task based on the cron pattern (see scheduling)
+   - _files_: used in conjection with a filewatcher to start tasks after a file is written
    - _require_: used in a child task saying to only start task if value is present
    - _retry_delay_: duration to wait before retrying the task
  - **retry**: the number of times a task is retried before being sent to failed_tasks
@@ -70,6 +71,16 @@ Example: schedule a task to run every day at 1 AM UTC. If this ran on 2020-01-02
 task = "topic"
 rule = "cron=0 0 1 * * *&Offset=-6"
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
+```
+
+### files 
+schedule a task after a specified file is written. This should be used with the filewatcher taskmaster or GCP file watching service. File matching is done using the filepath.Match which does not support `**` matching. Flowlord will attempt to pull the timestampe from the filepath which will can be used in the template with the time templates `{yyyy}|{dd}|{mm}|{hh}` also the matching file will be available through the metadata of the task `{meta:file}`
+
+```
+[[Phase]]
+task = "topic"
+rule = "files="/folder/*/*/*.txt"
+template = "{meta:file}?opt=true"
 ```
 
 ### require

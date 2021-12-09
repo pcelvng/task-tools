@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"sort"
 	"testing"
 
 	"github.com/hydronica/trial"
@@ -89,6 +90,7 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 			},
 		},
 	}
+
 	fn := func(i trial.Input) (interface{}, error) {
 
 		tm.producer, _ = nop.NewProducer("")
@@ -104,6 +106,10 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 				msg = append(msg, *t)
 			}
 		}
+
+		sort.Slice(msg, func(i, j int) bool {
+			return msg[i].Type < msg[j].Type
+		})
 		return msg, err
 	}
 	cases := trial.Cases{
