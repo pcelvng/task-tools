@@ -1,10 +1,13 @@
 PREFIX=/usr/local
 DESTDIR=
-version=$(shell git describe --tags 2> /dev/null || git rev-parse HEAD)
 GOFLAGS=-ldflags "-s -w -X github.com/pcelvng/task-tools.Version=${version} -X github.com/pcelvng/task-tools.BuildTimeUTC=`date -u '+%Y-%m-%d_%I:%M:%S%p'`"
 BINDIR=${PREFIX}/bin
-
 BLDDIR = build
+
+ifeq ("{version}", "")
+  version=$(shell git describe --tags --always)
+endif
+
 EXT=
 ifeq (${GOOS},windows)
     EXT=.exe
