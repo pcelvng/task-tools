@@ -24,9 +24,9 @@ func TestTaskMaster_Process(t *testing.T) {
 	}
 	consumer, err := nop.NewConsumer("")
 	if err != nil {
-		t.Fatal("consumer", err)
+		t.Fatal("doneConsumer", err)
 	}
-	tm := taskMaster{consumer: consumer, Cache: cache}
+	tm := taskMaster{doneConsumer: consumer, Cache: cache}
 	fn := func(v trial.Input) (interface{}, error) {
 		tsk := v.Interface().(task.Task)
 		producer, err := nop.NewProducer("")
@@ -37,6 +37,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		nop.FakeMsg = tsk.JSONBytes()
 		err = tm.Process(&tsk)
 		time.Sleep(100 * time.Millisecond)
+		tm.producer.Stop()
 		result := make([]task.Task, 0)
 		for _, msgs := range producer.Messages {
 			for _, msg := range msgs {
@@ -185,31 +186,83 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{},
 		},
 	}
-	trial.New(fn, cases).SubTest(t)
+	trial.New(fn, cases).Test(t)
 }
 
 func TestTaskMaster_Schedule(t *testing.T) {
-	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", nil)
-	if err != nil {
-		t.Fatal("cache init", err)
+
+	type expected struct {
+		Jobs  []job
+		Files []fileRule
 	}
-	consumer, err := nop.NewConsumer("")
-	producer, err := nop.NewProducer("")
-	if err != nil {
-		t.Fatal("consumer", err)
+	fn := func(in trial.Input) (interface{}, error) {
+		cache, err := workflow.New("../../../internal/test/"+in.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		tm := taskMaster{Cache: cache, cron: cron.New()}
+		err = tm.schedule()
+		exp := expected{
+			Jobs:  make([]job, 0),
+			Files: tm.files,
+		}
+		for _, e := range tm.cron.Entries() {
+			j := e.Job.(*job)
+			exp.Jobs = append(exp.Jobs, *j)
+		}
+		return exp, err
 	}
-	tm := taskMaster{consumer: consumer, producer: producer, Cache: cache, cron: cron.New()}
-	// verify task1 was scheduled correctly
-	if err := tm.schedule(); err != nil {
-		t.Fatal(err)
+	cases := trial.Cases{
+		"f1.toml": {
+			Input: "workflow/f1.toml",
+			Expected: expected{
+				Jobs: []job{
+					{
+						Name:     "t2",
+						Workflow: "f1.toml",
+						Topic:    "task1",
+						Schedule: "0 * * * *",
+						Offset:   -4 * time.Hour,
+						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
+					},
+					{
+						Name:     "t4",
+						Workflow: "f1.toml",
+						Topic:    "task1",
+						Schedule: "0 * * * *",
+						Offset:   -4 * time.Hour,
+						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
+					},
+				},
+			},
+		},
+		"f3.toml": {
+			Input: "workflow/f3.toml",
+			Expected: expected{
+				Jobs: []job{
+					{
+						Workflow: "f3.toml",
+						Topic:    "task1",
+						Schedule: "0 0 * * *",
+						Template: "?date={yyyy}-{mm}-{dd}",
+					},
+				},
+				Files: []fileRule{
+					{
+						SrcPattern:   "./folder/*.txt",
+						workflowFile: "f3.toml",
+						Phase: workflow.Phase{
+							Task:     "task3",
+							Rule:     "files=./folder/*.txt",
+							Template: "{meta:file}",
+						},
+					},
+				},
+			},
+		},
 	}
-	//
-	for _, e := range tm.cron.Entries() {
-		e.Job.Run()
-	}
-	if eq, diff := trial.Contains(producer.Messages["task1"], []string{`"type":"task1"`, `"meta":"workflow=f1.toml&job=t2"`}); !eq {
-		t.Error(diff)
-	}
+
+	trial.New(fn, cases).EqualFn(trial.EqualOpt(trial.IgnoreAllUnexported)).Test(t)
 }
 
 func TestIsReady(t *testing.T) {

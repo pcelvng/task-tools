@@ -64,7 +64,7 @@ func TestRefresh(t *testing.T) {
 		},
 		"folder": {
 			Input:    &Cache{path: "../internal/test/workflow", isDir: true},
-			Expected: 2, // load folder with 2 files
+			Expected: 3, // load folder with 2 files
 		},
 		"sub-folder": {
 			Input:    &Cache{path: "../internal/test/parent", isDir: true},
@@ -82,9 +82,10 @@ func TestRefresh(t *testing.T) {
 					"missing.toml": {},
 					"f1.toml":      {},
 					"f2.toml":      {},
+					"f3.toml":      {},
 				},
 			},
-			Expected: 2,
+			Expected: 3,
 		},
 		"keep loaded": {
 			Input: &Cache{
@@ -99,7 +100,7 @@ func TestRefresh(t *testing.T) {
 					},
 				},
 			},
-			Expected: 2,
+			Expected: 3,
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
@@ -124,7 +125,7 @@ func TestNew(t *testing.T) {
 	c.Close()
 
 	// workflow invalid or empty
-	if _, err := New("../internal/test/workflow/f3.toml", nil); err == nil {
+	if _, err := New("../internal/test/workflow/missing.toml", nil); err == nil {
 		t.Error("Expected error for missing file")
 	}
 
