@@ -89,7 +89,7 @@ func unmarshalStat(b []byte) (sts stat.Stats) {
 	return sts
 }
 
-// matchFile checks the sts file Path will all file Rules that are registered with flowlord
+// matchFile checks the sts.Path with all file Rules that are registered with flowlord
 // if a match is found it will create a task and send it out
 func (tm *taskMaster) matchFile(sts stat.Stats) error {
 	matches := 0
