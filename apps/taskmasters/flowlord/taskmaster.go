@@ -91,7 +91,12 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	}
 	if opts.FileTopic != "" {
 		bOpts.InTopic = opts.FileTopic
+		bOpts.InChannel = opts.FileTopic + "-flowlord"
 		tm.filesConsumer, err = bus.NewConsumer(bOpts)
+		if err != nil {
+			log.Println("files consumer: ", err)
+			tm.filesConsumer = nil
+		}
 	}
 	http.HandleFunc("/refresh", tm.refreshCache)
 	return tm
@@ -163,7 +168,6 @@ func (tm *taskMaster) Info() interface{} {
 		for _, child := range ent.Child {
 			for _, v := range strings.Split(child, " ➞ ") {
 				delete(wCache[j.Workflow], v)
-				fmt.Println("delete ", v)
 			}
 		}
 	}
@@ -186,11 +190,9 @@ func (tm *taskMaster) Info() interface{} {
 
 		// remove entries from wCache
 		delete(wCache[f.workflowFile], k)
-		fmt.Println("delete ", k)
 		for _, child := range ent.Child {
 			for _, v := range strings.Split(child, " ➞ ") {
 				delete(wCache[f.workflowFile], v)
-				fmt.Println("delete ", v)
 			}
 		}
 	}

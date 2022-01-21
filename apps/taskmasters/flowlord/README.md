@@ -79,7 +79,7 @@ schedule a task after a specified file is written. This should be used with the 
 ```
 [[Phase]]
 task = "topic"
-rule = "files="/folder/*/*/*.txt"
+rule = "files=/folder/*/*/*.txt"
 template = "{meta:file}?opt=true"
 ```
 
