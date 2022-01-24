@@ -158,6 +158,11 @@ func TestPathTime(t *testing.T) {
 			path:    "/path/to/file/2017/12.txt",
 			expTime: trial.TimeHour("2017-12-01T00"),
 		},
+		{
+			msg:     "date with -",
+			path:    "/path/to/file/2018-01-17",
+			expTime: trial.TimeDay("2018-01-17"),
+		},
 	}
 	for _, test := range cases {
 		tm := PathTime(test.path)

@@ -170,7 +170,7 @@ func PathTime(pth string) time.Time {
 
 	// day dash slug regex
 	if d2SlugRe.MatchString(pth) {
-		s := dSlugRe.FindString(pth)
+		s := d2SlugRe.FindString(pth)
 		t, _ := time.Parse("2006-01-02", s)
 		return t
 	}
