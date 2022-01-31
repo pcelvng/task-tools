@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -69,8 +70,9 @@ func TestDoneTopic(t *testing.T) {
 
 		r := strings.NewReader(in.String())
 		scanner := bufio.NewScanner(r)
-		return doneTopic(scanner), nil
-
+		s := doneTopic(scanner)
+		sort.Strings(s)
+		return s, nil
 	}
 	cases := trial.Cases{
 		"task without job": {

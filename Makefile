@@ -4,7 +4,7 @@ GOFLAGS=-ldflags "-s -w -X github.com/pcelvng/task-tools.Version=${version} -X g
 BINDIR=${PREFIX}/bin
 BLDDIR = build
 
-ifeq ("{version}", "")
+ifeq ("${version}", "")
   version=$(shell git describe --tags --always)
 endif
 
