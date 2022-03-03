@@ -104,6 +104,7 @@ func (tm *taskMaster) matchFile(sts stat.Stats) error {
 		// setup custom files values from rules
 		meta, _ := url.ParseQuery(f.Rule)
 		meta.Set("file", sts.Path)
+		meta.Set("filename", filepath.Base(sts.Path))
 		meta.Set("workflow", f.workflowFile)
 		// todo: add job if provided in task name ex -> task:job
 
