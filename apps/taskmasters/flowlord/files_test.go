@@ -116,7 +116,7 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 		"match": {
 			Input: stat.Stats{Path: "gs://bucket/path/file.txt"},
 			Expected: []task.Task{
-				{Type: "basic", Meta: "file=gs://bucket/path/file.txt&workflow=basic.toml"},
+				{Type: "basic", Meta: "file=gs://bucket/path/file.txt&filename=file.txt&workflow=basic.toml"},
 			},
 		},
 		"no match": {
@@ -126,8 +126,8 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 		"match 2": {
 			Input: stat.Stats{Path: "gs://bucket/group/data.txt"},
 			Expected: []task.Task{
-				{Type: "basic", Meta: "file=gs://bucket/group/data.txt&workflow=basic.toml"},
-				{Type: "data", Meta: "file=gs://bucket/group/data.txt&job=1&workflow=data.toml"},
+				{Type: "basic", Meta: "file=gs://bucket/group/data.txt&filename=data.txt&workflow=basic.toml"},
+				{Type: "data", Meta: "file=gs://bucket/group/data.txt&filename=data.txt&job=1&workflow=data.toml"},
 			},
 		},
 	}
