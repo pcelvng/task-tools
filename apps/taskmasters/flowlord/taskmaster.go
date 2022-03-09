@@ -435,16 +435,22 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if !isReady(p.Rule, t.Meta) {
 				continue
 			}
-			taskTime := tmpl.InfoTime(t.Info)
 			info := tmpl.Meta(p.Template, meta)
 			rules, _ := url.ParseQuery(p.Rule)
 
+			taskTime := tmpl.InfoTime(t.Info)
+			if v := meta.Get("cron"); v != "" && taskTime.IsZero() {
+				taskTime, _ = time.Parse(time.RFC3339, v)
+			}
 			if !taskTime.IsZero() {
 				info = tmpl.Parse(info, taskTime)
 			}
 			child := task.NewWithID(p.Task, info, t.ID)
 
 			child.Meta = "workflow=" + meta.Get("workflow")
+			if v := meta.Get("cron"); v != "" {
+				child.Meta += "&cron=" + v
+			}
 			if rules.Get("job") != "" {
 				child.Meta += "&job=" + rules.Get("job")
 			}
