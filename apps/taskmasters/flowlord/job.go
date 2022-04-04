@@ -24,6 +24,7 @@ func (j *job) Run() {
 	info := tmpl.Parse(j.Template, tm)
 	tsk := task.New(j.Topic, info)
 	tsk.Meta = "workflow=" + j.Workflow
+	tsk.Meta += "&cron=" + tm.Format(time.RFC3339)
 	if j.Name != "" {
 		tsk.Meta += "&job=" + j.Name
 	}

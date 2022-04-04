@@ -185,6 +185,16 @@ func TestTaskMaster_Process(t *testing.T) {
 			},
 			Expected: []task.Task{},
 		},
+		"cron timestamp": {
+			Input: task.Task{
+				Type:   "task1",
+				Meta:   "workflow=f1.toml&cron=2020-01-01T08:17:23Z",
+				Result: task.CompleteResult,
+			},
+			Expected: []task.Task{
+				{Type: "task2", Info: "?time=2020-01-01", Meta: "workflow=f1.toml&cron=2020-01-01T08:17:23Z"},
+			},
+		},
 	}
 	trial.New(fn, cases).Test(t)
 }
@@ -310,15 +320,6 @@ func TestIsReady(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).Test(t)
-}
-
-func comparer(i1, i2 interface{}) (equal bool, diff string) {
-	act := i1.(task.Task)
-	exp := i2.(task.Task)
-	if exp.Created == "match" {
-		exp.Created = act.Created
-	}
-	return trial.Equal(act, exp)
 }
 
 func TestValidatePhase(t *testing.T) {
