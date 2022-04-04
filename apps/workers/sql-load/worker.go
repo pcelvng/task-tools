@@ -322,7 +322,7 @@ func (w *worker) QuerySchema() (err error) {
 // ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
 func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
-	errChan := make(chan error)
+	errChan := make(chan error, 2)
 	dataIn := make(chan []byte, 20)
 	var header []string
 	var hBytes []byte
@@ -339,7 +339,7 @@ func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan cha
 					}
 
 					if row, e := MakeCsvRow(ds.dbSchema, b, header, ds.delimiter); e != nil {
-						errChan <- fmt.Errorf("csv read error %w %q", e, string(b))
+						errChan <- fmt.Errorf("csv read error %w", e)
 					} else if row != nil {
 						atomic.AddInt32(&ds.rowCount, 1)
 						rowChan <- row
@@ -377,7 +377,7 @@ loop:
 				break loop
 			}
 			csvHeader = false
-			log.Println("csv header built, fields", len(header))
+			//log.Println("csv header built, fields", len(header))
 			continue
 		}
 
@@ -387,8 +387,9 @@ loop:
 		case err := <-errChan:
 			if skipErrors {
 				ds.skipCount++
-				log.Println(err)
+				//log.Println(err)
 			} else {
+				//log.Println(err)
 				ds.err = err
 				break loop
 			}
