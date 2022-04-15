@@ -19,7 +19,7 @@ all: $(APPS)
 
 $(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
-	GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./apps/*/$*
+	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./apps/*/$*
 	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./apps/*/$*
 
 $(APPS): %: $(BLDDIR)/%
