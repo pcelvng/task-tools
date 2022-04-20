@@ -1,4 +1,4 @@
-package s3
+package minio
 
 import (
 	"bytes"
@@ -12,26 +12,26 @@ import (
 )
 
 func ExampleNewReader() {
-	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	r, err := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.txt", testBucket)
+	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
 
 	fmt.Println(err)        // output: <nil>
-	fmt.Println(r.sts.Path) // output: s3://task-tools-s3test/read/test.txt
+	fmt.Println(r.sts.Path) // output: ms://task-tools-test/read/test.txt
 	fmt.Println(r.sts.Size) // output: 20
 
 	// Output:
 	// <nil>
-	// s3://task-tools-s3test/read/test.txt
+	// ms://task-tools-test/read/test.txt
 	// 20
 }
 
 func ExampleNewReaderErrBadClient() {
-	origHost := StoreHost
-	StoreHost = "bad/endpoint/"
-	r, err := NewReader("", "", "")
+
+	host := "bad/endpoint/"
+	r, err := NewReader("", host, "", "")
 	if err == nil {
 		return
 	}
@@ -39,16 +39,13 @@ func ExampleNewReaderErrBadClient() {
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
 
-	// restore endpoint
-	StoreHost = origHost
-
 	// Output:
 	// <nil>
 	// Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
 }
 
 func ExampleNewReaderErrBadObject() {
-	r, err := NewReader("", testAccessKey, testSecretKey)
+	r, err := NewReader("", testAccessKey, testSecretKey, testEndpoint)
 
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: Bucket name cannot be empty
@@ -59,8 +56,8 @@ func ExampleNewReaderErrBadObject() {
 }
 
 func ExampleNewReaderErrObjStat() {
-	pth := "s3://does-not/exist.txt"
-	r, err := NewReader(pth, testAccessKey, testSecretKey)
+	pth := "ms://does-not/exist.txt"
+	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: The specified bucket does not exist.
@@ -83,7 +80,7 @@ func ExampleNewReaderErrGzip() {
 	buf.Write([]byte("test line\n"))
 	opts := minio.PutObjectOptions{}
 	opts.ContentType = "application/octet-stream"
-	_, err := testS3Client.PutObject(
+	_, err := testClient.PutObject(
 		testBucket,
 		"bad.gz",
 		&buf,
@@ -95,8 +92,8 @@ func ExampleNewReaderErrGzip() {
 		return
 	}
 
-	pth := fmt.Sprintf("s3://%v/bad.gz", testBucket)
-	r, err := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/bad.gz", testBucket)
+	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: gzip: invalid header
@@ -110,8 +107,8 @@ func ExampleNewReaderErrGzip() {
 }
 
 func ExampleReader_Read() {
-	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	r, err := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.txt", testBucket)
+	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -135,8 +132,8 @@ func ExampleReader_Read() {
 }
 
 func ExampleReader_ReadCompressed() {
-	pth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.gz", testBucket)
+	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -160,8 +157,8 @@ func ExampleReader_ReadCompressed() {
 }
 
 func ExampleReader_ReadLine() {
-	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.txt", testBucket)
+	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -186,8 +183,8 @@ func ExampleReader_ReadLine() {
 }
 
 func ExampleReader_ReadLineCompressed() {
-	pth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.gz", testBucket)
+	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -217,8 +214,8 @@ func ExampleReader_ReadLineCompressed() {
 }
 
 func ExampleReader_Stats() {
-	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.txt", testBucket)
+	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -234,8 +231,8 @@ func ExampleReader_Stats() {
 }
 
 func ExampleReader_Close() {
-	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
-	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.txt", testBucket)
+	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -259,8 +256,8 @@ func ExampleReader_Close() {
 }
 
 func ExampleReader_CloseCompressed() {
-	pth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.gz", testBucket)
+	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -284,8 +281,8 @@ func ExampleReader_CloseCompressed() {
 }
 
 func ExampleReader_CloseandClose() {
-	pth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testAccessKey, testSecretKey)
+	pth := fmt.Sprintf("ms://%v/read/test.gz", testBucket)
+	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
 	if r == nil {
 		return
 	}
@@ -314,9 +311,9 @@ func ExampleReader_CloseandClose() {
 func TestListFiles(t *testing.T) {
 	// setup - create objects
 	pths := []string{
-		fmt.Sprintf("s3://%s/list-test/f1.txt", testBucket),
-		fmt.Sprintf("s3://%s/list-test/f2.txt", testBucket),
-		fmt.Sprintf("s3://%s/list-test/dir/f3.txt", testBucket),
+		fmt.Sprintf("ms://%s/list-test/f1.txt", testBucket),
+		fmt.Sprintf("ms://%s/list-test/f2.txt", testBucket),
+		fmt.Sprintf("ms://%s/list-test/dir/f3.txt", testBucket),
 	}
 
 	for _, pth := range pths {
@@ -324,8 +321,8 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test returns only files
-	dirPth := fmt.Sprintf("s3://%s/list-test/", testBucket)
-	allSts, err := ListFiles(dirPth, testAccessKey, testSecretKey)
+	dirPth := fmt.Sprintf("ms://%s/list-test/", testBucket)
+	allSts, err := ListFiles(dirPth, testEndpoint, testAccessKey, testSecretKey)
 	if err != nil {
 		t.Error(err)
 	}
@@ -361,8 +358,8 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test that missing trailing "/" has same results
-	dirPth = fmt.Sprintf("s3://%s/list-test", testBucket)
-	allSts, err = ListFiles(dirPth, testAccessKey, testSecretKey)
+	dirPth = fmt.Sprintf("ms://%s/list-test", testBucket)
+	allSts, err = ListFiles(dirPth, testEndpoint, testAccessKey, testSecretKey)
 	if err != nil {
 		t.Errorf("expected nil but got err '%v'\n", err.Error())
 	}
@@ -398,15 +395,13 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test bad s3 client
-	origHost := StoreHost
-	StoreHost = "bad/endpoint/"
-	_, err = ListFiles(dirPth, testAccessKey, testSecretKey)
+	StoreHost := "bad/endpoint/"
+	_, err = ListFiles(dirPth, testAccessKey, testSecretKey, StoreHost)
 	if err == nil {
 		t.Error("expected err but got nil instead")
 	}
 
 	// cleanup
-	StoreHost = origHost // restore endpoint
 	for _, pth := range pths {
 		rmTestFile(pth)
 	}

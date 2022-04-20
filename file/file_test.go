@@ -159,6 +159,7 @@ func TestGlob_S3(t *testing.T) {
 			Expected: []string{path + "/test/f3/file5.txt", path + "/test/f5/file-6.txt"},
 		},
 	}
+	// TODO: test minio glob m3:localhost:9000/*/*.txt
 	trial.New(fn, cases).SubTest(t)
 }
 

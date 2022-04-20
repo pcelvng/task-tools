@@ -4,15 +4,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"hash"
-	"net/url"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/jbsmith7741/uri"
-	"github.com/pcelvng/task-tools/file/util"
 )
 
 func New() Stats {
@@ -116,10 +112,6 @@ func (s *Stats) ParseCreated() time.Time {
 	return t.In(time.UTC)
 }
 
-func (s Stats) ParsePath() (scheme, host, fPth string) {
-	return util.ParsePath(s.Path)
-}
-
 func (s Stats) JSONBytes() []byte {
 	b, _ := json.Marshal(s)
 	return b
@@ -127,26 +119,6 @@ func (s Stats) JSONBytes() []byte {
 
 func (s Stats) JSONString() string {
 	return string(s.JSONBytes())
-}
-
-// InfoString creates a uri-style info string from
-// Stats.
-func (s Stats) InfoString() string {
-	u := &url.URL{}
-	u.Scheme, u.Host, u.Path = s.ParsePath()
-	qVal := u.Query()
-	qVal.Set("linecnt", strconv.FormatInt(s.LineCnt, 10))
-	qVal.Set("bytecnt", strconv.FormatInt(s.ByteCnt, 10))
-	qVal.Set("size", strconv.FormatInt(s.Size, 10))
-	qVal.Set("checksum", s.Checksum)
-	qVal.Set("created", s.Created)
-	u.RawQuery = qVal.Encode()
-
-	info := u.String()
-	if u.Scheme == "" && !strings.HasPrefix(info, "/") {
-		info = "/" + info
-	}
-	return info
 }
 
 // Clone will create a copy of stat that won't trigger

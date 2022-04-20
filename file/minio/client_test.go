@@ -1,4 +1,4 @@
-package s3
+package minio
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/hydronica/trial"
 	minio "github.com/minio/minio-go"
 )
 
@@ -17,18 +18,15 @@ var (
 	testEndpoint  = "play.minio.io:9000"
 	testAccessKey = "Q3AM3UQ867SPQQA43P2F"
 	testSecretKey = "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
-	testBucket    = "task-tools-s3test"
-	testS3Client  *minio.Client
+	testBucket    = "task-tools-test"
+	testClient    *minio.Client
 )
 
 func TestMain(m *testing.M) {
 	var err error
 
-	// switch to test endpoint
-	StoreHost = testEndpoint
-
 	// test client
-	testS3Client, err = newTestS3Client()
+	testClient, err = newTestClient()
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
@@ -40,13 +38,13 @@ func TestMain(m *testing.M) {
 	}
 
 	// create two test files for reading
-	pth := fmt.Sprintf("s3://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("ms://%v/read/test.txt", testBucket)
 	if err := createTestFile(pth); err != nil {
 		log.Fatal(err)
 	}
 
 	// compressed read test file
-	gzPth := fmt.Sprintf("s3://%v/read/test.gz", testBucket)
+	gzPth := fmt.Sprintf("ms://%v/read/test.gz", testBucket)
 	if err := createTestFile(gzPth); err != nil {
 		log.Fatal(err)
 	}
@@ -64,12 +62,12 @@ func TestMain(m *testing.M) {
 	os.Exit(runRslt)
 }
 
-func newTestS3Client() (*minio.Client, error) {
-	return newS3Client(testAccessKey, testSecretKey)
+func newTestClient() (*minio.Client, error) {
+	return newClient(testEndpoint, testAccessKey, testSecretKey)
 }
 
 func createBucket(bckt string) error {
-	exists, err := testS3Client.BucketExists(bckt)
+	exists, err := testClient.BucketExists(bckt)
 	if err != nil {
 		return err
 	}
@@ -78,15 +76,15 @@ func createBucket(bckt string) error {
 		return nil
 	}
 
-	return testS3Client.MakeBucket(bckt, "us-east-1")
+	return testClient.MakeBucket(bckt, "us-east-1")
 }
 
 func rmBucket(bckt string) error {
-	return testS3Client.RemoveBucket(bckt)
+	return testClient.RemoveBucket(bckt)
 }
 
 func createTestFile(pth string) error {
-	w, err := newWriterFromS3Client(pth, testS3Client, nil)
+	w, err := newWriterFromClient(pth, testClient, nil)
 	if err != nil {
 		return err
 	}
@@ -97,23 +95,8 @@ func createTestFile(pth string) error {
 }
 
 func rmTestFile(pth string) error {
-	bckt, objPth := parsePth(pth)
-	return testS3Client.RemoveObject(bckt, objPth)
-}
-
-func ExampleParsePth() {
-	// showing:
-	// - returned bucket
-	// - returned object path
-
-	pth := "s3://bucket/path/to/object.txt"
-	bucket, objectPth := parsePth(pth)
-	fmt.Println(bucket)    // output: bucket
-	fmt.Println(objectPth) // output: /path/to/object.txt
-
-	// Output:
-	// bucket
-	// path/to/object.txt
+	_, bckt, objPth := parsePth(pth)
+	return testClient.RemoveObject(bckt, objPth)
 }
 
 func TestParsePth(t *testing.T) {
@@ -122,36 +105,48 @@ func TestParsePth(t *testing.T) {
 		outBucket string
 		outObjPth string
 	}
-	tests := []inputOutput{
-		{"", "", ""},
-		{"s3://", "", ""},
-		{"s3://bucket", "bucket", ""},
-		{"s3://bucket/", "bucket", ""},
-		{"s3://bucket/pth/to", "bucket", "pth/to"},
-		{"s3://bucket/pth/to/", "bucket", "pth/to/"},
-		{"s3://bucket/pth//to/", "bucket", "pth//to/"},
-		{"s3://bucket/pth//to//", "bucket", "pth//to//"},
-		{"s3://bucket/pth/to/object.txt", "bucket", "pth/to/object.txt"},
-	}
 
-	for _, tst := range tests {
-		bucket, objPth := parsePth(tst.inPth)
-		if bucket != tst.outBucket || objPth != tst.outObjPth {
-			t.Errorf(
-				"for input '%v' expected bucket:objectPth of %v:%v but got %v:%v",
-				tst.inPth,
-				tst.outBucket,
-				tst.outObjPth,
-				bucket,
-				objPth,
-			)
-		}
+	fn := func(i trial.Input) (interface{}, error) {
+		_, b, v := parsePth(i.String())
+		return []string{b, v}, nil
 	}
+	cases := trial.Cases{
+		"empty": {
+			Input:    "",
+			Expected: []string{"", ""},
+		},
+		"bucket only": {
+			Input:    "ms://bucket",
+			Expected: []string{"bucket", ""},
+		},
+		"bucket/": {
+			Input:    "ms://bucket/",
+			Expected: []string{"bucket", ""},
+		},
+		"full path": {
+			Input:    "ms://bucket/pth/to/object.txt",
+			Expected: []string{"bucket", "pth/to/object.txt"},
+		},
+		"host:port+bucket": {
+			Input:    "ms://127.0.0.1:80/bucket",
+			Expected: []string{"bucket", ""},
+		},
+		"host:port+bucket/": {
+			Input:    "ms://127.0.0.1:81/bucket/",
+			Expected: []string{"bucket", ""},
+		},
+		"host:port+bucket+path": {
+			Input:    "ms://127.0.0.1:81/bucket/path/to/file.txt",
+			Expected: []string{"bucket", "path/to/file.txt"},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+
 }
 
 func TestStat(t *testing.T) {
 	//setup
-	dir := "s3://" + testBucket + "/stat/test/"
+	dir := "ms://" + testBucket + "/stat/test/"
 	file := "test.txt"
 	path := dir + file
 	t.Log(path)
@@ -160,7 +155,7 @@ func TestStat(t *testing.T) {
 	}
 
 	t.Run("directory", func(t *testing.T) {
-		s, err := Stat(dir, testAccessKey, testSecretKey)
+		s, err := Stat(dir, testAccessKey, testSecretKey, testEndpoint)
 		if err != nil {
 			t.Error("directory", err)
 		}
@@ -173,7 +168,7 @@ func TestStat(t *testing.T) {
 	})
 
 	t.Run("file", func(t *testing.T) {
-		s, err := Stat(path, testAccessKey, testSecretKey)
+		s, err := Stat(path, testAccessKey, testSecretKey, testEndpoint)
 		if err != nil {
 			t.Error("file", err)
 		}
@@ -186,7 +181,7 @@ func TestStat(t *testing.T) {
 	})
 
 	t.Run("missing", func(t *testing.T) {
-		_, err := Stat(dir+"missing.txt", testAccessKey, testSecretKey)
+		_, err := Stat(dir+"missing.txt", testAccessKey, testSecretKey, testEndpoint)
 		if err == nil {
 			t.Error("Expected error on missing file")
 		}

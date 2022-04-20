@@ -1,54 +1,56 @@
-package s3
+package minio
 
 import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/pcelvng/task-tools/file/buf"
 )
 
 func ExampleNewWriter() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, err := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, err := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
 
-	fmt.Println(err)               // output: <nil>
-	fmt.Println(w.sts.Path)        // output: s3://task-tools-s3test/write/test.txt
-	fmt.Println(w.s3Client != nil) // output: true
-	fmt.Println(w.bfr != nil)      // output: true
-	fmt.Println(w.bucket)          // output: task-tools-s3test
-	fmt.Println(w.objPth)          // output: write/test.txt
-	fmt.Println(w.tmpPth == "")    // output: true
+	fmt.Println(err)             // output: <nil>
+	fmt.Println(w.sts.Path)      // output: ms://task-tools-test/write/test.txt
+	fmt.Println(w.client != nil) // output: true
+	fmt.Println(w.bfr != nil)    // output: true
+	fmt.Println(w.bucket)        // output: task-tools-test
+	fmt.Println(w.objPth)        // output: write/test.txt
+	fmt.Println(w.tmpPth == "")  // output: true
 
 	// Output:
 	// <nil>
-	// s3://task-tools-s3test/write/test.txt
+	// ms://task-tools-test/write/test.txt
 	// true
 	// true
-	// task-tools-s3test
+	// task-tools-test
 	// write/test.txt
 	// true
 }
 
 func ExampleNewWriterTmpFile() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	opt := NewOptions()
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	opt := buf.NewOptions()
 	opt.UseFileBuf = true
 	opt.FileBufDir = "./test/tmp"
 	opt.FileBufPrefix = "test_"
-	w, err := NewWriter(pth, testAccessKey, testSecretKey, opt)
+	w, err := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, opt)
 	if w == nil {
 		return
 	}
 
-	fmt.Println(err)               // output: <nil>
-	fmt.Println(w.sts.Path)        // output: s3://task-tools-s3test/write/test.txt
-	fmt.Println(w.s3Client != nil) // output: true
-	fmt.Println(w.bfr != nil)      // output: true
-	fmt.Println(w.bucket)          // output: task-tools-s3test
-	fmt.Println(w.objPth)          // output: write/test.txt
-	fmt.Println(w.tmpPth != "")    // output: true
+	fmt.Println(err)             // output: <nil>
+	fmt.Println(w.sts.Path)      // output: ms://task-tools-test/write/test.txt
+	fmt.Println(w.client != nil) // output: true
+	fmt.Println(w.bfr != nil)    // output: true
+	fmt.Println(w.bucket)        // output: task-tools-test
+	fmt.Println(w.objPth)        // output: write/test.txt
+	fmt.Println(w.tmpPth != "")  // output: true
 
 	// cleanup
 	w.bfr.Cleanup()
@@ -57,46 +59,46 @@ func ExampleNewWriterTmpFile() {
 
 	// Output:
 	// <nil>
-	// s3://task-tools-s3test/write/test.txt
+	// ms://task-tools-test/write/test.txt
 	// true
 	// true
-	// task-tools-s3test
+	// task-tools-test
 	// write/test.txt
 	// true
 }
 
 func ExampleNewWriterCompressed() {
-	pth := fmt.Sprintf("s3://%v/write/test.gz", testBucket)
-	w, err := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.gz", testBucket)
+	w, err := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
 
-	fmt.Println(err)               // output: <nil>
-	fmt.Println(w.sts.Path)        // output: s3://task-tools-s3test/write/test.gz
-	fmt.Println(w.s3Client != nil) // output: true
-	fmt.Println(w.bfr != nil)      // output: true
-	fmt.Println(w.bucket)          // output: task-tools-s3test
-	fmt.Println(w.objPth)          // output: write/test.gz
-	fmt.Println(w.tmpPth == "")    // output: true
+	fmt.Println(err)             // output: <nil>
+	fmt.Println(w.sts.Path)      // output: ms://task-tools-test/write/test.gz
+	fmt.Println(w.client != nil) // output: true
+	fmt.Println(w.bfr != nil)    // output: true
+	fmt.Println(w.bucket)        // output: task-tools-test
+	fmt.Println(w.objPth)        // output: write/test.gz
+	fmt.Println(w.tmpPth == "")  // output: true
 
 	// Output:
 	// <nil>
-	// s3://task-tools-s3test/write/test.gz
+	// ms://task-tools-test/write/test.gz
 	// true
 	// true
-	// task-tools-s3test
+	// task-tools-test
 	// write/test.gz
 	// true
 }
 
 func ExampleNewWriterErrBufS3() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	opt := NewOptions()
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	opt := buf.NewOptions()
 	opt.UseFileBuf = true
 	opt.FileBufDir = "/private/bad/tmp/dir"
 	opt.FileBufPrefix = "test_"
-	w, err := NewWriter(pth, testAccessKey, testSecretKey, opt)
+	w, err := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, opt)
 	if err == nil {
 		return
 	}
@@ -111,9 +113,8 @@ func ExampleNewWriterErrBufS3() {
 }
 
 func ExampleNewWriterErrBadClient() {
-	origHost := StoreHost
-	StoreHost = "bad/endpoint/"
-	w, err := NewWriter("", "", "", nil)
+	StoreHost := "bad/endpoint/"
+	w, err := NewWriter("", StoreHost, "", "", nil)
 	if err == nil {
 		return
 	}
@@ -121,17 +122,14 @@ func ExampleNewWriterErrBadClient() {
 	fmt.Println(w)   // output: <nil>
 	fmt.Println(err) // output: Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
 
-	// restore endpoint
-	StoreHost = origHost
-
 	// Output:
 	// <nil>
 	// Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
 }
 
 func ExampleWriter_Write() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -147,8 +145,8 @@ func ExampleWriter_Write() {
 }
 
 func ExampleWriter_WriteLine() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -162,8 +160,8 @@ func ExampleWriter_WriteLine() {
 }
 
 func ExampleWriter_Stats() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -172,7 +170,7 @@ func ExampleWriter_Stats() {
 	w.WriteLine([]byte("test line"))
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: s3://task-tools-s3test/write/test.txt
+	fmt.Println(sts.Path)          // output: ms://task-tools-test/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 0
@@ -180,7 +178,7 @@ func ExampleWriter_Stats() {
 	fmt.Println(sts.Created == "") // output: true
 
 	// Output:
-	// s3://task-tools-s3test/write/test.txt
+	// ms://task-tools-test/write/test.txt
 	// 20
 	// 2
 	// 0
@@ -189,8 +187,8 @@ func ExampleWriter_Stats() {
 }
 
 func ExampleWriter_CloseStats() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -200,7 +198,7 @@ func ExampleWriter_CloseStats() {
 	w.Close()
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: s3://task-tools-s3test/write/test.txt
+	fmt.Println(sts.Path)          // output: ms://task-tools-test/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 20
@@ -211,7 +209,7 @@ func ExampleWriter_CloseStats() {
 	rmTestFile(pth)
 
 	// Output:
-	// s3://task-tools-s3test/write/test.txt
+	// ms://task-tools-test/write/test.txt
 	// 20
 	// 2
 	// 20
@@ -220,8 +218,8 @@ func ExampleWriter_CloseStats() {
 }
 
 func ExampleWriter_Abort() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -241,8 +239,8 @@ func ExampleWriter_Abort() {
 }
 
 func ExampleWriter_AbortAndAbort() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -260,8 +258,8 @@ func ExampleWriter_AbortAndAbort() {
 }
 
 func ExampleWriter_Close() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -284,8 +282,8 @@ func ExampleWriter_Close() {
 }
 
 func ExampleWriter_CloseErrCopy() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -307,8 +305,8 @@ func ExampleWriter_CloseErrCopy() {
 }
 
 func ExampleWriter_CloseAndClose() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -332,8 +330,8 @@ func ExampleWriter_CloseAndClose() {
 }
 
 func ExampleWriter_AbortAndClose() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -353,8 +351,8 @@ func ExampleWriter_AbortAndClose() {
 }
 
 func ExampleWriter_CloseAndAbort() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -378,12 +376,12 @@ func ExampleWriter_CloseAndAbort() {
 }
 
 func ExampleWriter_CopyTmpFile() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	opt := NewOptions()
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	opt := buf.NewOptions()
 	opt.UseFileBuf = true
 	opt.FileBufDir = "./test/tmp"
 	opt.FileBufPrefix = "test_"
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, opt)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, opt)
 	if w == nil {
 		return
 	}
@@ -417,8 +415,8 @@ func ExampleWriter_CopyTmpFile() {
 }
 
 func ExampleWriter_CopyNoExtension() {
-	pth := fmt.Sprintf("s3://%v/write/test", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -449,8 +447,8 @@ func ExampleWriter_CopyNoExtension() {
 }
 
 func ExampleWriter_SetObjSts() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}
@@ -479,8 +477,8 @@ func ExampleWriter_SetObjSts() {
 }
 
 func ExampleWriter_SetObjStsErr() {
-	pth := fmt.Sprintf("s3://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testAccessKey, testSecretKey, nil)
+	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+	w, _ := NewWriter(pth, testEndpoint, testAccessKey, testSecretKey, nil)
 	if w == nil {
 		return
 	}

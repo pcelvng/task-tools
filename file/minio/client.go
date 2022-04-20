@@ -1,6 +1,7 @@
-package s3
+package minio
 
 import (
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -8,19 +9,18 @@ import (
 	minio "github.com/minio/minio-go"
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
-	"github.com/pcelvng/task-tools/file/util"
 	"github.com/pkg/errors"
 )
 
 var (
 	// domain of s3 compatible api
-	StoreHost = "s3.amazonaws.com"
+	//	StoreHost = "s3.amazonaws.com"
 
-	// map that maintains s3 clients
+	// map that maintains minIO clients
 	// to prevent creating new clients with
 	// every file for the same auth credentials
-	s3Clients = make(map[string]*minio.Client)
-	mu        sync.Mutex
+	minIOClients = make(map[string]*minio.Client) // key = host+key+secret
+	mu           sync.Mutex
 )
 
 func NewOptions() *Options {
@@ -33,16 +33,16 @@ type Options struct {
 	*buf.Options
 }
 
-func newS3Client(accessKey, secretKey string) (s3Client *minio.Client, err error) {
+func newClient(StoreHost, accessKey, secretKey string) (client *minio.Client, err error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	s3Client, _ = s3Clients[StoreHost+accessKey+secretKey]
-	if s3Client == nil {
-		s3Client, err = minio.New(StoreHost, accessKey, secretKey, true)
-		s3Clients[StoreHost+accessKey+secretKey] = s3Client
+	client, _ = minIOClients[StoreHost+accessKey+secretKey]
+	if client == nil {
+		client, err = minio.New(StoreHost, accessKey, secretKey, true)
+		minIOClients[StoreHost+accessKey+secretKey] = client
 	}
-	return s3Client, err
+	return client, err
 }
 
 // parsePth will parse an s3 path of the form:
@@ -51,19 +51,29 @@ func newS3Client(accessKey, secretKey string) (s3Client *minio.Client, err error
 // If either bucket or object are empty then
 // pth was not in the correct format for parsing or
 // object and or bucket do not exist in pth.
-func parsePth(pth string) (bucket, objPth string) {
-	_, bucket, objPth = util.ParsePath(pth)
-	objPth = strings.TrimLeft(objPth, "/")
-	return bucket, objPth
+func parsePth(p string) (scheme, bucket, path string) {
+	u, _ := url.Parse(p)
+	bucket = u.Host
+	path = strings.TrimLeft(u.Path, "/")
+	if strings.Contains(bucket, ":") {
+
+		i := strings.Index(path, "/")
+		if i == -1 { // no / found in path
+			return u.Scheme, path, ""
+		}
+		bucket = path[:i]
+		path = strings.TrimLeft(path[i:], "/")
+	}
+	return u.Scheme, bucket, path
 }
 
-// Stat a s3 directory or file for additional information
-func Stat(pth string, accessKey, secretKey string) (stat.Stats, error) {
-	client, err := newS3Client(accessKey, secretKey)
+// Stat a directory or file for additional information
+func Stat(pth string, accessKey, secretKey string, host string) (stat.Stats, error) {
+	client, err := newClient(accessKey, secretKey, host)
 	if err != nil {
-		return stat.Stats{}, errors.Wrap(err, "s3 client init")
+		return stat.Stats{}, errors.Wrap(err, "client init")
 	}
-	bucket, objPth := parsePth(pth)
+	_, bucket, objPth := parsePth(pth)
 	info, err := client.StatObject(bucket, objPth, minio.StatObjectOptions{})
 	// check if directory
 	if err != nil {

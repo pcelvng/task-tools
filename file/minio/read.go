@@ -1,4 +1,4 @@
-package s3
+package minio
 
 import (
 	"bufio"
@@ -14,31 +14,31 @@ import (
 	"github.com/pcelvng/task-tools/file/util"
 )
 
-func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
+func NewReader(pth string, host, accessKey, secretKey string) (*Reader, error) {
 	// get s3 client
-	s3Client, err := newS3Client(accessKey, secretKey)
+	s3Client, err := newClient(host, accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return newReaderFromS3Client(pth, s3Client)
+	return newReaderFromClient(pth, s3Client)
 }
 
-func newReaderFromS3Client(pth string, s3Client *minio.Client) (*Reader, error) {
+func newReaderFromClient(pth string, client *minio.Client) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
 	// get bucket, objPth and validate
-	bucket, objPth := parsePth(pth)
+	_, bucket, objPth := parsePth(pth)
 
 	// get object
-	s3Obj, err := s3Client.GetObject(bucket, objPth, minio.GetObjectOptions{})
+	obj, err := client.GetObject(bucket, objPth, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	// stats
-	objInfo, err := s3Obj.Stat()
+	objInfo, err := obj.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func newReaderFromS3Client(pth string, s3Client *minio.Client) (*Reader, error) 
 	sts.SetSize(objInfo.Size)
 
 	// hash reader
-	rHshr := util.NewHashReader(md5.New(), s3Obj)
+	rHshr := util.NewHashReader(md5.New(), obj)
 
 	// compression
 	var rBuf *bufio.Reader
@@ -62,7 +62,7 @@ func newReaderFromS3Client(pth string, s3Client *minio.Client) (*Reader, error) 
 	}
 
 	return &Reader{
-		s3Obj: s3Obj,
+		obj:   obj,
 		rBuf:  rBuf,
 		rGzip: rGzip,
 		rHshr: rHshr,
@@ -72,7 +72,7 @@ func newReaderFromS3Client(pth string, s3Client *minio.Client) (*Reader, error) 
 
 // Reader will read in streamed bytes from the s3 object.NewS3Client
 type Reader struct {
-	s3Obj *minio.Object // s3 file object
+	obj   *minio.Object // s3 file object
 	rBuf  *bufio.Reader
 	rGzip *gzip.Reader
 	rHshr *util.HashReader
@@ -121,7 +121,7 @@ func (r *Reader) Close() (err error) {
 	if r.rGzip != nil {
 		r.rGzip.Close()
 	}
-	err = r.s3Obj.Close()
+	err = r.obj.Close()
 
 	// calculate checksum
 	r.sts.SetChecksum(r.rHshr.Hshr)
@@ -133,14 +133,14 @@ func (r *Reader) Close() (err error) {
 // ListFiles will list all file objects in the provided pth directory.
 // pth is assumed to be a directory and so a trailing "/" is appended
 // if one does not already exist.
-func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
-	// get s3 client
-	s3Client, err := newS3Client(accessKey, secretKey)
+func ListFiles(pth string, host, accessKey, secretKey string) ([]stat.Stats, error) {
+	// get client
+	client, err := newClient(host, accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
 
-	bucket, objPth := parsePth(pth)
+	scheme, bucket, objPth := parsePth(pth)
 
 	// objPth should always have trailing '/' (assumed to be dir)
 	if !strings.HasSuffix(objPth, "/") {
@@ -154,7 +154,7 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 	defer close(doneCh)
 
 	allSts := make([]stat.Stats, 0)
-	objInfoCh := s3Client.ListObjectsV2(bucket, objPth, false, doneCh)
+	objInfoCh := client.ListObjectsV2(bucket, objPth, false, doneCh)
 	errs := appenderr.New()
 	for objInfo := range objInfoCh {
 		// don't include err objects
@@ -167,7 +167,8 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 		sts.IsDir = strings.HasSuffix(objInfo.Key, "/")
 		sts.SetCreated(objInfo.LastModified)
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
-		sts.SetPath(fmt.Sprintf("s3://%s/%s", bucket, objInfo.Key))
+		// TODO: replace s3 with path hostType
+		sts.SetPath(fmt.Sprintf("%s://%s/%s", scheme, bucket, objInfo.Key))
 		sts.SetSize(objInfo.Size)
 
 		allSts = append(allSts, sts)
