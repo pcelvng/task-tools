@@ -7,12 +7,11 @@ require (
 	cloud.google.com/go/bigquery v1.17.0
 	cloud.google.com/go/datacatalog v1.0.0 // indirect
 	cloud.google.com/go/pubsub v1.17.0 // indirect
-	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.0.0
-	github.com/dustinevan/chron v1.0.0 // indirect
+	github.com/dustinevan/chron v1.0.0
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -49,6 +48,5 @@ require (
 	google.golang.org/api v0.58.0
 	google.golang.org/genproto v0.0.0-20211019152133-63b7e35f4404 // indirect
 	google.golang.org/grpc v1.41.0 // indirect
-	gopkg.in/dustinevan/chron.v0 v0.0.0
 	gopkg.in/ini.v1 v1.62.0 // indirect
 )

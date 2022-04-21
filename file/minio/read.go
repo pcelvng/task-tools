@@ -139,6 +139,7 @@ func ListFiles(pth string, host, accessKey, secretKey string) ([]stat.Stats, err
 	if err != nil {
 		return nil, err
 	}
+	isMinioHost := strings.Contains(pth, host)
 
 	scheme, bucket, objPth := parsePth(pth)
 
@@ -168,7 +169,11 @@ func ListFiles(pth string, host, accessKey, secretKey string) ([]stat.Stats, err
 		sts.SetCreated(objInfo.LastModified)
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
 		// TODO: replace s3 with path hostType
-		sts.SetPath(fmt.Sprintf("%s://%s/%s", scheme, bucket, objInfo.Key))
+		if isMinioHost {
+			sts.SetPath(fmt.Sprintf("%s://%s/%s/%s", scheme, host, bucket, objInfo.Key))
+		} else {
+			sts.SetPath(fmt.Sprintf("%s://%s/%s", scheme, bucket, objInfo.Key))
+		}
 		sts.SetSize(objInfo.Size)
 
 		allSts = append(allSts, sts)

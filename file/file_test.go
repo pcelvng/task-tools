@@ -1,19 +1,14 @@
 package file
 
 import (
-	"os"
-	"testing"
-
-	"log"
-
-	"net/url"
-	"strings"
-
 	"fmt"
+	"log"
+	"os"
+	"strings"
+	"testing"
 
 	"github.com/hydronica/trial"
 	minio "github.com/minio/minio-go"
-	"github.com/pcelvng/task-tools/file/s3"
 )
 
 var (
@@ -23,7 +18,7 @@ var (
 	// https://docs.minio.io/docs/golang-client-api-reference
 	testEndpoint = "play.minio.io:9000"
 	testBucket   = "task-tools-test"
-	testS3Client *minio.Client
+	testClient   *minio.Client
 
 	wd   string
 	opts = Options{
@@ -38,11 +33,10 @@ func TestMain(m *testing.M) {
 	wd, _ = os.Getwd()
 
 	// setup remote (minio/s3/gcs) test
-	s3.StoreHost = testEndpoint // set test endpoint
 
 	// s3 client
 	var err error
-	testS3Client, err = minio.New(s3.StoreHost, opts.AccessKey, opts.SecretKey, true)
+	testClient, err = minio.New(testEndpoint, opts.AccessKey, opts.SecretKey, true)
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
@@ -64,16 +58,24 @@ func TestMain(m *testing.M) {
 		"test/f3/file5.txt",
 		"test/f5/file-6.txt",
 	}
+	os.MkdirAll("./test/f1", 0750)
+	os.MkdirAll("./test/f3", 0750)
+	os.MkdirAll("./test/f5", 0750)
 	for _, pth := range pths {
-		createFile("./"+pth, &opts)                                   // local
-		createFile(fmt.Sprintf("s3://%s/%s", testBucket, pth), &opts) // remote
+		if err := createFile("./"+pth, &opts); err != nil {
+			log.Fatal(err)
+		} // local
+		if err := createFile(fmt.Sprintf("m3://%s/%s/%s", testEndpoint, testBucket, pth), &opts); err != nil { // remote
+			log.Fatal(err)
+		}
+
 	}
 
 	code := m.Run()
 
 	// cleanup
 	os.RemoveAll("./test/")
-	rmS3Bucket(testBucket)
+	rmBucket(testBucket)
 	os.Exit(code)
 }
 
@@ -123,8 +125,8 @@ func TestGlob_Local(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
-func TestGlob_S3(t *testing.T) {
-	path := "s3://" + testBucket
+func TestGlob_Minio(t *testing.T) {
+	path := "m3://" + testEndpoint + "/" + testBucket
 	fn := func(input trial.Input) (interface{}, error) {
 		sts, err := Glob(input.String(), &opts)
 		files := make([]string, len(sts))
@@ -163,35 +165,27 @@ func TestGlob_S3(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
-func createFile(pth string, opt *Options) {
-	w, _ := NewWriter(pth, opt)
+func createFile(pth string, opt *Options) error {
+	w, err := NewWriter(pth, opt)
+	if err != nil {
+		return err
+	}
+
 	w.WriteLine([]byte("test line"))
 	w.WriteLine([]byte("test line"))
 	w.Close()
+	return nil
 }
 
 func createBucket(bckt string) error {
-	exists, err := testS3Client.BucketExists(bckt)
+	exists, err := testClient.BucketExists(bckt)
 	if err != nil || exists {
 		return err
 	}
 
-	return testS3Client.MakeBucket(bckt, "us-east-1")
+	return testClient.MakeBucket(bckt, "us-east-1")
 }
 
-func rmS3Bucket(bckt string) error {
-	return testS3Client.RemoveBucket(bckt)
-}
-
-func rmS3File(pth string) error {
-	bckt, objPth := parseS3Pth(pth)
-	return testS3Client.RemoveObject(bckt, objPth)
-}
-
-func parseS3Pth(pth string) (bucket, objPth string) {
-	// err is not possible since it's not via a request.
-	pPth, _ := url.Parse(pth)
-	bucket = pPth.Host
-	objPth = strings.TrimLeft(pPth.Path, "/")
-	return bucket, objPth
+func rmBucket(bckt string) error {
+	return testClient.RemoveBucket(bckt)
 }

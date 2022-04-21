@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
+	"log"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 	"github.com/pcelvng/task-tools/file/local"
 	"github.com/pcelvng/task-tools/file/minio"
 	"github.com/pcelvng/task-tools/file/nop"
-	"github.com/pcelvng/task-tools/file/s3"
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
@@ -262,7 +262,7 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 	if err != nil {
 		return stat.Stats{}, err
 	}
-	switch u.Host {
+	switch u.Scheme {
 	case "s3":
 		return minio.Stat(path, awsHost, opt.AccessKey, opt.SecretKey)
 	case "gs":
@@ -282,7 +282,7 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 // Supports the same globing patterns as provided in *nix
 // terminals.
 //
-// Globing in directories is  supported.
+// Globing in directories is supported.
 // ie - s3://bucket/path/*/files.txt will work
 // s3://bucket/path/dir[0-5]*/*.txt will work
 // but s3://bucket/path/to/*.txt will work.
@@ -298,6 +298,7 @@ func Glob(pth string, opt *Options) ([]stat.Stats, error) {
 		if err != nil {
 			return nil, err
 		}
+		log.Println(f)
 		folders = make([]string, len(f))
 		for i, v := range f {
 			folders[i] = v.Path

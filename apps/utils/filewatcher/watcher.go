@@ -5,13 +5,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustinevan/chron"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
-	chron "gopkg.in/dustinevan/chron.v0"
 )
 
 var (
