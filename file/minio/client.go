@@ -69,7 +69,7 @@ func parsePth(p string) (scheme, bucket, path string) {
 
 // Stat a directory or file for additional information
 func Stat(pth string, accessKey, secretKey string, host string) (stat.Stats, error) {
-	client, err := newClient(accessKey, secretKey, host)
+	client, err := newClient(host, accessKey, secretKey)
 	if err != nil {
 		return stat.Stats{}, errors.Wrap(err, "client init")
 	}
@@ -102,5 +102,5 @@ func Stat(pth string, accessKey, secretKey string, host string) (stat.Stats, err
 		Path:     info.Key,
 		Created:  info.LastModified.Format(time.RFC3339),
 		IsDir:    false,
-	}, nil
+	}, err
 }

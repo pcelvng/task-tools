@@ -92,8 +92,8 @@ func ExampleNewWriterCompressed() {
 	// true
 }
 
-func ExampleNewWriterErrBufS3() {
-	pth := fmt.Sprintf("ms://%v/write/test.txt", testBucket)
+func ExampleNewWriterErrBuf() {
+	pth := fmt.Sprintf("ms://%v/%v/write/test.txt", testEndpoint, testBucket)
 	opt := buf.NewOptions()
 	opt.UseFileBuf = true
 	opt.FileBufDir = "/private/bad/tmp/dir"
