@@ -26,31 +26,31 @@ func NewFromBytes(b []byte) Stats {
 // NewFromInfo creates Stats from a
 // uri formatted info string.
 func NewFromInfo(info string) Stats {
-	sts := &Stats{}
-	uri.Unmarshal(info, sts)
+	sts := Stats{}
+	uri.Unmarshal(info, &sts)
 
-	return *sts
+	return sts
 }
 
 type Stats struct {
 	// LineCnt returns the file line count.
-	LineCnt int64 `json:"linecnt" uri:"linecnt"`
+	LineCnt int64 `json:"linecnt"`
 
 	// ByteCount returns uncompressed raw file byte count.
-	ByteCnt int64 `json:"bytecnt" uri:"bytecnt"`
+	ByteCnt int64 `json:"bytecnt"`
 
 	// Size holds the actual file size.
-	Size int64 `json:"size" uri:"size"`
+	Size int64 `json:"size"`
 
 	// Checksum returns the base64 encoded string of the file md5 hash.
-	Checksum string `json:"checksum" uri:"checksum"`
+	Checksum string `json:"checksum"`
 
 	// Path returns the full absolute path of the file.
 	Path string `json:"path" uri:"origin"`
 
 	// Created returns the date the file was created or last updated;
 	// whichever is more recent.
-	Created string `json:"created" uri:"created"`
+	Created string `json:"created"`
 
 	IsDir bool `json:"-"`
 

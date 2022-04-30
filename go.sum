@@ -305,6 +305,10 @@ github.com/jbsmith7741/trial v0.3.1 h1:JZ0/w3lhfH4iacf9R2DnZWtTMa/Uf4O13gnuMLTub
 github.com/jbsmith7741/trial v0.3.1/go.mod h1:M4FQWUgVpPY2+i53L2nSB0AyPc86kSTIigcr9Q7XQlY=
 github.com/jbsmith7741/uri v0.4.1 h1:gblcpwbDNmy4scW+tTtP9i2G/n8xkwk66FtYcG0wmQ4=
 github.com/jbsmith7741/uri v0.4.1/go.mod h1:Ctt8YJ5gCFx5BX/FMFg5VkwuI9buBcvsITIiSMH+TeA=
+github.com/jbsmith7741/uri v0.5.0 h1:ER6TjPrBnCJjFXPX2fLcY2USuU3citAXM5bVxDPJIg0=
+github.com/jbsmith7741/uri v0.5.0/go.mod h1:Ctt8YJ5gCFx5BX/FMFg5VkwuI9buBcvsITIiSMH+TeA=
+github.com/jbsmith7741/uri v0.5.1 h1:zgIe2zBXN29rWNmD/CxBQ6PW/scyytL3iSZbp/sF00Y=
+github.com/jbsmith7741/uri v0.5.1/go.mod h1:Ctt8YJ5gCFx5BX/FMFg5VkwuI9buBcvsITIiSMH+TeA=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/jmoiron/sqlx v1.3.3 h1:j82X0bf7oQ27XeqxicSZsTU5suPwKElg3oyxNn43iTk=
 github.com/jmoiron/sqlx v1.3.3/go.mod h1:2BljVx/86SuTyjE+aPYlHCTNvZrnJXghYGpNiXLBMCQ=

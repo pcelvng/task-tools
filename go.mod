@@ -26,7 +26,7 @@ require (
 	github.com/jarcoal/httpmock v1.0.8
 	github.com/jbsmith7741/go-tools v0.4.1
 	github.com/jbsmith7741/trial v0.3.1
-	github.com/jbsmith7741/uri v0.4.1
+	github.com/jbsmith7741/uri v0.5.1
 	github.com/jmoiron/sqlx v1.3.3
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.6
