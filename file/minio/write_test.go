@@ -16,7 +16,7 @@ func ExampleNewWriter() {
 	}
 
 	fmt.Println(err)             // output: <nil>
-	fmt.Println(w.sts.Path)      // output: ms://task-tools-test/write/test.txt
+	fmt.Println(w.sts.Path)      // output: mc://task-tools-test/write/test.txt
 	fmt.Println(w.client != nil) // output: true
 	fmt.Println(w.bfr != nil)    // output: true
 	fmt.Println(w.bucket)        // output: task-tools-test
@@ -25,7 +25,7 @@ func ExampleNewWriter() {
 
 	// Output:
 	// <nil>
-	// ms://task-tools-test/write/test.txt
+	// mc://task-tools-test/write/test.txt
 	// true
 	// true
 	// task-tools-test
@@ -45,7 +45,7 @@ func ExampleNewWriterTmpFile() {
 	}
 
 	fmt.Println(err)             // output: <nil>
-	fmt.Println(w.sts.Path)      // output: ms://task-tools-test/write/test.txt
+	fmt.Println(w.sts.Path)      // output: mc://task-tools-test/write/test.txt
 	fmt.Println(w.client != nil) // output: true
 	fmt.Println(w.bfr != nil)    // output: true
 	fmt.Println(w.bucket)        // output: task-tools-test
@@ -59,7 +59,7 @@ func ExampleNewWriterTmpFile() {
 
 	// Output:
 	// <nil>
-	// ms://task-tools-test/write/test.txt
+	// mc://task-tools-test/write/test.txt
 	// true
 	// true
 	// task-tools-test
@@ -75,7 +75,7 @@ func ExampleNewWriterCompressed() {
 	}
 
 	fmt.Println(err)             // output: <nil>
-	fmt.Println(w.sts.Path)      // output: ms://task-tools-test/write/test.gz
+	fmt.Println(w.sts.Path)      // output: mc://task-tools-test/write/test.gz
 	fmt.Println(w.client != nil) // output: true
 	fmt.Println(w.bfr != nil)    // output: true
 	fmt.Println(w.bucket)        // output: task-tools-test
@@ -84,7 +84,7 @@ func ExampleNewWriterCompressed() {
 
 	// Output:
 	// <nil>
-	// ms://task-tools-test/write/test.gz
+	// mc://task-tools-test/write/test.gz
 	// true
 	// true
 	// task-tools-test
@@ -170,7 +170,7 @@ func ExampleWriter_Stats() {
 	w.WriteLine([]byte("test line"))
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: ms://task-tools-test/write/test.txt
+	fmt.Println(sts.Path)          // output: mc://task-tools-test/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 0
@@ -178,7 +178,7 @@ func ExampleWriter_Stats() {
 	fmt.Println(sts.Created == "") // output: true
 
 	// Output:
-	// ms://task-tools-test/write/test.txt
+	// mc://task-tools-test/write/test.txt
 	// 20
 	// 2
 	// 0
@@ -198,7 +198,7 @@ func ExampleWriter_CloseStats() {
 	w.Close()
 	sts := w.Stats()
 
-	fmt.Println(sts.Path)          // output: ms://task-tools-test/write/test.txt
+	fmt.Println(sts.Path)          // output: mc://task-tools-test/write/test.txt
 	fmt.Println(sts.ByteCnt)       // output: 20
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 20
@@ -209,7 +209,7 @@ func ExampleWriter_CloseStats() {
 	rmTestFile(pth)
 
 	// Output:
-	// ms://task-tools-test/write/test.txt
+	// mc://task-tools-test/write/test.txt
 	// 20
 	// 2
 	// 20

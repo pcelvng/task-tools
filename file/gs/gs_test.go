@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 )
 
 var (

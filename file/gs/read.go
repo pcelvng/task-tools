@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )
