@@ -38,13 +38,13 @@ func TestMain(m *testing.M) {
 	}
 
 	// create two test files for reading
-	pth := fmt.Sprintf("ms://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
 	if err := createTestFile(pth); err != nil {
 		log.Fatal(err)
 	}
 
 	// compressed read test file
-	gzPth := fmt.Sprintf("ms://%v/read/test.gz", testBucket)
+	gzPth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
 	if err := createTestFile(gzPth); err != nil {
 		log.Fatal(err)
 	}
@@ -116,27 +116,27 @@ func TestParsePth(t *testing.T) {
 			Expected: []string{"", ""},
 		},
 		"bucket only": {
-			Input:    "ms://bucket",
+			Input:    "mc://bucket",
 			Expected: []string{"bucket", ""},
 		},
 		"bucket/": {
-			Input:    "ms://bucket/",
+			Input:    "mc://bucket/",
 			Expected: []string{"bucket", ""},
 		},
 		"full path": {
-			Input:    "ms://bucket/pth/to/object.txt",
+			Input:    "mc://bucket/pth/to/object.txt",
 			Expected: []string{"bucket", "pth/to/object.txt"},
 		},
 		"host:port+bucket": {
-			Input:    "ms://127.0.0.1:80/bucket",
+			Input:    "mc://127.0.0.1:80/bucket",
 			Expected: []string{"bucket", ""},
 		},
 		"host:port+bucket/": {
-			Input:    "ms://127.0.0.1:81/bucket/",
+			Input:    "mc://127.0.0.1:81/bucket/",
 			Expected: []string{"bucket", ""},
 		},
 		"host:port+bucket+path": {
-			Input:    "ms://127.0.0.1:81/bucket/path/to/file.txt",
+			Input:    "mc://127.0.0.1:81/bucket/path/to/file.txt",
 			Expected: []string{"bucket", "path/to/file.txt"},
 		},
 	}
@@ -146,7 +146,7 @@ func TestParsePth(t *testing.T) {
 
 func TestStat(t *testing.T) {
 	//setup
-	dir := "ms://" + testBucket + "/stat/test/"
+	dir := "mc://" + testBucket + "/stat/test/"
 	file := "test.txt"
 	path := dir + file
 	t.Log(path)

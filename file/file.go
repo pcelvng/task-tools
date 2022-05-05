@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
-	"log"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -177,7 +176,7 @@ func NewReader(pth string, opt *Options) (r Reader, err error) {
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
 		r, err = gs.NewReader(pth, accessKey, secretKey)
-	case "m3", "minio":
+	case "mc", "minio":
 		return minio.NewReader(pth, u.Host, opt.AccessKey, opt.SecretKey)
 	case "nop":
 		return nop.NewReader(pth)
@@ -208,7 +207,7 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 		secretKey := opt.SecretKey
 		gcsOpts := gcsOptions(*opt)
 		w, err = gs.NewWriter(pth, accessKey, secretKey, &gcsOpts)
-	case "m3", "minio":
+	case "mc", "minio":
 		return minio.NewWriter(pth, u.Host, opt.AccessKey, opt.SecretKey, &bufOpts)
 	case "nop":
 		w, err = nop.NewWriter(pth)
@@ -244,7 +243,7 @@ func List(pthDir string, opt *Options) ([]stat.Stats, error) {
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
 		return gs.ListFiles(pthDir, accessKey, secretKey)
-	case "m3", "minio":
+	case "mc", "minio":
 		return minio.ListFiles(pthDir, u.Host, opt.AccessKey, opt.SecretKey)
 	case "nop":
 		return nop.ListFiles(pthDir)
@@ -269,7 +268,7 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 		accessKey := opt.AccessKey
 		secretKey := opt.SecretKey
 		return gs.Stat(path, accessKey, secretKey)
-	case "m3", "minio":
+	case "mc", "minio":
 		return minio.Stat(path, u.Host, opt.AccessKey, opt.SecretKey)
 	case "nop":
 		return nop.Stat(path)
@@ -298,7 +297,6 @@ func Glob(pth string, opt *Options) ([]stat.Stats, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Println(f)
 		folders = make([]string, len(f))
 		for i, v := range f {
 			folders[i] = v.Path

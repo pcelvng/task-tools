@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/hydronica/trial"
-	minio "github.com/minio/minio-go"
+	"github.com/minio/minio-go"
 )
 
 var (
@@ -28,6 +28,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	log.SetFlags(log.Lshortfile)
 
 	// setup local files test
 	wd, _ = os.Getwd()
@@ -65,7 +66,7 @@ func TestMain(m *testing.M) {
 		if err := createFile("./"+pth, &opts); err != nil {
 			log.Fatal(err)
 		} // local
-		if err := createFile(fmt.Sprintf("m3://%s/%s/%s", testEndpoint, testBucket, pth), &opts); err != nil { // remote
+		if err := createFile(fmt.Sprintf("mc://%s/%s/%s", testEndpoint, testBucket, pth), &opts); err != nil { // remote
 			log.Fatal(err)
 		}
 
@@ -126,7 +127,7 @@ func TestGlob_Local(t *testing.T) {
 }
 
 func TestGlob_Minio(t *testing.T) {
-	path := "m3://" + testEndpoint + "/" + testBucket
+	path := "mc://" + testEndpoint + "/" + testBucket
 	fn := func(input trial.Input) (interface{}, error) {
 		sts, err := Glob(input.String(), &opts)
 		files := make([]string, len(sts))
