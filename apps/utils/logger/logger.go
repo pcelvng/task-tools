@@ -20,17 +20,24 @@ type Logger struct {
 	done     chan struct{}
 }
 
-func newlog(topic string, c bus.Consumer) *Logger {
+func newlog(topic string, c bus.Consumer, destination string, opts *file.Options) (*Logger, error) {
 	l := &Logger{
 		topic:    topic,
 		consumer: c,
+		done:     make(chan struct{}),
 	}
+	if err := l.CreateWriters(opts, destination); err != nil {
+		return nil, err
+	}
+
 	go l.Read()
-	return l
+	return l, nil
 }
 
 func (l *Logger) Stop() {
-	l.consumer.Stop()
+	if err := l.consumer.Stop(); err != nil {
+		log.Println(err)
+	}
 	<-l.done
 }
 
