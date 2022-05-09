@@ -108,8 +108,8 @@ func (a *app) UpdateTopics() {
 					continue
 				}
 				log.Printf("connecting to %s", t)
-				l := newlog(t, c)
-				if err := l.CreateWriters(&a.File, Parse(a.LogPath, t, time.Now())); err != nil {
+				l, err := newlog(t, c, Parse(a.LogPath, t, time.Now()), &a.File)
+				if err != nil {
 					log.Fatalf("writer err for %s: %s", t, err)
 				}
 				a.topics[t] = l
@@ -131,11 +131,11 @@ func (a *app) RotateLogs() {
 }
 
 func (a *app) rotateWriters() error {
-	log.Println("active topics", len(a.topics))
 	errs := appenderr.New()
 	for _, topic := range a.topics {
 		errs.Add(topic.CreateWriters(&a.File, a.LogPath))
 	}
+	log.Println("active topics", len(a.topics))
 	return errs.ErrOrNil()
 }
 
@@ -147,13 +147,13 @@ func Parse(path, topic string, t time.Time) string {
 
 func (a *app) Stop() {
 	wg := sync.WaitGroup{}
-	for t, l := range a.topics {
+	for _, l := range a.topics {
 		wg.Add(1)
-		go func() {
+		go func(l *Logger) {
 			l.Stop()
-			log.Print(t, "stopped")
+			log.Print(l.topic, " stopped")
 			wg.Done()
-		}()
+		}(l)
 	}
 
 	wg.Wait()
