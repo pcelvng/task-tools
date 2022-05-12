@@ -139,15 +139,6 @@ func gcsOptions(opt Options) gs.Options {
 	return *gcsOpts
 }
 
-func localOptions(opt Options) local.Options {
-	localOpts := local.NewOptions()
-	localOpts.CompressLevel = compressionLookup(opt.CompressionLevel)
-	localOpts.UseFileBuf = opt.UseFileBuf
-	localOpts.FileBufDir = opt.FileBufDir
-	localOpts.FileBufPrefix = opt.FileBufPrefix
-	return *localOpts
-}
-
 // bufOptions converts a full file.Options to a buf.Options used for the buffer.
 // this avoids circular imports
 func bufOptions(opt Options) buf.Options {
@@ -214,8 +205,7 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	case "local":
 		fallthrough
 	default:
-		localOpts := localOptions(*opt)
-		w, err = local.NewWriter(pth, &localOpts)
+		w, err = local.NewWriter(pth, &bufOpts)
 	}
 
 	return w, err

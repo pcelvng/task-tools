@@ -18,7 +18,7 @@ import (
 // format then the file will be compressed in that format.
 // - 'append' indicates whether the write session will append the
 // contents to an existing file or truncate and then write. The
-// defaut is false which will truncate an existing file and then write.
+// default is false which will truncate an existing file and then write.
 // - 'lazy' set to 'true' will tell the writer to do a lazy write. This
 // means that all write calls will write to memory first and then write
 // to 'pth' when writing is complete with a final call to 'Close'. If
@@ -31,13 +31,9 @@ import (
 // For lazy writing, the writer supports writing to memory or a temp file.
 // The writer will use the temp file option if tmpDir and/or tmpPrefix is
 // provided. The writer will remove a temp file with a call to Close.
-func NewWriter(pth string, opt *Options) (*Writer, error) {
+func NewWriter(pth string, opt *buf.Options) (*Writer, error) {
 	// remove local:// prefix if exists
 	pth = rmLocalPrefix(pth)
-
-	if opt == nil {
-		opt = NewOptions()
-	}
 
 	// stats
 	sts := stat.New()
@@ -50,7 +46,7 @@ func NewWriter(pth string, opt *Options) (*Writer, error) {
 	}
 
 	// buffer
-	bfr, err := buf.NewBuffer(opt.Options)
+	bfr, err := buf.NewBuffer(opt)
 	if err != nil {
 		return nil, err
 	}

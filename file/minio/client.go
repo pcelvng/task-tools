@@ -39,7 +39,7 @@ func newClient(StoreHost, accessKey, secretKey string) (client *minio.Client, er
 
 	client, _ = minIOClients[StoreHost+accessKey+secretKey]
 	if client == nil {
-		client, err = minio.New(StoreHost, accessKey, secretKey, true)
+		client, err = minio.New(StoreHost, accessKey, secretKey, false)
 		minIOClients[StoreHost+accessKey+secretKey] = client
 	}
 	return client, err
@@ -68,7 +68,7 @@ func parsePth(p string) (scheme, bucket, path string) {
 }
 
 // Stat a directory or file for additional information
-func Stat(pth string, accessKey, secretKey string, host string) (stat.Stats, error) {
+func Stat(pth string, host, accessKey, secretKey string) (stat.Stats, error) {
 	client, err := newClient(host, accessKey, secretKey)
 	if err != nil {
 		return stat.Stats{}, errors.Wrap(err, "client init")
@@ -80,7 +80,7 @@ func Stat(pth string, accessKey, secretKey string, host string) (stat.Stats, err
 		donech := make(chan struct{})
 		defer close(donech)
 		count := 0
-		for range client.ListObjects(bucket, objPth, false, donech) {
+		for info := range client.ListObjects(bucket, objPth, false, donech) {
 			if info.Err != nil {
 				return stat.Stats{}, err
 			}
@@ -89,6 +89,7 @@ func Stat(pth string, accessKey, secretKey string, host string) (stat.Stats, err
 		if count > 0 {
 			return stat.Stats{
 				Path:  pth,
+				Files: int64(count),
 				IsDir: true,
 			}, nil
 		}

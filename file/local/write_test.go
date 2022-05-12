@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/pcelvng/task-tools/file/buf"
 )
 
 func ExampleNewWriter() {
@@ -41,10 +43,11 @@ func ExampleNewWriterCompression() {
 }
 
 func ExampleNewWriterWTmpFile() {
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "./test/tmp/"
-	opt.FileBufPrefix = "prefix_"
+	opt := &buf.Options{
+		UseFileBuf:    true,
+		FileBufDir:    "./test/tmp/",
+		FileBufPrefix: "prefix_",
+	}
 	w, err := NewWriter("./test/test.txt", opt)
 	if w == nil {
 		return
@@ -68,9 +71,8 @@ func ExampleNewWriterWTmpFile() {
 }
 
 func ExampleNewWriterBufErr() {
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "/private/bad/tmp/dir"
+	opt := &buf.Options{UseFileBuf: true, FileBufDir: "/private/bad/tmp/dir"}
+
 	w, err := NewWriter("./test/test.txt", opt)
 	if err == nil {
 		return
@@ -171,10 +173,7 @@ func ExampleWriter_Abort() {
 }
 
 func ExampleWriter_Close() {
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "./test/tmp"
-	opt.FileBufPrefix = "prefix_"
+	opt := &buf.Options{UseFileBuf: true, FileBufDir: "./test/tmp", FileBufPrefix: "prefix_"}
 	w, _ := NewWriter("./test/test.txt", opt)
 	if w == nil {
 		return
@@ -290,9 +289,7 @@ func ExampleWriter_copyAndClean() {
 
 func ExampleWriter_copyAndCleanTmpFile() {
 	// file buffer to file
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "./test/tmp"
+	opt := &buf.Options{UseFileBuf: true, FileBufDir: "./test/tmp"}
 	w, _ := NewWriter("./test/test.txt", opt)
 	if w == nil {
 		return
@@ -346,9 +343,7 @@ func ExampleWriter_copyAndCleanTmpFile() {
 
 func ExampleWriter_copyAndCleanTmpFileErr() {
 	// file buffer to file
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "./test/tmp"
+	opt := &buf.Options{UseFileBuf: true, FileBufDir: "./test/tmp"}
 	w, _ := NewWriter("./test/test.txt", opt)
 	if w == nil {
 		return
@@ -405,9 +400,7 @@ func ExampleWriter_copyAndCleanToDev() {
 
 func ExampleWriter_copyAndCleanTmpFileToDev() {
 	// file buffer to device file
-	opt := NewOptions()
-	opt.UseFileBuf = true
-	opt.FileBufDir = "./test/tmp"
+	opt := &buf.Options{UseFileBuf: true, FileBufDir: "./test/tmp"}
 	w, _ := NewWriter("/dev/stdout", opt)
 	if w == nil {
 		return

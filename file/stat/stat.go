@@ -34,16 +34,16 @@ func NewFromInfo(info string) Stats {
 
 type Stats struct {
 	// LineCnt returns the file line count.
-	LineCnt int64 `json:"linecnt"`
+	LineCnt int64 `json:"linecnt,omitempty"`
 
 	// ByteCount returns uncompressed raw file byte count.
-	ByteCnt int64 `json:"bytecnt"`
+	ByteCnt int64 `json:"bytecnt,omitempty"`
 
 	// Size holds the actual file size.
 	Size int64 `json:"size"`
 
 	// Checksum returns the base64 encoded string of the file md5 hash.
-	Checksum string `json:"checksum"`
+	Checksum string `json:"checksum,omitempty"`
 
 	// Path returns the full absolute path of the file.
 	Path string `json:"path" uri:"origin"`
@@ -52,9 +52,9 @@ type Stats struct {
 	// whichever is more recent.
 	Created string `json:"created"`
 
-	IsDir bool `json:"-"`
+	IsDir bool `json:"isDir,omitempty"`
 
-	Files int64 `json:"-"`
+	Files int64 `json:"files,omitempty"`
 
 	mu sync.Mutex
 }
