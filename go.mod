@@ -29,8 +29,8 @@ require (
 	github.com/jbsmith7741/trial v0.3.1
 	github.com/jbsmith7741/uri v0.4.1
 	github.com/jmoiron/sqlx v1.3.3
-	github.com/json-iterator/go v1.1.10
-	github.com/lib/pq v1.10.1
+	github.com/json-iterator/go v1.1.12
+	github.com/lib/pq v1.10.6
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/nsqio/go-nsq v1.0.8

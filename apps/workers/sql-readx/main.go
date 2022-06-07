@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/jmoiron/sqlx"
@@ -13,6 +12,7 @@ import (
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
 )
 
@@ -45,11 +45,15 @@ type options struct {
 }
 
 type DBOptions struct {
-	Type     string `toml:"type" commented:"true"`
-	Username string `toml:"username" commented:"true"`
-	Password string `toml:"password" commented:"true"`
-	Host     string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
-	DBName   string `toml:"dbname"`
+	Type        string `toml:"type" commented:"true"`
+	Username    string `toml:"username" commented:"true"`
+	Password    string `toml:"password" commented:"true"`
+	Host        string `toml:"host" comment:"host can be 'host:port', 'host', 'host:' or ':port'"`
+	DBName      string `toml:"dbname"`
+	SSLMode     string `toml:"sslmode" comment:"default is disable"`
+	SSLCert     string `toml:"sslcert"`
+	SSLKey      string `toml:"sslkey"`
+	SSLRootCert string `toml:"sslrootcert"`
 }
 
 func (o *options) Validate() error {
@@ -71,27 +75,18 @@ func (o *options) connectDB() (err error) {
 	case "mysql":
 		dsn = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", o.Username, o.Password, o.Host, o.DBName)
 		driverName = "mysql"
+		o.db, err = sqlx.Connect(driverName, dsn)
 	case "postgres":
 		driverName = "postgres"
-		host, port := o.Host, ""
-		if v := strings.Split(o.Host, ":"); len(v) > 1 {
-			host, port = v[0], v[1]
-		}
-
-		dsn = fmt.Sprintf("host=%s dbname=%s sslmode=disable", host, o.DBName)
-		if o.Username != "" {
-			dsn += " user=" + o.Username
-		}
-		if o.Password != "" {
-			dsn += " password=" + o.Password
-		}
-		if port != "" {
-			dsn += " port=" + port
+		if o.SSLMode == "" {
+			o.db, err = db.PGx(o.Username, o.Password, o.Host, o.DBName)
+		} else {
+			o.db, err = db.PGxSSL(o.Username, o.Password, o.Host, o.DBName, o.SSLMode, o.SSLCert, o.SSLKey, o.SSLRootCert)
 		}
 	default:
 		return fmt.Errorf("unknown db type %s", o.Type)
 	}
-	o.db, err = sqlx.Connect(driverName, dsn)
+
 	return err
 }
 

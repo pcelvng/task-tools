@@ -22,12 +22,12 @@ func TestNew(t *testing.T) {
 		{
 			msg:      "pointer struct",
 			v:        &testStruct{},
-			expected: map[string]data{"Name": data{Index: 0}, "Int1": data{Index: 1}, "count": data{Index: 4}},
+			expected: map[string]data{"Name": {Index: 0}, "Int1": {Index: 1}, "count": {Index: 4}},
 		},
 		{
 			msg:      "normal struct",
 			v:        &testStruct{},
-			expected: map[string]data{"Name": data{Index: 0}, "Int1": data{Index: 1}, "count": data{Index: 4}},
+			expected: map[string]data{"Name": {Index: 0}, "Int1": {Index: 1}, "count": {Index: 4}},
 		},
 	}
 	for _, test := range cases {

@@ -80,9 +80,15 @@ func main() {
 
 	if opts.Postgres.Host != "" {
 		opts.dbDriver = "postgres"
-		opts.sqlDB, err = db.Postgres(opts.Postgres.Username, opts.Postgres.Password, opts.Postgres.Host, opts.Postgres.DBName)
+		o := opts.Postgres
+		if o.SSLMode == "" || o.SSLMode == "disable" {
+			opts.sqlDB, err = db.Postgres(o.Username, o.Password, o.Host, o.DBName)
+		} else {
+			opts.sqlDB, err = db.PGSSL(o.Username, o.Password, o.Host, o.DBName, o.SSLMode, o.SSLCert, o.SSLKey, o.SSLRootcert)
+		}
 		if err != nil {
-			log.Fatalf("cannot connect to Postgres Instance %+v", opts.Postgres)
+			opts.Postgres.Password = "secret"
+			log.Fatalf("cannot connect to Postgres Instance %+v (%s)", opts.Postgres, err.Error())
 		}
 	}
 
