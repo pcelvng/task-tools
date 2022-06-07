@@ -8,6 +8,7 @@ import (
 	"os/user"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/pcelvng/task-tools/db/batch"
 	"github.com/pkg/errors"
@@ -54,6 +55,59 @@ type BatchLoader interface {
 	Commit(ctx context.Context, tableName string, cols ...string) (batch.Stats, error)
 }
 
+// PGx is a convenience initializer to obtain a Postgres sqlx.DB connection
+//
+// Note that this connection will set the default transaction isolation level to
+// 'serializable' to enforce more true atomic batch loading.
+func PGx(user, pass, host, dbName string) (*sqlx.DB, error) {
+	connStr := fmt.Sprintf(
+		"postgres://%s:%s@%s/%s?connect_timeout=5&default_transaction_isolation=serializable&sslmode=disable",
+		user, pass, host, dbName)
+	dbConn, err := sqlx.Connect("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return dbConn, nil
+}
+
+// PGxSSL is a convenience initializer to obtain a Postgres sqlx.DB connection using ssl certs
+//
+// Note that this connection will set the default transaction isolation level to
+// 'serializable' to enforce more true atomic batch loading.
+func PGxSSL(user, pass, host, dbName, sslMode, cert, key, caCert string) (*sqlx.DB, error) {
+	connStr := fmt.Sprintf(
+		"postgres://%s:%s@%s/%s?connect_timeout=5&default_transaction_isolation=serializable&sslmode=%s&sslcert=%s&sslkey=%s&sslrootcert=%s",
+		user, pass, host, dbName, sslMode, cert, key, caCert)
+	dbConn, err := sqlx.Connect("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return dbConn, nil
+}
+
+// PGSSL is a convenience initializer to obtain a Postgres DB connection using ssl certs
+//
+// Note that this connection will set the default transaction isolation level to
+// 'serializable' to enforce more true atomic batch loading.
+func PGSSL(user, pass, host, dbName, sslMode, cert, key, caCert string) (*sql.DB, error) {
+	connStr := fmt.Sprintf(
+		"postgres://%s:%s@%s/%s?connect_timeout=5&default_transaction_isolation=serializable&sslmode=%s&sslcert=%s&sslkey=%s&sslrootcert=%s",
+		user, pass, host, dbName, sslMode, cert, key, caCert)
+	dbConn, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// ping
+	if err = dbConn.Ping(); err != nil {
+		return nil, err
+	}
+
+	return dbConn, nil
+}
+
 // MySQL is a convenience initializer to obtain a MySQL DB connection.
 //
 // Note that this connection has an option to set transaction isolation level to
@@ -77,7 +131,7 @@ func MySQL(un, pass, host, dbName string) (*sql.DB, error) {
 //
 // Note that this connection will set the default transaction isolation level to
 // 'serializable' to enforce more true atomic batch loading.
-func MySQLTx(un, pass, host, dbName string, serializable bool ) (*sql.DB, error) {
+func MySQLTx(un, pass, host, dbName string, serializable bool) (*sql.DB, error) {
 	connStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", un, pass, host, dbName)
 	if serializable {
 		connStr += "&tx_isolation=serializable"
@@ -110,8 +164,7 @@ func Postgres(un, pass, host, dbName string) (*sql.DB, error) {
 		un = usr.Username
 	}
 
-	//connStr := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=disable", un, pass, host, dbName)
-	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable&default_transaction_isolation=serializable", un, pass, host, dbName)
+	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?connect_timeout=5&sslmode=disable&default_transaction_isolation=serializable", un, pass, host, dbName)
 	dbConn, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err

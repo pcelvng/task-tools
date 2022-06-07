@@ -36,6 +36,8 @@ type executer struct {
 
 type FieldMap map[string]string
 
+var j = jsoniter.ConfigFastest
+
 func (o *options) NewWorker(info string) task.Worker {
 	// unmarshal info string
 	iOpts := struct {
@@ -163,7 +165,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		}
 
 		r := w.Fields.convertRow(row)
-		b, err := jsoniter.Marshal(r)
+		b, err := j.Marshal(r)
 		if err != nil {
 			return task.Failed(err)
 		}
