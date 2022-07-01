@@ -1,22 +1,23 @@
 package minio
 
 import (
+	"context"
 	"mime"
 	"path/filepath"
 	"sync"
 
-	minio "github.com/minio/minio-go/v6"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
-func NewWriter(pth string, host, accessKey, secretKey string, opt *buf.Options) (*Writer, error) {
+func NewWriter(pth string, mOpt Option, opt *buf.Options) (*Writer, error) {
 	// s3 client:
 	// using minio client library;
 	// final writing doesn't happen until Close is called
 	// but getting the client now does authentication
 	// so we know early of authentication issues.
-	client, err := newClient(host, accessKey, secretKey)
+	client, err := newClient(mOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -179,22 +180,26 @@ func (w *Writer) copy() (n int64, err error) {
 
 	// copy tmp file buffer
 	if w.tmpPth != "" {
-		return w.client.FPutObject(
+		info, err := w.client.FPutObject(
+			context.Background(),
 			w.bucket,
 			w.objPth,
 			w.tmpPth,
 			opts,
 		)
+		return info.Size, err
 	}
 
 	// copy memory buffer
-	return w.client.PutObject(
+	info, err := w.client.PutObject(
+		context.Background(),
 		w.bucket,
 		w.objPth,
 		w.bfr,
 		w.bfr.Stats().Size,
 		opts,
 	)
+	return info.Size, err
 }
 
 // createdAt will retrieve the created date
@@ -204,6 +209,7 @@ func (w *Writer) copy() (n int64, err error) {
 func (w *Writer) setObjSts() error {
 	// created date
 	objInfo, err := w.client.StatObject(
+		context.Background(),
 		w.bucket,
 		w.objPth,
 		minio.StatObjectOptions{},

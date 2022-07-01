@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/pcelvng/task-tools/file/buf"
-	"github.com/pcelvng/task-tools/file/gs"
 	"github.com/pcelvng/task-tools/file/local"
 	"github.com/pcelvng/task-tools/file/minio"
 	"github.com/pcelvng/task-tools/file/nop"
@@ -124,21 +123,6 @@ func compressionLookup(s string) int {
 	}
 }
 
-const (
-	awsHost = "s3.amazonaws.com"
-	gcsHost = "storage.googleapis.com"
-)
-
-func gcsOptions(opt Options) gs.Options {
-	gcsOpts := gs.NewOptions()
-	gcsOpts.CompressLevel = compressionLookup(opt.CompressionLevel)
-	gcsOpts.UseFileBuf = opt.UseFileBuf
-	gcsOpts.FileBufDir = opt.FileBufDir
-	gcsOpts.FileBufPrefix = opt.FileBufPrefix
-	gcsOpts.KeepFailed = opt.FileBufKeepFailed
-	return *gcsOpts
-}
-
 // bufOptions converts a full file.Options to a buf.Options used for the buffer.
 // this avoids circular imports
 func bufOptions(opt Options) buf.Options {
@@ -160,15 +144,22 @@ func NewReader(pth string, opt *Options) (r Reader, err error) {
 		return
 	}
 
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
 	switch u.Scheme {
 	case "s3":
-		return minio.NewReader(pth, awsHost, opt.AccessKey, opt.SecretKey)
+		mOpt.Host = minio.S3Host
+		return minio.NewReader(pth, mOpt)
 	case "gcs", "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		r, err = gs.NewReader(pth, accessKey, secretKey)
+		mOpt.Host = minio.GSHost
+		return minio.NewReader(pth, mOpt)
 	case "mc", "minio":
-		return minio.NewReader(pth, u.Host, opt.AccessKey, opt.SecretKey)
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.NewReader(pth, mOpt)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.NewReader(pth, mOpt)
 	case "nop":
 		return nop.NewReader(pth)
 	case "local":
@@ -190,16 +181,22 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 		return
 	}
 	bufOpts := bufOptions(*opt)
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
 	switch u.Scheme {
 	case "s3":
-		return minio.NewWriter(pth, awsHost, opt.AccessKey, opt.SecretKey, &bufOpts)
+		mOpt.Host = minio.S3Host
+		return minio.NewWriter(pth, mOpt, &bufOpts)
 	case "gcs", "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		gcsOpts := gcsOptions(*opt)
-		w, err = gs.NewWriter(pth, accessKey, secretKey, &gcsOpts)
+		mOpt.Host = minio.GSHost
+		return minio.NewWriter(pth, mOpt, &bufOpts)
 	case "mc", "minio":
-		return minio.NewWriter(pth, u.Host, opt.AccessKey, opt.SecretKey, &bufOpts)
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.NewWriter(pth, mOpt, &bufOpts)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.NewWriter(pth, mOpt, &bufOpts)
 	case "nop":
 		w, err = nop.NewWriter(pth)
 	case "local":
@@ -226,15 +223,22 @@ func List(pthDir string, opt *Options) ([]stat.Stats, error) {
 	if err != nil {
 		return nil, err
 	}
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
 	switch u.Scheme {
 	case "s3":
-		return minio.ListFiles(pthDir, awsHost, opt.AccessKey, opt.SecretKey)
+		mOpt.Host = minio.S3Host
+		return minio.ListFiles(pthDir, mOpt)
 	case "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		return gs.ListFiles(pthDir, accessKey, secretKey)
+		mOpt.Host = minio.GSHost
+		return minio.ListFiles(pthDir, mOpt)
 	case "mc", "minio":
-		return minio.ListFiles(pthDir, u.Host, opt.AccessKey, opt.SecretKey)
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.ListFiles(pthDir, mOpt)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.ListFiles(pthDir, mOpt)
 	case "nop":
 		return nop.ListFiles(pthDir)
 	}
@@ -251,15 +255,22 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 	if err != nil {
 		return stat.Stats{}, err
 	}
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
 	switch u.Scheme {
 	case "s3":
-		return minio.Stat(path, awsHost, opt.AccessKey, opt.SecretKey)
+		mOpt.Host = minio.S3Host
+		return minio.Stat(path, mOpt)
 	case "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		return gs.Stat(path, accessKey, secretKey)
+		mOpt.Host = minio.GSHost
+		return minio.Stat(path, mOpt)
 	case "mc", "minio":
-		return minio.Stat(path, u.Host, opt.AccessKey, opt.SecretKey)
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.Stat(path, mOpt)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.Stat(path, mOpt)
 	case "nop":
 		return nop.Stat(path)
 	}

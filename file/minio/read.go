@@ -3,20 +3,21 @@ package minio
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/md5"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
-	minio "github.com/minio/minio-go/v6"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )
 
-func NewReader(pth string, host, accessKey, secretKey string) (*Reader, error) {
+func NewReader(pth string, opt Option) (*Reader, error) {
 	// get s3 client
-	s3Client, err := newClient(host, accessKey, secretKey)
+	s3Client, err := newClient(opt)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +33,7 @@ func newReaderFromClient(pth string, client *minio.Client) (*Reader, error) {
 	_, bucket, objPth := parsePth(pth)
 
 	// get object
-	obj, err := client.GetObject(bucket, objPth, minio.GetObjectOptions{})
+	obj, err := client.GetObject(context.Background(), bucket, objPth, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -133,13 +134,13 @@ func (r *Reader) Close() (err error) {
 // ListFiles will list all file objects in the provided pth directory.
 // pth is assumed to be a directory and so a trailing "/" is appended
 // if one does not already exist.
-func ListFiles(pth string, host, accessKey, secretKey string) ([]stat.Stats, error) {
+func ListFiles(pth string, opt Option) ([]stat.Stats, error) {
 	// get client
-	client, err := newClient(host, accessKey, secretKey)
+	client, err := newClient(opt)
 	if err != nil {
 		return nil, err
 	}
-	isMinioHost := strings.Contains(pth, host)
+	isMinioHost := strings.Contains(pth, opt.Host)
 
 	scheme, bucket, objPth := parsePth(pth)
 
@@ -155,7 +156,7 @@ func ListFiles(pth string, host, accessKey, secretKey string) ([]stat.Stats, err
 	defer close(doneCh)
 
 	allSts := make([]stat.Stats, 0)
-	objInfoCh := client.ListObjectsV2(bucket, objPth, false, doneCh)
+	objInfoCh := client.ListObjects(context.Background(), bucket, minio.ListObjectsOptions{Prefix: objPth, Recursive: false})
 	errs := appenderr.New()
 	for objInfo := range objInfoCh {
 		// don't include err objects
@@ -170,7 +171,7 @@ func ListFiles(pth string, host, accessKey, secretKey string) ([]stat.Stats, err
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
 		// TODO: replace s3 with path hostType
 		if isMinioHost {
-			sts.SetPath(fmt.Sprintf("%s://%s/%s/%s", scheme, host, bucket, objInfo.Key))
+			sts.SetPath(fmt.Sprintf("%s://%s/%s/%s", scheme, opt.Host, bucket, objInfo.Key))
 		} else {
 			sts.SetPath(fmt.Sprintf("%s://%s/%s", scheme, bucket, objInfo.Key))
 		}

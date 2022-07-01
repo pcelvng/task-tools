@@ -13,7 +13,7 @@ import (
 
 func ExampleNewReader() {
 	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
-	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, err := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -31,7 +31,7 @@ func ExampleNewReader() {
 func ExampleNewReaderErrBadClient() {
 
 	host := "bad/endpoint/"
-	r, err := NewReader("", host, "", "")
+	r, err := NewReader("", Option{Host: host})
 	if err == nil {
 		return
 	}
@@ -45,7 +45,7 @@ func ExampleNewReaderErrBadClient() {
 }
 
 func ExampleNewReaderErrBadObject() {
-	r, err := NewReader("", testAccessKey, testSecretKey, testEndpoint)
+	r, err := NewReader("", testOption)
 
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: Bucket name cannot be empty
@@ -57,7 +57,7 @@ func ExampleNewReaderErrBadObject() {
 
 func ExampleNewReaderErrObjStat() {
 	pth := "mc://does-not/exist.txt"
-	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, err := NewReader(pth, testOption)
 
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: The specified bucket does not exist.
@@ -93,7 +93,7 @@ func ExampleNewReaderErrGzip() {
 	}
 
 	pth := fmt.Sprintf("mc://%v/bad.gz", testBucket)
-	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, err := NewReader(pth, testOption)
 
 	fmt.Println(r)   // output: <nil>
 	fmt.Println(err) // output: gzip: invalid header
@@ -108,7 +108,7 @@ func ExampleNewReaderErrGzip() {
 
 func ExampleReader_Read() {
 	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
-	r, err := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, err := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -133,7 +133,7 @@ func ExampleReader_Read() {
 
 func ExampleReader_ReadCompressed() {
 	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -158,7 +158,7 @@ func ExampleReader_ReadCompressed() {
 
 func ExampleReader_ReadLine() {
 	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
-	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -184,7 +184,7 @@ func ExampleReader_ReadLine() {
 
 func ExampleReader_ReadLineCompressed() {
 	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -215,7 +215,7 @@ func ExampleReader_ReadLineCompressed() {
 
 func ExampleReader_Stats() {
 	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
-	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -232,7 +232,7 @@ func ExampleReader_Stats() {
 
 func ExampleReader_Close() {
 	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
-	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -257,7 +257,7 @@ func ExampleReader_Close() {
 
 func ExampleReader_CloseCompressed() {
 	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -282,7 +282,7 @@ func ExampleReader_CloseCompressed() {
 
 func ExampleReader_CloseandClose() {
 	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
-	r, _ := NewReader(pth, testEndpoint, testAccessKey, testSecretKey)
+	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
@@ -322,7 +322,7 @@ func TestListFiles(t *testing.T) {
 
 	// test returns only files
 	dirPth := fmt.Sprintf("mc://%s/list-test/", testBucket)
-	allSts, err := ListFiles(dirPth, testEndpoint, testAccessKey, testSecretKey)
+	allSts, err := ListFiles(dirPth, testOption)
 	if err != nil {
 		t.Error(err)
 	}
@@ -359,7 +359,7 @@ func TestListFiles(t *testing.T) {
 
 	// test that missing trailing "/" has same results
 	dirPth = fmt.Sprintf("mc://%s/list-test", testBucket)
-	allSts, err = ListFiles(dirPth, testEndpoint, testAccessKey, testSecretKey)
+	allSts, err = ListFiles(dirPth, testOption)
 	if err != nil {
 		t.Errorf("expected nil but got err '%v'\n", err.Error())
 	}
@@ -395,8 +395,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test bad s3 client
-	StoreHost := "bad/endpoint/"
-	_, err = ListFiles(dirPth, testAccessKey, testSecretKey, StoreHost)
+	_, err = ListFiles(dirPth, Option{Host: "bad/endpoint"})
 	if err == nil {
 		t.Error("expected err but got nil instead")
 	}

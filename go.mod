@@ -29,8 +29,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.3
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.6
-	github.com/minio/minio-go/v6 v6.0.57
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/minio/minio-go/v7 v7.0.26
 	github.com/nsqio/go-nsq v1.0.8
 	github.com/pcelvng/task v0.5.6
 	github.com/pelletier/go-toml v1.9.0

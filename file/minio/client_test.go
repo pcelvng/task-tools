@@ -1,13 +1,14 @@
 package minio
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"testing"
 
 	"github.com/hydronica/trial"
-	minio "github.com/minio/minio-go/v6"
+	minio "github.com/minio/minio-go/v7"
 )
 
 var (
@@ -15,11 +16,14 @@ var (
 	//
 	// see:
 	// https://docs.minio.io/docs/golang-client-api-reference
-	testEndpoint  = "play.minio.io:9000"
-	testAccessKey = "Q3AM3UQ867SPQQA43P2F"
-	testSecretKey = "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
-	testBucket    = "task-tools-test"
-	testClient    *minio.Client
+	testBucket = "task-tools-test"
+	testClient *minio.Client
+	testOption = Option{
+		Host:      "play.minio.io:9000",
+		AccessKey: "Q3AM3UQ867SPQQA43P2F",
+		SecretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
+		Secure:    true,
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -63,11 +67,11 @@ func TestMain(m *testing.M) {
 }
 
 func newTestClient() (*minio.Client, error) {
-	return newClient(testEndpoint, testAccessKey, testSecretKey)
+	return newClient(testOption)
 }
 
 func createBucket(bckt string) error {
-	exists, err := testClient.BucketExists(bckt)
+	exists, err := testClient.BucketExists(context.Background(), bckt)
 	if err != nil {
 		return err
 	}
@@ -76,11 +80,11 @@ func createBucket(bckt string) error {
 		return nil
 	}
 
-	return testClient.MakeBucket(bckt, "us-east-1")
+	return testClient.MakeBucket(context.Background(), bckt, minio.MakeBucketOptions{})
 }
 
 func rmBucket(bckt string) error {
-	return testClient.RemoveBucket(bckt)
+	return testClient.RemoveBucket(context.Background(), bckt)
 }
 
 func createTestFile(pth string) error {
@@ -96,7 +100,7 @@ func createTestFile(pth string) error {
 
 func rmTestFile(pth string) error {
 	_, bckt, objPth := parsePth(pth)
-	return testClient.RemoveObject(bckt, objPth)
+	return testClient.RemoveObject(context.Background(), bckt, objPth, minio.RemoveObjectOptions{})
 }
 
 func TestParsePth(t *testing.T) {
@@ -155,7 +159,7 @@ func TestStat(t *testing.T) {
 	}
 
 	t.Run("directory", func(t *testing.T) {
-		s, err := Stat(dir, testAccessKey, testSecretKey, testEndpoint)
+		s, err := Stat(dir, testOption)
 		if err != nil {
 			t.Error("directory", err)
 		}
@@ -168,7 +172,7 @@ func TestStat(t *testing.T) {
 	})
 
 	t.Run("file", func(t *testing.T) {
-		s, err := Stat(path, testAccessKey, testSecretKey, testEndpoint)
+		s, err := Stat(path, testOption)
 		if err != nil {
 			t.Error("file", err)
 		}
@@ -181,7 +185,7 @@ func TestStat(t *testing.T) {
 	})
 
 	t.Run("missing", func(t *testing.T) {
-		_, err := Stat(dir+"missing.txt", testAccessKey, testSecretKey, testEndpoint)
+		_, err := Stat(dir+"missing.txt", testOption)
 		if err == nil {
 			t.Error("Expected error on missing file")
 		}

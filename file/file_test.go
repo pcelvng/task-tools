@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/hydronica/trial"
-	"github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v7"
 )
 
 var (

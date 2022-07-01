@@ -1,21 +1,22 @@
 package minio
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	minio "github.com/minio/minio-go/v6"
-	"github.com/pcelvng/task-tools/file/buf"
+	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pkg/errors"
 )
 
 var (
 	// domain of s3 compatible api
-	//	StoreHost = "s3.amazonaws.com"
-
+	S3Host = "s3.amazonaws.com"
+	GSHost = "storage.googleapis.com"
 	// map that maintains minIO clients
 	// to prevent creating new clients with
 	// every file for the same auth credentials
@@ -23,24 +24,35 @@ var (
 	mu           sync.Mutex
 )
 
-func NewOptions() *Options {
-	return &Options{
-		Options: buf.NewOptions(),
-	}
+//func NewOptions() *Options {
+//	return &Options{
+//		Options: buf.NewOptions(),
+//	}
+//}
+
+type Option struct {
+	//	*buf.Options
+	Host      string
+	AccessKey string
+	SecretKey string
+	Secure    bool
 }
 
-type Options struct {
-	*buf.Options
+func (o Option) key() string {
+	return o.Host + o.AccessKey + o.SecretKey
 }
 
-func newClient(StoreHost, accessKey, secretKey string) (client *minio.Client, err error) {
+func newClient(opt Option) (client *minio.Client, err error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	client, _ = minIOClients[StoreHost+accessKey+secretKey]
+	client, _ = minIOClients[opt.key()]
 	if client == nil {
-		client, err = minio.New(StoreHost, accessKey, secretKey, false)
-		minIOClients[StoreHost+accessKey+secretKey] = client
+		client, err = minio.New(opt.Host, &minio.Options{
+			Creds:  credentials.NewStaticV4(opt.AccessKey, opt.SecretKey, ""),
+			Secure: true,
+		})
+		minIOClients[opt.key()] = client
 	}
 	return client, err
 }
@@ -68,19 +80,19 @@ func parsePth(p string) (scheme, bucket, path string) {
 }
 
 // Stat a directory or file for additional information
-func Stat(pth string, host, accessKey, secretKey string) (stat.Stats, error) {
-	client, err := newClient(host, accessKey, secretKey)
+func Stat(pth string, Opt Option) (stat.Stats, error) {
+	client, err := newClient(Opt)
 	if err != nil {
 		return stat.Stats{}, errors.Wrap(err, "client init")
 	}
 	_, bucket, objPth := parsePth(pth)
-	info, err := client.StatObject(bucket, objPth, minio.StatObjectOptions{})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	info, err := client.StatObject(ctx, bucket, objPth, minio.StatObjectOptions{})
 	// check if directory
 	if err != nil {
-		donech := make(chan struct{})
-		defer close(donech)
 		count := 0
-		for info := range client.ListObjects(bucket, objPth, false, donech) {
+		for info := range client.ListObjects(ctx, bucket, minio.ListObjectsOptions{Recursive: false, Prefix: objPth}) {
 			if info.Err != nil {
 				return stat.Stats{}, err
 			}
