@@ -2,12 +2,13 @@ package minio
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"strings"
 	"testing"
 
-	minio "github.com/minio/minio-go/v6"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
@@ -26,22 +27,6 @@ func ExampleNewReader() {
 	// <nil>
 	// mc://task-tools-test/read/test.txt
 	// 20
-}
-
-func ExampleNewReaderErrBadClient() {
-
-	host := "bad/endpoint/"
-	r, err := NewReader("", Option{Host: host})
-	if err == nil {
-		return
-	}
-
-	fmt.Println(r)   // output: <nil>
-	fmt.Println(err) // output: Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
-
-	// Output:
-	// <nil>
-	// Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
 }
 
 func ExampleNewReaderErrBadObject() {
@@ -81,6 +66,7 @@ func ExampleNewReaderErrGzip() {
 	opts := minio.PutObjectOptions{}
 	opts.ContentType = "application/octet-stream"
 	_, err := testClient.PutObject(
+		context.Background(),
 		testBucket,
 		"bad.gz",
 		&buf,

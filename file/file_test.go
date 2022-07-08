@@ -1,6 +1,7 @@
 package file
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 var (
@@ -37,7 +39,10 @@ func TestMain(m *testing.M) {
 
 	// s3 client
 	var err error
-	testClient, err = minio.New(testEndpoint, opts.AccessKey, opts.SecretKey, true)
+	testClient, err = minio.New(testEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(opts.AccessKey, opts.SecretKey, ""),
+		Secure: true,
+	})
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
@@ -179,14 +184,14 @@ func createFile(pth string, opt *Options) error {
 }
 
 func createBucket(bckt string) error {
-	exists, err := testClient.BucketExists(bckt)
+	exists, err := testClient.BucketExists(context.Background(), bckt)
 	if err != nil || exists {
 		return err
 	}
 
-	return testClient.MakeBucket(bckt, "us-east-1")
+	return testClient.MakeBucket(context.Background(), bckt, minio.MakeBucketOptions{})
 }
 
 func rmBucket(bckt string) error {
-	return testClient.RemoveBucket(bckt)
+	return testClient.RemoveBucket(context.Background(), bckt)
 }

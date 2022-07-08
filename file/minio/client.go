@@ -2,6 +2,7 @@ package minio
 
 import (
 	"context"
+	"log"
 	"net/url"
 	"strings"
 	"sync"
@@ -50,7 +51,7 @@ func newClient(opt Option) (client *minio.Client, err error) {
 	if client == nil {
 		client, err = minio.New(opt.Host, &minio.Options{
 			Creds:  credentials.NewStaticV4(opt.AccessKey, opt.SecretKey, ""),
-			Secure: true,
+			Secure: opt.Secure,
 		})
 		minIOClients[opt.key()] = client
 	}
@@ -88,6 +89,7 @@ func Stat(pth string, Opt Option) (stat.Stats, error) {
 	_, bucket, objPth := parsePth(pth)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	log.Println(bucket, objPth)
 	info, err := client.StatObject(ctx, bucket, objPth, minio.StatObjectOptions{})
 	// check if directory
 	if err != nil {

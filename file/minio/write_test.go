@@ -112,20 +112,6 @@ func ExampleNewWriterErrBuf() {
 	// true
 }
 
-func ExampleNewWriterErrBadClient() {
-	w, err := NewWriter("", Option{Host: "bad/endpoint/"}, nil)
-	if err == nil {
-		return
-	}
-
-	fmt.Println(w)   // output: <nil>
-	fmt.Println(err) // output: Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
-
-	// Output:
-	// <nil>
-	// Endpoint: bad/endpoint/ does not follow ip address or domain name standards.
-}
-
 func ExampleWriter_Write() {
 	pth := fmt.Sprintf("mc://%v/write/test.txt", testBucket)
 	w, _ := NewWriter(pth, testOption, nil)
