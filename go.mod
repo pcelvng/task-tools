@@ -17,6 +17,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cmp v0.5.6
 	github.com/google/uuid v1.3.0
+	github.com/hydronica/go-config v0.2.5
 	github.com/hydronica/toml v0.4.2
 	github.com/hydronica/trial v0.6.2
 	github.com/inhies/go-bytesize v0.0.0-20210819104631-275770b98743

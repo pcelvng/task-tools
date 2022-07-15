@@ -169,7 +169,7 @@ func ListFiles(pth string, opt Option) ([]stat.Stats, error) {
 		sts.IsDir = strings.HasSuffix(objInfo.Key, "/")
 		sts.SetCreated(objInfo.LastModified)
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
-		// TODO: replace s3 with path hostType
+
 		if isMinioHost {
 			sts.SetPath(fmt.Sprintf("%s://%s/%s/%s", scheme, opt.Host, bucket, objInfo.Key))
 		} else {

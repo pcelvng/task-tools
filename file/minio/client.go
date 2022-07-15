@@ -2,7 +2,6 @@ package minio
 
 import (
 	"context"
-	"log"
 	"net/url"
 	"strings"
 	"sync"
@@ -89,10 +88,10 @@ func Stat(pth string, Opt Option) (stat.Stats, error) {
 	_, bucket, objPth := parsePth(pth)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	log.Println(bucket, objPth)
 	info, err := client.StatObject(ctx, bucket, objPth, minio.StatObjectOptions{})
 	// check if directory
 	if err != nil {
+
 		count := 0
 		for info := range client.ListObjects(ctx, bucket, minio.ListObjectsOptions{Recursive: false, Prefix: objPth}) {
 			if info.Err != nil {
@@ -115,7 +114,7 @@ func Stat(pth string, Opt Option) (stat.Stats, error) {
 		Size:     info.Size,
 		Checksum: info.ETag,
 		Path:     info.Key,
-		Created:  info.LastModified.Format(time.RFC3339),
+		Created:  info.LastModified.UTC().Format(time.RFC3339),
 		IsDir:    false,
 	}, err
 }
