@@ -39,7 +39,10 @@ type Option struct {
 }
 
 func (o Option) key() string {
-	return o.Host + o.AccessKey + o.SecretKey
+	if o.Secure {
+		return o.Host + o.AccessKey + o.SecretKey
+	}
+	return o.Host + o.AccessKey + o.SecretKey + "un"
 }
 
 func newClient(opt Option) (client *minio.Client, err error) {

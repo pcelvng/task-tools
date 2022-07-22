@@ -13,19 +13,19 @@ import (
 )
 
 func ExampleNewReader() {
-	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.txt", testBucket)
 	r, err := NewReader(pth, testOption)
 	if r == nil {
 		return
 	}
 
 	fmt.Println(err)        // output: <nil>
-	fmt.Println(r.sts.Path) // output: mc://task-tools-test/read/test.txt
+	fmt.Println(r.sts.Path) // output: mcs://task-tools-test/read/test.txt
 	fmt.Println(r.sts.Size) // output: 20
 
 	// Output:
 	// <nil>
-	// mc://task-tools-test/read/test.txt
+	// mcs://task-tools-test/read/test.txt
 	// 20
 }
 
@@ -41,7 +41,7 @@ func ExampleNewReaderErrBadObject() {
 }
 
 func ExampleNewReaderErrObjStat() {
-	pth := "mc://does-not/exist.txt"
+	pth := "mcs://does-not/exist.txt"
 	r, err := NewReader(pth, testOption)
 
 	fmt.Println(r)   // output: <nil>
@@ -78,7 +78,7 @@ func ExampleNewReaderErrGzip() {
 		return
 	}
 
-	pth := fmt.Sprintf("mc://%v/bad.gz", testBucket)
+	pth := fmt.Sprintf("mcs://%v/bad.gz", testBucket)
 	r, err := NewReader(pth, testOption)
 
 	fmt.Println(r)   // output: <nil>
@@ -93,7 +93,7 @@ func ExampleNewReaderErrGzip() {
 }
 
 func ExampleReader_Read() {
-	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.txt", testBucket)
 	r, err := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -118,7 +118,7 @@ func ExampleReader_Read() {
 }
 
 func ExampleReader_ReadCompressed() {
-	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -143,7 +143,7 @@ func ExampleReader_ReadCompressed() {
 }
 
 func ExampleReader_ReadLine() {
-	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.txt", testBucket)
 	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -169,7 +169,7 @@ func ExampleReader_ReadLine() {
 }
 
 func ExampleReader_ReadLineCompressed() {
-	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -200,7 +200,7 @@ func ExampleReader_ReadLineCompressed() {
 }
 
 func ExampleReader_Stats() {
-	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.txt", testBucket)
 	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -217,7 +217,7 @@ func ExampleReader_Stats() {
 }
 
 func ExampleReader_Close() {
-	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.txt", testBucket)
 	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -242,7 +242,7 @@ func ExampleReader_Close() {
 }
 
 func ExampleReader_CloseCompressed() {
-	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -267,7 +267,7 @@ func ExampleReader_CloseCompressed() {
 }
 
 func ExampleReader_CloseandClose() {
-	pth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
+	pth := fmt.Sprintf("mcs://%v/read/test.gz", testBucket)
 	r, _ := NewReader(pth, testOption)
 	if r == nil {
 		return
@@ -297,9 +297,9 @@ func ExampleReader_CloseandClose() {
 func TestListFiles(t *testing.T) {
 	// setup - create objects
 	pths := []string{
-		fmt.Sprintf("mc://%s/list-test/f1.txt", testBucket),
-		fmt.Sprintf("mc://%s/list-test/f2.txt", testBucket),
-		fmt.Sprintf("mc://%s/list-test/dir/f3.txt", testBucket),
+		fmt.Sprintf("mcs://%s/list-test/f1.txt", testBucket),
+		fmt.Sprintf("mcs://%s/list-test/f2.txt", testBucket),
+		fmt.Sprintf("mcs://%s/list-test/dir/f3.txt", testBucket),
 	}
 
 	for _, pth := range pths {
@@ -307,7 +307,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test returns only files
-	dirPth := fmt.Sprintf("mc://%s/list-test/", testBucket)
+	dirPth := fmt.Sprintf("mcs://%s/list-test/", testBucket)
 	allSts, err := ListFiles(dirPth, testOption)
 	if err != nil {
 		t.Error(err)
@@ -344,7 +344,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	// test that missing trailing "/" has same results
-	dirPth = fmt.Sprintf("mc://%s/list-test", testBucket)
+	dirPth = fmt.Sprintf("mcs://%s/list-test", testBucket)
 	allSts, err = ListFiles(dirPth, testOption)
 	if err != nil {
 		t.Errorf("expected nil but got err '%v'\n", err.Error())
