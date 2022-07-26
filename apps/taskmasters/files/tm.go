@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task/bus"
@@ -374,7 +375,7 @@ func (j *job) Run() {
 // Default Template (if non provided)
 // "{SRC_PATH}?{SRC_STATS}"
 func genInfo(tmpl string, sts *stat.Stats) string {
-	info := sts.InfoString()
+	info := uri.Marshal(sts)
 
 	// default info string
 	if tmpl == "" {

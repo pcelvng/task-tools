@@ -1,46 +1,45 @@
-package gs
+package minio
 
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/md5"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )
 
-func NewReader(pth string, accessKey, secretKey string) (*Reader, error) {
-	// get gs client
-	gsClient, err := newGSClient(accessKey, secretKey)
+func NewReader(pth string, opt Option) (*Reader, error) {
+	// get s3 client
+	s3Client, err := newClient(opt)
 	if err != nil {
 		return nil, err
 	}
 
-	return newReaderFromGSClient(pth, gsClient)
+	return newReaderFromClient(pth, s3Client)
 }
 
-func newReaderFromGSClient(pth string, gsClient *minio.Client) (*Reader, error) {
+func newReaderFromClient(pth string, client *minio.Client) (*Reader, error) {
 	sts := stat.New()
 	sts.SetPath(pth)
 
 	// get bucket, objPth and validate
-	bucket, objPth := parsePth(pth)
+	_, bucket, objPth := parsePth(pth)
 
 	// get object
-	opts := &minio.GetObjectOptions{}
-	opts.Set("Accept-Encoding", "gzip") // needed to read file with the metadata gzip
-	gsObj, err := gsClient.GetObject(bucket, objPth, *opts)
+	obj, err := client.GetObject(context.Background(), bucket, objPth, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	// stats
-	objInfo, err := gsObj.Stat()
+	objInfo, err := obj.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +47,7 @@ func newReaderFromGSClient(pth string, gsClient *minio.Client) (*Reader, error) 
 	sts.SetSize(objInfo.Size)
 
 	// hash reader
-	rHshr := util.NewHashReader(md5.New(), gsObj)
+	rHshr := util.NewHashReader(md5.New(), obj)
 
 	// compression
 	var rBuf *bufio.Reader
@@ -64,7 +63,7 @@ func newReaderFromGSClient(pth string, gsClient *minio.Client) (*Reader, error) 
 	}
 
 	return &Reader{
-		gsObj: gsObj,
+		obj:   obj,
 		rBuf:  rBuf,
 		rGzip: rGzip,
 		rHshr: rHshr,
@@ -72,9 +71,9 @@ func newReaderFromGSClient(pth string, gsClient *minio.Client) (*Reader, error) 
 	}, nil
 }
 
-// Reader will read in streamed bytes from the gs object.NewgsClient
+// Reader will read in streamed bytes from the s3 object.NewS3Client
 type Reader struct {
-	gsObj *minio.Object // gs file object
+	obj   *minio.Object // s3 file object
 	rBuf  *bufio.Reader
 	rGzip *gzip.Reader
 	rHshr *util.HashReader
@@ -123,7 +122,7 @@ func (r *Reader) Close() (err error) {
 	if r.rGzip != nil {
 		r.rGzip.Close()
 	}
-	err = r.gsObj.Close()
+	err = r.obj.Close()
 
 	// calculate checksum
 	r.sts.SetChecksum(r.rHshr.Hshr)
@@ -135,15 +134,15 @@ func (r *Reader) Close() (err error) {
 // ListFiles will list all file objects in the provided pth directory.
 // pth is assumed to be a directory and so a trailing "/" is appended
 // if one does not already exist.
-func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
-
-	// get gs client
-	gsClient, err := newGSClient(accessKey, secretKey)
+func ListFiles(pth string, opt Option) ([]stat.Stats, error) {
+	// get client
+	client, err := newClient(opt)
 	if err != nil {
 		return nil, err
 	}
+	isMinioHost := strings.Contains(pth, opt.Host)
 
-	bucket, objPth := parsePth(pth)
+	scheme, bucket, objPth := parsePth(pth)
 
 	// objPth should always have trailing '/' (assumed to be dir)
 	if !strings.HasSuffix(objPth, "/") {
@@ -157,20 +156,12 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 	defer close(doneCh)
 
 	allSts := make([]stat.Stats, 0)
-	// ListObjectsV2 is not implemented for GS S3 API as of 7/8/2019
-	// https://stackoverflow.com/questions/45638871/is-the-listobjectsv2-api-call-implemented-in-google-cloud-storage
-	objInfoCh := gsClient.ListObjects(bucket, objPth, false, doneCh)
+	objInfoCh := client.ListObjects(context.Background(), bucket, minio.ListObjectsOptions{Prefix: objPth, Recursive: false})
 	errs := appenderr.New()
 	for objInfo := range objInfoCh {
-
-		// don't include dir and err objects
+		// don't include err objects
 		if objInfo.Err != nil {
 			errs.Add(objInfo.Err)
-			continue
-		}
-
-		// object is referring to itself
-		if objPth == objInfo.Key {
 			continue
 		}
 
@@ -178,7 +169,12 @@ func ListFiles(pth string, accessKey, secretKey string) ([]stat.Stats, error) {
 		sts.IsDir = strings.HasSuffix(objInfo.Key, "/")
 		sts.SetCreated(objInfo.LastModified)
 		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
-		sts.SetPath(fmt.Sprintf("gs://%s/%s", bucket, objInfo.Key))
+
+		if isMinioHost {
+			sts.SetPath(fmt.Sprintf("%s://%s/%s/%s", scheme, opt.Host, bucket, objInfo.Key))
+		} else {
+			sts.SetPath(fmt.Sprintf("%s://%s/%s", scheme, bucket, objInfo.Key))
+		}
 		sts.SetSize(objInfo.Size)
 
 		allSts = append(allSts, sts)

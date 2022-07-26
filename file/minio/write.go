@@ -1,32 +1,33 @@
-package s3
+package minio
 
 import (
+	"context"
 	"mime"
 	"path/filepath"
 	"sync"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
-func NewWriter(pth string, accessKey, secretKey string, opt *Options) (*Writer, error) {
+func NewWriter(pth string, mOpt Option, opt *buf.Options) (*Writer, error) {
 	// s3 client:
 	// using minio client library;
 	// final writing doesn't happen until Close is called
 	// but getting the client now does authentication
 	// so we know early of authentication issues.
-	s3Client, err := newS3Client(accessKey, secretKey)
+	client, err := newClient(mOpt)
 	if err != nil {
 		return nil, err
 	}
 
-	return newWriterFromS3Client(pth, s3Client, opt)
+	return newWriterFromClient(pth, client, opt)
 }
 
-func newWriterFromS3Client(pth string, s3Client *minio.Client, opt *Options) (*Writer, error) {
+func newWriterFromClient(pth string, s3Client *minio.Client, opt *buf.Options) (*Writer, error) {
 	if opt == nil {
-		opt = NewOptions()
+		opt = buf.NewOptions()
 	}
 
 	// stats
@@ -39,17 +40,17 @@ func newWriterFromS3Client(pth string, s3Client *minio.Client, opt *Options) (*W
 	}
 
 	// buffer
-	bfr, err := buf.NewBuffer(opt.Options)
+	bfr, err := buf.NewBuffer(opt)
 	if err != nil {
 		return nil, err
 	}
 	tmpPth := bfr.Stats().Path
 
 	// s3 bucket, objPth
-	bucket, objPth := parsePth(pth)
+	_, bucket, objPth := parsePth(pth)
 
 	return &Writer{
-		s3Client:   s3Client,
+		client:     s3Client,
 		bfr:        bfr,
 		bucket:     bucket,
 		objPth:     objPth,
@@ -71,10 +72,10 @@ func newWriterFromS3Client(pth string, s3Client *minio.Client, opt *Options) (*W
 //
 // Calling Abort() after Close() will do nothing.
 type Writer struct {
-	s3Client *minio.Client
-	bfr      *buf.Buffer
-	sts      stat.Stats
-	objSts   stat.Stats // stats as reported by s3
+	client *minio.Client
+	bfr    *buf.Buffer
+	sts    stat.Stats
+	objSts stat.Stats // stats as reported by s3
 
 	tmpPth string
 	bucket string // destination s3 bucket
@@ -179,22 +180,26 @@ func (w *Writer) copy() (n int64, err error) {
 
 	// copy tmp file buffer
 	if w.tmpPth != "" {
-		return w.s3Client.FPutObject(
+		info, err := w.client.FPutObject(
+			context.Background(),
 			w.bucket,
 			w.objPth,
 			w.tmpPth,
 			opts,
 		)
+		return info.Size, err
 	}
 
 	// copy memory buffer
-	return w.s3Client.PutObject(
+	info, err := w.client.PutObject(
+		context.Background(),
 		w.bucket,
 		w.objPth,
 		w.bfr,
 		w.bfr.Stats().Size,
 		opts,
 	)
+	return info.Size, err
 }
 
 // createdAt will retrieve the created date
@@ -203,7 +208,8 @@ func (w *Writer) copy() (n int64, err error) {
 // zero value.
 func (w *Writer) setObjSts() error {
 	// created date
-	objInfo, err := w.s3Client.StatObject(
+	objInfo, err := w.client.StatObject(
+		context.Background(),
 		w.bucket,
 		w.objPth,
 		minio.StatObjectOptions{},

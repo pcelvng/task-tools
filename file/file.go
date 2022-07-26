@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pcelvng/task-tools/file/gs"
+	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/local"
+	"github.com/pcelvng/task-tools/file/minio"
 	"github.com/pcelvng/task-tools/file/nop"
-	"github.com/pcelvng/task-tools/file/s3"
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
@@ -123,33 +123,15 @@ func compressionLookup(s string) int {
 	}
 }
 
-func s3Options(opt Options) s3.Options {
-	s3Opts := s3.NewOptions()
-	s3Opts.CompressLevel = compressionLookup(opt.CompressionLevel)
-	s3Opts.UseFileBuf = opt.UseFileBuf
-	s3Opts.FileBufDir = opt.FileBufDir
-	s3Opts.FileBufPrefix = opt.FileBufPrefix
-	s3Opts.KeepFailed = opt.FileBufKeepFailed
-	return *s3Opts
-}
-
-func gcsOptions(opt Options) gs.Options {
-	gcsOpts := gs.NewOptions()
-	gcsOpts.CompressLevel = compressionLookup(opt.CompressionLevel)
-	gcsOpts.UseFileBuf = opt.UseFileBuf
-	gcsOpts.FileBufDir = opt.FileBufDir
-	gcsOpts.FileBufPrefix = opt.FileBufPrefix
-	gcsOpts.KeepFailed = opt.FileBufKeepFailed
-	return *gcsOpts
-}
-
-func localOptions(opt Options) local.Options {
-	localOpts := local.NewOptions()
-	localOpts.CompressLevel = compressionLookup(opt.CompressionLevel)
-	localOpts.UseFileBuf = opt.UseFileBuf
-	localOpts.FileBufDir = opt.FileBufDir
-	localOpts.FileBufPrefix = opt.FileBufPrefix
-	return *localOpts
+// bufOptions converts a full file.Options to a buf.Options used for the buffer.
+// this avoids circular imports
+func bufOptions(opt Options) buf.Options {
+	return buf.Options{
+		CompressLevel: compressionLookup(opt.CompressionLevel),
+		UseFileBuf:    opt.UseFileBuf,
+		FileBufDir:    opt.FileBufDir,
+		FileBufPrefix: opt.FileBufPrefix,
+	}
 }
 
 func NewReader(pth string, opt *Options) (r Reader, err error) {
@@ -162,17 +144,24 @@ func NewReader(pth string, opt *Options) (r Reader, err error) {
 		return
 	}
 
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
 	switch u.Scheme {
 	case "s3":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		r, err = s3.NewReader(pth, accessKey, secretKey)
+		mOpt.Host = minio.S3Host
+		return minio.NewReader(pth, mOpt)
 	case "gcs", "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		r, err = gs.NewReader(pth, accessKey, secretKey)
+		mOpt.Host = minio.GSHost
+		return minio.NewReader(pth, mOpt)
+	case "mc", "minio":
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.NewReader(pth, mOpt)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.NewReader(pth, mOpt)
 	case "nop":
-		r, err = nop.NewReader(pth)
+		return nop.NewReader(pth)
 	case "local":
 		fallthrough
 	default:
@@ -187,24 +176,33 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 		opt = NewOptions()
 	}
 
-	switch parseScheme(pth) {
+	u, err := url.Parse(pth)
+	if err != nil {
+		return
+	}
+	bufOpts := bufOptions(*opt)
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
+	switch u.Scheme {
 	case "s3":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		s3Opts := s3Options(*opt)
-		w, err = s3.NewWriter(pth, accessKey, secretKey, &s3Opts)
+		mOpt.Host = minio.S3Host
+		return minio.NewWriter(pth, mOpt, &bufOpts)
 	case "gcs", "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		gcsOpts := gcsOptions(*opt)
-		w, err = gs.NewWriter(pth, accessKey, secretKey, &gcsOpts)
+		mOpt.Host = minio.GSHost
+		return minio.NewWriter(pth, mOpt, &bufOpts)
+	case "mc", "minio":
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.NewWriter(pth, mOpt, &bufOpts)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.NewWriter(pth, mOpt, &bufOpts)
 	case "nop":
 		w, err = nop.NewWriter(pth)
 	case "local":
 		fallthrough
 	default:
-		localOpts := localOptions(*opt)
-		w, err = local.NewWriter(pth, &localOpts)
+		w, err = local.NewWriter(pth, &bufOpts)
 	}
 
 	return w, err
@@ -221,16 +219,26 @@ func List(pthDir string, opt *Options) ([]stat.Stats, error) {
 		opt = NewOptions()
 	}
 
-	fileType := parseScheme(pthDir)
-	switch fileType {
+	u, err := url.Parse(pthDir)
+	if err != nil {
+		return nil, err
+	}
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
+	switch u.Scheme {
 	case "s3":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		return s3.ListFiles(pthDir, accessKey, secretKey)
+		mOpt.Host = minio.S3Host
+		return minio.ListFiles(pthDir, mOpt)
 	case "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		return gs.ListFiles(pthDir, accessKey, secretKey)
+		mOpt.Host = minio.GSHost
+		return minio.ListFiles(pthDir, mOpt)
+	case "mc", "minio":
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.ListFiles(pthDir, mOpt)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.ListFiles(pthDir, mOpt)
 	case "nop":
 		return nop.ListFiles(pthDir)
 	}
@@ -243,15 +251,26 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 	if opt == nil {
 		opt = NewOptions()
 	}
-	switch parseScheme(path) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return stat.Stats{}, err
+	}
+	mOpt := minio.Option{AccessKey: opt.AccessKey, SecretKey: opt.SecretKey, Secure: true}
+	switch u.Scheme {
 	case "s3":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		return s3.Stat(path, accessKey, secretKey)
+		mOpt.Host = minio.S3Host
+		return minio.Stat(path, mOpt)
 	case "gs":
-		accessKey := opt.AccessKey
-		secretKey := opt.SecretKey
-		return gs.Stat(path, accessKey, secretKey)
+		mOpt.Host = minio.GSHost
+		return minio.Stat(path, mOpt)
+	case "mc", "minio":
+		mOpt.Host = u.Host
+		mOpt.Secure = false
+		return minio.Stat(path, mOpt)
+	case "mcs":
+		mOpt.Host = u.Host
+		mOpt.Secure = true
+		return minio.Stat(path, mOpt)
 	case "nop":
 		return nop.Stat(path)
 	}
@@ -263,7 +282,7 @@ func Stat(path string, opt *Options) (stat.Stats, error) {
 // Supports the same globing patterns as provided in *nix
 // terminals.
 //
-// Globing in directories is  supported.
+// Globing in directories is supported.
 // ie - s3://bucket/path/*/files.txt will work
 // s3://bucket/path/dir[0-5]*/*.txt will work
 // but s3://bucket/path/to/*.txt will work.
@@ -349,17 +368,6 @@ func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
 	}
 
 	return folders, nil
-}
-
-// parseScheme will return the pth scheme (if exists).
-// If there is no scheme then an empty string is returned.
-func parseScheme(pth string) string {
-	u, err := url.Parse(pth)
-	if err != nil {
-		return ""
-	}
-
-	return u.Scheme
 }
 
 // ReadLines is a high-level utility that will read all the lines of a reader and call

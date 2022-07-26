@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/hydronica/trial"
-	"github.com/pcelvng/task/bus"
 )
 
 func TestNewOptions(t *testing.T) {
@@ -22,9 +21,6 @@ func TestNewOptions(t *testing.T) {
 		"default": {
 			Input: flags{taskType: "test", from: "now"},
 			Expected: &options{
-				Bus: bus.Options{
-					LookupdHosts: []string{""},
-				},
 				cache:        nil,
 				start:        now,
 				end:          now,
@@ -37,9 +33,6 @@ func TestNewOptions(t *testing.T) {
 		"complex case": {
 			Input: flags{taskType: "test", from: "2010-05-06T12", to: "2020-05-10", everyXHours: 3},
 			Expected: &options{
-				Bus: bus.Options{
-					LookupdHosts: []string{""},
-				},
 				cache:        nil,
 				start:        trial.TimeHour("2010-05-06T12"),
 				end:          trial.TimeDay("2020-05-10"),
@@ -57,9 +50,6 @@ func TestNewOptions(t *testing.T) {
 		"at hours": {
 			Input: flags{taskType: "test", at: "2010-02-12"},
 			Expected: &options{
-				Bus: bus.Options{
-					LookupdHosts: []string{""},
-				},
 				cache:        nil,
 				start:        trial.TimeDay("2010-02-12"),
 				end:          trial.TimeDay("2010-02-12"),
