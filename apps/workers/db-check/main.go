@@ -24,7 +24,7 @@ date2      - 2nd date to compare row counts between date1 and date2
 offset     - if date2 is not given, this is the offset duration back from date1 to get date2
 percent    - (default 0.05) percent is the allowed percentage of deviation between offset and compare row counts
               0.05 (5%) means the difference between the row counts can vary by 5 percent and be accepted
-							a greater difference would send an alert, if compare is not provided this check is not done
+              a greater difference would send an alert, if compare is not provided this check is not done
 
 Example task 
 (affiliate.publishers table has records from 24h ago, the difference between 24h and 48h row counts should not vary more than 5%): 
