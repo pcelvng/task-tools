@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"time"
 )
@@ -68,8 +70,9 @@ func (s *Slack) Notify(message string, level int) error {
 
 	req, _ := http.NewRequest("POST", s.Url, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-
-	_, err := http.DefaultClient.Do(req)
+	c := http.DefaultClient
+	c.Timeout = time.Minute
+	_, err := c.Do(req)
 	if err != nil {
 		return fmt.Errorf("error on http do: %v", err)
 	}
@@ -152,13 +155,15 @@ func (s *Slack) NewMessage(msg string) *Message {
 		Blocks:  make([]*Block, 0),
 	}
 
-	m.Blocks = append(m.Blocks, &Block{
+	b := &Block{
 		Type: "section",
 		Text: &Text{
 			Type: "mrkdwn",
 			Text: msg,
 		},
-	})
+	}
+
+	m.Blocks = append(m.Blocks, b)
 
 	return m
 }
@@ -221,13 +226,23 @@ func (s *Slack) SendMessage(m *Message) error {
 	time.Sleep(time.Second)
 
 	b, _ := json.Marshal(m)
-
 	req, _ := http.NewRequest("POST", s.Url, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
-
-	_, err := http.DefaultClient.Do(req)
+	c := http.DefaultClient
+	c.Timeout = time.Minute
+	resp, err := c.Do(req)
 	if err != nil {
 		return fmt.Errorf("error on http do: %v", err)
+	}
+
+	if resp != nil {
+		var b []byte
+		if resp.StatusCode/100 != 2 {
+			if resp.Body != nil {
+				b, _ = io.ReadAll(resp.Body)
+			}
+			log.Println("slack request response not ok", resp.Status, string(b))
+		}
 	}
 
 	return err
