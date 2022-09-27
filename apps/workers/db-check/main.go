@@ -27,8 +27,8 @@ tolerance - (default 0.05) percent is the allowed percentage of deviation betwee
               a greater difference would send an alert, if compare is not provided this check is not done
 
 Example task 
-(affiliate.publishers table has records from 24h ago, the difference between 24h and 48h row counts should not vary more than 5%): 
-  {"type":"task.dbcheck","info":"?db_name=psql_conn&table=table.schema&compare=48h&tolerance=0.1"}`
+(table.schema checked for records where my_date = 2022-01-02 and 2022-01-01 has 10% as many records as 2022-01-02):
+  {"type":"task.dbcheck","info":"?db=mydbname&table=table.schema&dt_column=my_date&date=2022-01-02&offset=24h&tolerance=0.1"}`
 )
 
 type Postgres struct {

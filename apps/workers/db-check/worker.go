@@ -78,7 +78,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 	if records == 0 {
 		m := []string{"no records found",
-			fmt.Sprintf("no `%s` for `%s`", w.DtColumn, w.Date.Format("2006-01-02")),
+			fmt.Sprintf("column `%s` value `%s`", w.DtColumn, w.Date.Format("2006-01-02")),
 		}
 		w.sendSlack(m...)
 		return task.Completed(fmt.Sprintln(m))
@@ -98,7 +98,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		}
 		if records2 == 0 {
 			m := []string{"no comparison date records found",
-				fmt.Sprintf("no `%s` for `%s`", w.DtColumn, dtCheck.Format("2006-01-02")),
+				fmt.Sprintf("column `%s` value `%s`", w.DtColumn, dtCheck.Format("2006-01-02")),
 			}
 			w.sendSlack(m...)
 			return task.Completed(fmt.Sprintln(m))
