@@ -2,6 +2,8 @@
 *.toml
 *.json
 
+.vscode/
+
 apps/taskmasters/backloader/backloader
 apps/taskmasters/crontask/crontask
 apps/taskmasters/http/http

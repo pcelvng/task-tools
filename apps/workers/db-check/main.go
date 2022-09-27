@@ -17,18 +17,18 @@ const (
 Runs record count checks against a given table's data to verify that the data is updated as expected
 
 uri params:
-table      - required table name to validate
-date_field - required field name that holds the date value
-date1      - 1st date value to check for records
-date2      - 2nd date to compare row counts between date1 and date2
-offset     - if date2 is not given, this is the offset duration back from date1 to get date2
-percent    - (default 0.05) percent is the allowed percentage of deviation between offset and compare row counts
+db        - required database name to use for query connections
+table     - required table name to validate
+dt_column - required column name that holds the date value to query
+date      - the date to compare data against tolerance level
+offset    - if given, this is the offset duration back from date to compare tolerance
+tolerance - (default 0.05) percent is the allowed percentage of deviation between offset and compare row counts
               0.05 (5%) means the difference between the row counts can vary by 5 percent and be accepted
               a greater difference would send an alert, if compare is not provided this check is not done
 
 Example task 
 (affiliate.publishers table has records from 24h ago, the difference between 24h and 48h row counts should not vary more than 5%): 
-  {"type":"task.dbcheck","info":"db_name?table=affiliate.publishers&compare=48h&percent=0.05"}`
+  {"type":"task.dbcheck","info":"?db_name=psql_conn&table=table.schema&compare=48h&tolerance=0.1"}`
 )
 
 type Postgres struct {
@@ -47,8 +47,8 @@ type Postgres struct {
 type options struct {
 	Slack string `toml:"slack"`
 
-	Bus  *bus.Options `toml:"bus"`
-	Psql Postgres     `toml:"postgres"` // postgres login values
+	Bus  *bus.Options        `toml:"bus"`
+	Psql map[string]Postgres `toml:"postgres"` // mulitple postgres db connections name:settings
 
 	producer bus.Producer
 }
@@ -56,31 +56,37 @@ type options struct {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	opts := &options{}
+	o := &options{
+		Psql: make(map[string]Postgres),
+	}
 
-	app := bootstrap.NewWorkerApp(taskType, opts.newWorker, opts).
+	app := bootstrap.NewWorkerApp(taskType, o.newWorker, o).
 		Version(tools.String()).
 		Description(description).
 		Initialize()
 
-	opts.producer = app.NewProducer()
+	o.producer = app.NewProducer()
 
 	app.Run()
 }
 
 // database connection validation
 func (o *options) Validate() (err error) {
-	// connect to iap database (salesforce data)
-	if o.Psql.SSLMode == "" || o.Psql.SSLMode == "disable" {
-		o.Psql.DB, err = db.PGx(o.Psql.User, o.Psql.Pass, o.Psql.Host, o.Psql.DBName)
-		if err != nil {
-			return fmt.Errorf("could not connect to postgres host:%s user:%s error:%s", o.Psql.Host, o.Psql.User, err.Error())
+	// check each psql connection
+	for name, c := range o.Psql {
+		// connect to iap database (salesforce data)
+		if c.SSLMode == "" || c.SSLMode == "disable" {
+			c.DB, err = db.PGx(c.User, c.Pass, c.Host, c.DBName)
+			if err != nil {
+				return fmt.Errorf("could not connect to postgres host:%s user:%s error:%s", c.Host, c.User, err.Error())
+			}
+		} else {
+			c.DB, err = db.PGxSSL(c.User, c.Pass, c.Host, c.DBName, c.SSLMode, c.SSLCert, c.SSLKey, c.SSLRootcert)
+			if err != nil {
+				return fmt.Errorf("could not connect to postgres (ssl) host:%s user:%s error:%s", c.Host, c.User, err.Error())
+			}
 		}
-	} else {
-		o.Psql.DB, err = db.PGxSSL(o.Psql.User, o.Psql.Pass, o.Psql.Host, o.Psql.DBName, o.Psql.SSLMode, o.Psql.SSLCert, o.Psql.SSLKey, o.Psql.SSLRootcert)
-		if err != nil {
-			return fmt.Errorf("could not connect to postgres (ssl) host:%s user:%s error:%s", o.Psql.Host, o.Psql.User, err.Error())
-		}
+		o.Psql[name] = c
 	}
 	return nil
 }
