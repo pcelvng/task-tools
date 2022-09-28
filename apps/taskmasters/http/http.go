@@ -158,7 +158,9 @@ func (opt *httpMaster) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req, _ := http.NewRequest("GET", "http://"+ip, nil)
-	res, err := http.DefaultClient.Do(req)
+	c := http.DefaultClient
+	c.Timeout = time.Minute
+	res, err := c.Do(req)
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		fmt.Fprintf(w, `{"msg":"%s}`, err)
