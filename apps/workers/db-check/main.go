@@ -74,7 +74,6 @@ func main() {
 func (o *options) Validate() (err error) {
 	// check each psql connection
 	for name, c := range o.Psql {
-		// connect to iap database (salesforce data)
 		if c.SSLMode == "" || c.SSLMode == "disable" {
 			c.DB, err = db.PGx(c.User, c.Pass, c.Host, c.DBName)
 			if err != nil {

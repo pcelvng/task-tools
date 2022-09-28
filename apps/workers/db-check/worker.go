@@ -81,7 +81,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			fmt.Sprintf("column `%s` value `%s`", w.DtColumn, w.Date.Format("2006-01-02")),
 		}
 		w.sendSlack(m...)
-		return task.Result("alert"), fmt.Sprintf("%v", m)
+		return task.Result("alert"), fmt.Sprintln(m)
 	}
 
 	var p float64
@@ -101,7 +101,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 				fmt.Sprintf("column `%s` value `%s`", w.DtColumn, dtCheck.Format("2006-01-02")),
 			}
 			w.sendSlack(m...)
-			return task.Completed(fmt.Sprintln(m))
+			return task.Result("alert"), fmt.Sprintln(m)
 		}
 		p = (float64(records2) - float64(records)) / float64(records)
 		if math.Abs(p) > w.Tolerance {
@@ -112,7 +112,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 				fmt.Sprintf("%.3f > %.3f", math.Abs(p)*100, w.Tolerance*100),
 			}
 			w.sendSlack(m...)
-			return task.Result("alert"), fmt.Sprintf("%v", m)
+			return task.Result("alert"), fmt.Sprintln(m)
 		}
 
 		msg = fmt.Sprintf("tolarence good at %.2f%%  %s:%d ~ %s:%d",
