@@ -14,8 +14,7 @@ func TestLoadFile(t *testing.T) {
 		path  string
 		cache *Cache
 	}
-	fn := func(v trial.Input) (interface{}, error) {
-		in := v.Interface().(input)
+	fn := func(in input) (string, error) {
 		if in.cache == nil {
 			in.cache = &Cache{Workflows: make(map[string]Workflow)}
 		}
@@ -23,7 +22,7 @@ func TestLoadFile(t *testing.T) {
 		f := in.cache.filePath(in.path)
 		return in.cache.Workflows[f].Checksum, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, string]{
 		"read file": {
 			Input:    input{path: "../internal/test/workflow/f1.toml"},
 			Expected: "4422274d9c9f7e987c609687a7702651", // checksum of test file
@@ -49,15 +48,14 @@ func TestLoadFile(t *testing.T) {
 }
 
 func TestRefresh(t *testing.T) {
-	fn := func(input trial.Input) (interface{}, error) {
-		c := input.Interface().(*Cache)
+	fn := func(c *Cache) (int, error) {
 		if c.Workflows == nil {
 			c.Workflows = make(map[string]Workflow)
 		}
 		_, err := c.Refresh()
 		return len(c.Workflows), err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[*Cache, int]{
 		"single file": {
 			Input:    &Cache{path: "../internal/test/workflow/f1.toml"},
 			Expected: 1, // load 1 file
@@ -152,11 +150,10 @@ func TestGet(t *testing.T) {
 		},
 	},
 	}
-	fn := func(v trial.Input) (interface{}, error) {
-		t := v.Interface().(task.Task)
+	fn := func(t task.Task) (Phase, error) {
 		return cache.Get(t), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[task.Task, Phase]{
 		"no meta": {
 			Input:    task.Task{Type: "task1"},
 			Expected: Phase{},
@@ -222,11 +219,10 @@ func TestChildren(t *testing.T) {
 			},
 		},
 	}}
-	fn := func(v trial.Input) (interface{}, error) {
-		t := v.Interface().(task.Task)
+	fn := func(t task.Task) ([]Phase, error) {
 		return cache.Children(t), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[task.Task, []Phase]{
 		"no meta": {
 			Input:    task.Task{Type: "task1"},
 			Expected: []Phase(nil),
@@ -269,30 +265,29 @@ func TestCache_FilePath(t *testing.T) {
 		file      string
 	}
 
-	fn := func(v trial.Input) (interface{}, error) {
-
+	fn := func(v trial.Input) (string, error) {
 		c := &Cache{path: v.Slice(0).String()}
 		return c.filePath(v.Slice(1).String()), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[trial.Input, string]{
 		"single file": {
-			Input:    []string{"./path", "./path/file.toml"},
+			Input:    trial.Args("./path", "./path/file.toml"),
 			Expected: "file.toml",
 		},
 		"same name": {
-			Input:    []string{"./path/file.toml", "./path/file.toml"},
+			Input:    trial.Args("./path/file.toml", "./path/file.toml"),
 			Expected: "file.toml",
 		},
 		"sub directory": {
-			Input:    []string{"./path", "./path/sub/file.toml"},
+			Input:    trial.Args("./path", "./path/sub/file.toml"),
 			Expected: "sub/file.toml",
 		},
 		"embedded": {
-			Input:    []string{"./path", "root/folder/path/file.toml"},
+			Input:    trial.Args("./path", "root/folder/path/file.toml"),
 			Expected: "file.toml",
 		},
 		"embedded sub": {
-			Input:    []string{"./path", "root/path/sub/file.toml"},
+			Input:    trial.Args("./path", "root/path/sub/file.toml"),
 			Expected: "sub/file.toml",
 		},
 	}

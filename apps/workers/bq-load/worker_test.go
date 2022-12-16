@@ -9,16 +9,16 @@ import (
 )
 
 func TestNewWorker(t *testing.T) {
-	fn := func(i trial.Input) (interface{}, error) {
+	fn := func(i string) (task.Worker, error) {
 		o := &options{}
-		w := o.NewWorker(i.String())
+		w := o.NewWorker(i)
 		if invalid, s := task.IsInvalidWorker(w); invalid {
 			return nil, errors.New(s)
 		}
 
 		return w, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, task.Worker]{
 		"required fields": {
 			Input:       "",
 			ExpectedErr: errors.New("origin is required"),

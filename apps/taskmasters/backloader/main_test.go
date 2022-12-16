@@ -14,10 +14,7 @@ func TestNewOptions(t *testing.T) {
 		return f
 	}
 	now, _ := time.Parse(tFormat, time.Now().Truncate(time.Hour).Format(tFormat))
-	fn := func(i trial.Input) (interface{}, error) {
-		return loadOptions(i.Interface().(flags))
-	}
-	cases := trial.Cases{
+	cases := trial.Cases[flags, *options]{
 		"default": {
 			Input: flags{taskType: "test", from: "now"},
 			Expected: &options{
@@ -60,5 +57,5 @@ func TestNewOptions(t *testing.T) {
 			},
 		},
 	}
-	trial.New(fn, cases).SubTest(t)
+	trial.New(loadOptions, cases).SubTest(t)
 }

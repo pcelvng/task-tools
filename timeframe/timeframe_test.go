@@ -3,15 +3,16 @@ package timeframe
 import (
 	"errors"
 	"testing"
+	"time"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 )
 
 func TestTimeFrame_Generate(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		return args[0].(*TimeFrame).Generate(), nil
+	fn := func(tf *TimeFrame) ([]time.Time, error) {
+		return tf.Generate(), nil
 	}
-	trial.New(fn, trial.Cases{
+	trial.New(fn, trial.Cases[*TimeFrame, []time.Time]{
 		"normal 24 hour generation": {
 			Input: &TimeFrame{
 				Start: trial.TimeDay("2018-05-01"),
@@ -121,10 +122,10 @@ func TestTimeFrame_Generate(t *testing.T) {
 }
 
 func TestTimeFrame_Validate(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		return nil, args[0].(*TimeFrame).Validate()
+	fn := func(tf *TimeFrame) (interface{}, error) {
+		return nil, tf.Validate()
 	}
-	trial.New(fn, trial.Cases{
+	trial.New(fn, trial.Cases[*TimeFrame, any]{
 		"valid struct": {
 			Input: &TimeFrame{
 				Start: trial.TimeDay("2018-05-01"),

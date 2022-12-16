@@ -86,15 +86,15 @@ func TestMain(m *testing.M) {
 }
 
 func TestGlob_Local(t *testing.T) {
-	fn := func(input trial.Input) (interface{}, error) {
-		sts, err := Glob(input.String(), nil)
+	fn := func(input string) ([]string, error) {
+		sts, err := Glob(input, nil)
 		files := make([]string, len(sts))
 		for i := 0; i < len(sts); i++ {
 			files[i] = strings.Replace(sts[i].Path, wd, ".", -1)
 		}
 		return files, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, []string]{
 		"star.txt": {
 			Input:    "./test/*.txt",
 			Expected: []string{"./test/file-1.txt", "./test/file2.txt"},
@@ -133,15 +133,15 @@ func TestGlob_Local(t *testing.T) {
 
 func TestGlob_Minio(t *testing.T) {
 	path := "mcs://" + testEndpoint + "/" + testBucket
-	fn := func(input trial.Input) (interface{}, error) {
-		sts, err := Glob(input.String(), &opts)
+	fn := func(input string) ([]string, error) {
+		sts, err := Glob(input, &opts)
 		files := make([]string, len(sts))
 		for i := 0; i < len(sts); i++ {
 			files[i] = sts[i].Path
 		}
 		return files, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, []string]{
 		"star.txt": {
 			Input:    path + "/test/*.txt",
 			Expected: []string{path + "/test/file-1.txt", path + "/test/file2.txt"},

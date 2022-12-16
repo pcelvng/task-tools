@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 	"github.com/pcelvng/task/bus"
 	"github.com/pcelvng/task/bus/nop"
 
@@ -18,11 +18,10 @@ func TestParse(t *testing.T) {
 		topic string
 		time  time.Time
 	}
-	fn := func(args ...interface{}) (interface{}, error) {
-		in := args[0].(input)
+	fn := func(in input) (string, error) {
 		return Parse(in.path, in.topic, in.time), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, string]{
 		"lower case topic": {
 			Input: input{
 				path:  "path/to/file/{topic}.json.gz",
@@ -50,13 +49,12 @@ func TestCreateWriters(t *testing.T) {
 		dest   string
 	}
 
-	fn := func(args ...interface{}) (interface{}, error) {
-		in := args[0].(input)
+	fn := func(in input) (interface{}, error) {
 		l := in.logger
 		return nil, l.CreateWriters(in.opts, in.dest)
 	}
 
-	cases := trial.Cases{
+	cases := trial.Cases[input, any]{
 		"good writer": {Input: input{
 			opts:   &file.Options{},
 			dest:   "nop://path1",
@@ -76,11 +74,10 @@ func TestCreateWriters(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 
-	fn := func(args ...interface{}) (interface{}, error) {
-		in := args[0].(app)
+	fn := func(in app) (interface{}, error) {
 		return nil, in.Validate()
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[app, any]{
 		"good validation": {
 			Input: app{
 				Bus: bus.Options{

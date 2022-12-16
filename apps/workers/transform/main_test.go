@@ -32,15 +32,15 @@ func BenchmarkProcess(t *testing.B) {
 }
 
 func TestNewWorker(t *testing.T) {
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in string) (task.Worker, error) {
 		o := &options{}
-		w := o.newWorker(in.String())
+		w := o.newWorker(in)
 		if b, err := task.IsInvalidWorker(w); b {
 			return nil, errors.New(err)
 		}
 		return nil, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, task.Worker]{
 		"valid": {
 			Input: "nop://file.txt?dest=nop://output.txt&jq=nop://read_eof",
 		},
@@ -69,25 +69,23 @@ func TestWorker_Process(t *testing.T) {
 		data string
 		jq   string
 	}
-	fn := func(in trial.Input) (interface{}, error) {
-		v := in.Interface().(input)
-
+	fn := func(in input) (string, error) {
 		// setup the worker
 		w := mock.NewWriter("nop://")
 		wrk := &worker{
 			writer: w,
 			code:   nil,
 		}
-		q, err := gojq.Parse(v.jq)
+		q, err := gojq.Parse(in.jq)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		wrk.code, err = gojq.Compile(q)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		// test the method
-		err = wrk.process([]byte(v.data))
+		err = wrk.process([]byte(in.data))
 
 		// retrieve the data
 		lines := w.GetLines()
@@ -96,7 +94,7 @@ func TestWorker_Process(t *testing.T) {
 		}
 		return lines[0], err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, string]{
 		"passthrough": {
 			Input: input{
 				data: examplejson,

@@ -10,21 +10,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus/io"
+	"github.com/pcelvng/task/bus/nop"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
-	"github.com/pcelvng/task/bus/io"
-	"github.com/pcelvng/task/bus/nop"
 )
 
 func TestOptions_Validate(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		opt := args[0].(options)
+	fn := func(opt options) (interface{}, error) {
 		return nil, opt.Validate()
 	}
-	trial.New(fn, trial.Cases{
+	trial.New(fn, trial.Cases[options, any]{
 		"one rule required": {
 			Input:       options{},
 			ExpectedErr: errors.New("no rules provided"),

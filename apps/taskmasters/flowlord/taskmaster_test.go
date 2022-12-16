@@ -27,8 +27,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		t.Fatal("doneConsumer", err)
 	}
 	tm := taskMaster{doneConsumer: consumer, Cache: cache}
-	fn := func(v trial.Input) (interface{}, error) {
-		tsk := v.Interface().(task.Task)
+	fn := func(tsk task.Task) ([]task.Task, error) {
 		producer, err := nop.NewProducer("")
 		if err != nil {
 			return nil, err
@@ -57,7 +56,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		})
 		return result, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[task.Task, []task.Task]{
 		"task1 attempt 0": {
 			Input: task.Task{
 				Type:    "task1",
@@ -205,10 +204,10 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		Jobs  []job
 		Files []fileRule
 	}
-	fn := func(in trial.Input) (interface{}, error) {
-		cache, err := workflow.New("../../../internal/test/"+in.String(), nil)
+	fn := func(in string) (expected, error) {
+		cache, err := workflow.New("../../../internal/test/"+in, nil)
 		if err != nil {
-			return nil, err
+			return expected{}, err
 		}
 		tm := taskMaster{Cache: cache, cron: cron.New()}
 		err = tm.schedule()
@@ -222,7 +221,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		}
 		return exp, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, expected]{
 		"f1.toml": {
 			Input: "workflow/f1.toml",
 			Expected: expected{
@@ -280,11 +279,10 @@ func TestIsReady(t *testing.T) {
 		rule string
 		meta string
 	}
-	fn := func(i trial.Input) (interface{}, error) {
-		in := i.Interface().(input)
+	fn := func(in input) (bool, error) {
 		return isReady(in.rule, in.meta), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, bool]{
 		"no require": {
 			Input:    input{"", ""},
 			Expected: true,
@@ -323,14 +321,14 @@ func TestIsReady(t *testing.T) {
 }
 
 func TestValidatePhase(t *testing.T) {
-	fn := func(i trial.Input) (interface{}, error) {
-		s := validatePhase(i.Interface().(workflow.Phase))
+	fn := func(in workflow.Phase) (string, error) {
+		s := validatePhase(in)
 		if s != "" {
-			return nil, errors.New(s)
+			return "", errors.New(s)
 		}
 		return s, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[workflow.Phase, string]{
 		"empty phase": {
 			Input:       workflow.Phase{},
 			ExpectedErr: errors.New("invalid phase"),

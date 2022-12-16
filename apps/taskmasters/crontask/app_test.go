@@ -4,15 +4,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 )
 
 func TestOptions_Validate(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		opts := args[0].(options)
+	fn := func(opts options) (interface{}, error) {
 		return nil, opts.Validate()
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[options, any]{
 		"valid rule": {
 			Input: options{
 				Rules: []Rule{

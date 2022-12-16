@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jbsmith7741/trial"
-
+	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
-	"github.com/pcelvng/task/bus"
 )
 
 func TestMain(m *testing.M) {
@@ -23,11 +23,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestOptions_Validate(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		opt := args[0].(infoOptions)
+	fn := func(opt infoOptions) (interface{}, error) {
 		return nil, (&opt).validate()
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[infoOptions, any]{
 		"valid options": {
 			Input: infoOptions{
 				Fields:       []string{"apple"},

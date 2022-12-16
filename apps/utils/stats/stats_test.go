@@ -21,8 +21,7 @@ func TestStat_DoneTask(t *testing.T) {
 		failed     int64
 		success    int64
 	}
-	fn := func(i trial.Input) (interface{}, error) {
-		in := i.Interface().(input)
+	fn := func(in input) (output, error) {
 		st := testStat(in.cache...)
 		for _, t := range in.Tasks {
 			st.DoneTask(t)
@@ -33,7 +32,7 @@ func TestStat_DoneTask(t *testing.T) {
 			success:    st.success.count,
 		}, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, output]{
 		"remove inprogress task": {
 			Input: input{
 				cache: []task.Task{
@@ -152,20 +151,20 @@ Success: 0.75% 	3  min: 5ms max 10s avg:830ms
 Failed: 0.25% 	1  min: 1µs max 3s avg:50ms`, `task3
 Success: 0.00% 
 Failed: 1.00% 	7  min: 50ms max 100ms avg:550ms`}
-	fn := func(in trial.Input) (interface{}, error) {
-		req := httptest.NewRequest("GET", in.String(), nil)
+	fn := func(in string) (string, error) {
+		req := httptest.NewRequest("GET", in, nil)
 		w := httptest.NewRecorder()
 		a.handler(w, req)
 		b, err := ioutil.ReadAll(w.Body)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		// remove first line uptime from result
 		s := string(b)
 		s = s[strings.Index(s, "\n")+1:]
 		return s, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, string]{
 		"all topics": {
 			Input:    "localhost:8080?",
 			Expected: strings.Join(response, "\n\n") + "\n\n",

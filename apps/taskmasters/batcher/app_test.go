@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 	"github.com/pcelvng/task/bus/nop"
 )
 
@@ -14,8 +14,7 @@ func TestTaskMaster_generate(t *testing.T) {
 		info         string
 		topic        string
 	}
-	fn := func(args ...interface{}) (interface{}, error) {
-		tOpts := args[0].(testOpts)
+	fn := func(tOpts testOpts) (any, error) {
 		p, _ := nop.NewProducer(tOpts.producerMock)
 		tm := &taskMaster{
 			producer: p,
@@ -25,7 +24,7 @@ func TestTaskMaster_generate(t *testing.T) {
 		return p.Messages[tOpts.topic], err
 	}
 
-	trial.New(fn, map[string]trial.Case{
+	trial.New(fn, trial.Cases[testOpts, any]{
 		"batch 2 days with meta": {
 			Input: testOpts{
 				info:  "?task-type=test&meta=job:job_name&from=2021-04-01T00&for=48h&daily#?date={yyyy}-{mm}-{dd}",

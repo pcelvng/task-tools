@@ -15,8 +15,8 @@ import (
 
 	"github.com/pcelvng/task/bus/nop"
 
+	"github.com/hydronica/trial"
 	"github.com/jarcoal/httpmock"
-	"github.com/jbsmith7741/trial"
 	"github.com/pcelvng/task/bus"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -174,21 +174,20 @@ func TestHandleStatus(t *testing.T) {
 	httpmock.RegisterResponder("GET", "http://null",
 		httpmock.NewErrorResponder(errors.New("connection refused")))
 
-	fn := func(args ...interface{}) (interface{}, error) {
+	fn := func(req *http.Request) (string, error) {
 		w := httptest.NewRecorder()
-		req := args[0].(*http.Request)
 		hm.handleStatus(w, req)
 
 		if w.Code != http.StatusOK {
-			return nil, errors.New(w.Body.String())
+			return "", errors.New(w.Body.String())
 		}
 
 		if err := json.Unmarshal(w.Body.Bytes(), &struct{}{}); err != nil {
-			return nil, fmt.Errorf("invalid json response %q", err)
+			return "", fmt.Errorf("invalid json response %q", err)
 		}
 		return w.Body.String(), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[*http.Request, string]{
 		"successful call": {
 			Input:    httptest.NewRequest("GET", "http://path/status?app=valid", nil),
 			Expected: `{"msg":"app ok"}`,
@@ -217,11 +216,10 @@ func TestHandleBatch(t *testing.T) {
 			{Name: "group1", Info: "s3://path/to/file.gz?hour=2018-01-01T00", Topic: "task2"},
 		},
 	}
-	fn := func(args ...interface{}) (interface{}, error) {
+	fn := func(req *http.Request) ([]string, error) {
 		w := httptest.NewRecorder()
 		p, _ := nop.NewProducer("")
 		hm.producer = p
-		req := args[0].(*http.Request)
 		hm.handleBatch(w, req)
 		if w.Code != http.StatusOK {
 			return nil, errors.New(w.Body.String())
@@ -237,7 +235,7 @@ func TestHandleBatch(t *testing.T) {
 		}
 		return tsks, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[*http.Request, []string]{
 		"simple batch": {
 			Input:    httptest.NewRequest("GET", "http://localhost:8080/batch?task-type=task&from=2018-01-01T00#?s3://data.json.gz", nil),
 			Expected: []string{`?from=2018-01-01T00&task-type=task&to=2018-01-01T00#?s3://data.json.gz`},
@@ -259,7 +257,7 @@ func TestHandleBatch(t *testing.T) {
 		},
 	}
 
-	trial.New(fn, cases).EqualFn(trial.ContainsFn).Test(t)
+	trial.New(fn, cases).EqualFn(trial.Contains).Test(t)
 }
 
 func TestHandleStats(t *testing.T) {
@@ -274,18 +272,17 @@ func TestHandleStats(t *testing.T) {
 	defer httpmock.Deactivate()
 	httpmock.RegisterResponder("GET", "http://endpoint:100/stats", echoURLResponse)
 
-	fn := func(args ...interface{}) (interface{}, error) {
+	fn := func(in input) (string, error) {
 		w := httptest.NewRecorder()
 
-		in := args[0].(input)
 		req := httptest.NewRequest("GET", in.request, nil)
 		(&in.master).handleStats(w, req)
 		if w.Code != http.StatusOK {
-			return nil, errors.New(w.Body.String())
+			return "", errors.New(w.Body.String())
 		}
 		return w.Body.String(), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, string]{
 		"no stats setup": {
 			Input:       input{request: "/stats"},
 			ExpectedErr: errors.New("stats not setup"),
@@ -327,7 +324,7 @@ func TestHandleStats(t *testing.T) {
 		},
 	}
 
-	trial.New(fn, cases).EqualFn(trial.ContainsFn).Test(t)
+	trial.New(fn, cases).EqualFn(trial.Contains).Test(t)
 }
 
 // echoURLResponse returns the url in the body of the response

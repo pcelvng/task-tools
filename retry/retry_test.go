@@ -3,23 +3,20 @@ package retry
 import (
 	"errors"
 	"testing"
-
-	"fmt"
-
 	"time"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	"github.com/pcelvng/task/bus/nop"
 )
 
 func TestNew(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		_, err := New(args[0].(*Options))
+	fn := func(opt *Options) (interface{}, error) {
+		_, err := New(opt)
 		return nil, err
 	}
-	trial.New(fn, trial.Cases{
+	trial.New(fn, trial.Cases[*Options, any]{
 		"No rules": {
 			Input:       &Options{},
 			ExpectedErr: errors.New("no retry rules specified"),
@@ -41,7 +38,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestApplyRule(t *testing.T) {
-	fn := func(args ...interface{}) (expected interface{}, err error) {
+	fn := func(in []task.Task) (expected interface{}, err error) {
 		r, err := New(&Options{
 			Options: bus.Options{
 				Bus: "nop",
@@ -53,46 +50,44 @@ func TestApplyRule(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		for _, v := range args {
-			tsk, ok := v.(*task.Task)
-			if !ok {
-				return nil, fmt.Errorf("%v is not of type *task.Task", v)
-			}
-			r.applyRule(tsk)
+		for _, tsk := range in {
+			r.applyRule(&tsk)
 		}
 		time.Sleep(time.Millisecond)
 		return r.producer, nil
 	}
-	trial.New(fn, trial.Cases{
+	trial.New(fn, trial.Cases[[]task.Task, any]{
 		"no errors - do nothing": {
-			Input: &task.Task{
-				Type:   "test",
-				Result: task.CompleteResult,
+			Input: []task.Task{
+				{
+					Type:   "test",
+					Result: task.CompleteResult,
+				},
 			},
 			Expected: map[string][]string{},
 		},
 		"retry a failed message": {
-			Input: &task.Task{
+			Input: []task.Task{{
 				Type:   "test",
 				Result: task.ErrResult,
-			},
+			}},
 			Expected: map[string][]string{"test": {`{"type":"test"`}},
 		},
 		"success after 1st retry": {
-			Input: trial.Args(
-				&task.Task{Type: "test", Result: task.ErrResult},
-				&task.Task{Type: "test", Result: task.CompleteResult},
-			),
+			Input: []task.Task{
+				{Type: "test", Result: task.ErrResult},
+				{Type: "test", Result: task.CompleteResult},
+			},
 			Expected: map[string][]string{"test": {`{"type":"test"`}},
 		},
 		"just keeps failing": {
-			Input: trial.Args(
-				&task.Task{Type: "test", Result: task.ErrResult},
-				&task.Task{Type: "test", Result: task.ErrResult},
-				&task.Task{Type: "test", Result: task.ErrResult},
-				&task.Task{Type: "test", Result: task.ErrResult},
-				&task.Task{Type: "test", Result: task.ErrResult},
-			),
+			Input: []task.Task{
+				{Type: "test", Result: task.ErrResult},
+				{Type: "test", Result: task.ErrResult},
+				{Type: "test", Result: task.ErrResult},
+				{Type: "test", Result: task.ErrResult},
+				{Type: "test", Result: task.ErrResult},
+			},
 			Expected: map[string][]string{
 				"test":         {`{"type":"test"`, `{"type":"test"`, `{"type":"test"`, `{"type":"test"`},
 				"retry-failed": {`{"type":"test"`, `{"type":"test"`}},

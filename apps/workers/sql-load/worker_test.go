@@ -28,10 +28,10 @@ func TestPrepareMeta(t *testing.T) {
 		schema  []DbColumn
 		columns []string
 	}
-	fn := func(in trial.Input) (interface{}, error) {
-		i := in.Interface().(input)
+	fn := func(in input) (output, error) {
+
 		o := output{}
-		o.schema, o.columns = PrepareMeta(i.schema, i.fields)
+		o.schema, o.columns = PrepareMeta(in.schema, in.fields)
 
 		// because we are dealing with a map for the jRow data
 		// we need to sort the output, not required in actual processing
@@ -41,7 +41,7 @@ func TestPrepareMeta(t *testing.T) {
 	}
 
 	// testing cases
-	cases := trial.Cases{
+	cases := trial.Cases[input, output]{
 		"no field map": { // missing keys in the json will be ignored
 			Input: input{
 				schema: []DbColumn{
@@ -139,10 +139,10 @@ func TestPrepareMeta(t *testing.T) {
 }
 
 func TestMakeCsvHeader(t *testing.T) {
-	fn := func(in trial.Input) (interface{}, error) {
-		return MakeCsvHeader(in.Interface().([]byte), []rune(",")[0])
+	fn := func(in []byte) ([]string, error) {
+		return MakeCsvHeader(in, []rune(",")[0])
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[[]byte, []string]{
 		"strings_header": {
 			Input:    []byte(`"first","second","third","fourth"`),
 			Expected: []string{"first", "second", "third", "fourth"},
@@ -168,11 +168,11 @@ func TestMakeCsvRow(t *testing.T) {
 		{Name: "num", FieldKey: "num", TypeName: "int", Nullable: true},
 	}
 
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in string) (Row, error) {
 		header := []string{"id", "name", "count", "percent", "num"}
-		return MakeCsvRow(schema, []byte(in.Interface().(string)), header, []rune(",")[0])
+		return MakeCsvRow(schema, []byte(in), header, []rune(",")[0])
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, Row]{
 		"test_csv": {
 			Input:    `"av1","myname",654321,0.145,123`,
 			Expected: Row{"av1", "myname", int64(654321), 0.145, int64(123)},
@@ -198,10 +198,10 @@ func TestMakeRow(t *testing.T) {
 		{Name: "percent", FieldKey: "percent", TypeName: "float", Nullable: true},
 		{Name: "num", FieldKey: "num", TypeName: "int", Nullable: true},
 	}
-	fn := func(in trial.Input) (interface{}, error) {
-		return MakeRow(schema, in.Interface().(map[string]interface{}))
+	fn := func(in map[string]any) (Row, error) {
+		return MakeRow(schema, in)
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[map[string]any, Row]{
 		"full row": {
 			Input: map[string]interface{}{
 				"id":      "1234",
@@ -291,14 +291,14 @@ func TestNewWorker(t *testing.T) {
 	os.Mkdir(f3, 0755)
 	d2, _ := filepath.Abs(f3)
 
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in input) (output, error) {
 		// set input
-		i := in.Interface().(input)
-		wrkr := i.options.newWorker(i.Info)
+
+		wrkr := in.options.newWorker(in.Info)
 		o := output{}
 		// if task is invalid set values
 		if invalid, msg := task.IsInvalidWorker(wrkr); invalid {
-			return nil, errors.New(msg)
+			return o, errors.New(msg)
 		}
 
 		// if the test isn't for a invalid worker set count and params
@@ -312,7 +312,7 @@ func TestNewWorker(t *testing.T) {
 		return o, nil
 	}
 	// testing cases
-	cases := trial.Cases{
+	cases := trial.Cases[input, output]{
 		"valid_worker": {
 			Input: input{options: &options{}, Info: d1 + "?table=schema.table_name"},
 			Expected: output{
@@ -375,13 +375,12 @@ func TestCreateInserts(t *testing.T) {
 		rows      []Row
 		batchSize int
 	}
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in input) ([]string, error) {
 		inChan := make(chan Row)
 		outChan := make(chan string)
 		doneChan := make(chan struct{})
-		i := in.Interface().(input)
 		go func() {
-			for _, r := range i.rows {
+			for _, r := range in.rows {
 				inChan <- r
 			}
 			close(inChan)
@@ -393,12 +392,12 @@ func TestCreateInserts(t *testing.T) {
 			}
 			close(doneChan)
 		}()
-		CreateInserts(inChan, outChan, i.table, i.columns, i.batchSize)
+		CreateInserts(inChan, outChan, in.table, in.columns, in.batchSize)
 		<-doneChan
 		return result, nil
 	}
 
-	cases := trial.Cases{
+	cases := trial.Cases[input, []string]{
 		"basic": {
 			Input: input{
 				table:     "test",
@@ -458,15 +457,14 @@ func TestReadFiles(t *testing.T) {
 		rowCount  int32
 		skipCount int
 	}
-	fn := func(in trial.Input) (interface{}, error) {
-		i := in.Interface().(input)
+	fn := func(in input) (out, error) {
 		ds := DataSet{
 			dbSchema: []DbColumn{
 				{Name: "id", FieldKey: "id"},
 				{Name: "name", FieldKey: "name", Nullable: true},
 				{Name: "count", FieldKey: "count", TypeName: "int", Nullable: true}},
 		}
-		reader := mock.NewReader("nop").AddLines(i.lines...)
+		reader := mock.NewReader("nop").AddLines(in.lines...)
 
 		rowChan := make(chan Row)
 		doneChan := make(chan struct{})
@@ -475,11 +473,11 @@ func TestReadFiles(t *testing.T) {
 			}
 			close(doneChan)
 		}()
-		ds.ReadFiles(context.Background(), reader, rowChan, i.skipErrors)
+		ds.ReadFiles(context.Background(), reader, rowChan, in.skipErrors)
 		<-doneChan
 		return out{rowCount: ds.rowCount, skipCount: ds.skipCount}, ds.err // number of rows or error
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, out]{
 		"valid data": {
 			Input: input{
 				lines: []string{
@@ -538,21 +536,21 @@ func TestCSVReadFiles(t *testing.T) {
 		rowCount  int32
 		skipCount int
 	}
-	fn := func(in trial.Input) (interface{}, error) {
-		i := in.Interface().(input)
-		if i.delimiter == "" {
-			i.delimiter = ","
+	fn := func(in input) (out, error) {
+
+		if in.delimiter == "" {
+			in.delimiter = ","
 		}
 		ds := DataSet{
 			csv:       true,
-			delimiter: []rune(i.delimiter)[0],
+			delimiter: []rune(in.delimiter)[0],
 			dbSchema: []DbColumn{
 				{Name: "id", FieldKey: "id"},
 				{Name: "name", FieldKey: "name", Nullable: true},
 				{Name: "count", FieldKey: "count", TypeName: "int", Nullable: true}},
 		}
 
-		reader := mock.NewReader("nop").AddLines(i.lines...)
+		reader := mock.NewReader("nop").AddLines(in.lines...)
 
 		rowChan := make(chan Row)
 		doneChan := make(chan struct{})
@@ -562,11 +560,11 @@ func TestCSVReadFiles(t *testing.T) {
 			}
 			close(doneChan)
 		}()
-		ds.ReadFiles(context.Background(), reader, rowChan, i.skipErrors)
+		ds.ReadFiles(context.Background(), reader, rowChan, in.skipErrors)
 		<-doneChan
 		return out{rowCount: ds.rowCount, skipCount: ds.skipCount}, ds.err // number of rows or error
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, out]{
 		"invalid row": {
 			Input: input{
 				lines: []string{

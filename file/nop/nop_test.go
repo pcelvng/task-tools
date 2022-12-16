@@ -12,10 +12,7 @@ import (
 
 func TestStat(t *testing.T) {
 	tm := time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339)
-	fn := func(in trial.Input) (interface{}, error) {
-		return Stat(in.String())
-	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, stat.Stats]{
 		"file.txt": {
 			Input: "nop://file.txt",
 			Expected: stat.Stats{
@@ -40,7 +37,7 @@ func TestStat(t *testing.T) {
 				Path:     "nop://path/to/dir?stat_dir"},
 		},
 	}
-	trial.New(fn, cases).SubTest(t)
+	trial.New(Stat, cases).SubTest(t)
 }
 
 func ExampleNewReader() {
