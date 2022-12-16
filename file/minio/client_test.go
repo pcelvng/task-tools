@@ -110,11 +110,11 @@ func TestParsePth(t *testing.T) {
 		outObjPth string
 	}
 
-	fn := func(i trial.Input) (interface{}, error) {
-		_, b, v := parsePth(i.String())
+	fn := func(i string) ([]string, error) {
+		_, b, v := parsePth(i)
 		return []string{b, v}, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, []string]{
 		"empty": {
 			Input:    "",
 			Expected: []string{"", ""},

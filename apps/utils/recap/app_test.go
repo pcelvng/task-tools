@@ -12,11 +12,10 @@ import (
 
 func TestPrintDates(t *testing.T) {
 	f := "2006/01/02T15"
-	fn := func(in trial.Input) (interface{}, error) {
-		s := printDates(in.Interface().([]time.Time))
-		return s, nil
+	fn := func(in []time.Time) (string, error) {
+		return printDates(in), nil
 	}
-	trial.New(fn, map[string]trial.Case{
+	cases := trial.Cases[[]time.Time, string]{
 		"simple series": {
 			Input:    trial.Times(f, "2018/04/09T03", "2018/04/09T04", "2018/04/09T05"),
 			Expected: "2018/04/09T03-2018/04/09T05",
@@ -37,15 +36,16 @@ func TestPrintDates(t *testing.T) {
 			Input:    trial.Times(f, "2018/04/09T00", "2018/04/10T00", "2018/04/11T00", "2018/04/12T00", "2018/04/15T00", "2018/04/16T00", "2018/04/17T00"),
 			Expected: "2018/04/09-2018/04/12,2018/04/15-2018/04/17",
 		},
-	}).Test(t)
+	}
+	trial.New(fn, cases).Test(t)
 
 }
 
 func TestRootPath(t *testing.T) {
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in trial.Input) (string, error) {
 		return rootPath(in.Slice(0).String(), in.Slice(1).Interface().(time.Time)), nil
 	}
-	trial.New(fn, map[string]trial.Case{
+	trial.New(fn, trial.Cases[trial.Input, string]{
 		"full time slug": {
 			Input:    trial.Args("/mnt/data/folder/2018/04/05/15.json.gz", trial.TimeHour("2018-04-05T15")),
 			Expected: "/mnt/data/folder/",
@@ -66,15 +66,15 @@ func TestRootPath(t *testing.T) {
 }
 
 func TestDoneTopic(t *testing.T) {
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in string) ([]string, error) {
 
-		r := strings.NewReader(in.String())
+		r := strings.NewReader(in)
 		scanner := bufio.NewScanner(r)
 		s := doneTopic(scanner)
 		sort.Strings(s)
 		return s, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, []string]{
 		"task without job": {
 			Input:    `{"type":"test1","info":"?date=2020-01-02","result":"complete"}`,
 			Expected: []string{"test1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02"},

@@ -20,13 +20,13 @@ import (
 func TestNewWorker(t *testing.T) {
 	mockDb := sqlx.MustOpen(sqlh.Mock, "mockDNS")
 	tFile := "../../../internal/test/nop.sql"
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in string) (string, error) {
 		opts := &options{
 			db: mockDb,
 		}
-		w := opts.NewWorker(in.String())
+		w := opts.NewWorker(in)
 		if invalid, s := task.IsInvalidWorker(w); invalid {
-			return nil, errors.New(s)
+			return "", errors.New(s)
 		}
 
 		switch v := w.(type) {
@@ -35,11 +35,11 @@ func TestNewWorker(t *testing.T) {
 		case *executer:
 			return v.Query, nil
 		default:
-			return nil, fmt.Errorf("unknown worker type: %T", w)
+			return "", fmt.Errorf("unknown worker type: %T", w)
 		}
 
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, string]{
 		"default": {
 			Input:    tFile + "?table=schema.table&dest=nop://",
 			Expected: "select * from fake_table;",
@@ -91,8 +91,7 @@ func TestWorker_DoTask(t *testing.T) {
 		Rows   [][]driver.Value // data returned from database
 	}
 
-	fn := func(i trial.Input) (interface{}, error) {
-		in := i.Interface().(input)
+	fn := func(in input) ([]string, error) {
 		// setup mock db response
 		db, mDB, _ := sqlmock.New()
 		eq := mDB.ExpectQuery("select *")
@@ -125,7 +124,7 @@ func TestWorker_DoTask(t *testing.T) {
 			return nil, errors.New(s)
 		}
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, []string]{
 		"basic": {
 			Input:    input{},
 			Expected: []string{},

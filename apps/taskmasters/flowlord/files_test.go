@@ -13,10 +13,10 @@ import (
 )
 
 func TestUnmarshalStat(t *testing.T) {
-	fn := func(i trial.Input) (interface{}, error) {
-		return unmarshalStat([]byte(i.String())), nil
+	fn := func(i string) (stat.Stats, error) {
+		return unmarshalStat([]byte(i)), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, stat.Stats]{
 		"invalid": {
 			Input:    "",
 			Expected: stat.Stats{},
@@ -91,11 +91,11 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 		},
 	}
 
-	fn := func(i trial.Input) (interface{}, error) {
+	fn := func(i stat.Stats) ([]task.Task, error) {
 
 		tm.producer, _ = nop.NewProducer("")
 		mock := tm.producer.(*nop.Producer)
-		err := tm.matchFile(i.Interface().(stat.Stats))
+		err := tm.matchFile(i)
 		msg := make([]task.Task, 0)
 		for _, v := range mock.Messages {
 			for _, s := range v {
@@ -112,7 +112,7 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 		})
 		return msg, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[stat.Stats, []task.Task]{
 		"match": {
 			Input: stat.Stats{Path: "gs://bucket/path/file.txt"},
 			Expected: []task.Task{

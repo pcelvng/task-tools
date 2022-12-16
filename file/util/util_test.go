@@ -6,15 +6,15 @@ import (
 	"io"
 	"testing"
 
-	"github.com/jbsmith7741/trial"
+	"github.com/hydronica/trial"
 )
 
 func TestOpenTmp(t *testing.T) {
-	fn := func(args ...interface{}) (interface{}, error) {
-		s, _, err := OpenTmp(args[0].(string), args[1].(string))
+	fn := func(args trial.Input) (interface{}, error) {
+		s, _, err := OpenTmp(args.Slice(0).String(), args.Slice(1).String())
 		return s, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[trial.Input, any]{
 		"normalize path": {
 			Input:    trial.Args("/noexist/../tmp/", "test_"),
 			Expected: "tmp/test_",

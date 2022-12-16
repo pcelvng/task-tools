@@ -184,10 +184,10 @@ func TestParseUUID(t *testing.T) {
 }
 
 func TestInfoTime(t *testing.T) {
-	fn := func(in trial.Input) (interface{}, error) {
-		return InfoTime(in.String()), nil
+	fn := func(in string) (time.Time, error) {
+		return InfoTime(in), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, time.Time]{
 		"day": {
 			Input:    "?day=2020-03-05",
 			Expected: trial.TimeDay("2020-03-05"),
@@ -249,15 +249,15 @@ func TestInfoTime(t *testing.T) {
 }
 
 func TestParseMeta(t *testing.T) {
-	fn := func(v trial.Input) (interface{}, error) {
+	fn := func(v trial.Input) (string, error) {
 		template := v.Slice(0).String()
 		meta, err := url.ParseQuery(v.Slice(1).String())
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		return Meta(template, meta), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[trial.Input, string]{
 		"{file}": {
 			Input:    trial.Args("{meta:file}", "file=s3://path/to/file.txt"),
 			Expected: "s3://path/to/file.txt",

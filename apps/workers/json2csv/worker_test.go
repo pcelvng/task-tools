@@ -13,15 +13,15 @@ import (
 )
 
 func TestOptions_NewWorker(t *testing.T) {
-	fn := func(in trial.Input) (interface{}, error) {
+	fn := func(in string) (task.Worker, error) {
 		opts := options{}
-		w := opts.NewWorker(in.String())
+		w := opts.NewWorker(in)
 		if isInvalid, s := task.IsInvalidWorker(w); isInvalid {
 			return nil, errors.New(s)
 		}
 		return w, nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[string, task.Worker]{
 		"valid": {
 			Input:    "nop://file.txt?output=nop://file.csv",
 			Expected: &worker{Meta: task.Meta{}, File: "nop://file.txt", Output: "nop://file.csv", Sep: ","},
@@ -77,21 +77,21 @@ func TestWorker_DoTask(t *testing.T) {
 		canceled  bool
 		sep       string
 	}
-	fn := func(in trial.Input) (interface{}, error) {
-		v := in.Interface().(input)
-		if v.sep == "" {
-			v.sep = ","
+	fn := func(in input) ([]string, error) {
+		if in.sep == "" {
+			in.sep = ","
 		}
-		w := mock.NewWriter(v.writePath)
+		w := mock.NewWriter(in.writePath)
 		wkr := &worker{
-			Sep:    v.sep,
-			reader: v.reader,
+			Sep:    in.sep,
+			reader: in.reader,
 			writer: w,
 			Meta:   task.NewMeta(),
 		}
 		// cancel the context option
 		ctx, cncl := context.WithCancel(context.Background())
-		if v.canceled {
+		defer cncl()
+		if in.canceled {
 			cncl()
 		}
 		r, s := wkr.DoTask(ctx)
@@ -102,7 +102,7 @@ func TestWorker_DoTask(t *testing.T) {
 		// test against data written
 		return w.GetLines(), nil
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, []string]{
 		"simple": {
 			Input: input{
 				reader: mock.NewReader("").AddLines(""),

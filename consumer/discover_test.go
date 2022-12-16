@@ -3,8 +3,8 @@ package consumer
 import (
 	"testing"
 
+	"github.com/hydronica/trial"
 	"github.com/jarcoal/httpmock"
-	"github.com/jbsmith7741/trial"
 	"github.com/nsqio/go-nsq"
 	"github.com/pkg/errors"
 )
@@ -76,8 +76,7 @@ func TestRegisterConsumer(t *testing.T) {
 		d    discover
 		prev []string
 	}
-	fn := func(args ...interface{}) (interface{}, error) {
-		in := args[0].(input)
+	fn := func(in input) ([]string, error) {
 		newTopics := make([]string, 0)
 		in.d.newConsumer = func(topic string, _ *nsq.Consumer) {
 			newTopics = append(newTopics, topic)
@@ -85,7 +84,7 @@ func TestRegisterConsumer(t *testing.T) {
 		_, err := (&in.d).registerConsumer(in.prev)
 		return newTopics, err
 	}
-	cases := trial.Cases{
+	cases := trial.Cases[input, []string]{
 		"no previous topics": {
 			Input: input{
 				d:    discover{lookupds: []string{"host1"}, channel: "stats"},
