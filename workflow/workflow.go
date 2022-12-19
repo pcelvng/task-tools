@@ -93,6 +93,9 @@ func (r Workflow) Parent() (p []Phase) {
 }
 
 func (c *Cache) Search(task, job string) (path string) {
+	if c == nil {
+		return ""
+	}
 	for key, w := range c.Workflows {
 		for _, p := range w.Phases {
 			if p.Task == task {
