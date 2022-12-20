@@ -9,27 +9,24 @@ import (
 
 func TestDate(t *testing.T) {
 	type input struct {
-		date string
+		date time.Time
 		dur  time.Duration // duration i.e., 48h
 	}
-	fn := func(i trial.Input) (interface{}, error) {
-
-		in := i.Interface().(input)
-		dt, _ := time.Parse("2006-01-02", in.date)
-		return date(dt, in.dur)
+	fn := func(in input) (time.Time, error) {
+		return date(in.date, in.dur)
 	}
 
-	cases := trial.Cases{
+	cases := trial.Cases[input, time.Time]{
 		"one_day": {
-			Input:    input{date: "2022-09-02", dur: time.Hour * 24},
+			Input:    input{date: trial.TimeDay("2022-09-02"), dur: time.Hour * 24},
 			Expected: trial.TimeDay("2022-09-01"),
 		},
 		"two_days": {
-			Input:    input{date: "2022-09-03", dur: time.Hour * 48},
+			Input:    input{date: trial.TimeDay("2022-09-03"), dur: time.Hour * 48},
 			Expected: trial.TimeDay("2022-09-01"),
 		},
 		"bad_time": {
-			Input:     input{date: "", dur: time.Hour * 48},
+			Input:     input{date: time.Time{}, dur: time.Hour * 48},
 			ShouldErr: true,
 		},
 	}

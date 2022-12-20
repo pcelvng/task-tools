@@ -177,7 +177,7 @@ func loadOptions(f flags) (*options, error) {
 	if f.taskTemplate != defTemplate {
 		opt.taskTemplate = f.taskTemplate
 	} else if opt.cache != nil {
-		w := opt.cache.Search(opt.taskType, f.job)
+		w, _ := opt.cache.Search(opt.taskType, f.job)
 		if w == "" {
 			return nil, fmt.Errorf("no workflow found for %s:%s", opt.taskType, f.job)
 		}
