@@ -59,6 +59,7 @@ type flags struct {
 	job          string
 	taskTemplate string
 	bus          string
+	meta         string
 
 	at    string
 	from  string
@@ -80,9 +81,12 @@ func run() error {
 	flag.StringVar(&f.taskType, "type", "", "REQUIRED; the task type")
 	flag.StringVar(&f.taskType, "t", "", "alias of 'type'")
 	flag.StringVar(&f.job, "job", "", "(optional: with config) workflow job")
+	flag.StringVar(&f.job, "j", "", "(optional: with config) workflow job")
 	flag.StringVar(&f.taskTemplate, "template", defTemplate, "task template")
 	flag.StringVar(&f.bus, "bus", "stdout", "one of 'stdout', 'file', 'nsq', 'pubsub'")
 	flag.StringVar(&f.bus, "b", "", "alias of 'bus'")
+	flag.StringVar(&f.meta, "meta", "", "set meta data for the created tasks (example: key1=123&key2=something)")
+	flag.StringVar(&f.meta, "m", "", "set meta data for the created tasks (example: key1=123&key2=something)")
 
 	flag.StringVar(&f.at, "at", "", "run once for a specific time. format 'yyyy-mm-ddThh' (example: '2017-01-03T01')")
 	flag.StringVar(&f.from, "from", "now", "format 'yyyy-mm-ddThh' (example: '2017-01-03T01'). Allows a special keyword 'now'.")
@@ -177,12 +181,14 @@ func loadOptions(f flags) (*options, error) {
 	if f.taskTemplate != defTemplate {
 		opt.taskTemplate = f.taskTemplate
 	} else if opt.cache != nil {
-		w := opt.cache.Search(opt.taskType, f.job)
+		w, _ := opt.cache.Search(opt.taskType, f.job)
 		if w == "" {
 			return nil, fmt.Errorf("no workflow found for %s:%s", opt.taskType, f.job)
 		}
 		opt.meta = "workflow=" + w
-
+		if f.meta != "" {
+			opt.meta += "&" + f.meta
+		}
 		if f.job != "" {
 			opt.meta += "&job=" + f.job
 		}

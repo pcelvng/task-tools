@@ -92,24 +92,31 @@ func (r Workflow) Parent() (p []Phase) {
 	return p
 }
 
-func (c *Cache) Search(task, job string) (path string) {
+// Search the all workflows within the cache anc return the first
+// matching phase with the specific task and job (optional)
+func (c *Cache) Search(task, job string) (path, template string) {
+	if c == nil {
+		return "", ""
+	}
 	for key, w := range c.Workflows {
 		for _, p := range w.Phases {
 			if p.Task == task {
 				if job == "" {
-					return key
+					return key, p.Template
 				}
 				v, _ := url.ParseQuery(p.Rule)
 				if v.Get("job") == job {
-					return key
+					return key, p.Template
 				}
 			}
 		}
 	}
-	return ""
+	return "", ""
 }
 
-// Get the Phase associated with the task t
+// Get the Phase associated with the task
+// looks for matching phases within a workflow defined in meta
+// that matches the task Type and job.
 func (c *Cache) Get(t task.Task) Phase {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

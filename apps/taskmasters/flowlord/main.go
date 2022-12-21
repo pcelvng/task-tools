@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	tools "github.com/pcelvng/task-tools"
-	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/hydronica/go-config"
+	"github.com/pcelvng/task/bus"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 )
@@ -32,7 +37,9 @@ type options struct {
 	DoneTopic   string        `toml:"done_topic" comment:"default is done"`
 	FileTopic   string        `toml:"file_topic" comment:"file topic for file watching"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
+	Port        int           `toml:"status_port"`
 	Slack       *slack.Slack  `toml:"slack"`
+	Bus         bus.Options   `toml:"bus"`
 	File        *file.Options `toml:"file"`
 }
 
@@ -42,14 +49,25 @@ func main() {
 		Refresh:     time.Minute * 15,
 		DoneTopic:   "done",
 		FailedTopic: "retry-failed",
+		File:        file.NewOptions(),
 	}
 
-	app := bootstrap.NewTaskMaster(name, New, opts).
-		Version(tools.String()).
-		Description(description)
+	config.LoadOrDie(opts)
+	tm := New(opts)
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	// do tasks
+	go func() {
+		<-sigChan
+		cancel()
 
-	app.Initialize()
-	app.Run()
+	}()
+
+	if err := tm.Run(ctx); err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 func (o options) Validate() error {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -19,7 +18,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/robfig/cron/v3"
 
-	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -43,13 +41,15 @@ type taskMaster struct {
 	doneTopic     string
 	failedTopic   string
 	*workflow.Cache
-	cron        *cron.Cron
-	slack       *slack.Slack
-	files       []fileRule
-	refreshChan chan struct{}
+	port  int
+	cron  *cron.Cron
+	slack *slack.Slack
+	files []fileRule
 }
 
 type stats struct {
+	AppName    string `json:"app_name"`
+	Version    string `json:"version"`
 	RunTime    string `json:"runtime"`
 	NextUpdate string `json:"next_cache"`
 	LastUpdate string `json:"last_cache"`
@@ -65,16 +65,19 @@ type cEntry struct {
 	Child    []string   `json:"Child,omitempty"`
 }
 
-func New(app *bootstrap.TaskMaster) bootstrap.Runner {
-	opts := app.AppOpt().(*options)
-	bOpts := app.GetBusOpts()
-	bOpts.InTopic = opts.DoneTopic
-	if bOpts.Bus == "pubsub" {
-		bOpts.InChannel = opts.DoneTopic + "-flowlord"
+func New(opts *options) *taskMaster {
+
+	opts.Bus.InTopic = opts.DoneTopic
+	if opts.Bus.Bus == "pubsub" {
+		opts.Bus.InChannel = opts.DoneTopic + "-flowlord"
 	}
-	consumer, err := bus.NewConsumer(bOpts)
+	consumer, err := bus.NewConsumer(&opts.Bus)
 	if err != nil {
-		log.Fatal("doneConsumer init", err)
+		log.Fatal("done Consumer init", err)
+	}
+	producer, err := bus.NewProducer(&opts.Bus)
+	if err != nil {
+		log.Fatal("producer init", err)
 	}
 	tm := &taskMaster{
 		initTime:     time.Now(),
@@ -82,23 +85,22 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 		doneTopic:    opts.DoneTopic,
 		failedTopic:  opts.FailedTopic,
 		fOpts:        opts.File,
-		producer:     app.NewProducer(),
+		producer:     producer,
 		doneConsumer: consumer,
+		port:         opts.Port,
 		cron:         cron.New(cron.WithSeconds()),
 		dur:          opts.Refresh,
 		slack:        opts.Slack,
-		refreshChan:  make(chan struct{}),
 	}
 	if opts.FileTopic != "" {
-		bOpts.InTopic = opts.FileTopic
-		bOpts.InChannel = opts.FileTopic + "-flowlord"
-		tm.filesConsumer, err = bus.NewConsumer(bOpts)
+		opts.Bus.InTopic = opts.FileTopic
+		opts.Bus.InChannel = opts.FileTopic + "-flowlord"
+		tm.filesConsumer, err = bus.NewConsumer(&opts.Bus)
 		if err != nil {
 			log.Println("files consumer: ", err)
 			tm.filesConsumer = nil
 		}
 	}
-	http.HandleFunc("/refresh", tm.refreshCache)
 	return tm
 }
 
@@ -112,131 +114,6 @@ func pName(topic, job string) string {
 	return topic + ":" + job
 }
 
-func (tm *taskMaster) Info() interface{} {
-	sts := stats{
-		RunTime:    gtools.PrintDuration(time.Now().Sub(tm.initTime)),
-		NextUpdate: tm.nextUpdate.Format("2006-01-02T15:04:05"),
-		LastUpdate: tm.lastUpdate.Format("2006-01-02T15:04:05"),
-		Workflow:   make(map[string]map[string]cEntry),
-	}
-
-	// create a copy of all workflows
-	wCache := make(map[string]map[string]workflow.Phase) // [file][task:job]Phase
-	for key, w := range tm.Cache.Workflows {
-		phases := make(map[string]workflow.Phase)
-		for _, j := range w.Phases {
-			phases[pName(j.Topic(), j.Job())] = j
-		}
-		wCache[key] = phases
-	}
-
-	for _, e := range tm.cron.Entries() {
-		j, ok := e.Job.(*job)
-		if !ok {
-			continue
-		}
-		ent := cEntry{
-			Next:     &e.Next,
-			Prev:     &e.Prev,
-			Schedule: []string{j.Schedule + "?offset=" + gtools.PrintDuration(j.Offset)},
-			Child:    make([]string, 0),
-		}
-		k := pName(j.Topic, j.Name)
-
-		w, found := sts.Workflow[j.Workflow]
-		if !found {
-			w = make(map[string]cEntry)
-			sts.Workflow[j.Workflow] = w
-		}
-
-		// check if for multi-scheduled entries
-		if e, found := w[k]; found {
-			if e.Prev.After(*ent.Prev) {
-				ent.Prev = e.Prev // keep the last run time
-			}
-			if e.Next.Before(*ent.Next) {
-				ent.Next = e.Next // keep the next run time
-			}
-			ent.Schedule = append(ent.Schedule, e.Schedule...)
-		}
-		// add children
-		ent.Child = tm.getAllChildren(j.Topic, j.Workflow, j.Name)
-		w[k] = ent
-
-		// remove entries from wCache
-		delete(wCache[j.Workflow], k)
-		for _, child := range ent.Child {
-			for _, v := range strings.Split(child, " ➞ ") {
-				delete(wCache[j.Workflow], v)
-			}
-		}
-	}
-
-	// add files based tasks
-
-	for _, f := range tm.files {
-		wPath := f.workflowFile
-		w, found := sts.Workflow[wPath]
-		if !found {
-			w = make(map[string]cEntry)
-			sts.Workflow[wPath] = w
-		}
-		k := pName(f.Topic(), f.Job())
-		ent := cEntry{
-			Schedule: []string{f.SrcPattern},
-			Child:    tm.getAllChildren(f.Topic(), f.workflowFile, f.Job()),
-		}
-		w[k] = ent
-
-		// remove entries from wCache
-		delete(wCache[f.workflowFile], k)
-		for _, child := range ent.Child {
-			for _, v := range strings.Split(child, " ➞ ") {
-				delete(wCache[f.workflowFile], v)
-			}
-		}
-	}
-
-	// Add non cron based tasks
-	for f, w := range wCache {
-		for _, v := range w {
-			k := pName(v.Topic(), v.Job())
-			// check for parents
-			for v.DependsOn != "" {
-				if t, found := wCache[f][v.DependsOn]; found {
-					k = v.DependsOn
-					v = t
-				} else {
-					break
-				}
-
-			}
-
-			children := tm.getAllChildren(v.Topic(), f, v.Job())
-			// todo: remove children from Cache
-			if _, found := sts.Workflow[f]; !found {
-				sts.Workflow[f] = make(map[string]cEntry)
-			}
-			warning := validatePhase(v)
-			if v.DependsOn != "" {
-				warning += "parent task not found: " + v.DependsOn
-			}
-			sts.Workflow[f][k] = cEntry{
-				Schedule: make([]string, 0),
-				Warning:  warning,
-				Child:    children,
-			}
-		}
-	}
-
-	return sts
-}
-
-func (tm *taskMaster) refreshCache(w http.ResponseWriter, _ *http.Request) {
-	tm.refreshChan <- struct{}{}
-	w.Write([]byte("cache refreshed"))
-}
-
 func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 	for _, c := range tm.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
 		job := strings.Trim(c.Task+":"+c.Job(), ":")
@@ -248,37 +125,26 @@ func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 	return s
 }
 
-// AutoUpdate will create a go routine to auto update the cached files
-// if any changes have been made to the workflow files
-func (tm *taskMaster) AutoUpdate() {
-	go func() {
-		tm.refreshChan <- struct{}{}
-		ticker := time.NewTicker(tm.dur)
-		for range ticker.C {
-			tm.refreshChan <- struct{}{}
-		}
-	}()
-	for range tm.refreshChan {
-		files, err := tm.Cache.Refresh()
-		if err != nil {
-			log.Println("error reloading workflow files", err)
-			return
-		}
-		// if there are values in files, there are changes that need to be reloaded
-		if len(files) > 0 {
-			log.Println("reloading workflow changes")
-			tcron := tm.cron
-			tm.cron = cron.New(cron.WithSeconds())
-			if err := tm.schedule(); err != nil {
-				log.Println("error setting up cron schedule", err)
-				tm.cron = tcron
-			} else {
-				tcron.Stop()
-			}
-		}
-		tm.lastUpdate = time.Now()
-		tm.nextUpdate = tm.lastUpdate.Add(tm.dur)
+func (tm *taskMaster) refreshCache() ([]string, error) {
+	files, err := tm.Cache.Refresh()
+	if err != nil {
+		return nil, fmt.Errorf("error reloading workflow: %w", err)
 	}
+	// if there are values in files, there are changes that need to be reloaded
+	if len(files) > 0 {
+		log.Println("reloading workflow changes")
+		tcron := tm.cron
+		tm.cron = cron.New(cron.WithSeconds())
+		if err := tm.schedule(); err != nil {
+			tm.cron = tcron // revert to old cron schedule
+			return files, fmt.Errorf("cron schedule: %w", err)
+		} else {
+			tcron.Stop()
+		}
+	}
+	tm.lastUpdate = time.Now()
+	tm.nextUpdate = tm.lastUpdate.Add(tm.dur)
+	return files, nil
 }
 
 func (tm *taskMaster) Run(ctx context.Context) (err error) {
@@ -287,7 +153,19 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	}
 
 	// refresh the workflow if the file(s) have been changed
-	go tm.AutoUpdate()
+	_, err = tm.refreshCache()
+	if err != nil {
+		log.Fatal(err)
+	}
+	go func() { // auto refresh cache after set duration
+		tick := time.NewTicker(tm.dur)
+		for range tick.C {
+			if _, err := tm.refreshCache(); err != nil {
+				log.Println(err)
+				// todo: send notification?
+			}
+		}
+	}()
 
 	if err := tm.schedule(); err != nil {
 		return errors.Wrapf(err, "cron schedule")
@@ -295,6 +173,8 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 
 	go tm.readDone(ctx)
 	go tm.readFiles(ctx)
+
+	go tm.StartHandler()
 	for {
 		select {
 		case <-ctx.Done():
