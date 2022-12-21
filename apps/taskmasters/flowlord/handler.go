@@ -25,7 +25,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/", tm.Info)
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
-	router.Get("/backload", tm.Backloader)
+	router.Post("/backload", tm.Backloader)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -40,7 +40,7 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 	sts := stats{
 		AppName:    "flowlord",
 		Version:    tools.Version,
-		RunTime:    gtools.PrintDuration(time.Now().Sub(tm.initTime)),
+		RunTime:    gtools.PrintDuration(time.Since(tm.initTime)),
 		NextUpdate: tm.nextUpdate.Format("2006-01-02T15:04:05"),
 		LastUpdate: tm.lastUpdate.Format("2006-01-02T15:04:05"),
 		Workflow:   make(map[string]map[string]cEntry),

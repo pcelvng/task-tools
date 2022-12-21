@@ -59,10 +59,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	// do tasks
 	go func() {
-		select {
-		case <-sigChan:
-			cancel()
-		}
+		<-sigChan
+		cancel()
+
 	}()
 
 	if err := tm.Run(ctx); err != nil {
