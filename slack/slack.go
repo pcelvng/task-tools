@@ -218,7 +218,7 @@ func (m *Message) AddBlockMsg(msg string) {
 
 func (s *Slack) SendMessage(m *Message) error {
 	// if there isn't a message just return
-	if m == nil {
+	if m == nil || s == nil {
 		return nil
 	}
 	// always wait 1 second before sending a message

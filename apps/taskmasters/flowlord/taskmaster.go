@@ -29,6 +29,8 @@ func init() {
 }
 
 type taskMaster struct {
+	//	options
+
 	initTime      time.Time
 	nextUpdate    time.Time
 	lastUpdate    time.Time
@@ -43,8 +45,19 @@ type taskMaster struct {
 	*workflow.Cache
 	port  int
 	cron  *cron.Cron
-	slack *slack.Slack
+	slack *Notification
 	files []fileRule
+
+	alerts chan task.Task
+}
+
+type Notification struct {
+	slack.Slack
+	ReportPath   string
+	MinFrequency time.Duration
+	MaxFrequency time.Duration
+
+	file *file.Options
 }
 
 type stats struct {
@@ -79,6 +92,14 @@ func New(opts *options) *taskMaster {
 	if err != nil {
 		log.Fatal("producer init", err)
 	}
+	if opts.Slack.MinFrequency == 0 {
+		opts.Slack.MinFrequency = 5 * time.Minute
+	}
+	if opts.Slack.MaxFrequency <= opts.Slack.MinFrequency {
+		opts.Slack.MaxFrequency = 16 * opts.Slack.MinFrequency
+	}
+
+	opts.Slack.file = opts.File
 	tm := &taskMaster{
 		initTime:     time.Now(),
 		path:         opts.Workflow,
@@ -91,6 +112,7 @@ func New(opts *options) *taskMaster {
 		cron:         cron.New(cron.WithSeconds()),
 		dur:          opts.Refresh,
 		slack:        opts.Slack,
+		alerts:       make(chan task.Task, 20),
 	}
 	if opts.FileTopic != "" {
 		opts.Bus.InTopic = opts.FileTopic
@@ -162,7 +184,6 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 		for range tick.C {
 			if _, err := tm.refreshCache(); err != nil {
 				log.Println(err)
-				// todo: send notification?
 			}
 		}
 	}()
@@ -175,6 +196,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	go tm.readFiles(ctx)
 
 	go tm.StartHandler()
+	go tm.slack.handleNotifications(tm.alerts, ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -185,7 +207,6 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 }
 
 func validatePhase(p workflow.Phase) string {
-
 	if p.DependsOn == "" {
 		if p.Rule == "" {
 			return "invalid phase: rule and dependsOn are blank"
@@ -295,14 +316,14 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				}
 			}()
 			return nil
-		} else if tm.failedTopic != "-" {
-			// send to the retry failed topic if retries > p.Retry
+		} else { // send to the retry failed topic if retries > p.Retry
 			meta.Set("retry", "failed")
 			t.Meta = meta.Encode()
-			tm.producer.Send(tm.failedTopic, t.JSONBytes())
+			if tm.failedTopic != "-" {
+				tm.producer.Send(tm.failedTopic, t.JSONBytes())
+			}
 			if tm.slack != nil {
-				b, _ := json.MarshalIndent(t, "", "  ")
-				tm.slack.Notify(string(b), slack.Critical)
+				tm.alerts <- *t
 			}
 		}
 
@@ -401,6 +422,78 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 			log.Println("files: ", err)
 		}
 	}
+}
+
+// handleNotifications gathers all 'failed' tasks and
+// sends a summary message every X minutes
+// It uses an exponential backoff to limit the number of messages
+// ie, (min) 5 -> 10 -> 20 -> 40 -> 80 -> 160 (max)
+// The backoff is cleared after no failed tasks occur within the window
+func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.Context) {
+	sendChan := make(chan struct{})
+	tasks := make([]task.Task, 0)
+	go func() {
+		dur := n.MinFrequency
+		for {
+			if len(tasks) > 0 {
+				sendChan <- struct{}{}
+				if dur *= 2; dur > n.MaxFrequency {
+					dur = n.MaxFrequency
+				}
+				log.Println("wait time ", dur)
+			} else if dur != n.MinFrequency {
+				dur = n.MinFrequency
+				log.Println("Reset ", dur)
+			}
+			time.Sleep(dur)
+		}
+	}()
+	for {
+		select {
+		case tsk := <-taskChan:
+			tasks = append(tasks, tsk)
+		case <-sendChan:
+			// prepare message
+			m := make(map[string]*alertStat) // [task:job]message
+			fPath := tmpl.Parse(n.ReportPath, time.Now())
+			writer, _ := file.NewWriter(fPath, n.file)
+			for _, tsk := range tasks {
+				b, _ := json.Marshal(tsk)
+				writer.Write(b)
+
+				meta, _ := url.ParseQuery(tsk.Meta)
+				key := tsk.Type + ":" + meta.Get("job")
+				v, found := m[key]
+				if !found {
+					v = &alertStat{key: key, times: make([]time.Time, 0)}
+					m[key] = v
+				}
+				v.count++
+				v.times = append(v.times, tmpl.InfoTime(tsk.Info))
+			}
+
+			var s string
+			for k, v := range m {
+				s += fmt.Sprintf("%-35s%5d  %v\n", k, v.count, tmpl.PrintDates(v.times))
+			}
+			if err := writer.Close(); err == nil && fPath != "" {
+				s += "see report at " + fPath
+			}
+			fmt.Println(s)
+			n.Slack.Notify(s, slack.Critical)
+
+			tasks = tasks[0:0] // reset slice
+		case <-ctx.Done():
+			return
+		}
+	}
+
+}
+
+type alertStat struct {
+	key   string
+	count int
+	times []time.Time
 }
 
 // jitterPercent will return a time.Duration representing extra

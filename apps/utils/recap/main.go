@@ -77,9 +77,9 @@ func doneTopic(scanner *bufio.Scanner) []string {
 	for name, v := range data {
 		ln := name + "\n"
 		ln += v.ExecTimes.String()
-		ln += fmt.Sprintf("\n\tComplete %3d  %v", v.CompletedCount, printDates(v.CompletedTimes))
+		ln += fmt.Sprintf("\n\tComplete %3d  %v", v.CompletedCount, tmpl.PrintDates(v.CompletedTimes))
 		if v.ErrorCount > 0 {
-			ln += fmt.Sprintf("\n\tError    %3d  %v", v.ErrorCount, printDates(v.ErrorTimes))
+			ln += fmt.Sprintf("\n\tError    %3d  %v", v.ErrorCount, tmpl.PrintDates(v.ErrorTimes))
 		}
 		lines = append(lines, ln)
 	}
@@ -105,7 +105,7 @@ func filesTopic(scanner *bufio.Scanner) []string {
 	}
 	lines := make([]string, 0, len(data))
 	for name, v := range data {
-		lines = append(lines, fmt.Sprintf("%s:\n%d\t\t%v", name, len(v), printDates(v)))
+		lines = append(lines, fmt.Sprintf("%s:\n%d\t\t%v", name, len(v), tmpl.PrintDates(v)))
 	}
 	return lines
 }
