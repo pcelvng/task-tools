@@ -197,13 +197,10 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 
 	go tm.StartHandler()
 	go tm.slack.handleNotifications(tm.alerts, ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("shutting down")
-			return nil
-		}
-	}
+	<-ctx.Done()
+	log.Println("shutting down")
+	return nil
+
 }
 
 func validatePhase(p workflow.Phase) string {
@@ -456,7 +453,10 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 			// prepare message
 			m := make(map[string]*alertStat) // [task:job]message
 			fPath := tmpl.Parse(n.ReportPath, time.Now())
-			writer, _ := file.NewWriter(fPath, n.file)
+			writer, err := file.NewWriter(fPath, n.file)
+			if err != nil {
+				log.Println(err)
+			}
 			for _, tsk := range tasks {
 				b, _ := json.Marshal(tsk)
 				writer.Write(b)

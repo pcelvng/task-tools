@@ -85,7 +85,11 @@ func TestTskMaster(t *testing.T) {
 	tm.producer = io.NewProducer()
 
 	outTopic := "./test/out.tsks.json"
-	tm.consumer, _ = io.NewConsumer(pth)
+	var err error
+	tm.consumer, err = io.NewConsumer(pth)
+	if err != nil {
+		t.Fatal(err)
+	}
 	doneCtx := tm.DoFileWatch(context.Background())
 
 	<-doneCtx.Done() // wait until done processing

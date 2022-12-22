@@ -176,6 +176,11 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 		opt = NewOptions()
 	}
 
+	if pth == "" {
+		return nop.NewWriter(pth)
+
+	}
+
 	u, err := url.Parse(pth)
 	if err != nil {
 		return
@@ -197,7 +202,7 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 		mOpt.Host = u.Host
 		mOpt.Secure = true
 		return minio.NewWriter(pth, mOpt, &bufOpts)
-	case "", "nop":
+	case "nop":
 		w, err = nop.NewWriter(pth)
 	case "local":
 		fallthrough
