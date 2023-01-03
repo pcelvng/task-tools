@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -241,5 +242,64 @@ func Meta(s string, meta url.Values) string {
 		s = strings.Replace(s, v, meta.Get(key), -1)
 	}
 
+	return s
+}
+
+// PrintDates takes a slice of times and displays the range of times in a more friendly format.
+func PrintDates(dates []time.Time) string {
+	tFormat := "2006/01/02T15"
+	if len(dates) == 0 {
+		return ""
+	}
+	sort.Slice(dates, func(i, j int) bool { return dates[i].Before(dates[j]) })
+	prev := dates[0]
+	s := prev.Format(tFormat)
+	series := false
+	for _, t := range dates {
+		diff := t.Truncate(time.Hour).Sub(prev.Truncate(time.Hour))
+		if diff != time.Hour && diff != 0 {
+			if series {
+				s += "-" + prev.Format(tFormat)
+			}
+			s += "," + t.Format(tFormat)
+			series = false
+		} else if diff == time.Hour {
+			series = true
+		}
+		prev = t
+	}
+	if series {
+		s += "-" + prev.Format(tFormat)
+	}
+
+	//check for daily records only
+	if !strings.Contains(s, "-") {
+		days := strings.Split(s, ",")
+		prev, _ := time.Parse(tFormat, days[0])
+		dailyString := prev.Format("2006/01/02")
+		series = false
+
+		for i := 1; i < len(days); i++ {
+			tm, _ := time.Parse(tFormat, days[i])
+			if r := tm.Sub(prev) % (24 * time.Hour); r != 0 {
+				return s
+			}
+			if tm.Sub(prev) != 24*time.Hour {
+				if series {
+					dailyString += "-" + prev.Format("2006/01/02")
+					series = false
+				}
+				dailyString += "," + tm.Format("2006/01/02")
+
+			} else {
+				series = true
+			}
+			prev = tm
+		}
+		if series {
+			return dailyString + "-" + prev.Format("2006/01/02")
+		}
+		return dailyString
+	}
 	return s
 }

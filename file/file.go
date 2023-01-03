@@ -176,6 +176,11 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 		opt = NewOptions()
 	}
 
+	if pth == "" {
+		return nop.NewWriter(pth)
+
+	}
+
 	u, err := url.Parse(pth)
 	if err != nil {
 		return

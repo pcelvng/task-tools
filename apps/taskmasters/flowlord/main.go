@@ -13,7 +13,6 @@ import (
 	"github.com/pcelvng/task/bus"
 
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/slack"
 )
 
 const (
@@ -38,7 +37,7 @@ type options struct {
 	FileTopic   string        `toml:"file_topic" comment:"file topic for file watching"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
 	Port        int           `toml:"status_port"`
-	Slack       *slack.Slack  `toml:"slack"`
+	Slack       *Notification `toml:"slack"`
 	Bus         bus.Options   `toml:"bus"`
 	File        *file.Options `toml:"file"`
 }
@@ -50,6 +49,7 @@ func main() {
 		DoneTopic:   "done",
 		FailedTopic: "retry-failed",
 		File:        file.NewOptions(),
+		Slack:       &Notification{},
 	}
 
 	config.LoadOrDie(opts)

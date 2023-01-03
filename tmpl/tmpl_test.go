@@ -296,3 +296,34 @@ func TestHostSlug(t *testing.T) {
 		t.Error("FAIL: invalid hostname")
 	}
 }
+
+func TestPrintDates(t *testing.T) {
+	f := "2006/01/02T15"
+	fn := func(in []time.Time) (string, error) {
+		return PrintDates(in), nil
+	}
+	cases := trial.Cases[[]time.Time, string]{
+		"simple series": {
+			Input:    trial.Times(f, "2018/04/09T03", "2018/04/09T04", "2018/04/09T05"),
+			Expected: "2018/04/09T03-2018/04/09T05",
+		},
+		"group of dates": {
+			Input:    trial.Times(f, "2018/04/10T14", "2018/04/10T14", "2018/04/10T00", "2018/04/09T00", "2018/04/10T00", "2018/04/11T00"),
+			Expected: "2018/04/09T00,2018/04/10T00,2018/04/10T14,2018/04/11T00",
+		},
+		"missing dates in middle": {
+			Input:    trial.Times(f, "2018/04/09T03", "2018/04/09T04", "2018/04/09T05", "2018/04/09T07", "2018/04/09T08", "2018/04/09T09", "2018/04/09T11"),
+			Expected: "2018/04/09T03-2018/04/09T05,2018/04/09T07-2018/04/09T09,2018/04/09T11",
+		},
+		"daily records": {
+			Input:    trial.Times(f, "2018/04/09T00", "2018/04/10T00", "2018/04/11T00", "2018/04/12T00"),
+			Expected: "2018/04/09-2018/04/12",
+		},
+		"daily records with gaps": {
+			Input:    trial.Times(f, "2018/04/09T00", "2018/04/10T00", "2018/04/11T00", "2018/04/12T00", "2018/04/15T00", "2018/04/16T00", "2018/04/17T00"),
+			Expected: "2018/04/09-2018/04/12,2018/04/15-2018/04/17",
+		},
+	}
+	trial.New(fn, cases).Test(t)
+
+}
