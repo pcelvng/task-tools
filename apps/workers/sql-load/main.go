@@ -37,6 +37,11 @@ table: (required), the name of the table to be inserted into i.e., schema.table_
 delete : allows insert into pre-existing data by deleting previous data. 
     - provide a list of delete key:values to be used in the delete statement
     - "?delete=date:2020-07-01|id:7"
+delete_custom : allows a place to provide custom params to build a custom delete query
+    - provide a statement (after the where clause) that defines what to delete
+		- should be url encoded for safety
+		- for example unencoded: "t1 >= '2023-01-02T00:00:00' and t1 <= '2023-01-02T23:00:00' and id = 123456"
+		- then url encoded: "?delete_custom=t1%20%3E%3D%20%272023-01-02T00%3A00%3A00%27%20and%20t1%20%3C%3D%20%272023-01-02T23%3A00%3A00%27%20and%20id%20%3D%20123456%20"
 truncate: allows insert into pre-existing table by truncating before insertion
 fields : allows mapping different json key values to different database column names
     - provide a list of field name mapping {DB column name}:{json key name} to be mapped 

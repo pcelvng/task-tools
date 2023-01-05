@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ type InfoURI struct {
 	Table        string            `uri:"table" required:"true"`      // insert table name i.e., "schema.table_name"
 	SkipErr      bool              `uri:"skip_err"`                   // if bad records are found they are skipped and logged instead of throwing an error
 	DeleteMap    map[string]string `uri:"delete"`                     // map used to build the delete query statement
+	DeleteCustom string            `uri:"delete_custom"`              // delete params statement is provided as a string value
 	FieldsMap    map[string]string `uri:"fields"`                     // map json key values to different db names
 	Truncate     bool              `uri:"truncate"`                   // truncate the table rather than delete
 	CachedInsert bool              `uri:"cached_insert"`              // this will attempt to load the query data though a temp table (postgres only)
@@ -108,13 +110,20 @@ func (o *options) newWorker(info string) task.Worker {
 	}
 	w.fReader = r
 
-	if len(w.Params.DeleteMap) > 0 && w.Params.Truncate {
-		return task.InvalidWorker("truncate can not be used with delete fields")
-	}
-	w.delQuery = DeleteQuery(w.Params.DeleteMap, w.Params.Table)
 	if w.Params.Truncate {
+		if len(w.Params.DeleteMap) > 0 || len(w.Params.DeleteCustom) > 0 {
+			return task.InvalidWorker("truncate can not be used with delete fields")
+		}
 		w.delQuery = fmt.Sprintf("delete from %s", w.Params.Table)
+		return w
 	}
+
+	if w.Params.DeleteCustom != "" {
+		w.delQuery = CustomDelete(w.Params.DeleteCustom, w.Params.Table)
+		return w
+	}
+
+	w.delQuery = DeleteQuery(w.Params.DeleteMap, w.Params.Table)
 
 	return w
 }
@@ -136,7 +145,6 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	retry := 0
 
 	if w.Params.CachedInsert && w.dbDriver == "postgres" {
-		start := time.Now()
 
 		// create table
 		tempTable := strings.Replace(w.Params.Table, ".", "_", -1) + "_" + RandString(10)
@@ -177,7 +185,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		var txErr error
 		var tx *sql.Tx
 
-		start = time.Now()
+		start := time.Now()
 		q := "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"
 
 		if w.delQuery != "" {
@@ -211,7 +219,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 		w.queryRunTime = time.Since(start)
 	} else {
-		start := time.Now()
+
 		b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
 
 		for row := range rowChan {
@@ -219,7 +227,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			b.AddRow(row)
 		}
 		b.Delete(w.delQuery)
-		start = time.Now()
+		start := time.Now()
 		stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
 		if err != nil {
 			return task.Failed(fmt.Errorf("commit to db failed %w", err))
@@ -564,6 +572,12 @@ func MakeRow(dbSchema []DbColumn, j JsonData) (row Row, err error) {
 		row[k] = j[f.FieldKey]
 	}
 	return row, nil
+}
+
+// url decodes a url encoded custom query given as a uri param
+func CustomDelete(encoded, table string) string {
+	q, _ := url.PathUnescape(encoded)
+	return fmt.Sprintf("delete from %s where %s", table, q)
 }
 
 func DeleteQuery(m map[string]string, table string) string {

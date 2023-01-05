@@ -316,9 +316,12 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		} else { // send to the retry failed topic if retries > p.Retry
 			meta.Set("retry", "failed")
 			t.Meta = meta.Encode()
-			if tm.failedTopic != "-" {
+			if tm.failedTopic != "-" && tm.failedTopic != "" {
 				tm.producer.Send(tm.failedTopic, t.JSONBytes())
 			}
+		}
+
+		if t.Result == task.AlertResult || t.Result == task.ErrResult || t.Result == task.WarnResult {
 			if tm.slack != nil {
 				tm.alerts <- *t
 			}
@@ -415,7 +418,7 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 			return
 		}
 		s := unmarshalStat(b)
-		if err := tm.matchFile(s); err != nil {
+		if err := tm.matchFile(s.Clone()); err != nil {
 			log.Println("files: ", err)
 		}
 	}

@@ -15,6 +15,28 @@ import (
 	"github.com/pcelvng/task-tools/file/mock"
 )
 
+func TestDeleteCustom(t *testing.T) {
+	type input struct {
+		table   string
+		encoded string
+	}
+	fn := func(in input) (string, error) {
+		out := CustomDelete(in.encoded, in.table)
+		return out, nil
+	}
+	cases := trial.Cases[input, string]{
+		"test1": {
+			Input: input{
+				table:   "mytable",
+				encoded: `hour_local%20%3E%3D%20%272023-01-02T00%3A00%3A00%27%20and%20hour_local%20%3C%3D%20%272023-01-02T23%3A00%3A00%27%20and%20account_id%20%3D%20560277441796101`,
+			},
+			Expected: `delete from mytable where hour_local >= '2023-01-02T00:00:00' and hour_local <= '2023-01-02T23:00:00' and account_id = 560277441796101`,
+		},
+	}
+
+	trial.New(fn, cases).Test(t)
+}
+
 func TestDefaultUpdate(t *testing.T) {
 
 }
