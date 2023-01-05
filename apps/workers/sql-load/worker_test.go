@@ -528,7 +528,7 @@ func TestReadFiles(t *testing.T) {
 			},
 			ShouldErr: true,
 		},
-		"skip invalids": {
+		"skip_invalids": {
 			Input: input{
 				lines: []string{
 					`{`, `{`, `{`, `{`, `{`,
