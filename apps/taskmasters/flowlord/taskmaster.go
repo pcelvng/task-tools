@@ -319,9 +319,12 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if tm.failedTopic != "-" && tm.failedTopic != "" {
 				tm.producer.Send(tm.failedTopic, t.JSONBytes())
 			}
+			if tm.slack != nil {
+				tm.alerts <- *t
+			}
 		}
 
-		if t.Result == task.ErrResult || t.Result == task.AlertResult {
+		if t.Result == task.AlertResult && tm.slack != nil {
 			if tm.slack != nil {
 				tm.alerts <- *t
 			}
