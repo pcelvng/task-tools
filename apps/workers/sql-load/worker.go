@@ -29,7 +29,7 @@ type InfoURI struct {
 	Table        string            `uri:"table" required:"true"`      // insert table name i.e., "schema.table_name"
 	SkipErr      bool              `uri:"skip_err"`                   // if bad records are found they are skipped and logged instead of throwing an error
 	DeleteMap    map[string]string `uri:"delete"`                     // map used to build the delete query statement
-	DeleteCustom string            `uri:"delete_custom"`              // delete params statement is provided as a string value
+	DeleteSql    string            `uri:"delete_sql"`                 // delete params statement is provided as a string value
 	FieldsMap    map[string]string `uri:"fields"`                     // map json key values to different db names
 	Truncate     bool              `uri:"truncate"`                   // truncate the table rather than delete
 	CachedInsert bool              `uri:"cached_insert"`              // this will attempt to load the query data though a temp table (postgres only)
@@ -111,15 +111,15 @@ func (o *options) newWorker(info string) task.Worker {
 	w.fReader = r
 
 	if w.Params.Truncate {
-		if len(w.Params.DeleteMap) > 0 || len(w.Params.DeleteCustom) > 0 {
+		if len(w.Params.DeleteMap) > 0 || len(w.Params.DeleteSql) > 0 {
 			return task.InvalidWorker("truncate can not be used with delete fields")
 		}
 		w.delQuery = fmt.Sprintf("delete from %s", w.Params.Table)
 		return w
 	}
 
-	if w.Params.DeleteCustom != "" {
-		w.delQuery = CustomDelete(w.Params.DeleteCustom, w.Params.Table)
+	if w.Params.DeleteSql != "" {
+		w.delQuery = CustomDelete(w.Params.DeleteSql, w.Params.Table)
 		return w
 	}
 
