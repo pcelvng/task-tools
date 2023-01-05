@@ -26,7 +26,7 @@ func TestTaskMaster_Process(t *testing.T) {
 	if err != nil {
 		t.Fatal("doneConsumer", err)
 	}
-	tm := taskMaster{doneConsumer: consumer, Cache: cache}
+	tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic"}
 	fn := func(tsk task.Task) ([]task.Task, error) {
 		producer, err := nop.NewProducer("")
 		if err != nil {
@@ -92,6 +92,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task1 no retry": {
 			Input: task.Task{
 				Type:   "task1",
+				Job:    "task1_no_retry",
 				Info:   "?date=2019-12-12",
 				Result: task.ErrResult,
 				ID:     "UUID_task1",
@@ -99,6 +100,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{
 				{
 					Type:   "task1",
+					Job:    "task1_no_retry",
 					Info:   "?date=2019-12-12",
 					ID:     "UUID_task1",
 					Meta:   "retry=failed&workflow=f1.toml",

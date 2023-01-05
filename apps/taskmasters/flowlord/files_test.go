@@ -95,7 +95,7 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 
 		tm.producer, _ = nop.NewProducer("")
 		mock := tm.producer.(*nop.Producer)
-		err := tm.matchFile(i)
+		err := tm.matchFile(i.Clone())
 		msg := make([]task.Task, 0)
 		for _, v := range mock.Messages {
 			for _, s := range v {

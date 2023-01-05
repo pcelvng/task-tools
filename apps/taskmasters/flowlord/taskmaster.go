@@ -316,9 +316,15 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		} else { // send to the retry failed topic if retries > p.Retry
 			meta.Set("retry", "failed")
 			t.Meta = meta.Encode()
-			if tm.failedTopic != "-" {
+			if tm.failedTopic != "-" && tm.failedTopic != "" {
 				tm.producer.Send(tm.failedTopic, t.JSONBytes())
 			}
+			if tm.slack != nil {
+				tm.alerts <- *t
+			}
+		}
+
+		if t.Result == task.AlertResult && tm.slack != nil {
 			if tm.slack != nil {
 				tm.alerts <- *t
 			}
@@ -415,7 +421,7 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 			return
 		}
 		s := unmarshalStat(b)
-		if err := tm.matchFile(s); err != nil {
+		if err := tm.matchFile(s.Clone()); err != nil {
 			log.Println("files: ", err)
 		}
 	}
@@ -448,7 +454,13 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 	for {
 		select {
 		case tsk := <-taskChan:
-			tasks = append(tasks, tsk)
+			// if the task result is an alert result, send a slack notification now
+			if tsk.Result == task.AlertResult {
+				b, _ := json.MarshalIndent(tsk, "", " ")
+				n.Slack.Notify(string(b), slack.Critical)
+			} else { // if the task result is not an alert result add to the tasks list summary
+				tasks = append(tasks, tsk)
+			}
 		case <-sendChan:
 			// prepare message
 			m := make(map[string]*alertStat) // [task:job]message
