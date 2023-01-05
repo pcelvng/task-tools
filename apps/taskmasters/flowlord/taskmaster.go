@@ -321,7 +321,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			}
 		}
 
-		if t.Result == task.AlertResult || t.Result == task.ErrResult || t.Result == task.WarnResult {
+		if t.Result == task.ErrResult || t.Result == task.AlertResult {
 			if tm.slack != nil {
 				tm.alerts <- *t
 			}
@@ -451,7 +451,13 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 	for {
 		select {
 		case tsk := <-taskChan:
-			tasks = append(tasks, tsk)
+			// if the task result is an alert result, send a slack notification now
+			if tsk.Result == task.AlertResult {
+				b, _ := json.MarshalIndent(tsk, "", " ")
+				n.Slack.Notify(string(b), slack.Critical)
+			} else { // if the task result is not an alert result add to the tasks list summary
+				tasks = append(tasks, tsk)
+			}
 		case <-sendChan:
 			// prepare message
 			m := make(map[string]*alertStat) // [task:job]message
