@@ -104,6 +104,12 @@ func (o *options) newWorker(info string) task.Worker {
 
 	w.ds = NewDataSet(w.Params.FileType == "csv", []rune(w.Params.Delimiter)[0])
 
+	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
+	if err != nil {
+		return task.InvalidWorker("%v", err)
+	}
+	w.fReader = r
+
 	if w.Params.Truncate {
 		if len(w.Params.DeleteMap) > 0 || len(w.Params.DeleteSql) > 0 {
 			return task.InvalidWorker("truncate can not be used with delete fields")
@@ -123,14 +129,8 @@ func (o *options) newWorker(info string) task.Worker {
 }
 
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
-	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
-	if err != nil {
-		return task.Warn("cannot read file for loading (%s) (%s)", w.Params.FilePath, err.Error())
-	}
-	w.fReader = r
-
 	// read the table schema to know the types for each column
-	err = w.QuerySchema()
+	err := w.QuerySchema()
 	if err != nil {
 		return task.Failed(err)
 	}
