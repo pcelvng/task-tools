@@ -26,6 +26,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
+	router.Handle("/workflow/*", http.FileServer(nil))
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -55,8 +56,9 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 		}
 		wCache[key] = phases
 	}
-
-	for _, e := range tm.cron.Entries() {
+	entries := tm.cron.Entries()
+	for i := 0; i < len(entries); i++ {
+		e := entries[i]
 		j, ok := e.Job.(*job)
 		if !ok {
 			continue
@@ -177,6 +179,10 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 	b, _ := json.MarshalIndent(v, "", "  ")
 
 	w.Write(b)
+}
+
+func (tm *taskMaster) fileHandler(w http.ResponseWriter, r *http.Request) {
+
 }
 
 type request struct {

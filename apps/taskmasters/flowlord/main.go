@@ -12,6 +12,7 @@ import (
 	"github.com/hydronica/go-config"
 	"github.com/pcelvng/task/bus"
 
+	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file"
 )
 
@@ -52,7 +53,7 @@ func main() {
 		Slack:       &Notification{},
 	}
 
-	config.LoadOrDie(opts)
+	config.New(opts).Version(tools.String()).Description(description).LoadOrDie()
 	tm := New(opts)
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
