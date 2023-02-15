@@ -223,9 +223,9 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		b := db.NewBatchLoader(w.dbDriver, w.sqlDB)
 
 		for row := range rowChan {
-			atomic.AddInt32(&w.ds.rowCount, 1)
 			b.AddRow(row)
 		}
+
 		b.Delete(w.delQuery)
 		start := time.Now()
 		stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
