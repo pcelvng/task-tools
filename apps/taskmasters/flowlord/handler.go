@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/pcelvng/task"
 
 	tools "github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
@@ -26,7 +28,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
-	router.Handle("/workflow/*", http.FileServer(nil))
+	router.Get("/workflow/*", tm.workflowFiles)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -181,8 +183,28 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Write(b)
 }
 
-func (tm *taskMaster) fileHandler(w http.ResponseWriter, r *http.Request) {
-
+func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
+	f := chi.URLParam(r, "*")
+	// this works but needs to be switch to a fs.FS or something that can work a directory as
+	// a user can ../ into a parent folder and access files that they should have access to.
+	reader, err := file.NewReader(tm.path+"/"+f, tm.fOpts)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	ext := strings.TrimLeft(filepath.Ext(f), ".")
+	switch ext {
+	case "toml":
+		w.Header().Set("Content-Type", "application/toml")
+	case "json":
+		w.Header().Set("Content-Type", "application/json")
+	case "yaml", "yml":
+		w.Header().Set("Context-Type", "text/x-yaml")
+	}
+	b, _ := io.ReadAll(reader)
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
 }
 
 type request struct {
