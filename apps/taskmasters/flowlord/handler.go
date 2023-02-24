@@ -185,9 +185,29 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 
 func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	f := chi.URLParam(r, "*")
-	// this works but needs to be switch to a fs.FS or something that can work a directory as
-	// a user can ../ into a parent folder and access files that they should have access to.
-	reader, err := file.NewReader(tm.path+"/"+f, tm.fOpts)
+
+	if strings.Contains(f, "../") {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	pth := tm.path + "/" + f
+
+	sts, err := file.Stat(pth, tm.fOpts)
+	if err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	if sts.IsDir {
+		files, _ := file.List(pth, tm.fOpts)
+		for _, f := range files {
+			b, a, _ := strings.Cut(f.Path, tm.path)
+			w.Write([]byte(b + a + "\n"))
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	reader, err := file.NewReader(pth, tm.fOpts)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(err.Error()))
