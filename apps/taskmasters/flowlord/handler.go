@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/pcelvng/task"
 
 	tools "github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
@@ -26,6 +28,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
+	router.Get("/workflow/*", tm.workflowFiles)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -55,8 +58,9 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 		}
 		wCache[key] = phases
 	}
-
-	for _, e := range tm.cron.Entries() {
+	entries := tm.cron.Entries()
+	for i := 0; i < len(entries); i++ {
+		e := entries[i]
 		j, ok := e.Job.(*job)
 		if !ok {
 			continue
@@ -176,6 +180,50 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 	b, _ := json.MarshalIndent(v, "", "  ")
 
+	w.Write(b)
+}
+
+func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
+	f := chi.URLParam(r, "*")
+
+	if strings.Contains(f, "../") {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	pth := tm.path + "/" + f
+
+	sts, err := file.Stat(pth, tm.fOpts)
+	if err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	if sts.IsDir {
+		files, _ := file.List(pth, tm.fOpts)
+		for _, f := range files {
+			b, a, _ := strings.Cut(f.Path, tm.path)
+			w.Write([]byte(b + a + "\n"))
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	reader, err := file.NewReader(pth, tm.fOpts)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	ext := strings.TrimLeft(filepath.Ext(f), ".")
+	switch ext {
+	case "toml":
+		w.Header().Set("Content-Type", "application/toml")
+	case "json":
+		w.Header().Set("Content-Type", "application/json")
+	case "yaml", "yml":
+		w.Header().Set("Context-Type", "text/x-yaml")
+	}
+	b, _ := io.ReadAll(reader)
+	w.WriteHeader(http.StatusOK)
 	w.Write(b)
 }
 
