@@ -129,6 +129,46 @@ func TestBackloader(t *testing.T) {
 			},
 			ShouldErr: true,
 		},
+		"invalid_time": {
+			Input: request{Task: "task1", At: "2022-120-01"},
+			Expected: response{
+				Count: 1,
+				Tasks: []task.Task{
+					{Type: "task1", Info: time.Now().Format("?date=2006-01-02"), Meta: "workflow=f3.toml"},
+				}},
+		},
+		"to only": {
+			Input: request{Task: "task1", To: "2022-12-01"},
+			Expected: response{
+				Count: 1,
+				Tasks: []task.Task{
+					{Type: "task1", Info: "?date=2022-12-01", Meta: "workflow=f3.toml"},
+				}},
+		},
+		"from only": {
+			Input: request{Task: "task1", From: "2022-12-01"},
+			Expected: response{
+				Count: 1,
+				Tasks: []task.Task{
+					{Type: "task1", Info: "?date=2022-12-01", Meta: "workflow=f3.toml"},
+				}},
+		},
+		"backwards": {
+			Input: request{
+				Task:     "month",
+				Template: "?table=exp.tbl_{YYYY}_{MM}",
+				From:     "2021-01-01",
+				To:       "2020-10-01",
+				By:       "month",
+			},
+			Expected: response{
+				Tasks: []task.Task{
+					{Type: "month", Info: "?table=exp.tbl_2021_01"},
+					{Type: "month", Info: "?table=exp.tbl_2020_10"},
+				},
+				Count: 4,
+			},
+		},
 	}
 	trial.New(fn, cases).Comparer(trial.EqualOpt(
 		trial.IgnoreAllUnexported,

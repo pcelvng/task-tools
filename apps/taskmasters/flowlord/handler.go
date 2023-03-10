@@ -289,6 +289,14 @@ func (tm *taskMaster) backload(req request) response {
 	start := parseTime(req.From)
 	end := parseTime(req.To)
 	msg := make([]string, 0)
+	if start.IsZero() && !end.IsZero() {
+		start = end
+		msg = append(msg, "from value not set")
+	}
+	if !start.IsZero() && end.IsZero() {
+		end = start
+		msg = append(msg, "to value not set")
+	}
 	if start.IsZero() && end.IsZero() && at.IsZero() {
 		msg = append(msg, "no time provided using today")
 		at = time.Now()
@@ -334,11 +342,30 @@ func (tm *taskMaster) backload(req request) response {
 	meta, _ := url.QueryUnescape(vals.Encode())
 
 	tasks := make([]task.Task, 0)
+
+	// reverse task order when end time comes before start
+	var reverseTasks bool
+	if end.Before(start) {
+		reverseTasks = true
+		t := end
+		end = start
+		start = t
+	}
+
 	for t := start; end.Sub(t) >= 0; t = byIter(t) {
 		tsk := *task.New(req.Task, tmpl.Parse(req.Template, t))
 		tsk.Meta = meta
 		tasks = append(tasks, tsk)
 	}
+
+	if reverseTasks {
+		tmp := make([]task.Task, len(tasks))
+		for i := 0; i < len(tasks); i++ {
+			tmp[i] = tasks[len(tasks)-i-1]
+		}
+		tasks = tmp
+	}
+
 	return response{Tasks: tasks, Count: len(tasks), Status: strings.Join(msg, " ,")}
 }
 
