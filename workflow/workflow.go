@@ -2,7 +2,7 @@ package workflow
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -288,7 +288,7 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 	if err != nil {
 		return "", errors.Wrapf(err, "new reader %s", path)
 	}
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return "", errors.Wrapf(err, "read-all: %s", path)
 	}

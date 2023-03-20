@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/hydronica/toml"
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 )
@@ -45,6 +47,33 @@ func TestLoadFile(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
+}
+
+func TestToml(t *testing.T) {
+	v := `
+[[phase]]
+task = "task1"
+rule = "cron=0 * * * *&offset=-4h&job=t2&retry_delay=10ms"
+retry = 3
+template = "?date={yyyy}-{mm}-{dd}T{hh}"
+
+[[phase]]
+task = "task2"
+dependsOn = "task1"
+rule = ""
+retry = 3
+template = "{meta:file}?time={yyyy}-{mm}-{dd}"
+`
+	w := &Workflow{}
+
+	if _, err := toml.Decode(v, w); err != nil {
+		t.Fatalf(err.Error())
+	}
+	if len(w.Phases) != 2 {
+		t.Errorf("Expected 2 phases got %d", len(w.Phases))
+		t.Log(spew.Sdump(w.Phases))
+	}
+
 }
 
 func TestRefresh(t *testing.T) {
