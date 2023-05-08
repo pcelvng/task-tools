@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -99,13 +100,15 @@ func (c *Memory) Recap() map[string]*Stats {
 	c.mu.RLock()
 	for _, v := range c.cache {
 		for _, t := range v.Events {
-			stat, found := data[t.Type+":"+t.Job]
+			key := strings.TrimRight(t.Type+":"+t.Job, ":")
+			stat, found := data[key]
 			if !found {
 				stat = &Stats{
 					CompletedTimes: make([]time.Time, 0),
 					ErrorTimes:     make([]time.Time, 0),
 					ExecTimes:      &DurationStats{},
 				}
+				data[key] = stat
 			}
 			stat.Add(t)
 		}

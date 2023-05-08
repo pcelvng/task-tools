@@ -22,6 +22,22 @@ type Stats struct {
 	ExecTimes *DurationStats
 }
 
+func (s *Stats) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
+}
+
+func (s Stats) String() string {
+	r := s.ExecTimes.String()
+	if s.CompletedCount > 0 {
+		r += fmt.Sprintf("\n\tComplete: %d %v", s.CompletedCount, tmpl.PrintDates(s.CompletedTimes))
+	}
+	if s.ErrorCount > 0 {
+		r += fmt.Sprintf("\n\tError: %d %v", s.ErrorCount, tmpl.PrintDates(s.ErrorTimes))
+	}
+
+	return r
+}
+
 type DurationStats struct {
 	Min   time.Duration
 	Max   time.Duration
@@ -52,11 +68,9 @@ func (s *DurationStats) Average() time.Duration {
 	return time.Duration(s.sum/s.count) * precision
 }
 
-func (s DurationStats) String() string {
-	if s.count == 0 {
-		return ""
-	}
-	return fmt.Sprintf("\tmin: %v max %v avg:%v", s.Min, s.Max, s.Average())
+func (s *DurationStats) String() string {
+	return fmt.Sprintf("min: %v max: %v avg: %v",
+		s.Min, s.Max, s.Average())
 }
 
 func (stats *Stats) Add(tsk task.Task) {

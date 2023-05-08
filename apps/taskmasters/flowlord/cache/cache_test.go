@@ -151,3 +151,71 @@ func TestRecycle(t *testing.T) {
 		t.Logf(diff)
 	}
 }
+
+func TestRecap(t *testing.T) {
+	fn := func(in []task.Task) (map[string]string, error) {
+		c := &Memory{cache: map[string]TaskJob{}}
+		for _, t := range in {
+			c.Add(t)
+		}
+		result := map[string]string{}
+		for k, v := range c.Recap() {
+			result[k] = v.String()
+		}
+		return result, nil
+	}
+	cases := trial.Cases[[]task.Task, map[string]string]{
+		"task no job": {
+			Input: []task.Task{{ID: "abc", Type: "test1", Info: "?date=2020-01-02", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:10Z"}},
+			Expected: map[string]string{
+				"test1": "min: 10s max: 10s avg: 10s\n\tComplete: 1 2020/01/02",
+			},
+		},
+		"task:job": {
+			Input: []task.Task{
+				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-01", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:10Z"},
+				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-02", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:15Z"},
+				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-03", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:05Z"},
+			},
+			Expected: map[string]string{
+				"test1:job1": "min: 5s max: 15s avg: 10s\n\tComplete: 3 2020/01/01-2020/01/03",
+			},
+		},
+		"with errors": {
+			Input: []task.Task{
+				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-01", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:10Z"},
+				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-02", Result: "error", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:15Z"},
+				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-03", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:05Z"},
+			},
+			Expected: map[string]string{
+				"test1:job1": "min: 5s max: 10s avg: 7.5s\n\tComplete: 2 2020/01/01,2020/01/03\n\tError: 1 2020/01/02",
+			},
+		},
+		"hourly": {
+			Input: []task.Task{
+				{ID: "abc", Type: "proc", Job: "hour", Info: "?hour=2020-01-01T05", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:10Z"},
+				{ID: "abc", Type: "proc", Job: "hour", Info: "?hour_utc=2020-01-01T06", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:15Z"},
+				{ID: "abc", Type: "proc", Job: "hour", Info: "?hour=2020-01-01T07", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:05Z"},
+				{ID: "abc", Type: "proc", Job: "hour", Info: "?hour=2020-01-01T08", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:47Z"},
+				{ID: "abc", Type: "proc", Job: "hour", Info: "?hour=2020-01-01T09", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:01:33Z"},
+			},
+			Expected: map[string]string{
+				"proc:hour": "min: 5s max: 1m33s avg: 34s\n\tComplete: 5 2020/01/01T05-2020/01/01T09",
+			},
+		},
+		"monthly": {
+			Input: []task.Task{
+				{ID: "abc", Type: "month", Info: "?day=2020-01-01", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:10Z"},
+				{ID: "abc", Type: "month", Info: "?day=2020-02-01", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:15Z"},
+			},
+			Expected: map[string]string{
+				"month": "min: 10s max: 15s avg: 12.5s\n\tComplete: 2 2020/01/01,2020/02/01",
+			},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+
+	// run data through recap
+	// compare results against expected.
+
+}
