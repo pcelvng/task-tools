@@ -29,6 +29,9 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
 	router.Get("/workflow/*", tm.workflowFiles)
+	router.Get("/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
