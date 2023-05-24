@@ -17,7 +17,7 @@ type worker struct {
 	task.Meta
 	slack *slack.Slack
 
-	DBSrv     string    `uri:"db_srv" required:"true"`                   // database server/source connection
+	DBSrc     string    `uri:"db_src" required:"true"`                   // database source
 	Table     string    `uri:"table" required:"true"`                    // name of the schema.table to query
 	Type      string    `uri:"type" required:"true"`                     // type of check
 	Field     string    `uri:"field"`                                    // field name being checked
@@ -59,20 +59,18 @@ func (w *worker) CheckMissing(ctx context.Context) (task.Result, string) {
 	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Missing Data Check - " + d + "*")
 	issues := 0
 
-	c, err := w.GetRecordCount(ctx)
+	cnt, err := w.GetRecordCount(ctx)
 	if err != nil {
 		issues++
 		// there was an error when checking table data add a slack message block with the error
 		m.AddElements(fmt.Sprintf(":octagonal_sign:  *%s* - %s", w.Table, err.Error()))
 		log.Printf("%s - %s\n", w.Table, err.Error())
-	} else {
+	} else if cnt == 0 {
 		// there are no records, or nothing to process in the table
 		// send a slack message alerting for the table
-		if c == 0 {
-			issues++
-			m.AddElements(fmt.Sprintf(":no_entry_sign:  *%s* - missing data", w.Table))
-			log.Printf("%s : %s missing data \n", w.Table, d)
-		}
+		issues++
+		m.AddElements(fmt.Sprintf(":no_entry_sign:  *%s* - missing data", w.Table))
+		log.Printf("%s : %s missing data \n", w.Table, d)
 	}
 
 	// for any issues, send slack message
@@ -84,9 +82,9 @@ func (w *worker) CheckMissing(ctx context.Context) (task.Result, string) {
 }
 
 func (w *worker) GetRecordCount(ctx context.Context) (count int64, err error) {
-	pg, found := w.Psql[w.DBSrv]
+	pg, found := w.Psql[w.DBSrc]
 	if !found {
-		return 0, fmt.Errorf("db name %s not found", w.DBSrv)
+		return 0, fmt.Errorf("db source %s not found", w.DBSrc)
 	}
 	qStr := fmt.Sprintf("select count(0) as count from %s where date(%s) = '%s'", w.Table, w.DateField, w.Date.Format("2006-01-02"))
 	row := pg.DB.QueryRowxContext(ctx, qStr)
@@ -102,19 +100,17 @@ func (w *worker) CheckNull(ctx context.Context) (task.Result, string) {
 	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Null Check - " + d + "*")
 	issues := 0
 
-	c, err := w.GetNullCount(ctx)
+	cnt, err := w.GetNullCount(ctx)
 	if err != nil {
 		issues++
 		// there was an error when checking table data add a slack message block with the error
 		m.AddElements(fmt.Sprintf(":octagonal_sign:  *%s; %s* - %s", w.Table, w.Field, err.Error()))
 		log.Printf("%s; %s - %s\n", w.Table, w.Field, err.Error())
-	} else {
+	} else if cnt != 0 {
 		// null value found - send a slack message alerting for the table & field
-		if c != 0 {
-			issues++
-			m.AddElements(fmt.Sprintf(":no_entry_sign:  *%s; %s* - null value", w.Table, w.Field))
-			log.Printf("null value: %s; %s %s\n", w.Table, w.Field, d)
-		}
+		issues++
+		m.AddElements(fmt.Sprintf(":no_entry_sign:  *%s; %s* - null value", w.Table, w.Field))
+		log.Printf("null value: %s; %s %s\n", w.Table, w.Field, d)
 	}
 
 	// for any issues, send slack message
@@ -126,9 +122,9 @@ func (w *worker) CheckNull(ctx context.Context) (task.Result, string) {
 }
 
 func (w *worker) GetNullCount(ctx context.Context) (count int64, err error) {
-	pg, found := w.Psql[w.DBSrv]
+	pg, found := w.Psql[w.DBSrc]
 	if !found {
-		return 0, fmt.Errorf("db name %s not found", w.DBSrv)
+		return 0, fmt.Errorf("db source %s not found", w.DBSrc)
 	}
 	qStr := fmt.Sprintf("select count(0) as count from %s where %s is null and date(%s) = '%s'", w.Table, w.Field, w.DateField, w.Date.Format("2006-01-02"))
 	row := pg.DB.QueryRowxContext(ctx, qStr)

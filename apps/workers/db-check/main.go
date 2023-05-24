@@ -17,15 +17,17 @@ const (
 Runs checks against a given table's data to verify that the data is updated as expected
 
 uri params:
-db_srv     - database server/source connection
+db_src     - database source
 table      - schema.table name to validate
 type       - type of check
+             * missing - alerts if 0 records are found for selected date
+             * null - alerts if null values are found in selected field for selected date
 field      - field name being checked
 date_field - date/time field to query
 date       - date value to use in query
 
 Example:
-{"type":"task.db-check","info":"?db_srv=mydbsrv&table=myschema.mytable&type=missing|null&field=myfield&date_field=mydatefield&date=2023-05-24"}
+{"type":"task.db-check","info":"?db_src=mydbsrc&table=myschema.mytable&type=missing|null&field=myfield&date_field=mydatefield&date=2023-05-24"}
 
 !Note! "missing" type checks do not need the "field" param since the record count only relies on the "date_field" and date value`
 )
