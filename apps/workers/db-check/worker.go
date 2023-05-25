@@ -63,14 +63,14 @@ func (w *worker) CheckMissing(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		issues++
 		// there was an error when checking table data add a slack message block with the error
-		m.AddElements(fmt.Sprintf(":octagonal_sign:  *%s* - %s", w.Table, err.Error()))
-		log.Printf("%s - %s\n", w.Table, err.Error())
+		m.AddElements(fmt.Sprintf(":octagonal_sign:  *(%s) %s* - %s", w.DBSrc, w.Table, err.Error()))
+		log.Printf("(%s) %s - %s\n", w.DBSrc, w.Table, err.Error())
 	} else if cnt == 0 {
 		// there are no records, or nothing to process in the table
 		// send a slack message alerting for the table
 		issues++
-		m.AddElements(fmt.Sprintf(":no_entry_sign:  *%s* - missing data", w.Table))
-		log.Printf("%s : %s missing data \n", w.Table, d)
+		m.AddElements(fmt.Sprintf(":no_entry_sign:  *(%s) %s* - missing data", w.DBSrc, w.Table))
+		log.Printf("(%s) %s : %s missing data \n", w.DBSrc, w.Table, d)
 	}
 
 	// for any issues, send slack message
@@ -104,13 +104,13 @@ func (w *worker) CheckNull(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		issues++
 		// there was an error when checking table data add a slack message block with the error
-		m.AddElements(fmt.Sprintf(":octagonal_sign:  *%s; %s* - %s", w.Table, w.Field, err.Error()))
-		log.Printf("%s; %s - %s\n", w.Table, w.Field, err.Error())
+		m.AddElements(fmt.Sprintf(":octagonal_sign:  *(%s) %s; %s* - %s", w.DBSrc, w.Table, w.Field, err.Error()))
+		log.Printf("(%s) %s; %s - %s\n", w.DBSrc, w.Table, w.Field, err.Error())
 	} else if cnt != 0 {
 		// null value found - send a slack message alerting for the table & field
 		issues++
-		m.AddElements(fmt.Sprintf(":no_entry_sign:  *%s; %s* - null value", w.Table, w.Field))
-		log.Printf("null value: %s; %s %s\n", w.Table, w.Field, d)
+		m.AddElements(fmt.Sprintf(":no_entry_sign:  *(%s) %s; %s* - null value", w.DBSrc, w.Table, w.Field))
+		log.Printf("null value: (%s) %s; %s %s\n", w.DBSrc, w.Table, w.Field, d)
 	}
 
 	// for any issues, send slack message
