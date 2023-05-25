@@ -12,23 +12,24 @@ import (
 )
 
 const (
-	taskType    = "task.dbcheck"
+	taskType    = "task.db-check"
 	description = `
-Runs record count checks against a given table's data to verify that the data is updated as expected
+Runs checks against a given table's data to verify that the data is updated as expected
 
 uri params:
-db        - required database name to use for query connections
-table     - required table name to validate
-dt_column - required column name that holds the date value to query
-date      - the date to compare data against tolerance level
-offset    - if given, this is the offset duration back from date to compare tolerance
-tolerance - (default 0.05) percent is the allowed percentage of deviation between offset and compare row counts
-              0.05 (5%) means the difference between the row counts can vary by 5 percent and be accepted
-              a greater difference would send an alert, if compare is not provided this check is not done
+db_src     - database source
+table      - schema.table name to validate
+type       - type of check
+             * missing - alerts if 0 records are found for selected date
+             * null - alerts if null values are found in selected field for selected date
+field      - field name being checked
+date_field - date/time field to query
+date       - date value to use in query
 
-Example task 
-(table.schema checked for records where my_date = 2022-01-02 and 2022-01-01 has 10% as many records as 2022-01-02):
-  {"type":"task.dbcheck","info":"?db=mydbname&table=table.schema&dt_column=my_date&date=2022-01-02&offset=24h&tolerance=0.1"}`
+Example:
+{"type":"task.db-check","info":"?db_src=mydbsrc&table=myschema.mytable&type=missing|null&field=myfield&date_field=mydatefield&date=2023-05-24"}
+
+!Note! "missing" type checks do not need the "field" param since the record count only relies on the "date_field" and date value`
 )
 
 type Postgres struct {
@@ -48,7 +49,7 @@ type options struct {
 	Slack string `toml:"slack"`
 
 	Bus  *bus.Options        `toml:"bus"`
-	Psql map[string]Postgres `toml:"postgres"` // mulitple postgres db connections name:settings
+	Psql map[string]Postgres `toml:"postgres"` // multiple postgres db server/source connections name:settings
 
 	producer bus.Producer
 }
