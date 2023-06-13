@@ -75,7 +75,7 @@ func (c *Memory) Recycle() Stat {
 // Add a task to the cache
 // the task must have an id to be added.
 func (c *Memory) Add(t task.Task) {
-	if t.ID == "" {
+	if t.ID == "" || c == nil {
 		return
 	}
 	c.mu.Lock()
@@ -97,6 +97,9 @@ func (c *Memory) Add(t task.Task) {
 
 func (c *Memory) Recap() map[string]*Stats {
 	data := map[string]*Stats{}
+	if c == nil {
+		return data
+	}
 	c.mu.RLock()
 	for _, v := range c.cache {
 		for _, t := range v.Events {

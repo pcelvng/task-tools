@@ -103,7 +103,7 @@ func TestTaskMaster_Process(t *testing.T) {
 					Job:    "task1_no_retry",
 					Info:   "?date=2019-12-12",
 					ID:     "UUID_task1",
-					Meta:   "retry=failed&workflow=f1.toml",
+					Meta:   "retried=3&retry=failed&workflow=f1.toml",
 					Result: "error",
 				},
 			},
