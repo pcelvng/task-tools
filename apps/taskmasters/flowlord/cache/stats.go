@@ -1,9 +1,11 @@
 package cache
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
+	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -22,8 +24,32 @@ type Stats struct {
 	ExecTimes *DurationStats
 }
 
-func (s *Stats) MarshalText() ([]byte, error) {
-	return []byte(s.String()), nil
+func (s *Stats) MarshalJSON() ([]byte, error) {
+	type count struct {
+		Count int
+		Times string
+	}
+
+	v := struct {
+		Min      string `json:"min"`
+		Max      string `json:"max"`
+		Average  string `json:"avg"`
+		Complete count  `json:"complete"`
+		Error    count  `json:"error"`
+	}{
+		Min:     gtools.PrintDuration(s.ExecTimes.Min),
+		Max:     gtools.PrintDuration(s.ExecTimes.Max),
+		Average: gtools.PrintDuration(s.ExecTimes.Average()),
+		Complete: count{
+			Count: s.CompletedCount,
+			Times: tmpl.PrintDates(s.CompletedTimes),
+		},
+		Error: count{
+			Count: s.ErrorCount,
+			Times: tmpl.PrintDates(s.ErrorTimes),
+		},
+	}
+	return json.Marshal(v)
 }
 
 func (s Stats) String() string {

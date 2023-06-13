@@ -30,7 +30,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Post("/backload", tm.Backloader)
 	router.Get("/workflow/*", tm.workflowFiles)
 	router.Get("/task/{id}", tm.taskHandler)
-	router.Get("/task", tm.recapHandler)
+	router.Get("/recap", tm.recapHandler)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -194,13 +194,26 @@ func (tm *taskMaster) taskHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (tm *taskMaster) recapHandler(w http.ResponseWriter, r *http.Request) {
+
 	data := tm.taskCache.Recap()
-	b, err := json.Marshal(data)
-	if err != nil {
-		log.Println(err)
+
+	if r.Header.Get("Accept") == "application/json" {
+		b, err := json.Marshal(data)
+		if err != nil {
+			log.Println(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(b)
+		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
+
+	var s string
+	for k, v := range data {
+		s += k + "\n\t" + v.String()
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(s))
+
 }
 
 func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
