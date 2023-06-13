@@ -355,7 +355,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				continue
 			}
 			info := tmpl.Meta(p.Template, meta)
-			rules, _ := url.ParseQuery(p.Rule)
+			//rules, _ := url.ParseQuery(p.Rule)
 
 			taskTime := tmpl.InfoTime(t.Info)
 			if v := meta.Get("cron"); v != "" && taskTime.IsZero() {
@@ -365,15 +365,14 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				info = tmpl.Parse(info, taskTime)
 			}
 			child := task.NewWithID(p.Task, info, t.ID)
+			child.Job = p.Job()
 
 			child.Meta = "workflow=" + meta.Get("workflow")
 			if v := meta.Get("cron"); v != "" {
 				child.Meta += "&cron=" + v
 			}
-			if rules.Get("job") != "" {
-				child.Meta += "&job=" + rules.Get("job")
-			}
-			tm.taskCache.Add(*t)
+
+			tm.taskCache.Add(*child)
 			if err := tm.producer.Send(p.Task, child.JSONBytes()); err != nil {
 				return err
 			}

@@ -26,6 +26,7 @@ func (j *job) Run() {
 	tsk.Meta = "workflow=" + j.Workflow
 	tsk.Meta += "&cron=" + tm.Format(time.RFC3339)
 	if j.Name != "" {
+		tsk.Job = j.Name
 		tsk.Meta += "&job=" + j.Name
 	}
 
