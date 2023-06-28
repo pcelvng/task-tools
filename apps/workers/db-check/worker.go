@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +39,9 @@ type ZeroRec struct {
 type MissingRec struct {
 	Hour int
 }
+
+type ZeroRecs []ZeroRec
+type MissingRecs []MissingRec
 
 func (o *options) newWorker(info string) task.Worker {
 	w := &worker{
@@ -194,7 +198,7 @@ func (w *worker) CheckZeroSum(ctx context.Context) (task.Result, string) {
 	return task.Completed("table %s; zero sum check completed for date %s, issues: %d", w.Table, d, issues)
 }
 
-func (w *worker) GetZeroSums(ctx context.Context) (zr []ZeroRec, mr []MissingRec, err error) {
+func (w *worker) GetZeroSums(ctx context.Context) (zr ZeroRecs, mr MissingRecs, err error) {
 	pg, found := w.Psql[w.DBSrc]
 	if !found {
 		return nil, nil, fmt.Errorf("db source %s not found", w.DBSrc)
@@ -278,5 +282,15 @@ func (w *worker) GetZeroSums(ctx context.Context) (zr []ZeroRec, mr []MissingRec
 			mr = append(mr, MissingRec{Hour: hour})
 		}
 	}
+	sort.Sort(zr) //ensures hour->field order in slack messages and for unit tests
 	return zr, mr, nil
+}
+
+func (z ZeroRecs) Len() int      { return len(z) }
+func (z ZeroRecs) Swap(i, j int) { z[i], z[j] = z[j], z[i] }
+func (z ZeroRecs) Less(i, j int) bool {
+	if z[i].Hour == z[j].Hour {
+		return strings.ToLower(z[i].Field) < strings.ToLower(z[j].Field)
+	}
+	return z[i].Hour < z[j].Hour
 }
