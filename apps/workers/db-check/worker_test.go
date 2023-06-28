@@ -12,9 +12,9 @@ import (
 
 func TestGetZeroSums(t *testing.T) {
 	type Row struct {
-		IntCol  int64
-		NumCol  []uint8
-		DateCol time.Time
+		integer int
+		numeric string
+		date    string // format 2006-01-02T15
 	}
 
 	type Input struct {
@@ -28,12 +28,6 @@ func TestGetZeroSums(t *testing.T) {
 		MR MissingRecs
 	}
 
-	d := time.Date(2023, 06, 15, 0, 0, 0, 0, time.UTC)
-	dt := make([]time.Time, 24)
-	for i := range dt {
-		dt[i] = d.Add(time.Hour * time.Duration(i))
-	}
-
 	fn := func(in Input) (Expected, error) {
 		// setup mock db response
 		db, mock, _ := sqlmock.New()
@@ -42,8 +36,8 @@ func TestGetZeroSums(t *testing.T) {
 		column2 := mock.NewColumn("revenue").OfType("NUMERIC", []uint8("0.0"))
 		column3 := mock.NewColumn("date").OfType("TIMESTAMP", time.Time{})
 		rows := mock.NewRowsWithColumnDefinition(column1, column2, column3)
-		for i := range in.Rows {
-			rows.AddRow(in.Rows[i].IntCol, in.Rows[i].NumCol, in.Rows[i].DateCol)
+		for _, r := range in.Rows {
+			rows.AddRow(int64(r.integer), []uint8(r.numeric), trial.TimeHour(r.date))
 		}
 		eq.WillReturnRows(rows)
 
@@ -62,30 +56,30 @@ func TestGetZeroSums(t *testing.T) {
 	cases := trial.Cases[Input, Expected]{
 		"timestamp_no_zero_missing": {
 			Input: Input{DateType: "ts", GroupTS: "", Rows: []Row{
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[0]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[1]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[2]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[3]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[4]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[5]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[6]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[7]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[8]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[9]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[10]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[11]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[12]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[13]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[14]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[15]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[16]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[17]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[18]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[19]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[20]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[21]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[22]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[23]},
+				{123, "123.45", "2006-01-02T00"},
+				{123, "123.45", "2006-01-02T01"},
+				{123, "123.45", "2006-01-02T02"},
+				{123, "123.45", "2006-01-02T03"},
+				{123, "123.45", "2006-01-02T04"},
+				{123, "123.45", "2006-01-02T05"},
+				{123, "123.45", "2006-01-02T06"},
+				{123, "123.45", "2006-01-02T07"},
+				{123, "123.45", "2006-01-02T08"},
+				{123, "123.45", "2006-01-02T09"},
+				{123, "123.45", "2006-01-02T10"},
+				{123, "123.45", "2006-01-02T11"},
+				{123, "123.45", "2006-01-02T12"},
+				{123, "123.45", "2006-01-02T13"},
+				{123, "123.45", "2006-01-02T14"},
+				{123, "123.45", "2006-01-02T15"},
+				{123, "123.45", "2006-01-02T16"},
+				{123, "123.45", "2006-01-02T17"},
+				{123, "123.45", "2006-01-02T18"},
+				{123, "123.45", "2006-01-02T19"},
+				{123, "123.45", "2006-01-02T20"},
+				{123, "123.45", "2006-01-02T21"},
+				{123, "123.45", "2006-01-02T22"},
+				{123, "123.45", "2006-01-02T23"},
 			}},
 			Expected: Expected{
 				ZR: ZeroRecs{},
@@ -94,27 +88,27 @@ func TestGetZeroSums(t *testing.T) {
 		},
 		"timestamp_zero_int_num_missing": {
 			Input: Input{DateType: "ts", GroupTS: "", Rows: []Row{
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[0]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[1]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[2]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[4]},
-				{IntCol: int64(0), NumCol: []uint8("123.45"), DateCol: dt[5]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[6]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[7]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[8]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[9]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[10]},
-				{IntCol: int64(123), NumCol: []uint8("0"), DateCol: dt[11]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[12]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[13]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[15]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[16]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[17]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[18]},
-				{IntCol: int64(0), NumCol: []uint8("0"), DateCol: dt[19]},
-				{IntCol: int64(123), NumCol: []uint8("0"), DateCol: dt[20]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[22]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[23]},
+				{123, "123.45", "2006-01-02T00"},
+				{123, "123.45", "2006-01-02T01"},
+				{123, "123.45", "2006-01-02T02"},
+				{123, "123.45", "2006-01-02T04"},
+				{0, "123.45", "2006-01-02T05"},
+				{123, "123.45", "2006-01-02T06"},
+				{123, "123.45", "2006-01-02T07"},
+				{123, "123.45", "2006-01-02T08"},
+				{123, "123.45", "2006-01-02T09"},
+				{123, "123.45", "2006-01-02T10"},
+				{123, "0", "2006-01-02T11"},
+				{123, "123.45", "2006-01-02T12"},
+				{123, "123.45", "2006-01-02T13"},
+				{123, "123.45", "2006-01-02T15"},
+				{123, "123.45", "2006-01-02T16"},
+				{123, "123.45", "2006-01-02T17"},
+				{123, "123.45", "2006-01-02T18"},
+				{0, "0", "2006-01-02T19"},
+				{123, "0", "2006-01-02T20"},
+				{123, "123.45", "2006-01-02T22"},
+				{123, "123.45", "2006-01-02T23"},
 			}},
 			Expected: Expected{
 				ZR: ZeroRecs{
@@ -133,25 +127,25 @@ func TestGetZeroSums(t *testing.T) {
 		},
 		"date_group_ts_zero_int_num_missing": {
 			Input: Input{DateType: "dt", GroupTS: "timestamp-field", Rows: []Row{
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[0]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[1]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[2]},
-				{IntCol: int64(123), NumCol: []uint8("0"), DateCol: dt[4]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[6]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[7]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[8]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[9]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[10]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[11]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[12]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[13]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[15]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[16]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[17]},
-				{IntCol: int64(0), NumCol: []uint8("123.45"), DateCol: dt[18]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[19]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[22]},
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[23]},
+				{123, "123.45", "2006-01-02T00"},
+				{123, "123.45", "2006-01-02T01"},
+				{123, "123.45", "2006-01-02T02"},
+				{123, "0", "2006-01-02T04"},
+				{123, "123.45", "2006-01-02T06"},
+				{123, "123.45", "2006-01-02T07"},
+				{123, "123.45", "2006-01-02T08"},
+				{123, "123.45", "2006-01-02T09"},
+				{123, "123.45", "2006-01-02T10"},
+				{123, "123.45", "2006-01-02T11"},
+				{123, "123.45", "2006-01-02T12"},
+				{123, "123.45", "2006-01-02T13"},
+				{123, "123.45", "2006-01-02T15"},
+				{123, "123.45", "2006-01-02T16"},
+				{123, "123.45", "2006-01-02T17"},
+				{0, "123.45", "2006-01-02T18"},
+				{123, "123.45", "2006-01-02T19"},
+				{123, "123.45", "2006-01-02T22"},
+				{123, "123.45", "2006-01-02T23"},
 			}},
 			Expected: Expected{
 				ZR: ZeroRecs{
@@ -169,7 +163,7 @@ func TestGetZeroSums(t *testing.T) {
 		},
 		"date_no_zero_missing": {
 			Input: Input{DateType: "dt", GroupTS: "", Rows: []Row{
-				{IntCol: int64(123), NumCol: []uint8("123.45"), DateCol: dt[0]},
+				{123, "123.45", "2006-01-02T00"},
 			}},
 			Expected: Expected{
 				ZR: ZeroRecs{},
@@ -178,7 +172,7 @@ func TestGetZeroSums(t *testing.T) {
 		},
 		"date_zero_integer_numeric": {
 			Input: Input{DateType: "dt", GroupTS: "", Rows: []Row{
-				{IntCol: int64(0), NumCol: []uint8("0"), DateCol: dt[0]},
+				{0, "0", "2006-01-02T00"},
 			}},
 			Expected: Expected{
 				ZR: ZeroRecs{
