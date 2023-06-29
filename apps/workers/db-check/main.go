@@ -22,12 +22,19 @@ table      - schema.table name to validate
 type       - type of check
              * missing - alerts if 0 records are found for selected date
              * null - alerts if null values are found in selected field for selected date
+             * zero - alerts if zero sum values are found for selected fields for selected date/times
+                    - will also alert if no records are found for selected date/times
 field      - field name being checked
-date_field - date/time field to query
+date_field - date/timestamp field to query
+date_type  - type of date_field ("dt" = date -or- "ts" = timestamp)
 date       - date value to use in query
+             * date (dt) format: yyyy-mm-dd
+             * timestamp (ts) format: yyyy-mm-ddThh:00
+group_ts   - timestamp field to group by for hour level checking for tables with both a date and a timestamp field
+             (optional "zero" type field used for efficiency purposes; date_field should be date type)
 
 Example:
-{"type":"task.db-check","info":"?db_src=mydbsrc&table=myschema.mytable&type=missing|null&field=myfield&date_field=mydatefield&date=2023-05-24"}
+{"type":"task.db-check","info":"?db_src=mydbsrc&table=myschema.mytable&type=missing|null|zero&field=myfield&date_field=mydatefield&date_type=dt|ts&date=2023-05-24"}
 
 !Note! "missing" type checks do not need the "field" param since the record count only relies on the "date_field" and date value`
 )
