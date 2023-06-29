@@ -143,7 +143,7 @@ func TestGetZeroSums(t *testing.T) {
 				MR: MissingRecs{},
 			},
 		},
-		"date_missing_rec": {
+		"date_missing_record": {
 			Input: Input{DateType: "dt", Date: "2006-01-02", GroupTS: "", Rows: []Row{}},
 			Expected: Expected{
 				ZR: ZeroRecs{},

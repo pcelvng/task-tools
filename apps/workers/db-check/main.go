@@ -29,7 +29,7 @@ date_field - date/timestamp field to query
 date_type  - type of date_field ("dt" = date -or- "ts" = timestamp)
 date       - date value to use in query
              * date (dt) format: yyyy-mm-dd
-             * timestamp (ts) format: yyyy-mm-ddThh
+             * timestamp (ts) format: yyyy-mm-ddThh:00
 group_ts   - timestamp field to group by for hour level checking for tables with both a date and a timestamp field
              (optional "zero" type field used for efficiency purposes; date_field should be date type)
 
