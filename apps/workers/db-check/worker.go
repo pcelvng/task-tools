@@ -21,14 +21,14 @@ type worker struct {
 	task.Meta
 	slack *slack.Slack
 
-	DBSrc     string    `uri:"db_src" required:"true"`                   // database source
-	Table     string    `uri:"table" required:"true"`                    // name of the schema.table to query
-	Type      string    `uri:"type" required:"true"`                     // type of check
-	Field     string    `uri:"field"`                                    // field name being checked
-	DateField string    `uri:"date_field" required:"true"`               // date/time field to query
-	DateType  string    `uri:"date_type"`                                // date type ("dt" = date, "ts" = timestamp)
-	Date      time.Time `uri:"date" format:"2006-01-02" required:"true"` // date value to use in query
-	GroupTS   string    `uri:"group_ts"`                                 // date field to group by
+	DBSrc     string `uri:"db_src" required:"true"`     // database source
+	Table     string `uri:"table" required:"true"`      // name of the schema.table to query
+	Type      string `uri:"type" required:"true"`       // type of check
+	Field     string `uri:"field"`                      // field name being checked
+	DateField string `uri:"date_field" required:"true"` // date/time field to query
+	DateType  string `uri:"date_type"`                  // date type ("dt" = date, "ts" = timestamp)
+	Date      string `uri:"date" required:"true"`       // date value to use in query
+	GroupTS   string `uri:"group_ts"`                   // date field to group by
 }
 
 type ZeroRec struct {
@@ -62,6 +62,17 @@ func (o *options) newWorker(info string) task.Worker {
 	if w.Type == "zero" && w.DateType == "ts" && w.GroupTS != "" {
 		return task.InvalidWorker("group_ts only valid with 'dt' date_type")
 	}
+	if w.Type == "zero" && w.DateType == "ts" {
+		_, err := time.Parse("2006-01-02T15:00", w.Date)
+		if err != nil {
+			return task.InvalidWorker("invalid date; expected format: yyyy-mm-ddThh:00")
+		}
+	} else {
+		_, err := time.Parse("2006-01-02", w.Date)
+		if err != nil {
+			return task.InvalidWorker("invalid date; expected format: yyyy-mm-dd")
+		}
+	}
 
 	return w
 }
@@ -80,8 +91,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 }
 
 func (w *worker) CheckMissing(ctx context.Context) (task.Result, string) {
-	d := w.Date.Format("2006-01-02")
-	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Missing Data Check - " + d + "*")
+	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Missing Data Check - " + w.Date + "*")
 	issues := 0
 
 	cnt, err := w.GetRecordCount(ctx)
@@ -95,7 +105,7 @@ func (w *worker) CheckMissing(ctx context.Context) (task.Result, string) {
 		// send a slack message alerting for the table
 		issues++
 		m.AddElements(fmt.Sprintf(":no_entry_sign:  *(%s) %s* - missing data", w.DBSrc, w.Table))
-		log.Printf("(%s) %s : %s missing data \n", w.DBSrc, w.Table, d)
+		log.Printf("(%s) %s : %s missing data \n", w.DBSrc, w.Table, w.Date)
 	}
 
 	// for any issues, send slack message
@@ -103,7 +113,7 @@ func (w *worker) CheckMissing(ctx context.Context) (task.Result, string) {
 		w.slack.SendMessage(m)
 	}
 
-	return task.Completed("table %s missing data check completed for date %s, issues: %d", w.Table, d, issues)
+	return task.Completed("table %s missing data check completed for date %s, issues: %d", w.Table, w.Date, issues)
 }
 
 func (w *worker) GetRecordCount(ctx context.Context) (count int64, err error) {
@@ -111,7 +121,7 @@ func (w *worker) GetRecordCount(ctx context.Context) (count int64, err error) {
 	if !found {
 		return 0, fmt.Errorf("db source %s not found", w.DBSrc)
 	}
-	qStr := fmt.Sprintf("select count(0) as count from %s where date(%s) = '%s'", w.Table, w.DateField, w.Date.Format("2006-01-02"))
+	qStr := fmt.Sprintf("select count(0) as count from %s where date(%s) = '%s'", w.Table, w.DateField, w.Date)
 	row := pg.DB.QueryRowxContext(ctx, qStr)
 	err = row.Scan(&count)
 	if err != nil {
@@ -121,8 +131,7 @@ func (w *worker) GetRecordCount(ctx context.Context) (count int64, err error) {
 }
 
 func (w *worker) CheckNull(ctx context.Context) (task.Result, string) {
-	d := w.Date.Format("2006-01-02")
-	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Null Check - " + d + "*")
+	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Null Check - " + w.Date + "*")
 	issues := 0
 
 	cnt, err := w.GetNullCount(ctx)
@@ -135,7 +144,7 @@ func (w *worker) CheckNull(ctx context.Context) (task.Result, string) {
 		// null value found - send a slack message alerting for the table & field
 		issues++
 		m.AddElements(fmt.Sprintf(":no_entry_sign:  *(%s) %s; %s* - null value", w.DBSrc, w.Table, w.Field))
-		log.Printf("null value: (%s) %s; %s %s\n", w.DBSrc, w.Table, w.Field, d)
+		log.Printf("null value: (%s) %s; %s %s\n", w.DBSrc, w.Table, w.Field, w.Date)
 	}
 
 	// for any issues, send slack message
@@ -143,7 +152,7 @@ func (w *worker) CheckNull(ctx context.Context) (task.Result, string) {
 		w.slack.SendMessage(m)
 	}
 
-	return task.Completed("table %s; field %s null check completed for date %s, issues: %d", w.Table, w.Field, d, issues)
+	return task.Completed("table %s; field %s null check completed for date %s, issues: %d", w.Table, w.Field, w.Date, issues)
 }
 
 func (w *worker) GetNullCount(ctx context.Context) (count int64, err error) {
@@ -151,7 +160,7 @@ func (w *worker) GetNullCount(ctx context.Context) (count int64, err error) {
 	if !found {
 		return 0, fmt.Errorf("db source %s not found", w.DBSrc)
 	}
-	qStr := fmt.Sprintf("select count(0) as count from %s where %s is null and date(%s) = '%s'", w.Table, w.Field, w.DateField, w.Date.Format("2006-01-02"))
+	qStr := fmt.Sprintf("select count(0) as count from %s where %s is null and date(%s) = '%s'", w.Table, w.Field, w.DateField, w.Date)
 	row := pg.DB.QueryRowxContext(ctx, qStr)
 	err = row.Scan(&count)
 	if err != nil {
@@ -161,8 +170,7 @@ func (w *worker) GetNullCount(ctx context.Context) (count int64, err error) {
 }
 
 func (w *worker) CheckZeroSum(ctx context.Context) (task.Result, string) {
-	d := w.Date.Format("2006-01-02")
-	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Zero Sum Check - " + d + "*")
+	m := w.slack.NewMessage(":radioactive_sign: *task-tools db-check - Zero Sum Check - " + w.Date + "*")
 	issues := 0
 
 	zr, mr, err := w.GetZeroSums(ctx)
@@ -177,7 +185,7 @@ func (w *worker) CheckZeroSum(ctx context.Context) (task.Result, string) {
 				// zero sum found - send a slack message alerting for the table, hour and field
 				issues++
 				m.AddElements(fmt.Sprintf(":no_entry_sign:  *(%s) %s; (Hour: %d) %s* - zero sum", w.DBSrc, w.Table, r.Hour, r.Field))
-				log.Printf("zero sum: (%s) %s; (hour: %d) %s %s\n", w.DBSrc, w.Table, r.Hour, r.Field, d)
+				log.Printf("zero sum: (%s) %s; (hour: %d) %s %s\n", w.DBSrc, w.Table, r.Hour, r.Field, w.Date)
 			}
 		}
 		if mr != nil {
@@ -185,7 +193,7 @@ func (w *worker) CheckZeroSum(ctx context.Context) (task.Result, string) {
 				// missing record(s) - send a slack message alerting for the table & missing hour
 				issues++
 				m.AddElements(fmt.Sprintf(":no_entry_sign:  *(%s) %s; (Hour: %d)* - missing record(s)", w.DBSrc, w.Table, r.Hour))
-				log.Printf("missing record(s): (%s) %s; (hour: %d) %s\n", w.DBSrc, w.Table, r.Hour, d)
+				log.Printf("missing record(s): (%s) %s; (hour: %d) %s\n", w.DBSrc, w.Table, r.Hour, w.Date)
 			}
 		}
 	}
@@ -195,7 +203,7 @@ func (w *worker) CheckZeroSum(ctx context.Context) (task.Result, string) {
 		w.slack.SendMessage(m)
 	}
 
-	return task.Completed("table %s; zero sum check completed for date %s, issues: %d", w.Table, d, issues)
+	return task.Completed("table %s; zero sum check completed for date %s, issues: %d", w.Table, w.Date, issues)
 }
 
 func (w *worker) GetZeroSums(ctx context.Context) (zr ZeroRecs, mr MissingRecs, err error) {
@@ -220,13 +228,9 @@ func (w *worker) GetZeroSums(ctx context.Context) (zr ZeroRecs, mr MissingRecs, 
 		grpString = fmt.Sprintf("group by %s order by %s", w.GroupTS, w.GroupTS)
 		asDate = w.GroupTS
 	}
-	hrCnt := 1
-	if w.DateType == "ts" || w.GroupTS != "" {
-		hrCnt = 24
-	}
-	foundHours := make([]bool, hrCnt)
+	foundHours := make([]bool, 24)
 
-	qStr := fmt.Sprintf("select %s, %s as date from %s where date(%s) = '%s' %s;", selString, asDate, w.Table, w.DateField, w.Date.Format("2006-01-02"), grpString)
+	qStr := fmt.Sprintf("select %s, %s as date from %s where %s = '%s' %s;", selString, asDate, w.Table, w.DateField, w.Date, grpString)
 	rows, err := pg.DB.QueryxContext(ctx, qStr)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "postgres query")
@@ -276,10 +280,20 @@ func (w *worker) GetZeroSums(ctx context.Context) (zr ZeroRecs, mr MissingRecs, 
 			zr = append(zr, ZeroRec{Field: cName, Hour: hour})
 		}
 	}
-
-	for hour, found := range foundHours {
-		if !found {
-			mr = append(mr, MissingRec{Hour: hour})
+	if w.GroupTS != "" {
+		for hour, found := range foundHours {
+			if !found {
+				mr = append(mr, MissingRec{Hour: hour})
+			}
+		}
+	} else {
+		selHour := 0
+		s := strings.Split(w.Date, "T")
+		if len(s) > 1 {
+			selHour, _ = strconv.Atoi(s[1][0:2])
+		}
+		if !foundHours[selHour] {
+			mr = append(mr, MissingRec{Hour: selHour})
 		}
 	}
 	sort.Sort(zr) //ensures hour->field order in slack messages and for unit tests

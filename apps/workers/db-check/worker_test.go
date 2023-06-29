@@ -19,6 +19,7 @@ func TestGetZeroSums(t *testing.T) {
 
 	type Input struct {
 		DateType string
+		Date     string
 		GroupTS  string
 		Rows     []Row
 	}
@@ -47,6 +48,7 @@ func TestGetZeroSums(t *testing.T) {
 			}}},
 			DBSrc:    "test",
 			DateType: in.DateType,
+			Date:     in.Date,
 			GroupTS:  in.GroupTS,
 		}
 
@@ -55,78 +57,35 @@ func TestGetZeroSums(t *testing.T) {
 	}
 	cases := trial.Cases[Input, Expected]{
 		"timestamp_no_zero_missing": {
-			Input: Input{DateType: "ts", GroupTS: "", Rows: []Row{
-				{123, "123.45", "2006-01-02T00"},
-				{123, "123.45", "2006-01-02T01"},
-				{123, "123.45", "2006-01-02T02"},
-				{123, "123.45", "2006-01-02T03"},
-				{123, "123.45", "2006-01-02T04"},
-				{123, "123.45", "2006-01-02T05"},
-				{123, "123.45", "2006-01-02T06"},
-				{123, "123.45", "2006-01-02T07"},
-				{123, "123.45", "2006-01-02T08"},
-				{123, "123.45", "2006-01-02T09"},
-				{123, "123.45", "2006-01-02T10"},
-				{123, "123.45", "2006-01-02T11"},
-				{123, "123.45", "2006-01-02T12"},
-				{123, "123.45", "2006-01-02T13"},
+			Input: Input{DateType: "ts", Date: "2006-01-02T14:00", GroupTS: "", Rows: []Row{
 				{123, "123.45", "2006-01-02T14"},
-				{123, "123.45", "2006-01-02T15"},
-				{123, "123.45", "2006-01-02T16"},
-				{123, "123.45", "2006-01-02T17"},
-				{123, "123.45", "2006-01-02T18"},
-				{123, "123.45", "2006-01-02T19"},
-				{123, "123.45", "2006-01-02T20"},
-				{123, "123.45", "2006-01-02T21"},
-				{123, "123.45", "2006-01-02T22"},
-				{123, "123.45", "2006-01-02T23"},
 			}},
 			Expected: Expected{
 				ZR: ZeroRecs{},
 				MR: MissingRecs{},
 			},
 		},
-		"timestamp_zero_int_num_missing": {
-			Input: Input{DateType: "ts", GroupTS: "", Rows: []Row{
-				{123, "123.45", "2006-01-02T00"},
-				{123, "123.45", "2006-01-02T01"},
-				{123, "123.45", "2006-01-02T02"},
-				{123, "123.45", "2006-01-02T04"},
-				{0, "123.45", "2006-01-02T05"},
-				{123, "123.45", "2006-01-02T06"},
-				{123, "123.45", "2006-01-02T07"},
-				{123, "123.45", "2006-01-02T08"},
-				{123, "123.45", "2006-01-02T09"},
-				{123, "123.45", "2006-01-02T10"},
-				{123, "0", "2006-01-02T11"},
-				{123, "123.45", "2006-01-02T12"},
-				{123, "123.45", "2006-01-02T13"},
-				{123, "123.45", "2006-01-02T15"},
-				{123, "123.45", "2006-01-02T16"},
-				{123, "123.45", "2006-01-02T17"},
-				{123, "123.45", "2006-01-02T18"},
-				{0, "0", "2006-01-02T19"},
-				{123, "0", "2006-01-02T20"},
-				{123, "123.45", "2006-01-02T22"},
-				{123, "123.45", "2006-01-02T23"},
+		"timestamp_zero_integer_numeric": {
+			Input: Input{DateType: "ts", Date: "2006-01-02T14:00", GroupTS: "", Rows: []Row{
+				{0, "0", "2006-01-02T14"},
 			}},
 			Expected: Expected{
 				ZR: ZeroRecs{
-					{Field: "impression", Hour: 5},
-					{Field: "revenue", Hour: 11},
-					{Field: "impression", Hour: 19},
-					{Field: "revenue", Hour: 19},
-					{Field: "revenue", Hour: 20},
+					{Field: "impression", Hour: 14},
+					{Field: "revenue", Hour: 14},
 				},
-				MR: MissingRecs{
-					{Hour: 3},
-					{Hour: 14},
-					{Hour: 21},
-				},
+				MR: MissingRecs{},
+			},
+		},
+		"timestamp_missing_record": {
+			Input: Input{DateType: "ts", Date: "2006-01-02T14:00", GroupTS: "", Rows: []Row{}},
+			Expected: Expected{
+				ZR: ZeroRecs{},
+				MR: MissingRecs{{Hour: 14}},
 			},
 		},
 		"date_group_ts_zero_int_num_missing": {
-			Input: Input{DateType: "dt", GroupTS: "timestamp-field", Rows: []Row{
+			Input: Input{DateType: "dt", Date: "2006-01-02", GroupTS: "timestamp-field", Rows: []Row{
 				{123, "123.45", "2006-01-02T00"},
 				{123, "123.45", "2006-01-02T01"},
 				{123, "123.45", "2006-01-02T02"},
@@ -136,7 +95,7 @@ func TestGetZeroSums(t *testing.T) {
 				{123, "123.45", "2006-01-02T08"},
 				{123, "123.45", "2006-01-02T09"},
 				{123, "123.45", "2006-01-02T10"},
-				{123, "123.45", "2006-01-02T11"},
+				{0, "0", "2006-01-02T11"},
 				{123, "123.45", "2006-01-02T12"},
 				{123, "123.45", "2006-01-02T13"},
 				{123, "123.45", "2006-01-02T15"},
@@ -150,6 +109,8 @@ func TestGetZeroSums(t *testing.T) {
 			Expected: Expected{
 				ZR: ZeroRecs{
 					{Field: "revenue", Hour: 4},
+					{Field: "impression", Hour: 11},
+					{Field: "revenue", Hour: 11},
 					{Field: "impression", Hour: 18},
 				},
 				MR: MissingRecs{
@@ -162,7 +123,7 @@ func TestGetZeroSums(t *testing.T) {
 			},
 		},
 		"date_no_zero_missing": {
-			Input: Input{DateType: "dt", GroupTS: "", Rows: []Row{
+			Input: Input{DateType: "dt", Date: "2006-01-02", GroupTS: "", Rows: []Row{
 				{123, "123.45", "2006-01-02T00"},
 			}},
 			Expected: Expected{
@@ -171,7 +132,7 @@ func TestGetZeroSums(t *testing.T) {
 			},
 		},
 		"date_zero_integer_numeric": {
-			Input: Input{DateType: "dt", GroupTS: "", Rows: []Row{
+			Input: Input{DateType: "dt", Date: "2006-01-02", GroupTS: "", Rows: []Row{
 				{0, "0", "2006-01-02T00"},
 			}},
 			Expected: Expected{
@@ -183,7 +144,7 @@ func TestGetZeroSums(t *testing.T) {
 			},
 		},
 		"date_missing_rec": {
-			Input: Input{DateType: "dt", GroupTS: "", Rows: []Row{}},
+			Input: Input{DateType: "dt", Date: "2006-01-02", GroupTS: "", Rows: []Row{}},
 			Expected: Expected{
 				ZR: ZeroRecs{},
 				MR: MissingRecs{{Hour: 0}},
