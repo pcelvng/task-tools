@@ -32,6 +32,8 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
+	router.Get("/task/{id}", tm.taskHandler)
+	router.Get("/recap", tm.recapHandler)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -186,6 +188,37 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Write(b)
 }
 
+func (tm *taskMaster) taskHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	v := tm.taskCache.Get(id)
+	b, _ := json.Marshal(v)
+	w.Header().Add("Content-Type", "application/json")
+	w.Write(b)
+}
+
+func (tm *taskMaster) recapHandler(w http.ResponseWriter, r *http.Request) {
+
+	data := tm.taskCache.Recap()
+
+	if r.Header.Get("Accept") == "application/json" {
+		b, err := json.Marshal(data)
+		if err != nil {
+			log.Println(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(b)
+		return
+	}
+
+	var s string
+	for k, v := range data {
+		s += k + "\n\t" + v.String()
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(s))
+
+}
+
 func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	f := chi.URLParam(r, "*")
 
@@ -261,6 +294,7 @@ func (tm *taskMaster) Backloader(w http.ResponseWriter, r *http.Request) {
 		resp.Status = "Executed: " + resp.Status
 		errs := appenderr.New()
 		for _, t := range resp.Tasks {
+			tm.taskCache.Add(t)
 			errs.Add(tm.producer.Send(t.Type, t.JSONBytes()))
 		}
 		if errs.ErrOrNil() != nil {
@@ -369,7 +403,7 @@ func (tm *taskMaster) backload(req request) response {
 		tasks = tmp
 	}
 
-	return response{Tasks: tasks, Count: len(tasks), Status: strings.Join(msg, " ,")}
+	return response{Tasks: tasks, Count: len(tasks), Status: strings.Join(msg, ", ")}
 }
 
 func toUrlValues(m map[string]string) url.Values {

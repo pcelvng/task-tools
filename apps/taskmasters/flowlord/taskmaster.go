@@ -14,6 +14,7 @@ import (
 
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/apps/taskmasters/flowlord/cache"
 	"github.com/pcelvng/task/bus"
 	"github.com/pkg/errors"
 	"github.com/robfig/cron/v3"
@@ -42,6 +43,7 @@ type taskMaster struct {
 	fOpts         *file.Options
 	doneTopic     string
 	failedTopic   string
+	taskCache     *cache.Memory
 	*workflow.Cache
 	port  int
 	cron  *cron.Cron
@@ -102,6 +104,7 @@ func New(opts *options) *taskMaster {
 	opts.Slack.file = opts.File
 	tm := &taskMaster{
 		initTime:     time.Now(),
+		taskCache:    cache.NewMemory(120),
 		path:         opts.Workflow,
 		doneTopic:    opts.DoneTopic,
 		failedTopic:  opts.FailedTopic,
@@ -148,6 +151,15 @@ func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 }
 
 func (tm *taskMaster) refreshCache() ([]string, error) {
+	stat := tm.taskCache.Recycle()
+	if stat.Removed > 0 {
+		log.Printf("task-cache: size %d removed %d time: %v", stat.Count, stat.Removed, stat.ProcessTime)
+		for _, t := range stat.Unfinished {
+			// add unfinished tasks to alerts channel
+			tm.alerts <- t
+		}
+	}
+
 	files, err := tm.Cache.Refresh()
 	if err != nil {
 		return nil, fmt.Errorf("error reloading workflow: %w", err)
@@ -283,7 +295,7 @@ func (tm *taskMaster) schedule() (err error) {
 // Send retry failed tasks to tm.failedTopic (only if the phase exists in the workflow)
 func (tm *taskMaster) Process(t *task.Task) error {
 	meta, _ := url.ParseQuery(t.Meta)
-
+	tm.taskCache.Add(*t)
 	// attempt to retry
 	if t.Result == task.ErrResult {
 		p := tm.Get(*t)
@@ -308,6 +320,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			t.Meta = meta.Encode()
 			go func() {
 				time.Sleep(delay)
+				tm.taskCache.Add(*t)
 				if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
 					log.Println(err)
 				}
@@ -315,8 +328,10 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			return nil
 		} else { // send to the retry failed topic if retries > p.Retry
 			meta.Set("retry", "failed")
+			meta.Set("retried", strconv.Itoa(p.Retry))
 			t.Meta = meta.Encode()
 			if tm.failedTopic != "-" && tm.failedTopic != "" {
+				tm.taskCache.Add(*t)
 				tm.producer.Send(tm.failedTopic, t.JSONBytes())
 			}
 			if tm.slack != nil {
@@ -340,7 +355,6 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				continue
 			}
 			info := tmpl.Meta(p.Template, meta)
-			rules, _ := url.ParseQuery(p.Rule)
 
 			taskTime := tmpl.InfoTime(t.Info)
 			if v := meta.Get("cron"); v != "" && taskTime.IsZero() {
@@ -350,14 +364,14 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				info = tmpl.Parse(info, taskTime)
 			}
 			child := task.NewWithID(p.Task, info, t.ID)
+			child.Job = p.Job()
 
 			child.Meta = "workflow=" + meta.Get("workflow")
 			if v := meta.Get("cron"); v != "" {
 				child.Meta += "&cron=" + v
 			}
-			if rules.Get("job") != "" {
-				child.Meta += "&job=" + rules.Get("job")
-			}
+
+			tm.taskCache.Add(*child)
 			if err := tm.producer.Send(p.Task, child.JSONBytes()); err != nil {
 				return err
 			}
@@ -471,7 +485,7 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 			}
 			for _, tsk := range tasks {
 				b, _ := json.Marshal(tsk)
-				writer.Write(b)
+				writer.WriteLine(b)
 
 				meta, _ := url.ParseQuery(tsk.Meta)
 				key := tsk.Type + ":" + meta.Get("job")
