@@ -355,7 +355,6 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				continue
 			}
 			info := tmpl.Meta(p.Template, meta)
-			//rules, _ := url.ParseQuery(p.Rule)
 
 			taskTime := tmpl.InfoTime(t.Info)
 			if v := meta.Get("cron"); v != "" && taskTime.IsZero() {
