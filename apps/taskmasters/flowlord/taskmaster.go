@@ -152,6 +152,7 @@ func (tm *taskMaster) refreshCache() ([]string, error) {
 		log.Printf("task-cache: size %d removed %d time: %v", stat.Count, stat.Removed, stat.ProcessTime)
 		for _, t := range stat.Unfinished {
 			// add unfinished tasks to alerts channel
+			t.Msg += "unfinished task detected"
 			tm.alerts <- t
 		}
 	}
