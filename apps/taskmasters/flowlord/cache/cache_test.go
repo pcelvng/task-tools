@@ -168,7 +168,7 @@ func TestRecap(t *testing.T) {
 		"task no job": {
 			Input: []task.Task{{ID: "abc", Type: "test1", Info: "?date=2020-01-02", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:10Z"}},
 			Expected: map[string]string{
-				"test1": "min: 10s max: 10s avg: 10s\n\tComplete: 1 2020/01/02",
+				"test1": "min: 10s max: 10s avg: 10s\n\tComplete: 1 2020/01/02\n",
 			},
 		},
 		"task:job": {
@@ -178,7 +178,7 @@ func TestRecap(t *testing.T) {
 				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-03", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:05Z"},
 			},
 			Expected: map[string]string{
-				"test1:job1": "min: 5s max: 15s avg: 10s\n\tComplete: 3 2020/01/01-2020/01/03",
+				"test1:job1": "min: 5s max: 15s avg: 10s\n\tComplete: 3 2020/01/01-2020/01/03\n",
 			},
 		},
 		"with errors": {
@@ -188,7 +188,7 @@ func TestRecap(t *testing.T) {
 				{ID: "abc", Type: "test1", Job: "job1", Info: "?day=2020-01-03", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:05Z"},
 			},
 			Expected: map[string]string{
-				"test1:job1": "min: 5s max: 10s avg: 7.5s\n\tComplete: 2 2020/01/01,2020/01/03\n\tError: 1 2020/01/02",
+				"test1:job1": "min: 5s max: 10s avg: 7.5s\n\tComplete: 2 2020/01/01,2020/01/03\n\tError: 1 2020/01/02\n",
 			},
 		},
 		"hourly": {
@@ -200,7 +200,7 @@ func TestRecap(t *testing.T) {
 				{ID: "abc", Type: "proc", Job: "hour", Info: "?hour=2020-01-01T09", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:01:33Z"},
 			},
 			Expected: map[string]string{
-				"proc:hour": "min: 5s max: 1m33s avg: 34s\n\tComplete: 5 2020/01/01T05-2020/01/01T09",
+				"proc:hour": "min: 5s max: 1m33s avg: 34s\n\tComplete: 5 2020/01/01T05-2020/01/01T09\n",
 			},
 		},
 		"monthly": {
@@ -209,13 +209,19 @@ func TestRecap(t *testing.T) {
 				{ID: "abc", Type: "month", Info: "?day=2020-02-01", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:15Z"},
 			},
 			Expected: map[string]string{
-				"month": "min: 10s max: 15s avg: 12.5s\n\tComplete: 2 2020/01/01,2020/02/01",
+				"month": "min: 10s max: 15s avg: 12.5s\n\tComplete: 2 2020/01/01,2020/02/01\n",
+			},
+		},
+		"meta_job": {
+			Input: []task.Task{
+				{ID: "abc", Type: "test1", Info: "?day=2020-01-01", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:10Z", Meta: "job=job1"},
+				{ID: "abc", Type: "test1", Info: "?day=2020-01-02", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:15Z", Meta: "job=job1"},
+				{ID: "abc", Type: "test1", Info: "?day=2020-01-03", Result: "complete", Started: "2023-01-01T00:00:00Z", Ended: "2023-01-01T00:00:05Z", Meta: "job=job1"},
+			},
+			Expected: map[string]string{
+				"test1:job1": "min: 5s max: 15s avg: 10s\n\tComplete: 3 2020/01/01-2020/01/03\n",
 			},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
-
-	// run data through recap
-	// compare results against expected.
-
 }

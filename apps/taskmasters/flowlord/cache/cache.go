@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -103,7 +104,12 @@ func (c *Memory) Recap() map[string]*Stats {
 	c.mu.RLock()
 	for _, v := range c.cache {
 		for _, t := range v.Events {
-			key := strings.TrimRight(t.Type+":"+t.Job, ":")
+			job := t.Job
+			if job == "" {
+				v, _ := url.ParseQuery(t.Meta)
+				job = v.Get("job")
+			}
+			key := strings.TrimRight(t.Type+":"+job, ":")
 			stat, found := data[key]
 			if !found {
 				stat = &Stats{

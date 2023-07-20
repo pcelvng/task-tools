@@ -25,10 +25,6 @@ import (
 	"github.com/pcelvng/task-tools/workflow"
 )
 
-func init() {
-	rand.Seed(time.Now().Unix())
-}
-
 type taskMaster struct {
 	//	options
 
@@ -156,6 +152,7 @@ func (tm *taskMaster) refreshCache() ([]string, error) {
 		log.Printf("task-cache: size %d removed %d time: %v", stat.Count, stat.Removed, stat.ProcessTime)
 		for _, t := range stat.Unfinished {
 			// add unfinished tasks to alerts channel
+			t.Msg += "unfinished task detected"
 			tm.alerts <- t
 		}
 	}
@@ -315,6 +312,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				meta.Set("delayed", gtools.PrintDuration(delay))
 			}
 			t = task.NewWithID(t.Type, t.Info, t.ID)
+			t.Job = p.Job()
 			i++
 			meta.Set("retry", strconv.Itoa(i))
 			t.Meta = meta.Encode()

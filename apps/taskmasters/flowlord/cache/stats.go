@@ -61,7 +61,7 @@ func (s Stats) String() string {
 		r += fmt.Sprintf("\n\tError: %d %v", s.ErrorCount, tmpl.PrintDates(s.ErrorTimes))
 	}
 
-	return r
+	return r + "\n"
 }
 
 type DurationStats struct {
