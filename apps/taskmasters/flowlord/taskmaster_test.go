@@ -70,6 +70,7 @@ func TestTaskMaster_Process(t *testing.T) {
 				{
 					Type: "task1",
 					Info: "?date=2019-12-12",
+					Job:  "t2",
 					ID:   "UUID_task1_attempt0",
 					Meta: "delayed=XXms&retry=1&workflow=f1.toml"},
 			},
@@ -84,6 +85,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{
 				{
 					Type: "task1",
+					Job:  "t2",
 					Info: "?date=2019-12-12",
 					ID:   "UUID_task1_attempt2",
 					Meta: "delayed=XXms&retry=3&workflow=f1.toml"},
