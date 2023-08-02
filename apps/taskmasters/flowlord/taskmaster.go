@@ -361,7 +361,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if !taskTime.IsZero() {
 				info = tmpl.Parse(info, taskTime)
 			}
-			child := task.NewWithID(p.Task, info, t.ID)
+			child := task.NewWithID(p.Topic(), info, t.ID)
 			child.Job = p.Job()
 
 			child.Meta = "workflow=" + meta.Get("workflow")

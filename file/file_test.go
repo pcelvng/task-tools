@@ -51,8 +51,7 @@ func TestMain(m *testing.M) {
 	// bucket
 	err = createBucket(testBucket)
 	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+		log.Println(err)
 	}
 
 	// create files

@@ -18,7 +18,7 @@ import (
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-	cache, err := workflow.New("../../../internal/test/workflow/f1.toml", nil)
+	cache, err := workflow.New("../../../internal/test/workflow", nil)
 	if err != nil {
 		t.Fatal("cache init", err)
 	}
@@ -52,6 +52,9 @@ func TestTaskMaster_Process(t *testing.T) {
 			}
 		}
 		sort.Slice(result, func(i, j int) bool {
+			if result[i].Type == result[j].Type {
+				return result[i].Job < result[j].Type
+			}
 			return result[i].Type < result[j].Type
 		})
 		return result, err
@@ -197,6 +200,32 @@ func TestTaskMaster_Process(t *testing.T) {
 			},
 			Expected: []task.Task{
 				{Type: "task2", Info: "?time=2020-01-01", Meta: "workflow=f1.toml&cron=2020-01-01T08:17:23Z"},
+			},
+		},
+		// start a child worker with the job data in the rule
+		"no meta job -> children ": {
+			Input: task.Task{
+				Type:   "worker",
+				Job:    "parent_job",
+				ID:     "parent_ID",
+				Meta:   "workflow=jobs.toml&cron=2020-01-01T08:17:23Z",
+				Result: "complete",
+			},
+			Expected: []task.Task{
+				{
+					Type: "worker",
+					Job:  "child1",
+					ID:   "parent_ID",
+					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z",
+					Info: "?date=2020-01-01T08",
+				},
+				{
+					Type: "worker",
+					Job:  "child2",
+					ID:   "parent_ID",
+					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z",
+					Info: "?day=2020-01-01",
+				},
 			},
 		},
 	}
