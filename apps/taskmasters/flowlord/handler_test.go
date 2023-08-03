@@ -91,7 +91,6 @@ func TestBackloader(t *testing.T) {
 				Count: 32,
 			},
 		},
-
 		"monthly": {
 			Input: request{
 				Task:     "month",
@@ -108,7 +107,6 @@ func TestBackloader(t *testing.T) {
 				Count: 12,
 			},
 		},
-
 		"meta_template": {
 			Input: request{
 				Task:     "meta",
@@ -151,7 +149,8 @@ func TestBackloader(t *testing.T) {
 				Count: 1,
 				Tasks: []task.Task{
 					{Type: "task1", Info: "?date=2022-12-01", Meta: "workflow=f3.toml"},
-				}},
+				},
+			},
 		},
 		"backwards": {
 			Input: request{
