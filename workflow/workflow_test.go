@@ -91,7 +91,7 @@ func TestRefresh(t *testing.T) {
 		},
 		"folder": {
 			Input:    &Cache{path: "../internal/test/workflow", isDir: true},
-			Expected: 3, // load folder with 2 files
+			Expected: 4, // load folder with 2 files
 		},
 		"sub-folder": {
 			Input:    &Cache{path: "../internal/test/parent", isDir: true},
@@ -112,7 +112,7 @@ func TestRefresh(t *testing.T) {
 					"f3.toml":      {},
 				},
 			},
-			Expected: 3,
+			Expected: 4,
 		},
 		"keep loaded": {
 			Input: &Cache{
@@ -127,7 +127,7 @@ func TestRefresh(t *testing.T) {
 					},
 				},
 			},
-			Expected: 3,
+			Expected: 4,
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

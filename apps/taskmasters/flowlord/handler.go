@@ -334,8 +334,12 @@ func (tm *taskMaster) backload(req request) response {
 		end = start
 		msg = append(msg, "to value not set")
 	}
-	if start.IsZero() && end.IsZero() && at.IsZero() {
+	if req.At == "" && req.From == "" && req.To == "" {
 		msg = append(msg, "no time provided using today")
+		at = time.Now()
+	}
+	if start.IsZero() && end.IsZero() && at.IsZero() {
+		msg = append(msg, "invalid time format (to|from|at), using today")
 		at = time.Now()
 	}
 	if !at.IsZero() {
@@ -419,7 +423,10 @@ func parseTime(s string) time.Time {
 	if err == nil {
 		return t
 	}
-	t, _ = time.Parse("2006-01-02T15", s)
+	t, err = time.Parse("2006-01-02T15", s)
+	if err == nil {
+		return t
+	}
+	t, _ = time.Parse(time.RFC3339, s)
 	return t
-
 }

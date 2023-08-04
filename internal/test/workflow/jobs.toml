@@ -1,0 +1,17 @@
+[[Phase]]
+task = "worker"
+rule = "cron=0 5 * * *?job=parent_job"
+retry = 3
+template = "?date={yyyy}-{mm}-{dd}T{hh}"
+
+[[Phase]]
+task = "worker"
+rule = "job=child1"
+dependsOn="worker:parent_job"
+retry = 3
+template = "?date={yyyy}-{mm}-{dd}T{hh}"
+
+[[Phase]]
+task = "worker:child2"
+dependsOn="worker:parent_job"
+template = "?day={yyyy}-{mm}-{dd}"

@@ -172,7 +172,9 @@ func (c *Cache) Children(t task.Task) []Phase {
 	result := make([]Phase, 0)
 
 	key := values.Get("workflow")
-	job := values.Get("job")
+	if t.Job == "" {
+		t.Job = values.Get("job")
+	}
 	if key == "" {
 		return nil
 	}
@@ -186,7 +188,7 @@ func (c *Cache) Children(t task.Task) []Phase {
 		}
 
 		if depends == t.Type {
-			if j == "" || j == job {
+			if j == "" || j == t.Job {
 				result = append(result, w)
 			}
 		}
