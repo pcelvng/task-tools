@@ -53,7 +53,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		}
 		sort.Slice(result, func(i, j int) bool {
 			if result[i].Type == result[j].Type {
-				return result[i].Job < result[j].Type
+				return result[i].Job < result[j].Job
 			}
 			return result[i].Type < result[j].Type
 		})
@@ -148,7 +148,7 @@ func TestTaskMaster_Process(t *testing.T) {
 					Info: "?year=2019",
 					ID:   "UUID_task1",
 					Job:  "t5",
-					Meta: "workflow=f1.toml",
+					Meta: "workflow=f1.toml&job=t5",
 				},
 			},
 		},
@@ -216,14 +216,14 @@ func TestTaskMaster_Process(t *testing.T) {
 					Type: "worker",
 					Job:  "child1",
 					ID:   "parent_ID",
-					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z",
+					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z&job=child1",
 					Info: "?date=2020-01-01T08",
 				},
 				{
 					Type: "worker",
 					Job:  "child2",
 					ID:   "parent_ID",
-					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z",
+					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z&job=child2",
 					Info: "?day=2020-01-01",
 				},
 			},
