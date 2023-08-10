@@ -368,6 +368,9 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if v := meta.Get("cron"); v != "" {
 				child.Meta += "&cron=" + v
 			}
+			if child.Job != "" {
+				child.Meta += "&job=" + child.Job
+			}
 
 			tm.taskCache.Add(*child)
 			if err := tm.producer.Send(p.Task, child.JSONBytes()); err != nil {
