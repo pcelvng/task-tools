@@ -1,36 +1,30 @@
 # task-tools
 [![CircleCI](https://circleci.com/gh/pcelvng/task-tools/tree/master.svg?style=svg)](https://circleci.com/gh/pcelvng/task-tools/tree/master)
-Tools to enhance the Task experience
+A set of tools and apps used in the [task](https://github.com/pcelvng/task) ecosystem
+
+## Getting Started 
 
 
-# v0.1.0 Todo List
+### bootstrap
 
-**Taskmasters:**
+## Useful Apps
 
-- 'backloader'; create batch of tasks backloading/running over a long period of time (in progress)
-- 'cron'; create tasks in response to the passage of time (in progress)
-- 'http'; will create tasks from an http rest call
-- 'complete'; will create tasks based on completed tasks
-- 'retry'; will retry failed tasks (in progress)
-- 'dir'; will watch a dir and create tasks when new files are created, will support local files and s3
-- 'file'; will listen on a topic for 'file' json objects and create tasks in response
-- 'db'; will listen on a topic for 'db' json objects and create tasks in response
-- 'audit'; will listen on a topic for 'audit' json objects and create tasks in response
+### flowlord
+Flowlord is the recommended all-purpose TaskMaster that should be used with workflow files to schedule when tasks should run and the task hierarchy. It can retry failed jobs, alert when tasks fail and has an API that can be used to backload/schedule jobs and give a recap of recent jobs run. 
 
-**Workers:**
+See Additional [docs](apps/taskmasters/flowlord/README.md).  
 
-- 'noop' (in progress)
-- 'sort-by-hour'; read in a file and write to multiple files sorted by a date field (in progress)
-- 'copy'
+### Workers
+- bq-load: BigQuery Loader 
+- sql-load: Postgres/MySQL Optimized loader 
+- sql-readx: Postgres/MySQL reader with ability to execute admin query
+- db-check: Monitoring tools to verify data is being populated as expect in DB
+- transform: generic json modification worker that works uses gojq
 
 
-**Auditors:**
+## Utilities 
 
-- 'dir'; will check that files exist in a dir
-- 'file'; will audit a created file
-- 'db'; will audit db record counts
-
-**File Tools**
+### File Tools 
 
 - local reader/writer
 - s3 reader/writer
@@ -39,17 +33,14 @@ Tools to enhance the Task experience
 - general writer initializer; will choose correct writer based on path
 - globbing; multiple readers/writers from a glob pattern
 
-**Utility Apps:**
+### Slack 
+Utility to send messages to slack. 
 
-- log cat utility
-- log tail utility
-- log stats utility
-
-
-**Other:**
-
-- distributed logging
-- distributed logging: Statsd
-- distributed logging: Prometheus
-- distributed logging: InfluxData ???
-
+``` go 
+func main() {
+    notify := slack.Slack{
+        Url: "https://hooks.slack.com/services/ORG_ID/APP_IP/CHANNEL_ID
+    }
+    notify.Notify("Hello World", slack.OK) 
+}
+```
