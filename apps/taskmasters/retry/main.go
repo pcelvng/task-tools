@@ -1,11 +1,11 @@
 package main
 
 import (
+	retry2 "github.com/pcelvng/task-tools/apps/taskmasters/retry/retry"
 	"log"
 
 	"github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
-	"github.com/pcelvng/task-tools/retry"
 )
 
 const (
@@ -14,10 +14,10 @@ const (
 )
 
 func main() {
-	opts := retry.NewOptions()
+	opts := retry2.NewOptions()
 	bootstrap.NewUtility(name, opts).Version(tools.String()).Description(description).Initialize()
 
-	tm, err := retry.New(opts)
+	tm, err := retry2.New(opts)
 	if err != nil {
 		log.Fatal(err)
 	}

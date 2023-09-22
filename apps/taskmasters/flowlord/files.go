@@ -120,7 +120,7 @@ func (tm *taskMaster) matchFile(sts stat.Stats) error {
 		}
 	}
 	if matches == 0 {
-		return fmt.Errorf("no match found for %s", sts.Path)
+		return fmt.Errorf("no match found for %q", sts.Path)
 	}
 	return nil
 

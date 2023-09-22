@@ -19,7 +19,7 @@ import (
 // Reader is an io.ReadCloser that also provides
 // file statistics along with a few additional methods.
 type Reader interface {
-	// Read should behave as defined in the io.Read interface.
+	// ReadCloser should behave as defined in the io.Read interface.
 	// In this way we can take advantage of all standard library
 	// methods that rely on Read such as copy.
 	//
@@ -43,7 +43,7 @@ type Reader interface {
 // Writer is a io.WriteCloser that also provides
 // file statistics along with a few additional methods.
 type Writer interface {
-	// Write should behave as defined in io.Writer so that it
+	// WriteCloser should behave as defined in io.Writer so that it
 	// is compatible with standard library tooling such as
 	// io.Copy. Additionally concurrent calls to Write should
 	// be safe and not corrupt the output. Order may
@@ -73,7 +73,6 @@ type Writer interface {
 	Abort() error
 }
 
-// NewOptions
 func NewOptions() *Options {
 	return &Options{
 		CompressionLevel: "speed",
