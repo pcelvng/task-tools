@@ -3,8 +3,22 @@ version: 2
 jobs:
   build:
     docker:
-      - image: cimg/go:1.18
+      - image: cimg/go:1.21
     working_directory: ~/task-tools
     steps:
       - checkout
-      - run: go test -cover ./...
+      - run: go install github.com/jstemmer/go-junit-report/v2@latest
+      - run:
+          name: Run the tests
+          command: |
+            mkdir -p junit
+            go test -cover -v -coverprofile=coverage.out -covermode=atomic ./... > tests.out || true 
+            go tool cover -func=coverage.out | tail -1
+            go tool cover -html=coverage.out -o=cover.html
+            go-junit-report -set-exit-code -in tests.out -out junit/test-results.xml
+      - store_test_results:
+          path: ~/task-tools/junit
+      - store_artifacts:
+          path: cover.html
+      - store_artifacts:
+          path: ~/task-tools/junit

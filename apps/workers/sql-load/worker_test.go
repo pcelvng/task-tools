@@ -493,6 +493,7 @@ func TestReadFiles(t *testing.T) {
 		go func() {
 			for range rowChan {
 			}
+			time.Sleep(100 * time.Millisecond)
 			close(doneChan)
 		}()
 		ds.ReadFiles(context.Background(), reader, rowChan, in.skipErrors)
