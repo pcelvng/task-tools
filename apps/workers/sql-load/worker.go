@@ -649,6 +649,26 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 				} else {
 					f.WriteString("false")
 				}
+			case []any:
+				f.WriteString(`'{`)
+				for i := 0; i < len(x); i++ {
+					switch v := x[i].(type) {
+					case string:
+						f.WriteString(`"`)
+						f.WriteString(v)
+						f.WriteString(`"`)
+					case int:
+						f.WriteString(strconv.Itoa(v))
+					case int64:
+						f.WriteString(strconv.FormatInt(v, 10))
+					case float64:
+						f.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
+					}
+					if i != len(x)-1 {
+						f.WriteString(",")
+					}
+				}
+				f.WriteString(`}'`)
 			default:
 				if x == nil {
 					f.WriteString("NULL")

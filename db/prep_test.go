@@ -1,10 +1,10 @@
 package db
 
 import (
+	"github.com/hydronica/trial"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNew(t *testing.T) {
@@ -82,29 +82,63 @@ func TestPrepare_CheckColumns(t *testing.T) {
 }
 
 func TestPrepare_Row(t *testing.T) {
-	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Values(testStruct{
-		Name: "Hello world",
-		Int1: 10,
-		Int4: 42,
-	}, "Name", "count", "Int1"))
+	type input struct {
+		data    any
+		columns []string
+	}
+	fn := func(in input) ([]any, error) {
+		return Values(in.data, in.columns...), nil
+	}
+	cases := trial.Cases[input, []any]{
+		"struct": {
+			Input: input{
+				data: testStruct{
+					Name: "Hello world",
+					Int1: 10,
+					Int4: 42,
+				},
+				columns: []string{"Name", "count", "Int1"},
+			},
+			Expected: []interface{}{"Hello world", 42, 10},
+		},
+		"pointer": {
+			Input: input{
+				data: &testStruct{
+					Name: "Hello world",
+					Int1: 10,
+					Int4: 42,
+				},
+				columns: []string{"Name", "count", "Int1"},
+			},
+			Expected: []interface{}{"Hello world", 42, 10},
+		},
+		"nullable": {
+			Input: input{
+				data: struct {
+					Int    int    `db:"int,nullzero"`
+					String string `db:"string,nullzero"`
+				}{
+					Int:    0,
+					String: "hello",
+				},
+				columns: []string{"int", "string"},
+			},
+			Expected: []interface{}{nil, "hello"},
+		},
+		"arrays": {
+			Input: input{
+				columns: []string{"strings"}, //, "ints", "floats"},
+				data: struct {
+					Strings []string `db:"strings"`
+					//	Ints []int
+					//	Floats []float64
+				}{Strings: []string{"a", "b", "c"}},
+			},
+			Expected: []any{[]string{"a", "b", "c"}},
+		},
+	}
 
-	assert.Equal(t, []interface{}{"Hello world", 42, 10}, Values(&testStruct{
-		Name: "Hello world",
-		Int1: 10,
-		Int4: 42,
-	}, "Name", "count", "Int1"))
-
-	assert.Equal(t, []interface{}{nil, "hello"}, Values(struct {
-		Int    int    `db:"int,nullzero"`
-		String string `db:"string,nullzero"`
-	}{
-		Int:    0,
-		String: "hello",
-	}, "int", "string"))
-
-	assert.Equal(t, []interface{}{nil}, Values(struct {
-		String string `db:"string,nullzero"`
-	}{}, "string"))
+	trial.New(fn, cases).SubTest(t)
 
 }
 
