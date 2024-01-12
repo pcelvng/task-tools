@@ -305,7 +305,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			return nil
 		}
 		if p.Retry > i {
-			var delay time.Duration
+			delay := time.Second
 			if s := rules.Get("retry_delay"); s != "" {
 				delay, _ = time.ParseDuration(s)
 				delay = delay + jitterPercent(delay, 40)

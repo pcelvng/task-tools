@@ -4,8 +4,8 @@ import (
 	"log"
 
 	"github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/apps/taskmasters/retry/retry"
 	"github.com/pcelvng/task-tools/bootstrap"
-	"github.com/pcelvng/task-tools/retry"
 )
 
 const (
