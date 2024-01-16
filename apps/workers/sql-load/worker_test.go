@@ -515,6 +515,18 @@ func TestCreateInserts(t *testing.T) {
 				"insert into test(float_array)\n  VALUES \n('{2.71828,3.14159,1.61803}');\n",
 			},
 		},
+		"internal": {
+			Input: input{
+				table:   "test",
+				columns: []string{"interval"},
+				rows: []Row{
+					{10 * time.Second}},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(interval)\n  VALUES \n('10s');\n",
+			},
+		},
 	}
 	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)
 }

@@ -312,7 +312,6 @@ func (w *worker) QuerySchema() (err error) {
 			if strings.Contains(c.DataType, "char") || strings.Contains(c.DataType, "text") {
 				w.ds.dbSchema[idx].TypeName = "string"
 			}
-
 			if strings.Contains(c.DataType, "int") || strings.Contains(c.DataType, "serial") {
 				w.ds.dbSchema[idx].TypeName = "int"
 			}
@@ -550,15 +549,19 @@ func MakeRow(dbSchema []DbColumn, j JsonData) (row Row, err error) {
 		}
 		switch x := v.(type) {
 		case string:
-			if dbSchema[k].TypeName == "int" {
+			if dbSchema[k].DataType == "interval" {
+				j[f.FieldKey], err = time.ParseDuration(x)
+			} else if dbSchema[k].TypeName == "int" {
 				j[f.FieldKey], err = strconv.ParseInt(x, 10, 64)
-			}
-			if dbSchema[k].TypeName == "float" {
+			} else if dbSchema[k].TypeName == "float" {
 				j[f.FieldKey], err = strconv.ParseFloat(x, 64)
 			}
+
 		case float64:
-			// convert a float to an int if the schema is an int type
-			if dbSchema[k].TypeName == "int" {
+			if dbSchema[k].DataType == "interval" {
+				j[f.FieldKey] = time.Duration(x)
+			} else if dbSchema[k].TypeName == "int" {
+				// convert a float to an int if the schema is an int type
 				if x != float64(int64(x)) {
 					err = fmt.Errorf("add_row: cannot convert number value to int64 for %s value: %v type: %s",
 						f.Name, v, dbSchema[k].DataType)
@@ -649,6 +652,10 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 				} else {
 					f.WriteString("false")
 				}
+			case time.Duration:
+				f.WriteString("'")
+				f.WriteString(x.String())
+				f.WriteString("'")
 			case []any:
 				f.WriteString(`'{`)
 				for i := 0; i < len(x); i++ {
