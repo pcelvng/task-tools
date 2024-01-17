@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/pcelvng/task-tools/slack"
 	"io"
 	"log"
 	"net/http"
@@ -29,6 +30,17 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
 	router.Get("/workflow/*", tm.workflowFiles)
+	router.Get("/notify", func(w http.ResponseWriter, r *http.Request) {
+		sts := stats{
+			AppName: "flowlord",
+			Version: tools.Version,
+			RunTime: gtools.PrintDuration(time.Since(tm.initTime)),
+		}
+		b, _ := json.Marshal(sts)
+		if err := tm.slack.Notify(string(b), slack.OK); err != nil {
+			w.Write([]byte(err.Error()))
+		}
+	})
 	router.Get("/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})

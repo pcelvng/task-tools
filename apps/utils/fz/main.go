@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pcelvng/task-tools/slack"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,11 +19,13 @@ const usage = `Usage: fz [command [opts ...] args ...]
 Available commands
   ls  <path>        List files and directories within a path
   cat <path>        Concat file content to stdout
-  cp  <from> <to>   Copy a file from a location to another`
+  cp  <from> <to>   Copy a file from a location to another
+  slack <url> <text> Send slack message to channel 
+`
 
 func main() {
 	conf := file.Options{}
-	config.New(&conf).Description(usage).LoadOrDie()
+	config.New(&conf).DisableFlags().Description(usage).LoadOrDie()
 
 	args := getCMDArgs()
 	if len(args) <= 1 {
@@ -41,6 +44,10 @@ func main() {
 		err = cat(f1, &conf)
 	case "cp":
 		err = cp(f1, f2, &conf)
+	case "slack":
+		if err := slack.Notify(f1, f2); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		log.Fatalf("Unknown command %s\n%s", cmd, usage)
 	}

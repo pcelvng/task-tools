@@ -13,8 +13,8 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
-	github.com/hydronica/go-config v0.2.5
-	github.com/hydronica/toml v0.4.2
+	github.com/hydronica/go-config v0.2.6
+	github.com/hydronica/toml v0.5.0
 	github.com/hydronica/trial v0.7.0
 	github.com/inhies/go-bytesize v0.0.0-20210819104631-275770b98743
 	github.com/itchyny/gojq v0.12.3
@@ -55,7 +55,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.1 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
-	github.com/iancoleman/strcase v0.1.2 // indirect
+	github.com/iancoleman/strcase v0.3.0 // indirect
 	github.com/itchyny/timefmt-go v0.1.3 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/klauspost/asmfmt v1.3.2 // indirect
