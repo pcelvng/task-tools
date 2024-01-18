@@ -72,9 +72,19 @@ func (s *Slack) Notify(message string, level int) error {
 	req.Header.Set("Content-Type", "application/json")
 	c := http.DefaultClient
 	c.Timeout = time.Minute
-	_, err := c.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return fmt.Errorf("error on http do: %v", err)
+	}
+
+	if resp != nil {
+		var b []byte
+		if resp.StatusCode/100 != 2 {
+			if resp.Body != nil {
+				b, _ = io.ReadAll(resp.Body)
+			}
+			log.Printf("slack: %d %q", resp.StatusCode, string(b))
+		}
 	}
 
 	return err
@@ -246,4 +256,11 @@ func (s *Slack) SendMessage(m *Message) error {
 	}
 
 	return err
+}
+
+// Notify sends a text message to the slack url defined
+// this is a very basic message without any formatting
+func Notify(url string, text string) error {
+	s := &Slack{Url: url}
+	return s.Notify(text, Other)
 }

@@ -472,7 +472,9 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 			// if the task result is an alert result, send a slack notification now
 			if tsk.Result == task.AlertResult {
 				b, _ := json.MarshalIndent(tsk, "", " ")
-				n.Slack.Notify(string(b), slack.Critical)
+				if err := n.Slack.Notify(string(b), slack.Critical); err != nil {
+					log.Println(err)
+				}
 			} else { // if the task result is not an alert result add to the tasks list summary
 				tasks = append(tasks, tsk)
 			}
@@ -507,7 +509,9 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 				s += "see report at " + fPath
 			}
 			fmt.Println(s)
-			n.Slack.Notify(s, slack.Critical)
+			if err := n.Slack.Notify(s, slack.Critical); err != nil {
+				log.Println(err)
+			}
 
 			tasks = tasks[0:0] // reset slice
 		case <-ctx.Done():
