@@ -99,12 +99,11 @@ func (c *Cache) Search(task, job string) (path, template string) {
 	}
 	for key, w := range c.Workflows {
 		for _, p := range w.Phases {
-			if p.Task == task {
+			if p.Topic() == task {
 				if job == "" {
 					return key, p.Template
 				}
-				v, _ := url.ParseQuery(p.Rule)
-				if v.Get("job") == job {
+				if job == p.Job() {
 					return key, p.Template
 				}
 			}
@@ -122,17 +121,19 @@ func (c *Cache) Get(t task.Task) Phase {
 
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
-	job := values.Get("job")
+	job := t.Job
+	if job == "" {
+		job = values.Get("job")
+	}
 
 	if key == "*" { // search all workflows for first match
 		for _, phases := range c.Workflows {
 			for _, w := range phases.Phases {
-				if w.Task == t.Type {
+				if w.Topic() == t.Type {
 					if job == "" {
 						return w
 					}
-					v, _ := url.ParseQuery(w.Rule)
-					if v.Get("job") == job {
+					if w.Job() == job {
 						return w
 					}
 				}
@@ -142,12 +143,11 @@ func (c *Cache) Get(t task.Task) Phase {
 	}
 
 	for _, w := range c.Workflows[key].Phases {
-		if w.Task == t.Type {
+		if w.Topic() == t.Type {
 			if job == "" {
 				return w
 			}
-			v, _ := url.ParseQuery(w.Rule)
-			if v.Get("job") == job {
+			if w.Job() == job {
 				return w
 			}
 		}

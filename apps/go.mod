@@ -1,6 +1,6 @@
-module task-apps
+module github.com/pcelvng/task-tools/apps
 
-go 1.21.3
+go 1.18
 
 require (
 	cloud.google.com/go/bigquery v1.57.1
@@ -23,7 +23,6 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.9
 	github.com/pcelvng/task v0.7.0
-	github.com/pcelvng/task-tools v0.25.4
 	github.com/prometheus/client_golang v1.18.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.8.4
