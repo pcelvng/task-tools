@@ -1,10 +1,9 @@
 package db
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 var knownStructs = make(map[reflect.Type]*prepare)
@@ -14,7 +13,7 @@ var knownStructs = make(map[reflect.Type]*prepare)
 func CheckColumns(v interface{}, cols ...string) error {
 	missing := MissingColumns(v, cols...)
 	if len(missing) > 0 {
-		return errors.Errorf("columns not found: %s", strings.Join(missing, ", "))
+		return fmt.Errorf("columns not found: %s", strings.Join(missing, ", "))
 	}
 
 	return nil

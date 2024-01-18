@@ -1,11 +1,11 @@
 package mock
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/pcelvng/task-tools/file/nop"
-	"github.com/pkg/errors"
 )
 
 type Writer struct {
@@ -17,7 +17,7 @@ type Writer struct {
 func NewWriter(pth string) *Writer {
 	w, err := nop.NewWriter(pth)
 	if err != nil {
-		panic(errors.Wrap(err, "invalid mock writer"))
+		panic(fmt.Errorf("invalid mock writer %w", err))
 	}
 	return &Writer{
 		Writer:     w,

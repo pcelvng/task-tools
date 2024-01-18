@@ -12,7 +12,6 @@ import (
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pkg/errors"
 )
 
 type Phase struct {
@@ -74,7 +73,7 @@ func New(path string, opts *file.Options) (*Cache, error) {
 	}
 	sts, err := file.Stat(path, opts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "problem with path %s", path)
+		return nil, fmt.Errorf("problem with path %s %w", path, err)
 	}
 	c.isDir = sts.IsDir
 	_, err = c.Refresh()
@@ -274,7 +273,7 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 	data := c.Workflows[f]
 	// permission issues
 	if err != nil {
-		return "", errors.Wrapf(err, "stats %s", path)
+		return "", fmt.Errorf("stats %s %w", path, err)
 	}
 	// We can't process a directory here
 	if sts.IsDir {
@@ -288,17 +287,17 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 
 	r, err := file.NewReader(path, opts)
 	if err != nil {
-		return "", errors.Wrapf(err, "new reader %s", path)
+		return "", fmt.Errorf("new reader %s %w", path, err)
 	}
 	b, err := io.ReadAll(r)
 	if err != nil {
-		return "", errors.Wrapf(err, "read-all: %s", path)
+		return "", fmt.Errorf("read-all: %s %w", path, err)
 	}
 	d := Workflow{
 		Checksum: data.Checksum,
 	}
 	if _, err := toml.Decode(string(b), &d); err != nil {
-		return "", errors.Wrapf(err, "decode: %s", string(b))
+		return "", fmt.Errorf("decode: %s %w", string(b), err)
 	}
 
 	c.Workflows[f] = d

@@ -2,6 +2,7 @@ package minio
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 	"sync"
@@ -10,7 +11,6 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pcelvng/task-tools/file/stat"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -86,7 +86,7 @@ func parsePth(p string) (scheme, bucket, path string) {
 func Stat(pth string, Opt Option) (stat.Stats, error) {
 	client, err := newClient(Opt)
 	if err != nil {
-		return stat.Stats{}, errors.Wrap(err, "client init")
+		return stat.Stats{}, fmt.Errorf("client init %w", err)
 	}
 	_, bucket, objPth := parsePth(pth)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

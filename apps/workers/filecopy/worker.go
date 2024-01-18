@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
-	"github.com/pkg/errors"
 )
 
 func newInfoOptions(info string) (*infoOptions, error) {
@@ -92,7 +92,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	_, err := io.Copy(w.writer, w.reader)
 	w.reader.Close()
 	if err != nil {
-		return task.Failed(errors.Wrap(err, "io: copy"))
+		return task.Failf("io: copy %v", err)
 	}
 
 	err = w.writer.Close()

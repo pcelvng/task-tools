@@ -13,7 +13,6 @@ import (
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/slack"
-	"github.com/pkg/errors"
 )
 
 type worker struct {
@@ -125,7 +124,7 @@ func (w *worker) GetRecordCount(ctx context.Context) (count int64, err error) {
 	row := pg.DB.QueryRowxContext(ctx, qStr)
 	err = row.Scan(&count)
 	if err != nil {
-		return 0, errors.Wrap(err, "postgres scan")
+		return 0, fmt.Errorf("postgres scan %w", err)
 	}
 	return count, nil
 }
@@ -164,7 +163,7 @@ func (w *worker) GetNullCount(ctx context.Context) (count int64, err error) {
 	row := pg.DB.QueryRowxContext(ctx, qStr)
 	err = row.Scan(&count)
 	if err != nil {
-		return 0, errors.Wrap(err, "postgres scan")
+		return 0, fmt.Errorf("postgres scan %w", err)
 	}
 	return count, nil
 }
@@ -233,13 +232,13 @@ func (w *worker) GetZeroSums(ctx context.Context) (zr ZeroRecs, mr MissingRecs, 
 	qStr := fmt.Sprintf("select %s, %s as date from %s where %s = '%s' %s;", selString, asDate, w.Table, w.DateField, w.Date, grpString)
 	rows, err := pg.DB.QueryxContext(ctx, qStr)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "postgres query")
+		return nil, nil, fmt.Errorf("postgres query %w", err)
 	}
 	defer rows.Close()
 
 	colNames, err := rows.Columns()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "postgres columns")
+		return nil, nil, fmt.Errorf("postgres columns %w", err)
 	}
 	var colVals = make(map[string]interface{})
 	cols := make([]interface{}, len(colNames))
@@ -250,7 +249,7 @@ func (w *worker) GetZeroSums(ctx context.Context) (zr ZeroRecs, mr MissingRecs, 
 	for rows.Next() {
 		err = rows.Scan(colPtrs...)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "postgres scan")
+			return nil, nil, fmt.Errorf("postgres scan %w", err)
 		}
 		for i, col := range cols {
 			colVals[colNames[i]] = col

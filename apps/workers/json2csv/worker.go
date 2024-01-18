@@ -10,7 +10,6 @@ import (
 
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
-	"github.com/pkg/errors"
 
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -84,7 +83,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	}
 	writer.Flush()
 	if err := w.writer.Close(); err != nil {
-		return task.Failed(errors.Wrapf(err, "write close"))
+		return task.Failf("write close %v", err)
 	}
 	sts := w.writer.Stats()
 	if w.fileTopic != "" {

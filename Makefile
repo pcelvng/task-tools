@@ -2,7 +2,7 @@ PREFIX=/usr/local
 DESTDIR=
 GOFLAGS=-ldflags "-s -w -X github.com/pcelvng/task-tools.Version=${version} -X github.com/pcelvng/task-tools.BuildTimeUTC=`date -u '+%Y-%m-%d_%I:%M:%S%p'`"
 BINDIR=${PREFIX}/bin
-BLDDIR = build
+BLDDIR = ../build
 
 ifeq ("${version}", "")
   version=$(shell git describe --tags --always)
@@ -19,8 +19,9 @@ all: $(APPS)
 
 $(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
-	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./apps/*/$*
-	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./apps/*/$*
+	cd apps; \
+	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./*/$* ; \
+	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./*/$*
 
 $(APPS): %: $(BLDDIR)/%
 

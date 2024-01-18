@@ -16,7 +16,6 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/apps/taskmasters/flowlord/cache"
 	"github.com/pcelvng/task/bus"
-	"github.com/pkg/errors"
 	"github.com/robfig/cron/v3"
 
 	"github.com/pcelvng/task-tools/file"
@@ -180,7 +179,7 @@ func (tm *taskMaster) refreshCache() ([]string, error) {
 
 func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
-		return errors.Wrapf(err, "workflow setup")
+		return fmt.Errorf("workflow setup %w", err)
 	}
 
 	// refresh the workflow if the file(s) have been changed
@@ -198,7 +197,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	}()
 
 	if err := tm.schedule(); err != nil {
-		return errors.Wrapf(err, "cron schedule")
+		return fmt.Errorf("cron schedule %w", err)
 	}
 
 	go tm.readDone(ctx)
@@ -273,12 +272,12 @@ func (tm *taskMaster) schedule() (err error) {
 			if s := rules.Get("offset"); s != "" {
 				j.Offset, err = time.ParseDuration(s)
 				if err != nil {
-					return errors.Wrapf(err, "invalid duration %s", s)
+					return fmt.Errorf("invalid duration %s %w", s, err)
 				}
 			}
 
 			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
-				return errors.Wrapf(err, "invalid rule for %s:%s %s", path, w.Task, w.Rule)
+				return fmt.Errorf("invalid rule for %s:%s %s %w", path, w.Task, w.Rule, err)
 			}
 		}
 	}

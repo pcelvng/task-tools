@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/nsqio/go-nsq"
-	"github.com/pkg/errors"
 )
 
 type discover struct {
@@ -42,14 +41,14 @@ func (d *discover) registerConsumer(prevTopics []string) ([]string, error) {
 	for _, host := range d.lookupds {
 		topics, err := getTopics(host)
 		if err != nil {
-			return prevTopics, errors.Wrapf(err, "topic err %s", err)
+			return prevTopics, fmt.Errorf("topic err %w", err)
 		}
 
 		for _, topic := range topics {
 			if _, found := topicMap[topic]; !found {
 				c, err := nsq.NewConsumer(topic, d.channel, nsq.NewConfig())
 				if err != nil {
-					return prevTopics, errors.Wrap(err, "consumer init err")
+					return prevTopics, fmt.Errorf("consumer init err %w", err)
 				}
 				d.newConsumer(topic, c)
 				topicMap[topic] = struct{}{}
