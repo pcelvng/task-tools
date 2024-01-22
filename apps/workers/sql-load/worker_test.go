@@ -463,11 +463,75 @@ func TestCreateInserts(t *testing.T) {
 				"insert into test(a,b,c)\n  VALUES \n(1,'2',3.2),\n(true,false,NULL);\n",
 			},
 		},
+		"array_string": {
+			Input: input{
+				table:   "test",
+				columns: []string{"string_array"},
+				rows: []Row{
+					{[]any{"a", "b", "c"}},
+				},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(string_array)\n  VALUES \n('{\"a\",\"b\",\"c\"}');\n",
+			},
+		},
+		"array_int": {
+			Input: input{
+				table:   "test",
+				columns: []string{"int_array"},
+				rows: []Row{
+					{[]any{1, 2, 3}},
+				},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(int_array)\n  VALUES \n('{1,2,3}');\n",
+			},
+		},
+		"array_int64": {
+			Input: input{
+				table:   "test",
+				columns: []string{"int_array"},
+				rows: []Row{
+					{[]any{int64(6), int64(7), int64(8)}},
+				},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(int_array)\n  VALUES \n('{6,7,8}');\n",
+			},
+		},
+		"array_float64": {
+			Input: input{
+				table:   "test",
+				columns: []string{"float_array"},
+				rows: []Row{
+					{[]any{2.71828, 3.14159, 1.61803}},
+				},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(float_array)\n  VALUES \n('{2.71828,3.14159,1.61803}');\n",
+			},
+		},
+		"internal": {
+			Input: input{
+				table:   "test",
+				columns: []string{"interval"},
+				rows: []Row{
+					{10 * time.Second}},
+				batchSize: 10,
+			},
+			Expected: []string{
+				"insert into test(interval)\n  VALUES \n('10s');\n",
+			},
+		},
 	}
 	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)
 }
 
-func TestReadFiles(t *testing.T) {
+func TestReadFiles(t *testing.T) { // flaky test
 	c := trial.CaptureLog()
 	defer c.ReadAll()
 
@@ -493,7 +557,6 @@ func TestReadFiles(t *testing.T) {
 		go func() {
 			for range rowChan {
 			}
-			time.Sleep(100 * time.Millisecond)
 			close(doneChan)
 		}()
 		ds.ReadFiles(context.Background(), reader, rowChan, in.skipErrors)

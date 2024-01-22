@@ -15,6 +15,8 @@ Initially only postgresql will be supported
   * `?fields=jsonKeyName:dbColumnName`
 * `cached_insert` : will create a temp table for insert
   * this temp table data will then be inserted into the [`table_name`]
+  * greatly improves performance. 
+  * supports array data types
 * `batch_size` : number of rows to insert at once (default: 1000)
 
 Example tasks:
