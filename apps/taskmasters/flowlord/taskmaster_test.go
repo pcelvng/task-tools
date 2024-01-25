@@ -16,9 +16,11 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+const base_test_path string = "../../../internal/test/"
+
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-	cache, err := workflow.New("../../../internal/test/workflow", nil)
+	cache, err := workflow.New(base_test_path+"workflow", nil)
 	if err != nil {
 		t.Fatal("cache init", err)
 	}
@@ -235,22 +237,22 @@ func TestTaskMaster_Process(t *testing.T) {
 func TestTaskMaster_Schedule(t *testing.T) {
 
 	type expected struct {
-		Jobs  []job
+		Jobs  []cronJob
 		Files []fileRule
 	}
 	fn := func(in string) (expected, error) {
-		cache, err := workflow.New("../../../internal/test/"+in, nil)
+		cache, err := workflow.New(base_test_path+in, nil)
 		if err != nil {
 			return expected{}, err
 		}
 		tm := taskMaster{Cache: cache, cron: cron.New()}
 		err = tm.schedule()
 		exp := expected{
-			Jobs:  make([]job, 0),
+			Jobs:  make([]cronJob, 0),
 			Files: tm.files,
 		}
 		for _, e := range tm.cron.Entries() {
-			j := e.Job.(*job)
+			j := e.Job.(*cronJob)
 			exp.Jobs = append(exp.Jobs, *j)
 		}
 		return exp, err
@@ -259,7 +261,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		"f1.toml": {
 			Input: "workflow/f1.toml",
 			Expected: expected{
-				Jobs: []job{
+				Jobs: []cronJob{
 					{
 						Name:     "t2",
 						Workflow: "f1.toml",
@@ -282,7 +284,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		"f3.toml": {
 			Input: "workflow/f3.toml",
 			Expected: expected{
-				Jobs: []job{
+				Jobs: []cronJob{
 					{
 						Workflow: "f3.toml",
 						Topic:    "task1",
@@ -306,6 +308,64 @@ func TestTaskMaster_Schedule(t *testing.T) {
 	}
 
 	trial.New(fn, cases).EqualFn(trial.EqualOpt(trial.IgnoreAllUnexported)).Test(t)
+}
+
+func TestTaskMaster_Batch(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	cache, err := workflow.New(base_test_path+"batch.toml", nil)
+	if err != nil {
+		t.Fatalf("error setting up cache %s", err)
+	}
+	tm := taskMaster{Cache: cache}
+	fn := func(in string) ([]task.Task, error) {
+		producer, _ := nop.NewProducer("")
+		tm.producer = producer
+		err := tm.Batch(in)
+		tasks := make([]task.Task, 0)
+		for _, msg := range producer.Messages {
+			for _, t := range msg {
+				tsk, _ := task.NewFromBytes([]byte(t))
+				tasks = append(tasks, task.Task{Type: tsk.Type, Info: tsk.Info, Meta: tsk.Meta})
+			}
+		}
+		return tasks, err
+	}
+	cases := trial.Cases[string, []task.Task]{
+		"to_from": {
+			Input: "?task=date-batch&from=2024-01-01&to=2024-01-03&by=day",
+			Expected: []task.Task{
+				{Type: "date-batch", Info: "?day=2024-01-01", Meta: ""},
+				{Type: "date-batch", Info: "?day=2024-01-02", Meta: ""},
+				{Type: "date-batch", Info: "?day=2024-01-03", Meta: ""},
+			},
+		},
+		"for -3": {
+			Input: "?task=date-batch&from=2023-12-31&for=-48h",
+			Expected: []task.Task{
+				{Type: "date-batch", Info: "?day=2023-12-31", Meta: ""},
+				{Type: "date-batch", Info: "?day=2023-12-30", Meta: ""},
+				{Type: "date-batch", Info: "?day=2023-12-29", Meta: ""},
+			},
+		},
+		"metas": {
+			Input: "?task=meta-batch&meta=name:a,b,c|value:1,2,3",
+			Expected: []task.Task{
+				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today},
+				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today},
+				{Type: "meta-batch", Info: "?name=c&value=3&day=" + today},
+			},
+		},
+		"file": {
+			Input: "test/data.json?task=batch-president",
+			Expected: []task.Task{
+				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797"},
+				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801"},
+				{Type: "batch-president", Info: "?president=thomas jefferson&start=1801&end=1809"},
+				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817"},
+			},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
 }
 
 func TestIsReady(t *testing.T) {

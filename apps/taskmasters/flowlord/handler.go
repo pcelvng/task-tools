@@ -78,7 +78,7 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 	entries := tm.cron.Entries()
 	for i := 0; i < len(entries); i++ {
 		e := entries[i]
-		j, ok := e.Job.(*job)
+		j, ok := e.Job.(*cronJob)
 		if !ok {
 			continue
 		}

@@ -104,7 +104,6 @@ func (tm *taskMaster) read(ctx context.Context) {
 			}
 		}
 	}
-	log.Println("done")
 	close(tm.done)
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/pcelvng/task-tools/tmpl"
 )
 
-type job struct {
+type cronJob struct {
 	Name     string
 	Workflow string
 	Topic    string
@@ -19,7 +19,7 @@ type job struct {
 	producer bus.Producer
 }
 
-func (j *job) Run() {
+func (j *cronJob) Run() {
 	tm := time.Now().Add(j.Offset)
 	info := tmpl.Parse(j.Template, tm)
 	tsk := task.New(j.Topic, info)
