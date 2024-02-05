@@ -13,6 +13,11 @@ type options struct {
 	// worker specific config values 
 }
 
+func (o *options) Validate() error {
+	//todo: validate options struct and error on missing/invalid inputs
+	return nil 
+}
+
 func main() {
 	opts := &options{}
 	app := bootstrap.NewWorkerApp("app Name", opts.NewWorker, opts).
@@ -24,7 +29,7 @@ func main() {
 
 func (o *options) NewWorker(info string) task.Worker {
   // TODO: parse the info string and setup a new Worker
-  return worker{
+  return &worker{
     Meta:    task.NewMeta(),
   } 
 }
@@ -43,15 +48,25 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 ### Creating a taskmaster 
 
 ``` go 
-desc = "cli description"
+const desc = "cli description"
+
+type options struct {}
+
+func (o *options) Validate() error {
+	//todo: validate options struct and error on missing/invalid inputs
+	return nil 
+}
+
 func main() {
-    opts := &options{}
-	app := bootstrap.NewTaskMaster("appName", NewFunc, opts).
+	opts := &options{}
+	app := bootstrap.NewTaskMaster("appName", New, opts).
 		Version(tools.String()).
 		Description(desc)
 	app.Initialize()
 	app.Run()
 }
+
+type taskMaster struct {} 
 
 func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	return &taskMaster{}
@@ -59,12 +74,13 @@ func New(app *bootstrap.TaskMaster) bootstrap.Runner {
 
 func (tm *taskMaster) Info() interface{} {
 	// provide a struct of data to be display on the /info status endpoint
-	return struct{}
+	return struct{}{}
 }
 
 func (tm *taskMaster) Run(ctx context.Context) error {
 	// main running process
 	// read from consumer and produce tasks as required
+	return nil 
 }
 
 ```

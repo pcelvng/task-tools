@@ -93,12 +93,18 @@ func (b *batchJob) Run() {
 	tasks, err := b.Batch(t)
 	if err != nil {
 		log.Println(err)
-		// todo send back an alert to flowlord.
+		tsk := *task.New(b.Topic, b.Template)
+		tsk.Job = b.Name
+		tsk.Result = task.ErrResult
+		tsk.Msg = err.Error()
+		b.alerts <- tsk //notify flowlord of issues
 		return
 	}
 	for _, t := range tasks {
 		if err := b.producer.Send(t.Type, t.JSONBytes()); err != nil {
-			//todo send alert to flowlord
+			t.Result = task.ErrResult
+			t.Msg = err.Error()
+			b.alerts <- t //notify flowlord of issues
 		}
 	}
 }

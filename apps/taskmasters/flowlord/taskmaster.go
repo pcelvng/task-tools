@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -235,6 +236,7 @@ func validatePhase(p workflow.Phase) string {
 
 // schedule the tasks and refresh the schedule when updated
 func (tm *taskMaster) schedule() (err error) {
+	errs := make([]error, 0)
 	if len(tm.Workflows) == 0 {
 		return fmt.Errorf("no workflows found check path %s", tm.path)
 	}
@@ -263,16 +265,16 @@ func (tm *taskMaster) schedule() (err error) {
 
 			j, err := tm.NewJob(w, path)
 			if err != nil {
-				return err
+				errs = append(errs, err)
 			}
 
 			if _, err = tm.cron.AddJob(cronSchedule, j); err != nil {
-				return fmt.Errorf("invalid rule for %s:%s %s %w", path, w.Task, w.Rule, err)
+				errs = append(errs, fmt.Errorf("invalid rule for %s:%s %s %w", path, w.Task, w.Rule, err))
 			}
 		}
 	}
 	tm.cron.Start()
-	return nil
+	return errors.Join(errs...)
 }
 
 // Process the given task
