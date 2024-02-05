@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	gtools "github.com/jbsmith7741/go-tools"
-	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/apps/taskmasters/flowlord/cache"
 	"github.com/pcelvng/task/bus"
@@ -243,13 +241,13 @@ func (tm *taskMaster) schedule() (err error) {
 	for path, workflow := range tm.Workflows {
 		for _, w := range workflow.Parent() {
 			rules, _ := url.ParseQuery(w.Rule)
+			cronSchedule := rules.Get("cron")
 			if f := rules.Get("files"); f != "" {
-				//todo: add to log checker
 				r := fileRule{
 					SrcPattern:   f,
 					workflowFile: path,
 					Phase:        w,
-					CronCheck:    rules.Get("cron"),
+					CronCheck:    cronSchedule,
 				}
 				r.CountCheck, _ = strconv.Atoi(rules.Get("count"))
 
@@ -258,157 +256,23 @@ func (tm *taskMaster) schedule() (err error) {
 				//todo: Create a cron job for a task that is cron and files
 			}
 
-			if rules.Get("cron") == "" {
+			if cronSchedule == "" {
 				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)
 				continue
 			}
 
-			j := &cronJob{
-				Name:     rules.Get("job"),
-				Workflow: path,
-				Topic:    w.Task,
-				Schedule: rules.Get("cron"),
-				Template: w.Template,
-				producer: tm.producer,
-			}
-			if s := rules.Get("offset"); s != "" {
-				j.Offset, err = time.ParseDuration(s)
-				if err != nil {
-					return fmt.Errorf("invalid duration %s %w", s, err)
-				}
+			j, err := tm.NewJob(w, path)
+			if err != nil {
+				return err
 			}
 
-			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
+			if _, err = tm.cron.AddJob(cronSchedule, j); err != nil {
 				return fmt.Errorf("invalid rule for %s:%s %s %w", path, w.Task, w.Rule, err)
 			}
 		}
 	}
 	tm.cron.Start()
 	return nil
-}
-
-// Batch will create a range of jobs either by date or per line in a reference file
-func (tm *taskMaster) Batch(batch_info string) (err error) {
-	type iOpts struct {
-		FilePath string            `uri:"origin"`
-		Start    string            `uri:"from"`
-		To       string            `uri:"to"`
-		For      time.Duration     `uri:"for"`
-		By       string            `uri:"by"`
-		Task     string            `uri:"task"` // topic to send to
-		Job      string            `uri:"job"`  // job to lookup
-		Meta     map[string]string `uri:"meta"` // url values.
-		// Template string pulled from task cached based on task and job
-	}
-	i := iOpts{}
-
-	if err := uri.Unmarshal(batch_info, &i); err != nil {
-		return err
-	}
-	start := parseTime(i.Start)
-	if start.IsZero() {
-		start = time.Now().Truncate(time.Hour)
-	}
-	end := parseTime(i.To)
-	if end.IsZero() {
-		end = start.Add(i.For)
-	}
-	path, template := tm.Search(i.Task, i.Job)
-	if path == "" {
-		return fmt.Errorf("could not find batch job %v:%v", i.Task, i.Job)
-	}
-	var data []tmpl.GetMap
-	if len(i.Meta) > 0 && i.FilePath != "" {
-		return errors.New("meta and filePath can not both be set")
-	}
-	if len(i.Meta) != 0 {
-		if data, err = createMeta(i.Meta); err != nil {
-			return err
-		}
-	}
-
-	if i.FilePath != "" {
-		reader, err := file.NewReader(i.FilePath, tm.fOpts)
-		if err != nil {
-			return fmt.Errorf("FilePath error %w", err)
-		}
-		scanner := file.NewScanner(reader)
-
-		for scanner.Scan() {
-			row := make(tmpl.GetMap)
-			json.Unmarshal(scanner.Bytes(), &row)
-			data = append(data, row)
-		}
-	}
-	// handle `by` iterator
-	var byIter func(time.Time) time.Time
-	switch i.By {
-	case "hour":
-		byIter = func(t time.Time) time.Time { return t.Add(time.Hour) }
-	case "month":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 1, 0) }
-	default:
-		fallthrough
-	case "day":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
-	}
-
-	var reverseTasks bool
-	if end.Before(start) {
-		reverseTasks = true
-		t := end
-		end = start
-		start = t
-	}
-	// create the batch tasks
-	tasks := make([]task.Task, 0)
-	for t := start; end.Sub(t) >= 0; t = byIter(t) {
-		info := tmpl.Parse(template, t)
-		for _, d := range data {
-			tsk := *task.New(i.Task, tmpl.Meta(info, d))
-			tasks = append(tasks, tsk)
-		}
-		if len(data) == 0 {
-			tsk := *task.New(i.Task, info)
-			tasks = append(tasks, tsk)
-		}
-	}
-	if reverseTasks {
-		tmp := make([]task.Task, len(tasks))
-		for i := 0; i < len(tasks); i++ {
-			tmp[i] = tasks[len(tasks)-i-1]
-		}
-		tasks = tmp
-	}
-	for _, t := range tasks {
-		if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createMeta(data map[string]string) ([]tmpl.GetMap, error) {
-	var result []tmpl.GetMap
-	for k, vals := range data {
-		valLength := len(strings.Split(vals, ","))
-		if result == nil {
-			result = make([]tmpl.GetMap, valLength)
-		}
-
-		if valLength != len(result) {
-			log.Println("inconsistent lengths")
-			return nil, fmt.Errorf("inconsistent lengths in meta %d != %d", valLength, len(result))
-		}
-		for i, v := range strings.Split(vals, ",") {
-			if result[i] == nil {
-				result[i] = make(tmpl.GetMap)
-			}
-			result[i][k] = v
-		}
-	}
-	return result, nil
 }
 
 // Process the given task

@@ -5,16 +5,11 @@ retry = 3
 template = ""
 
 [[phase]]
-task = "date-batch"
-rule = ""
-dependsOn = "batch:date"
+task = "batch-date"
+rule = "?for=-48h&offset=-24h"
 template = "?day={yyyy}-{mm}-{dd}"
 
 [[phase]]
-task = "meta-batch"
-dependsOn = "batch:file"
-template = "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}"
-
-[[phase]]
 task = "batch-president"
+rule = "?meta_file=test/presidents.json"
 template = "?president={meta:name}&start={meta:start}&end={meta:end}"

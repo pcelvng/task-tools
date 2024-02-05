@@ -311,44 +311,50 @@ func TestTaskMaster_Schedule(t *testing.T) {
 }
 
 func TestTaskMaster_Batch(t *testing.T) {
-	today := time.Now().Format("2006-01-02")
-	cache, err := workflow.New(base_test_path+"batch.toml", nil)
-	if err != nil {
-		t.Fatalf("error setting up cache %s", err)
-	}
-	tm := taskMaster{Cache: cache}
-	fn := func(in string) ([]task.Task, error) {
-		producer, _ := nop.NewProducer("")
-		tm.producer = producer
-		err := tm.Batch(in)
-		tasks := make([]task.Task, 0)
-		for _, msg := range producer.Messages {
-			for _, t := range msg {
-				tsk, _ := task.NewFromBytes([]byte(t))
-				tasks = append(tasks, task.Task{Type: tsk.Type, Info: tsk.Info, Meta: tsk.Meta})
-			}
+	today := "2024-01-15"
+	tm := &taskMaster{}
+	fn := func(ph workflow.Phase) ([]task.Task, error) {
+		j, err := tm.NewJob(ph, "batch.toml")
+		bJob, ok := j.(*batchJob)
+		if !ok {
+			return nil, errors.New("expected *batchjob")
 		}
-		return tasks, err
+		if err != nil {
+			return nil, err
+		}
+		return bJob.Batch(trial.TimeDay(today).Add(bJob.Offset))
 	}
-	cases := trial.Cases[string, []task.Task]{
+	cases := trial.Cases[workflow.Phase, []task.Task]{
 		"to_from": {
-			Input: "?task=date-batch&from=2024-01-01&to=2024-01-03&by=day",
+			Input: workflow.Phase{
+				Task:     "batch-date",
+				Rule:     "from=2024-01-01&to=2024-01-03&by=day",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
 			Expected: []task.Task{
-				{Type: "date-batch", Info: "?day=2024-01-01", Meta: ""},
-				{Type: "date-batch", Info: "?day=2024-01-02", Meta: ""},
-				{Type: "date-batch", Info: "?day=2024-01-03", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-01", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-02", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-03", Meta: ""},
 			},
 		},
 		"for -3": {
-			Input: "?task=date-batch&from=2023-12-31&for=-48h",
+			Input: workflow.Phase{
+				Task:     "batch-date",
+				Rule:     "for=-48h",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
 			Expected: []task.Task{
-				{Type: "date-batch", Info: "?day=2023-12-31", Meta: ""},
-				{Type: "date-batch", Info: "?day=2023-12-30", Meta: ""},
-				{Type: "date-batch", Info: "?day=2023-12-29", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-15", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-14", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-13", Meta: ""},
 			},
 		},
 		"metas": {
-			Input: "?task=meta-batch&meta=name:a,b,c|value:1,2,3",
+			Input: workflow.Phase{
+				Task:     "meta-batch",
+				Rule:     "meta=name:a,b,c|value:1,2,3",
+				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+			},
 			Expected: []task.Task{
 				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today},
 				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today},
@@ -356,7 +362,11 @@ func TestTaskMaster_Batch(t *testing.T) {
 			},
 		},
 		"file": {
-			Input: "test/data.json?task=batch-president",
+			Input: workflow.Phase{
+				Task:     "batch-president",
+				Rule:     "meta_file=test/presidents.json",
+				Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
+			},
 			Expected: []task.Task{
 				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797"},
 				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801"},
@@ -365,7 +375,8 @@ func TestTaskMaster_Batch(t *testing.T) {
 			},
 		},
 	}
-	trial.New(fn, cases).SubTest(t)
+	trial.New(fn, cases).Comparer(
+		trial.EqualOpt(trial.IgnoreAllUnexported, trial.IgnoreFields("ID", "Created"))).SubTest(t)
 }
 
 func TestIsReady(t *testing.T) {

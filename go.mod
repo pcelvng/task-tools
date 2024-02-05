@@ -6,13 +6,13 @@ require (
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.3.0
 	github.com/hydronica/toml v0.4.2
-	github.com/hydronica/trial v0.7.0
+	github.com/hydronica/trial v0.7.2
 	github.com/jarcoal/httpmock v1.0.8
 	github.com/jbsmith7741/go-tools v0.4.1
-	github.com/jbsmith7741/uri v0.5.1
+	github.com/jbsmith7741/uri v0.6.0
 	github.com/jmoiron/sqlx v1.3.3
 	github.com/lib/pq v1.10.6
 	github.com/minio/minio-go/v7 v7.0.26
