@@ -137,7 +137,7 @@ func pName(topic, job string) string {
 
 func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 	for _, c := range tm.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
-		job := strings.Trim(c.Task+":"+c.Job(), ":")
+		job := strings.Trim(c.Topic()+":"+c.Job(), ":")
 		if children := tm.getAllChildren(c.Task, workflow, c.Job()); len(children) > 0 {
 			job += " ➞ " + strings.Join(children, " ➞ ")
 		}
@@ -265,7 +265,7 @@ func (tm *taskMaster) schedule() (err error) {
 
 			j, err := tm.NewJob(w, path)
 			if err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("issue with %s %w", w.Task, err))
 			}
 
 			if _, err = tm.cron.AddJob(cronSchedule, j); err != nil {

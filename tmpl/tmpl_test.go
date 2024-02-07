@@ -262,7 +262,7 @@ func TestParseMeta(t *testing.T) {
 				return "", err
 			}
 		} else {
-			meta = GetMap(in.m)
+			meta = TMap[string](in.m)
 		}
 		return Meta(in.template, meta), nil
 	}

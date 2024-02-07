@@ -56,6 +56,7 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 			producer: tm.producer,
 		},
 		alerts: tm.alerts,
+		fOpts:  *tm.fOpts,
 	}
 
 	u := url.URL{}
@@ -81,7 +82,7 @@ type batchJob struct {
 	For      time.Duration       `uri:"for"`
 	By       string              `uri:"by"`
 	Meta     map[string][]string `uri:"meta"`
-	FilePath string              `uri:"meta_file"`
+	FilePath string              `uri:"meta-file"`
 	fOpts    file.Options
 
 	alerts chan task.Task
@@ -127,9 +128,9 @@ func (b *batchJob) Batch(t time.Time) ([]task.Task, error) {
 	}
 
 	if b.FilePath != "" {
-		reader, err := file.NewReader(b.FilePath, &b.fOpts)
+		reader, err := file.NewGlobReader(b.FilePath, &b.fOpts)
 		if err != nil {
-			return nil, fmt.Errorf("FilePath error %w", err)
+			return nil, fmt.Errorf("file %q error %w", b.FilePath, err)
 		}
 		scanner := file.NewScanner(reader)
 

@@ -62,7 +62,6 @@ func main() {
 	go func() {
 		<-sigChan
 		cancel()
-
 	}()
 
 	if err := tm.Run(ctx); err != nil {

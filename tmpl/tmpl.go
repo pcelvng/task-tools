@@ -246,6 +246,11 @@ func Meta(s string, meta Getter) string {
 }
 
 type GetMap map[string]any
+type TMap[T any] map[string]T
+
+func (t TMap[any]) Get(k string) string {
+	return fmt.Sprintf("%v", t[k])
+}
 
 func (m GetMap) Get(k string) string {
 	switch v := m[k].(type) {
@@ -255,8 +260,10 @@ func (m GetMap) Get(k string) string {
 		return strconv.Itoa(v)
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64)
+	case nil:
+		return "null"
 	}
-	return "-invalid"
+	return fmt.Sprintf("i~%T", m[k])
 }
 
 type Getter interface {
