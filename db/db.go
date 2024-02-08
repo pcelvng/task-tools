@@ -21,10 +21,10 @@ type Options struct {
 type SSL struct {
 	// Mode-PG: disable, allow, prefer, *require*, verify-ca, verify-full
 	// Mode-MySQL: DISABLED, PREFERRED, REQUIRED, VERIFY_CA, VERIFY_IDENTITY
-	Mode     string `toml:"sslmode" comment:"require is set if certs found"`
-	Cert     string `toml:"sslcert"`
-	Key      string `toml:"sslkey"`
-	Rootcert string `toml:"sslrootcert"`
+	Mode     string `toml:"mode" comment:"require is set if certs found"`
+	Cert     string `toml:"cert"`
+	Key      string `toml:"key"`
+	Rootcert string `toml:"rootcert"`
 }
 
 // isSet checks that paths to cert files are provided
