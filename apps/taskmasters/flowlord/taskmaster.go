@@ -292,8 +292,8 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		r := meta.Get("retry")
 		i, _ := strconv.Atoi(r)
 		// the task should have a workflow phase
-		if p.Task == "" {
-			return nil
+		if p.IsEmpty() {
+			return fmt.Errorf("phase not found in %q for %v:%v", meta.Get("workflow"), t.Type, t.Job)
 		}
 		if p.Retry > i {
 			delay := time.Second
@@ -321,7 +321,9 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			t.Meta = meta.Encode()
 			if tm.failedTopic != "-" && tm.failedTopic != "" {
 				tm.taskCache.Add(*t)
-				tm.producer.Send(tm.failedTopic, t.JSONBytes())
+				if err := tm.producer.Send(tm.failedTopic, t.JSONBytes()); err != nil {
+					return err
+				}
 			}
 			if tm.slack != nil {
 				tm.alerts <- *t
@@ -364,7 +366,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			}
 
 			tm.taskCache.Add(*child)
-			if err := tm.producer.Send(p.Task, child.JSONBytes()); err != nil {
+			if err := tm.producer.Send(p.Topic(), child.JSONBytes()); err != nil {
 				return err
 			}
 		}

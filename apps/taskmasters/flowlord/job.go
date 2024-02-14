@@ -19,7 +19,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-type cronJob struct {
+type Cronjob struct {
 	Name     string        `uri:"-"`
 	Workflow string        `uri:"-"`
 	Topic    string        `uri:"-"`
@@ -31,7 +31,7 @@ type cronJob struct {
 	producer bus.Producer `uri:"-"`
 }
 
-func (j *cronJob) Run() {
+func (j *Cronjob) Run() {
 	tm := time.Now().Add(j.Offset)
 	info := tmpl.Parse(j.Template, tm)
 	tsk := task.New(j.Topic, info)
@@ -46,8 +46,12 @@ func (j *cronJob) Run() {
 }
 
 func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
+	fOps := file.Options{}
+	if tm.fOpts != nil {
+		fOps = *tm.fOpts
+	}
 	bJob := &batchJob{
-		cronJob: cronJob{
+		Cronjob: Cronjob{
 			Name:     ph.Job(),
 			Workflow: path,
 			Topic:    ph.Topic(),
@@ -56,7 +60,7 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 			producer: tm.producer,
 		},
 		alerts: tm.alerts,
-		fOpts:  *tm.fOpts,
+		fOpts:  fOps,
 	}
 
 	u := url.URL{}
@@ -65,9 +69,9 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 		return nil, err
 	}
 
-	// return cronJob if not batch params
+	// return Cronjob if not batch params
 	if bJob.For == 0 && bJob.FilePath == "" && len(bJob.Meta) == 0 {
-		return &bJob.cronJob, nil
+		return &bJob.Cronjob, nil
 	}
 
 	if bJob.FilePath != "" && len(bJob.Meta) > 0 {
@@ -78,7 +82,7 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 }
 
 type batchJob struct {
-	cronJob
+	Cronjob
 	For      time.Duration       `uri:"for"`
 	By       string              `uri:"by"`
 	Meta     map[string][]string `uri:"meta"`
@@ -166,7 +170,7 @@ func (b *batchJob) Batch(t time.Time) ([]task.Task, error) {
 	tasks := make([]task.Task, 0)
 	for t := start; end.Sub(t) >= 0; t = byIter(t) {
 		info := tmpl.Parse(b.Template, t)
-		for _, d := range data {
+		for _, d := range data { // meta data tasks
 			tsk := *task.New(b.Topic, tmpl.Meta(info, d))
 
 			tsk.Meta = "workflow=" + b.Workflow
@@ -176,8 +180,13 @@ func (b *batchJob) Batch(t time.Time) ([]task.Task, error) {
 			}
 			tasks = append(tasks, tsk)
 		}
-		if len(data) == 0 {
+		if len(data) == 0 { // time only tasks
 			tsk := *task.New(b.Topic, info)
+			tsk.Meta = "workflow=" + b.Workflow
+			if b.Name != "" {
+				tsk.Job = b.Name
+				tsk.Meta += "&job=" + b.Name
+			}
 			tasks = append(tasks, tsk)
 		}
 	}

@@ -1,17 +1,22 @@
-[[Phase]]
+[[phase]]
 task = "worker"
 rule = "cron=0 5 * * *?job=parent_job"
 retry = 3
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
 
-[[Phase]]
+[[phase]]
 task = "worker"
 rule = "job=child1"
 dependsOn="worker:parent_job"
 retry = 3
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
 
-[[Phase]]
+[[phase]]
 task = "worker:child2"
 dependsOn="worker:parent_job"
+template = "?day={yyyy}-{mm}-{dd}"
+
+[[phase]]
+task = "worker:child3"
+dependsOn="worker:child2"
 template = "?day={yyyy}-{mm}-{dd}"

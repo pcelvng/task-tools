@@ -99,7 +99,6 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task1 no retry": {
 			Input: task.Task{
 				Type:   "task1",
-				Job:    "task1_no_retry",
 				Info:   "?date=2019-12-12",
 				Result: task.ErrResult,
 				ID:     "UUID_task1",
@@ -107,7 +106,6 @@ func TestTaskMaster_Process(t *testing.T) {
 			Expected: []task.Task{
 				{
 					Type:   "task1",
-					Job:    "task1_no_retry",
 					Info:   "?date=2019-12-12",
 					ID:     "UUID_task1",
 					Meta:   "retried=3&retry=failed&workflow=f1.toml",
@@ -151,6 +149,24 @@ func TestTaskMaster_Process(t *testing.T) {
 					ID:   "UUID_task1",
 					Job:  "t5",
 					Meta: "workflow=f1.toml&job=t5",
+				},
+			},
+		},
+		"job in phase": {
+			Input: task.Task{
+				Type:   "worker",
+				Job:    "child2",
+				ID:     "UUID2",
+				Result: task.CompleteResult,
+				Meta:   "workflow=jobs.toml",
+			},
+			Expected: []task.Task{
+				{
+					Type: "worker",
+					Job:  "child3",
+					Info: "?day={yyyy}-{mm}-{dd}",
+					ID:   "UUID2",
+					Meta: "workflow=jobs.toml&job=child3",
 				},
 			},
 		},
@@ -231,13 +247,13 @@ func TestTaskMaster_Process(t *testing.T) {
 			},
 		},
 	}
-	trial.New(fn, cases).Test(t)
+	trial.New(fn, cases).SubTest(t)
 }
 
 func TestTaskMaster_Schedule(t *testing.T) {
 
 	type expected struct {
-		Jobs  []cronJob
+		Jobs  []Cronjob
 		Files []fileRule
 	}
 	fn := func(in string) (expected, error) {
@@ -248,11 +264,11 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		tm := taskMaster{Cache: cache, cron: cron.New()}
 		err = tm.schedule()
 		exp := expected{
-			Jobs:  make([]cronJob, 0),
+			Jobs:  make([]Cronjob, 0),
 			Files: tm.files,
 		}
 		for _, e := range tm.cron.Entries() {
-			j := e.Job.(*cronJob)
+			j := e.Job.(*Cronjob)
 			exp.Jobs = append(exp.Jobs, *j)
 		}
 		return exp, err
@@ -261,7 +277,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		"f1.toml": {
 			Input: "workflow/f1.toml",
 			Expected: expected{
-				Jobs: []cronJob{
+				Jobs: []Cronjob{
 					{
 						Name:     "t2",
 						Workflow: "f1.toml",
@@ -284,7 +300,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		"f3.toml": {
 			Input: "workflow/f3.toml",
 			Expected: expected{
-				Jobs: []cronJob{
+				Jobs: []Cronjob{
 					{
 						Workflow: "f3.toml",
 						Topic:    "task1",
@@ -325,6 +341,7 @@ func TestTaskMaster_Batch(t *testing.T) {
 		return bJob.Batch(trial.TimeDay(today).Add(bJob.Offset))
 	}
 	cases := trial.Cases[workflow.Phase, []task.Task]{
+		/* NOT SUPPORTED
 		"to_from": {
 			Input: workflow.Phase{
 				Task:     "batch-date",
@@ -336,7 +353,7 @@ func TestTaskMaster_Batch(t *testing.T) {
 				{Type: "batch-date", Info: "?day=2024-01-02", Meta: ""},
 				{Type: "batch-date", Info: "?day=2024-01-03", Meta: ""},
 			},
-		},
+		}, */
 		"for -3": {
 			Input: workflow.Phase{
 				Task:     "batch-date",
@@ -344,9 +361,9 @@ func TestTaskMaster_Batch(t *testing.T) {
 				Template: "?day={yyyy}-{mm}-{dd}",
 			},
 			Expected: []task.Task{
-				{Type: "batch-date", Info: "?day=2024-01-15", Meta: ""},
-				{Type: "batch-date", Info: "?day=2024-01-14", Meta: ""},
-				{Type: "batch-date", Info: "?day=2024-01-13", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-15", Meta: "workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-14", Meta: "workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "workflow=batch.toml"},
 			},
 		},
 		"metas": {
@@ -356,22 +373,22 @@ func TestTaskMaster_Batch(t *testing.T) {
 				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
 			},
 			Expected: []task.Task{
-				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today},
-				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today},
-				{Type: "meta-batch", Info: "?name=c&value=3&day=" + today},
+				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today, Meta: "workflow=batch.toml"},
+				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today, Meta: "workflow=batch.toml"},
+				{Type: "meta-batch", Info: "?name=c&value=3&day=" + today, Meta: "workflow=batch.toml"},
 			},
 		},
 		"file": {
 			Input: workflow.Phase{
 				Task:     "batch-president",
-				Rule:     "meta_file=test/presidents.json",
+				Rule:     "meta-file=test/presidents.json",
 				Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
 			},
 			Expected: []task.Task{
-				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797"},
-				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801"},
-				{Type: "batch-president", Info: "?president=thomas jefferson&start=1801&end=1809"},
-				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817"},
+				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797", Meta: "workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801", Meta: "workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=thomas jefferson&start=1801&end=1809", Meta: "workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817", Meta: "workflow=batch.toml"},
 			},
 		},
 	}

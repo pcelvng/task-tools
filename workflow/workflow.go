@@ -15,7 +15,7 @@ import (
 )
 
 type Phase struct {
-	Task      string // doubles as the Name of the topic to send data to
+	Task      string // Should use Topic() and Job() for access
 	Rule      string
 	DependsOn string // Task that the previous workflow depends on
 	Retry     int
