@@ -174,7 +174,7 @@ func TestGet(t *testing.T) {
 				{Task: "dup"},
 				{Task: "t2", Rule: "job=j1"},
 				{Task: "t2", Rule: "job=j2"},
-				{Task: "t2", Rule: "job=j3"},
+				{Task: "t2:j3", Rule: ""},
 			},
 		},
 	},
@@ -195,6 +195,10 @@ func TestGet(t *testing.T) {
 			Input:    task.Task{Type: "missing", Meta: "workflow=workflow.toml"},
 			Expected: Phase{},
 		},
+		"task_job": {
+			Input:    task.Task{Type: "t2", Job: "j2", Meta: "workflow=*"},
+			Expected: Phase{Task: "t2", Rule: "job=j2"},
+		},
 		"task2": {
 			Input:    task.Task{Type: "task2", Meta: "workflow=workflow.toml"},
 			Expected: Phase{Task: "task2", DependsOn: "task1"},
@@ -209,7 +213,7 @@ func TestGet(t *testing.T) {
 		},
 		"wildcard search": {
 			Input:    task.Task{Type: "t2", Meta: "workflow=*&job=j3"},
-			Expected: Phase{Task: "t2", Rule: "job=j3"},
+			Expected: Phase{Task: "t2:j3"},
 		},
 		"wildcard with same task in different files": { // picks first match, results will vary
 			Input:    task.Task{Type: "dup", Meta: "workflow=*"},

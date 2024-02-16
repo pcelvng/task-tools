@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/pcelvng/task-tools/apps/taskmasters/batcher/timeframe"
+	"github.com/pcelvng/task-tools/file"
 	"log"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/jbsmith7741/uri"
@@ -20,6 +23,7 @@ type taskMaster struct {
 	initTime time.Time
 	producer bus.Producer
 	consumer bus.Consumer
+	fOpts    file.Options
 	stats
 	done chan struct{}
 }
@@ -31,20 +35,22 @@ type stats struct {
 }
 
 type infoOpts struct {
+	FilePath string            `uri:"origin"`
 	TaskType string            `uri:"task-type" required:"true"`
 	Topic    string            `uri:"topic"`
-	For      duration          `uri:"for"`
+	For      time.Duration     `uri:"for"`
 	Template string            `uri:"fragment" required:"true"`
 	Meta     map[string]string `uri:"meta"`
 	timeframe.TimeFrame
 }
 
-func New(app *bootstrap.TaskMaster) bootstrap.Runner {
+func (o *options) New(app *bootstrap.TaskMaster) bootstrap.Runner {
 	return &taskMaster{
 		initTime: time.Now(),
 		stats:    stats{Requests: make(map[string]int)},
 		producer: app.NewProducer(),
 		consumer: app.NewConsumer(),
+		fOpts:    o.File,
 		done:     make(chan struct{}),
 	}
 }
@@ -98,27 +104,37 @@ func (tm *taskMaster) read(ctx context.Context) {
 			}
 		}
 	}
-	log.Println("done")
 	close(tm.done)
 }
 
 func (tm *taskMaster) generate(info string) error {
 	var iOpts infoOpts
 	if err := uri.Unmarshal(info, &iOpts); err != nil {
-		return fmt.Errorf("uri unmarshal %w", err)
+		return fmt.Errorf("info uri: %w", err)
 	}
 
 	if iOpts.Meta == nil {
 		iOpts.Meta = make(map[string]string)
 	}
 
-	iOpts.Meta["batcher"] = "true"
+	var reader file.Reader
+	if iOpts.FilePath != "" {
+		var err error
+		reader, err = file.NewReader(iOpts.FilePath, &tm.fOpts)
+		if err != nil {
+			return err
+		}
+	}
 
+	iOpts.Meta["batcher"] = "true"
+	if iOpts.TimeFrame.Start.IsZero() {
+		iOpts.TimeFrame.Start = time.Now()
+	}
 	if iOpts.End.IsZero() {
-		if iOpts.For == 0 {
+		if iOpts.For == 0 && iOpts.FilePath == "" {
 			return errors.New("end date required (see for/to)")
 		}
-		iOpts.End = iOpts.Start.Add(iOpts.For.Duration())
+		iOpts.End = iOpts.Start.Add(iOpts.For)
 	}
 	if iOpts.Topic == "" {
 		iOpts.Topic = iOpts.TaskType
@@ -128,15 +144,52 @@ func (tm *taskMaster) generate(info string) error {
 	}
 	tm.Requests[iOpts.Topic]++
 	tm.LastReceived = info
-	for _, t := range iOpts.Generate() {
-		tsk := task.New(iOpts.TaskType, tmpl.Parse(iOpts.Template, t))
-		m := task.NewMeta()
-		for k, v := range iOpts.Meta {
-			m.SetMeta(k, v)
-		}
-		tsk.Meta = m.GetMeta().Encode()
-		if err := tm.producer.Send(iOpts.Topic, tsk.JSONBytes()); err != nil {
-			return err
+	hours := iOpts.Generate()
+	if len(hours) == 0 {
+		hours = []time.Time{time.Now().Truncate(time.Hour)}
+	}
+	for _, t := range hours {
+		if iOpts.FilePath == "" {
+			tsk := task.New(iOpts.TaskType, tmpl.Parse(iOpts.Template, t))
+			m := task.NewMeta()
+			for k, v := range iOpts.Meta {
+				m.SetMeta(k, v)
+			}
+			tsk.Meta = m.GetMeta().Encode()
+			if err := tm.producer.Send(iOpts.Topic, tsk.JSONBytes()); err != nil {
+				return err
+			}
+		} else {
+			scanner := file.NewScanner(reader)
+			for scanner.Scan() {
+				data := make(map[string]any)
+				if err := json.Unmarshal(scanner.Bytes(), &data); err != nil {
+					return err
+				}
+				vals := make(url.Values)
+				for k, v := range data {
+					switch x := v.(type) {
+					case string:
+						vals.Add(k, x)
+					case int:
+						vals.Add(k, strconv.Itoa(x))
+					case float64:
+						vals.Add(k, strconv.FormatFloat(x, 'f', -1, 64))
+					}
+				}
+
+				info := tmpl.Parse(iOpts.Template, t)
+				info = tmpl.Meta(info, vals)
+				tsk := task.New(iOpts.TaskType, info)
+				m := task.NewMeta()
+				for k, v := range iOpts.Meta {
+					m.SetMeta(k, v)
+				}
+				tsk.Meta = m.GetMeta().Encode()
+				if err := tm.producer.Send(iOpts.Topic, tsk.JSONBytes()); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

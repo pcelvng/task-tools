@@ -8,7 +8,7 @@ import (
 )
 
 type TimeFrame struct {
-	Start       time.Time `uri:"from" required:"true" format:"2006-01-02T15"`
+	Start       time.Time `uri:"from" format:"2006-01-02T15"`
 	End         time.Time `uri:"to" format:"2006-01-02T15"`
 	EveryXHours int       `uri:"every-x-hours" default:"1"`
 	Daily       bool      `uri:"daily"`

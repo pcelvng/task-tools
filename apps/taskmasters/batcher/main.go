@@ -3,15 +3,17 @@ package main
 import (
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
+	"github.com/pcelvng/task-tools/file"
 )
 
 const (
 	taskType    = "batcher"
 	description = `batcher creates a set of batch to be passed on to downstream processes
-
+    filepath (origin) - optional reference to json map to be used for meta data. 
 	task-type - the downstream task type (required)
 	from - the start time of the first task to be created (required)
 	daily - run task for each day (every 24 hours)
+	meta - values to be stored as meta data ex -> meta=job:test_job
 	*** pick a duration modifier *** 
 	 to - the end time of the last task to be created
 	 for - the duration that should be run     
@@ -24,8 +26,17 @@ Example:
 `
 )
 
+type options struct {
+	File file.Options `toml:"file"`
+}
+
+func (o *options) Validate() error {
+	return nil
+}
+
 func main() {
-	app := bootstrap.NewTaskMaster(taskType, New, nil).
+	opts := &options{}
+	app := bootstrap.NewTaskMaster(taskType, opts.New, opts).
 		Version(tools.String()).
 		Description(description)
 	app.Initialize()

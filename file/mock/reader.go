@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"errors"
 	"io"
 	"math"
 	"net/url"
@@ -9,7 +10,6 @@ import (
 	"github.com/pcelvng/task-tools/file"
 
 	"github.com/pcelvng/task-tools/file/stat"
-	"github.com/pkg/errors"
 )
 
 var _ file.Reader = (*reader)(nil)

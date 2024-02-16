@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -16,7 +17,6 @@ import (
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/apps/taskmasters/flowlord/cache"
 	"github.com/pcelvng/task/bus"
-	"github.com/pkg/errors"
 	"github.com/robfig/cron/v3"
 
 	"github.com/pcelvng/task-tools/file"
@@ -137,7 +137,7 @@ func pName(topic, job string) string {
 
 func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 	for _, c := range tm.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
-		job := strings.Trim(c.Task+":"+c.Job(), ":")
+		job := strings.Trim(c.Topic()+":"+c.Job(), ":")
 		if children := tm.getAllChildren(c.Task, workflow, c.Job()); len(children) > 0 {
 			job += " ➞ " + strings.Join(children, " ➞ ")
 		}
@@ -180,7 +180,7 @@ func (tm *taskMaster) refreshCache() ([]string, error) {
 
 func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
-		return errors.Wrapf(err, "workflow setup")
+		return fmt.Errorf("workflow setup %w", err)
 	}
 
 	// refresh the workflow if the file(s) have been changed
@@ -198,7 +198,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	}()
 
 	if err := tm.schedule(); err != nil {
-		return errors.Wrapf(err, "cron schedule")
+		return fmt.Errorf("cron schedule %w", err)
 	}
 
 	go tm.readDone(ctx)
@@ -236,19 +236,20 @@ func validatePhase(p workflow.Phase) string {
 
 // schedule the tasks and refresh the schedule when updated
 func (tm *taskMaster) schedule() (err error) {
+	errs := make([]error, 0)
 	if len(tm.Workflows) == 0 {
 		return fmt.Errorf("no workflows found check path %s", tm.path)
 	}
 	for path, workflow := range tm.Workflows {
 		for _, w := range workflow.Parent() {
 			rules, _ := url.ParseQuery(w.Rule)
+			cronSchedule := rules.Get("cron")
 			if f := rules.Get("files"); f != "" {
-				//todo: add to log checker
 				r := fileRule{
 					SrcPattern:   f,
 					workflowFile: path,
 					Phase:        w,
-					CronCheck:    rules.Get("cron"),
+					CronCheck:    cronSchedule,
 				}
 				r.CountCheck, _ = strconv.Atoi(rules.Get("count"))
 
@@ -257,33 +258,23 @@ func (tm *taskMaster) schedule() (err error) {
 				//todo: Create a cron job for a task that is cron and files
 			}
 
-			if rules.Get("cron") == "" {
+			if cronSchedule == "" {
 				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)
 				continue
 			}
 
-			j := &job{
-				Name:     rules.Get("job"),
-				Workflow: path,
-				Topic:    w.Task,
-				Schedule: rules.Get("cron"),
-				Template: w.Template,
-				producer: tm.producer,
-			}
-			if s := rules.Get("offset"); s != "" {
-				j.Offset, err = time.ParseDuration(s)
-				if err != nil {
-					return errors.Wrapf(err, "invalid duration %s", s)
-				}
+			j, err := tm.NewJob(w, path)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("issue with %s %w", w.Task, err))
 			}
 
-			if _, err = tm.cron.AddJob(j.Schedule, j); err != nil {
-				return errors.Wrapf(err, "invalid rule for %s:%s %s", path, w.Task, w.Rule)
+			if _, err = tm.cron.AddJob(cronSchedule, j); err != nil {
+				errs = append(errs, fmt.Errorf("invalid rule for %s:%s %s %w", path, w.Task, w.Rule, err))
 			}
 		}
 	}
 	tm.cron.Start()
-	return nil
+	return errors.Join(errs...)
 }
 
 // Process the given task
@@ -301,8 +292,8 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		r := meta.Get("retry")
 		i, _ := strconv.Atoi(r)
 		// the task should have a workflow phase
-		if p.Task == "" {
-			return nil
+		if p.IsEmpty() {
+			return fmt.Errorf("phase not found in %q for %v:%v", meta.Get("workflow"), t.Type, t.Job)
 		}
 		if p.Retry > i {
 			delay := time.Second
@@ -330,7 +321,9 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			t.Meta = meta.Encode()
 			if tm.failedTopic != "-" && tm.failedTopic != "" {
 				tm.taskCache.Add(*t)
-				tm.producer.Send(tm.failedTopic, t.JSONBytes())
+				if err := tm.producer.Send(tm.failedTopic, t.JSONBytes()); err != nil {
+					return err
+				}
 			}
 			if tm.slack != nil {
 				tm.alerts <- *t
@@ -373,7 +366,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			}
 
 			tm.taskCache.Add(*child)
-			if err := tm.producer.Send(p.Task, child.JSONBytes()); err != nil {
+			if err := tm.producer.Send(p.Topic(), child.JSONBytes()); err != nil {
 				return err
 			}
 		}

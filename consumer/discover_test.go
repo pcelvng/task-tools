@@ -1,12 +1,12 @@
 package consumer
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/hydronica/trial"
 	"github.com/jarcoal/httpmock"
 	"github.com/nsqio/go-nsq"
-	"github.com/pkg/errors"
 )
 
 func TestGetTopics(t *testing.T) {

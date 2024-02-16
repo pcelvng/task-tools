@@ -235,7 +235,7 @@ var regexMeta = regexp.MustCompile(`{meta:(\w+)}`)
 // metadata query params
 // all token should be prefixed with meta
 // {meta:key}
-func Meta(s string, meta url.Values) string {
+func Meta(s string, meta Getter) string {
 	for _, match := range regexMeta.FindAllStringSubmatch(s, -1) {
 		// replace the original match with the meta value from the key
 		v, key := match[0], match[1]
@@ -243,6 +243,31 @@ func Meta(s string, meta url.Values) string {
 	}
 
 	return s
+}
+
+type GetMap map[string]any
+type TMap[T any] map[string]T
+
+func (t TMap[any]) Get(k string) string {
+	return fmt.Sprintf("%v", t[k])
+}
+
+func (m GetMap) Get(k string) string {
+	switch v := m[k].(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case nil:
+		return "null"
+	}
+	return fmt.Sprintf("i~%T", m[k])
+}
+
+type Getter interface {
+	Get(string) string
 }
 
 // PrintDates takes a slice of times and displays the range of times in a more friendly format.

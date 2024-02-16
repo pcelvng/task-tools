@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -12,7 +14,6 @@ import (
 	"github.com/jbsmith7741/uri"
 
 	"github.com/pcelvng/task"
-	"github.com/pkg/errors"
 )
 
 type TaskRequest struct {
@@ -88,7 +89,7 @@ func (opt *httpMaster) handleBatch(w http.ResponseWriter, r *http.Request) {
 
 func parseRequest(r *http.Request, i interface{}) error {
 	// read the http request body
-	body, _ := ioutil.ReadAll(r.Body)
+	body, _ := io.ReadAll(r.Body)
 
 	// there must be some kind of request body sent, or request query params
 	if len(body) == 0 && len(r.URL.Query()) == 0 {
@@ -99,7 +100,7 @@ func parseRequest(r *http.Request, i interface{}) error {
 	if len(body) > 0 {
 		err := json.Unmarshal(body, i)
 		if err != nil {
-			return errors.Wrapf(err, "body unmarshal")
+			return fmt.Errorf("body unmarshal %w", err)
 		}
 	}
 
@@ -221,7 +222,7 @@ func (opt *httpMaster) handleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer res.Body.Close()
-	body, _ := ioutil.ReadAll(res.Body)
+	body, _ := io.ReadAll(res.Body)
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
 }

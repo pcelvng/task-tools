@@ -31,32 +31,38 @@ template = "?hour={yyyy}-{mm}-{dd}T{hh}"
    - if left blank this tasks will only start based on the rule
  - **rule**: rules on about the tasks that are encoded as query params 
    - _cron_: schedule the task based on the cron pattern (see scheduling)
+   - _offset_: offsets the current time passed into the template
    - _files_: used in conjection with a filewatcher to start tasks after a file is written
    - _require_: used in a child task saying to only start task if value is present
    - _retry_delay_: duration to wait before retrying the task
+   - batching to create multiple jobs
+     - _for_: create a number of jobs starting with current time + offset to end of for statement 
+     - _by_: iterator when creating tasks. day (default), hour, month
+     - _meta_: create a task for each item in the array passed in as meta. 
+     - _meta_file_: path to a file (json,csv) use to meta data template, each row will create a task.  
  - **retry**: the number of times a task is retried before being sent to failed_tasks
  - **template**: a URL string that is parsed and put into the task's info string when created
 
 ### Template 
 templating is used to create dynamic tasks based on the time run or previous jobs run. templates are designated with surrounding brackets `{}`
 
-| keyword | definition |
-|-|-|
-| {yyyy} | year |
-| {dd} | day of month (1-31) | 
-| {mm} | month of year (1-12) | 
-| {hh} | hour of day (0-23) | 
-| {ts} | full timestamp 20060102T150405 | 
-| {meta:(\w+)} | use meta data provide in a parent task| 
+| keyword      | definition                                       |
+|--------------|--------------------------------------------------|
+| {yyyy}       | year                                             |
+| {dd}         | day of month (1-31)                              | 
+| {mm}         | month of year (1-12)                             | 
+| {hh}         | hour of day (0-23)                               | 
+| {ts}         | full timestamp 20060102T150405                   | 
+| {meta:(\w+)} | insert meta data provided in parent task or rule | 
 
 The timestamp is derived from the parent task's info string and supports the following params and formats 
 
-| field | format | example | 
-|-|-|-|
-| day | 2006-01-02 | ?day=2020-02-05 | 
-| date | 2006-01-02 | ?date=2010-10-12 | 
-| hour | 2006-01-02T15 | ?hour=2000-01-02T13 | 
-| time | 2006-01-02T15:04:05Z07:00 | ?time=2000-01-02T13:12:15Z | 
+| field | format                    | example                    | 
+|-------|---------------------------|----------------------------|
+| day   | 2006-01-02                | ?day=2020-02-05            | 
+| date  | 2006-01-02                | ?date=2010-10-12           | 
+| hour  | 2006-01-02T15             | ?hour=2000-01-02T13        | 
+| time  | 2006-01-02T15:04:05Z07:00 | ?time=2000-01-02T13:12:15Z | 
 
 ## scheduling 
 
@@ -69,7 +75,7 @@ Example: schedule a task to run every day at 1 AM UTC. If this ran on 2020-01-02
 ```
 [[Phase]]
 task = "topic"
-rule = "cron=0 0 1 * * *&Offset=-6"
+rule = "cron=0 0 1 * * *&Offset=-6h"
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
 ```
 

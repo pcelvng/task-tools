@@ -249,34 +249,50 @@ func TestInfoTime(t *testing.T) {
 }
 
 func TestParseMeta(t *testing.T) {
-	fn := func(v trial.Input) (string, error) {
-		template := v.Slice(0).String()
-		meta, err := url.ParseQuery(v.Slice(1).String())
-		if err != nil {
-			return "", err
-		}
-		return Meta(template, meta), nil
+	type input struct {
+		url      string
+		m        map[string]string
+		template string
 	}
-	cases := trial.Cases[trial.Input, string]{
+	fn := func(in input) (s string, err error) {
+		var meta Getter
+		if in.url != "" {
+			meta, err = url.ParseQuery(in.url)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			meta = TMap[string](in.m)
+		}
+		return Meta(in.template, meta), nil
+	}
+	cases := trial.Cases[input, string]{
 		"{file}": {
-			Input:    trial.Args("{meta:file}", "file=s3://path/to/file.txt"),
+			Input:    input{template: "{meta:file}", url: "file=s3://path/to/file.txt"},
 			Expected: "s3://path/to/file.txt",
 		},
 		"missing key": { // populate with a blank if missing the key
-			Input:    trial.Args("{meta:file}", ""),
+			Input:    input{template: "{meta:file}"},
 			Expected: "",
 		},
 		"no change": {
-			Input:    trial.Args("the quick brown fox jumped over the lazy dog", ""),
+			Input:    input{template: "the quick brown fox jumped over the lazy dog"},
 			Expected: "the quick brown fox jumped over the lazy dog",
 		},
 		"invalid match": {
-			Input:    trial.Args("{meta:da ta}", ""),
+			Input:    input{template: "{meta:da ta}"},
 			Expected: "{meta:da ta}",
 		},
 		"complex": {
-			Input:    trial.Args("{meta:file}?hour={meta:time}&key=value&pass={meta:pass}", "file=gs://bucket/test.gz&time=2019-03-04&pass=r$kE43"),
+			Input:    input{template: "{meta:file}?hour={meta:time}&key=value&pass={meta:pass}", url: "file=gs://bucket/test.gz&time=2019-03-04&pass=r$kE43"},
 			Expected: "gs://bucket/test.gz?hour=2019-03-04&key=value&pass=r$kE43",
+		},
+		"map": {
+			Input: input{
+				template: "{meta:name}&{meta:v}",
+				m:        map[string]string{"name": "john", "v": "123"},
+			},
+			Expected: "john&123",
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

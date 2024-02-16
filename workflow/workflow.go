@@ -12,11 +12,10 @@ import (
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pkg/errors"
 )
 
 type Phase struct {
-	Task      string // doubles as the Name of the topic to send data to
+	Task      string // Should use Topic() and Job() for access
 	Rule      string
 	DependsOn string // Task that the previous workflow depends on
 	Retry     int
@@ -74,7 +73,7 @@ func New(path string, opts *file.Options) (*Cache, error) {
 	}
 	sts, err := file.Stat(path, opts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "problem with path %s", path)
+		return nil, fmt.Errorf("problem with path %s %w", path, err)
 	}
 	c.isDir = sts.IsDir
 	_, err = c.Refresh()
@@ -100,12 +99,11 @@ func (c *Cache) Search(task, job string) (path, template string) {
 	}
 	for key, w := range c.Workflows {
 		for _, p := range w.Phases {
-			if p.Task == task {
+			if p.Topic() == task {
 				if job == "" {
 					return key, p.Template
 				}
-				v, _ := url.ParseQuery(p.Rule)
-				if v.Get("job") == job {
+				if job == p.Job() {
 					return key, p.Template
 				}
 			}
@@ -123,17 +121,19 @@ func (c *Cache) Get(t task.Task) Phase {
 
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
-	job := values.Get("job")
+	job := t.Job
+	if job == "" {
+		job = values.Get("job")
+	}
 
 	if key == "*" { // search all workflows for first match
 		for _, phases := range c.Workflows {
 			for _, w := range phases.Phases {
-				if w.Task == t.Type {
+				if w.Topic() == t.Type {
 					if job == "" {
 						return w
 					}
-					v, _ := url.ParseQuery(w.Rule)
-					if v.Get("job") == job {
+					if w.Job() == job {
 						return w
 					}
 				}
@@ -143,12 +143,11 @@ func (c *Cache) Get(t task.Task) Phase {
 	}
 
 	for _, w := range c.Workflows[key].Phases {
-		if w.Task == t.Type {
+		if w.Topic() == t.Type {
 			if job == "" {
 				return w
 			}
-			v, _ := url.ParseQuery(w.Rule)
-			if v.Get("job") == job {
+			if w.Job() == job {
 				return w
 			}
 		}
@@ -274,7 +273,7 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 	data := c.Workflows[f]
 	// permission issues
 	if err != nil {
-		return "", errors.Wrapf(err, "stats %s", path)
+		return "", fmt.Errorf("stats %s %w", path, err)
 	}
 	// We can't process a directory here
 	if sts.IsDir {
@@ -288,17 +287,17 @@ func (c *Cache) loadFile(path string, opts *file.Options) (f string, err error) 
 
 	r, err := file.NewReader(path, opts)
 	if err != nil {
-		return "", errors.Wrapf(err, "new reader %s", path)
+		return "", fmt.Errorf("new reader %s %w", path, err)
 	}
 	b, err := io.ReadAll(r)
 	if err != nil {
-		return "", errors.Wrapf(err, "read-all: %s", path)
+		return "", fmt.Errorf("read-all: %s %w", path, err)
 	}
 	d := Workflow{
 		Checksum: data.Checksum,
 	}
 	if _, err := toml.Decode(string(b), &d); err != nil {
-		return "", errors.Wrapf(err, "decode: %s", string(b))
+		return "", fmt.Errorf("decode: %s %w", string(b), err)
 	}
 
 	c.Workflows[f] = d

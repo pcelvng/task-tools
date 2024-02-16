@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -18,7 +19,6 @@ import (
 	"github.com/hydronica/trial"
 	"github.com/jarcoal/httpmock"
 	"github.com/pcelvng/task/bus"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
