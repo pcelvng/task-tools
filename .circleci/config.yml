@@ -15,7 +15,6 @@ jobs:
             go test -cover -v -coverprofile=coverage.out -covermode=atomic ./... >> tests.out || true 
             cd apps && go test -cover -v -coverprofile=coverage.out -covermode=atomic ./... >> tests.out || true 
             cd .. 
-            cat tests.out
             go tool cover -func=coverage.out | tail -1
             go tool cover -html=coverage.out -o=cover.html
             go-junit-report -set-exit-code -in tests.out -out junit/test-results.xml
@@ -25,3 +24,5 @@ jobs:
           path: cover.html
       - store_artifacts:
           path: ~/task-tools/junit
+      - store_artifacts:
+          path: tests.out

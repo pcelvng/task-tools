@@ -32,8 +32,8 @@ func TestMain(m *testing.M) {
 	// test client
 	testClient, err = newTestClient()
 	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+		log.Printf("SKIP: error with test minio client %v %v", testClient, err)
+		return
 	}
 
 	// make test bucket
