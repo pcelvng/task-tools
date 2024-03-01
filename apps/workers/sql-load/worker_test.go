@@ -476,6 +476,18 @@ func TestCreateInserts(t *testing.T) {
 				"insert into test(string_array)\n  VALUES \n('{\"a\",\"b\",\"c\"}');\n",
 			},
 		},
+		"array_quote_string": {
+			Input: input{
+				table:   "test",
+				columns: []string{"string_array"},
+				rows: []Row{
+					{
+						[]any{"a'b", "cd", "ef"},
+					},
+				},
+			},
+			Expected: []string{"insert into test(string_array)\n  VALUES \n('{\"a''b\",\"cd\",\"ef\"}');\n"},
+		},
 		"array_int": {
 			Input: input{
 				table:   "test",

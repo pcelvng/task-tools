@@ -162,6 +162,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 		tableCreated := false
 		// load data into temp table
+		row := 1
 		for s := range queryChan {
 			if !tableCreated {
 				s = createTempTable + s
@@ -169,8 +170,11 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			}
 			if _, err := w.sqlDB.ExecContext(ctx, s); err != nil {
 				cancelFn()
-				return task.Failed(err)
+				log.Println("row=", row)
+				log.Println(s)
+				return task.Failf("insert error on row %d %v", row, err)
 			}
+			row++
 		}
 
 		if w.ds.err != nil {
@@ -662,7 +666,7 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 					switch v := x[i].(type) {
 					case string:
 						f.WriteString(`"`)
-						f.WriteString(v)
+						f.WriteString(strings.Replace(v, "'", "''", -1))
 						f.WriteString(`"`)
 					case int:
 						f.WriteString(strconv.Itoa(v))
