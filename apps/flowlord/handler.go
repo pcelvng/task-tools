@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/jbsmith7741/uri"
 	"io"
 	"log"
 	"net/http"
@@ -284,7 +286,8 @@ type request struct {
 	At   string // single time
 	By   string // month | day | hour // default by day,
 
-	Meta     map[string]string
+	Meta     map[string][]string
+	Metafile string `json:"meta-file"`
 	Template string // should pull from workflow if possible
 	Execute  bool
 }
@@ -374,26 +377,53 @@ func (tm *taskMaster) backload(req request) response {
 		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
 	}
 
-	// handle meta data
-	if req.Meta == nil {
-		req.Meta = make(map[string]string)
-	}
-	if w, template := tm.Cache.Search(req.Task, req.Job); w != "" {
-		msg = append(msg, "phase found in "+w)
-		req.Meta["workflow"] = w
-		req.Template = template
+	workflowPath, phase := tm.Cache.Search(req.Task, req.Job)
+	if workflowPath != "" {
+		msg = append(msg, "phase found in "+workflowPath)
+		req.Template = phase.Template
 	}
 	if req.Template == "" {
 		return response{Status: "no template found for " + req.Task, code: http.StatusBadRequest}
 	}
-
-	if req.Job != "" {
-		req.Meta["job"] = req.Job
+	rules := struct {
+		MetaFile string              `uri:"meta-file"`
+		Meta     map[string][]string `uri:"meta"`
+	}{}
+	// todo: replace with uri.UnmarshalQuery when released
+	if err := uri.Unmarshal((&url.URL{RawQuery: phase.Rule}).String(), &rules); err != nil {
+		return response{Status: "invalid rule found for " + req.Task, code: http.StatusBadRequest}
 	}
 
-	vals := toUrlValues(req.Meta)
-	req.Template = tmpl.Meta(req.Template, vals)
-	meta, _ := url.QueryUnescape(vals.Encode())
+	// If no meta/meta-file is provided use phase defaults
+	if req.Meta == nil {
+		req.Meta = rules.Meta
+	}
+	if req.Metafile == "" {
+		req.Metafile = rules.MetaFile
+	}
+	if len(req.Meta) > 0 && req.Metafile != "" {
+		return response{Status: "Unsupported: meta and meta-file both used, use one only", code: http.StatusBadRequest}
+	}
+
+	data, err := createMeta(req.Meta)
+	if err != nil {
+		return response{Status: err.Error(), code: http.StatusBadRequest}
+	}
+	if req.Metafile != "" {
+		reader, err := file.NewGlobReader(req.Metafile, tm.fOpts)
+		if err != nil {
+			return response{Status: fmt.Sprintf("file %q error %v", req.Metafile, err), code: http.StatusInternalServerError}
+		}
+		scanner := file.NewScanner(reader)
+
+		for scanner.Scan() {
+			row := make(tmpl.GetMap)
+			if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
+				return response{Status: fmt.Sprintf("issue processing file %v %v", req.Metafile, err), code: http.StatusInternalServerError}
+			}
+			data = append(data, row)
+		}
+	}
 
 	tasks := make([]task.Task, 0)
 
@@ -407,9 +437,26 @@ func (tm *taskMaster) backload(req request) response {
 	}
 
 	for t := start; end.Sub(t) >= 0; t = byIter(t) {
-		tsk := *task.New(req.Task, tmpl.Parse(req.Template, t))
-		tsk.Meta = meta
-		tasks = append(tasks, tsk)
+		info := tmpl.Parse(req.Template, t)
+		for _, d := range data { // meta data tasks
+			tsk := *task.New(req.Task, tmpl.Meta(info, d))
+
+			tsk.Meta = "workflow=" + workflowPath
+			if job := phase.Job(); job != "" {
+				tsk.Job = job
+				tsk.Meta += "&job=" + job
+			}
+			tasks = append(tasks, tsk)
+		}
+		if len(data) == 0 { // time only tasks
+			tsk := *task.New(req.Task, info)
+			tsk.Meta = "workflow=" + workflowPath
+			if job := phase.Job(); job != "" {
+				tsk.Job = job
+				tsk.Meta += "&job=" + job
+			}
+			tasks = append(tasks, tsk)
+		}
 	}
 
 	if reverseTasks {
@@ -421,14 +468,6 @@ func (tm *taskMaster) backload(req request) response {
 	}
 
 	return response{Tasks: tasks, Count: len(tasks), Status: strings.Join(msg, ", ")}
-}
-
-func toUrlValues(m map[string]string) url.Values {
-	u := make(url.Values)
-	for k, v := range m {
-		u[k] = []string{v}
-	}
-	return u
 }
 
 func parseTime(s string) time.Time {

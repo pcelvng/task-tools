@@ -14,7 +14,6 @@ import (
 
 	"github.com/hydronica/toml"
 	"github.com/jbsmith7741/uri"
-	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 
 	tools "github.com/pcelvng/task-tools"
@@ -181,7 +180,7 @@ func loadOptions(f flags) (*options, error) {
 	if f.taskTemplate != defTemplate {
 		opt.taskTemplate = f.taskTemplate
 	} else if opt.cache != nil {
-		w, _ := opt.cache.Search(opt.taskType, f.job)
+		w, ph := opt.cache.Search(opt.taskType, f.job)
 		if w == "" {
 			return nil, fmt.Errorf("no workflow found for %s:%s", opt.taskType, f.job)
 		}
@@ -192,10 +191,7 @@ func loadOptions(f flags) (*options, error) {
 		if f.job != "" {
 			opt.meta += "&job=" + f.job
 		}
-		tsk := task.Task{Type: opt.taskType, Meta: opt.meta}
-		if p := opt.cache.Get(tsk); !p.IsEmpty() {
-			opt.taskTemplate = p.Template
-		}
+		opt.taskTemplate = ph.Template
 	}
 
 	if err := opt.setOnHours(f.onHours); err != nil {
