@@ -90,7 +90,7 @@ func (tm *taskMaster) Run(ctx context.Context) error {
 ### **Flowlord**
 an all-purpose TaskMaster that should be used with workflow files to schedule when tasks should run and the task hierarchy. It can retry failed jobs, alert when tasks fail and has an API that can be used to backload/schedule jobs and give a recap of recent jobs run. 
 
-See Additional [docs](apps/taskmasters/flowlord/README.md).  
+See Additional [docs](apps/flowlord/README.md).  
 
 
 ### Workers

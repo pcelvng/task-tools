@@ -1,7 +1,7 @@
 # flowlord taskmaster
 flowlord schedules and coordinates task dependency across workflows. Flowlord reads tasks from the done topic, failed tasks can be configured to retry a set number of times before being sent to slack and/or a retry_failed topic. Successful tasks will start children tasks.
 
-![](./flowlord.drawio.svg)
+![](flowlord.drawio.svg)
 
 ## workflow 
 A workflow consists of one or more phases as a way to define of how a set of task is to be scheduled and run and the dependencies between them. 
