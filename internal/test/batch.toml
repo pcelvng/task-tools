@@ -1,15 +1,14 @@
 [[phase]]
-task = "batch:date"
-rule = "cron=0 5 * * *?batch="
-retry = 3
-template = ""
-
-[[phase]]
 task = "batch-date"
 rule = "?for=-48h&offset=-24h"
 template = "?day={yyyy}-{mm}-{dd}"
 
 [[phase]]
 task = "batch-president"
-rule = "?meta_file=test/presidents.json"
+rule = "meta_file=test/presidents.json"
 template = "?president={meta:name}&start={meta:start}&end={meta:end}"
+
+[[phase]]
+task = "b-meta"
+rule = "meta=key:a,b|val:1,2"
+template = "?key={meta:key}&val={meta:val}"

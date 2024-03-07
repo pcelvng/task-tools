@@ -348,8 +348,8 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			info := tmpl.Meta(p.Template, meta)
 
 			taskTime := tmpl.InfoTime(t.Info)
-			if v := meta.Get("cron"); v != "" && taskTime.IsZero() {
-				taskTime, _ = time.Parse(time.RFC3339, v)
+			if cronTime := meta.Get("cron"); cronTime != "" && taskTime.IsZero() {
+				taskTime, _ = time.Parse(DateHour, cronTime)
 			}
 			if !taskTime.IsZero() {
 				info = tmpl.Parse(info, taskTime)

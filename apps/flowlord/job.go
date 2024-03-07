@@ -19,6 +19,8 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+const DateHour = "2006-01-02T15"
+
 type Cronjob struct {
 	Name     string        `uri:"-"`
 	Workflow string        `uri:"-"`
@@ -36,7 +38,7 @@ func (j *Cronjob) Run() {
 	info := tmpl.Parse(j.Template, tm)
 	tsk := task.New(j.Topic, info)
 	tsk.Meta = "workflow=" + j.Workflow
-	tsk.Meta += "&cron=" + tm.Format(time.DateTime)
+	tsk.Meta += "&cron=" + tm.Format(DateHour)
 	if j.Name != "" {
 		tsk.Job = j.Name
 		tsk.Meta += "&job=" + j.Name

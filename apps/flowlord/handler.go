@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/jbsmith7741/uri"
 	"io"
@@ -286,7 +287,7 @@ type request struct {
 	At   string // single time
 	By   string // month | day | hour // default by day,
 
-	Meta     map[string][]string
+	Meta     Meta
 	Metafile string `json:"meta-file"`
 	Template string // should pull from workflow if possible
 	Execute  bool
@@ -395,12 +396,11 @@ func (tm *taskMaster) backload(req request) response {
 	}
 
 	// If no meta/meta-file is provided use phase defaults
-	if req.Meta == nil {
+	if req.Meta == nil && req.Metafile == "" {
 		req.Meta = rules.Meta
-	}
-	if req.Metafile == "" {
 		req.Metafile = rules.MetaFile
 	}
+
 	if len(req.Meta) > 0 && req.Metafile != "" {
 		return response{Status: "Unsupported: meta and meta-file both used, use one only", code: http.StatusBadRequest}
 	}
@@ -438,23 +438,27 @@ func (tm *taskMaster) backload(req request) response {
 
 	for t := start; end.Sub(t) >= 0; t = byIter(t) {
 		info := tmpl.Parse(req.Template, t)
+		tskMeta := make(url.Values)
+		tskMeta.Set("cron", t.Format(DateHour))
+		if workflowPath != "" {
+			tskMeta.Set("workflow", workflowPath)
+		}
+		if job := req.Job; job != "" {
+			tskMeta.Set("job", job)
+		}
+
 		for _, d := range data { // meta data tasks
 			tsk := *task.New(req.Task, tmpl.Meta(info, d))
-
-			tsk.Meta = "workflow=" + workflowPath
-			if job := phase.Job(); job != "" {
-				tsk.Job = job
-				tsk.Meta += "&job=" + job
+			for k, _ := range d {
+				tskMeta.Set(k, d.Get(k))
 			}
+			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
 			tasks = append(tasks, tsk)
 		}
 		if len(data) == 0 { // time only tasks
+
 			tsk := *task.New(req.Task, info)
-			tsk.Meta = "workflow=" + workflowPath
-			if job := phase.Job(); job != "" {
-				tsk.Job = job
-				tsk.Meta += "&job=" + job
-			}
+			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
 			tasks = append(tasks, tsk)
 		}
 	}
@@ -481,4 +485,23 @@ func parseTime(s string) time.Time {
 	}
 	t, _ = time.Parse(time.RFC3339, s)
 	return t
+}
+
+type Meta map[string][]string
+
+// UnmarshalJSON with the format of map[string]string and map[string][]string
+func (m Meta) UnmarshalJSON(d []byte) error {
+	if m == nil {
+		return errors.New("assignment to nil map")
+	}
+	v := make(map[string]string)
+	if err := json.Unmarshal(d, &v); err == nil {
+		for k, v := range v {
+			m[k] = []string{v}
+		}
+		return nil
+	}
+
+	m2 := (map[string][]string)(m)
+	return json.Unmarshal(d, &m2)
 }
