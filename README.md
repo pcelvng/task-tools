@@ -97,9 +97,9 @@ See Additional [docs](apps/flowlord/README.md).
 - **bq-load**: BigQuery Loader
 - **sql-load**: Postgres/MySQL Optimized Idempotent loader
 - **sql-readx**: Postgres/MySQL reader with ability to execute admin query
-  - perfect for creating schedule partitions or other schedule admin tasks
+  - perfect for scheduling admin tasks like partition creation
 - **db-check**: Monitoring tools to verify data is being populated as expect in DB
-- **transform**: generic json modification worker that works uses gojq
+- **transform**: generic json modification worker that uses gojq
 
 
 ## Utilities 

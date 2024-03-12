@@ -3,6 +3,10 @@ flowlord schedules and coordinates task dependency across workflows. Flowlord re
 
 ![](flowlord.drawio.svg)
 
+
+[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](https://github.com/pcelvng/task-tools/wiki/Flowlord-API)
+
+
 ## workflow 
 A workflow consists of one or more phases as a way to define of how a set of task is to be scheduled and run and the dependencies between them. 
 
@@ -64,7 +68,8 @@ The timestamp is derived from the parent task's info string and supports the fol
 | hour  | 2006-01-02T15             | ?hour=2000-01-02T13        | 
 | time  | 2006-01-02T15:04:05Z07:00 | ?time=2000-01-02T13:12:15Z | 
 
-## scheduling 
+## rule
+defition on how the phase's task/job is to be created 
 
 ### cron 
 schedule a task based on a cron expression. 
@@ -101,3 +106,12 @@ template = "{meta:file}"
 dependsOn = "parent:job"
 ```
 The example task 'child:job' will only start if the parent job has file data in it's meta field. 
+
+### batch 
+batching is a way to create multiple tasks when the phase is run. This can be done with a date range or through different meta data. 
+
+  * for: a duration for the job to be run from. Ex: -60h 
+  * by: time iterator Ex: hour, day, month 
+  * meta: comma separated data associate with a key. Each item will generate a new task Ex: meta=key:a,b,c|key2=1,2,3 
+  * meta_file: a line deliminated data file. each row (line) will generate a new task. 
+
