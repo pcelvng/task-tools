@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
 	router.Get("/workflow/*", tm.workflowFiles)
+	router.Get("/workflow", tm.workflowFiles)
 	router.Get("/notify", func(w http.ResponseWriter, r *http.Request) {
 		sts := stats{
 			AppName: "flowlord",
@@ -236,13 +238,20 @@ func (tm *taskMaster) recapHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
-	f := chi.URLParam(r, "*")
+	fName := chi.URLParam(r, "*")
 
-	if strings.Contains(f, "../") {
+	if strings.Contains(fName, "../") {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	pth := tm.path + "/" + f
+	var pth string
+	// support directory and single file for workflow path lookup.
+	if _, f := path.Split(tm.path); f == "" {
+		pth = tm.path + "/" + fName
+	} else {
+		// for single file show the file regardless of the file param
+		pth = tm.path
+	}
 
 	sts, err := file.Stat(pth, tm.fOpts)
 	if err != nil {
@@ -265,7 +274,7 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
-	ext := strings.TrimLeft(filepath.Ext(f), ".")
+	ext := strings.TrimLeft(filepath.Ext(fName), ".")
 	switch ext {
 	case "toml":
 		w.Header().Set("Content-Type", "application/toml")
