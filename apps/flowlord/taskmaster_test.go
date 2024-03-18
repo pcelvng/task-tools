@@ -16,7 +16,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-const base_test_path string = "../../../internal/test/"
+const base_test_path string = "../../internal/test/"
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
@@ -213,11 +213,11 @@ func TestTaskMaster_Process(t *testing.T) {
 		"cron timestamp": {
 			Input: task.Task{
 				Type:   "task1",
-				Meta:   "workflow=f1.toml&cron=2020-01-01T08:17:23Z",
+				Meta:   "workflow=f1.toml&cron=2020-01-01T08",
 				Result: task.CompleteResult,
 			},
 			Expected: []task.Task{
-				{Type: "task2", Info: "?time=2020-01-01", Meta: "workflow=f1.toml&cron=2020-01-01T08:17:23Z"},
+				{Type: "task2", Info: "?time=2020-01-01", Meta: "workflow=f1.toml&cron=2020-01-01T08"},
 			},
 		},
 		// start a child worker with the job data in the rule
@@ -226,7 +226,7 @@ func TestTaskMaster_Process(t *testing.T) {
 				Type:   "worker",
 				Job:    "parent_job",
 				ID:     "parent_ID",
-				Meta:   "workflow=jobs.toml&cron=2020-01-01T08:17:23Z",
+				Meta:   "workflow=jobs.toml&cron=2020-01-01T08",
 				Result: "complete",
 			},
 			Expected: []task.Task{
@@ -234,14 +234,14 @@ func TestTaskMaster_Process(t *testing.T) {
 					Type: "worker",
 					Job:  "child1",
 					ID:   "parent_ID",
-					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z&job=child1",
+					Meta: "workflow=jobs.toml&cron=2020-01-01T08&job=child1",
 					Info: "?date=2020-01-01T08",
 				},
 				{
 					Type: "worker",
 					Job:  "child2",
 					ID:   "parent_ID",
-					Meta: "workflow=jobs.toml&cron=2020-01-01T08:17:23Z&job=child2",
+					Meta: "workflow=jobs.toml&cron=2020-01-01T08&job=child2",
 					Info: "?day=2020-01-01",
 				},
 			},

@@ -13,9 +13,9 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = backloader crontask files retry filewatcher sort2file deduper batcher http recap filecopy logger stats json2csv flowlord csv2json sql-load sql-readx bq-load transform db-check
+APPS = filewatcher sort2file deduper recap filecopy logger json2csv csv2json sql-load sql-readx bq-load transform db-check
 
-all: $(APPS) 
+all: $(APPS) flowlord
 
 $(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
@@ -23,7 +23,9 @@ $(BLDDIR)/%: clean
 	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./*/$* ; \
 	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./*/$*
 
-$(APPS): %: $(BLDDIR)/%
+flowlord:
+	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o build/linux/flowlord ./apps/flowlord/ ; \
+	go build ${GOFLAGS} -o build/flowlord ./apps/flowlord
 
 clean:
 	rm -rf $(BLDDIR)
@@ -41,7 +43,7 @@ docker: $(APPS)
 test:
 	go test -cover ./...
 
-.PHONY: install clean docker all
+.PHONY: install clean docker all flowlord
 .PHONY: $(APPS)
 
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"log"
 	"math/rand"
 	"net/url"
@@ -15,7 +16,6 @@ import (
 
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/apps/taskmasters/flowlord/cache"
 	"github.com/pcelvng/task/bus"
 	"github.com/robfig/cron/v3"
 
@@ -348,8 +348,8 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			info := tmpl.Meta(p.Template, meta)
 
 			taskTime := tmpl.InfoTime(t.Info)
-			if v := meta.Get("cron"); v != "" && taskTime.IsZero() {
-				taskTime, _ = time.Parse(time.RFC3339, v)
+			if cronTime := meta.Get("cron"); cronTime != "" && taskTime.IsZero() {
+				taskTime, _ = time.Parse(DateHour, cronTime)
 			}
 			if !taskTime.IsZero() {
 				info = tmpl.Parse(info, taskTime)

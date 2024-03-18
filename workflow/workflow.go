@@ -93,23 +93,23 @@ func (r Workflow) Parent() (p []Phase) {
 
 // Search the all workflows within the cache anc return the first
 // matching phase with the specific task and job (optional)
-func (c *Cache) Search(task, job string) (path, template string) {
+func (c *Cache) Search(task, job string) (path string, ph Phase) {
 	if c == nil {
-		return "", ""
+		return "", Phase{}
 	}
 	for key, w := range c.Workflows {
 		for _, p := range w.Phases {
 			if p.Topic() == task {
 				if job == "" {
-					return key, p.Template
+					return key, p
 				}
 				if job == p.Job() {
-					return key, p.Template
+					return key, p
 				}
 			}
 		}
 	}
-	return "", ""
+	return "", Phase{}
 }
 
 // Get the Phase associated with the task
