@@ -47,7 +47,7 @@ func TestBackloader(t *testing.T) {
 			},
 			Expected: response{
 				Tasks: []task.Task{
-					{Type: "sql", Meta: "cron=" + toHour + "&job=load", Info: "./file.txt?ts=" + today},
+					{Type: "sql", Job: "load", Meta: "cron=" + toHour + "&job=load", Info: "./file.txt?ts=" + today},
 				},
 				Count: 1,
 			},

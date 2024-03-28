@@ -452,13 +452,18 @@ func (tm *taskMaster) backload(req request) response {
 		if workflowPath != "" {
 			tskMeta.Set("workflow", workflowPath)
 		}
-		if job := req.Job; job != "" {
+		job := req.Job
+		if job != "" {
 			tskMeta.Set("job", job)
 		}
 
 		for _, d := range data { // meta data tasks
-			tsk := *task.New(req.Task, tmpl.Meta(info, d))
-			for k, _ := range d {
+			i, keys := tmpl.Meta(info, d)
+			tsk := *task.New(req.Task, i)
+			tsk.Job = job
+
+			// add matching keys as meta data
+			for _, k := range keys {
 				tskMeta.Set(k, d.Get(k))
 			}
 			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
@@ -467,6 +472,7 @@ func (tm *taskMaster) backload(req request) response {
 		if len(data) == 0 { // time only tasks
 
 			tsk := *task.New(req.Task, info)
+			tsk.Job = job
 			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
 			tasks = append(tasks, tsk)
 		}

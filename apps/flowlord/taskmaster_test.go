@@ -328,6 +328,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 
 func TestTaskMaster_Batch(t *testing.T) {
 	today := "2024-01-15"
+	toHour := "2024-01-15T00"
 	tm := &taskMaster{}
 	fn := func(ph workflow.Phase) ([]task.Task, error) {
 		j, err := tm.NewJob(ph, "batch.toml")
@@ -361,9 +362,9 @@ func TestTaskMaster_Batch(t *testing.T) {
 				Template: "?day={yyyy}-{mm}-{dd}",
 			},
 			Expected: []task.Task{
-				{Type: "batch-date", Info: "?day=2024-01-15", Meta: "workflow=batch.toml"},
-				{Type: "batch-date", Info: "?day=2024-01-14", Meta: "workflow=batch.toml"},
-				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-15", Meta: "cron=2024-01-15T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-14", Meta: "cron=2024-01-14T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "cron=2024-01-13T00&workflow=batch.toml"},
 			},
 		},
 		"metas": {
@@ -373,9 +374,9 @@ func TestTaskMaster_Batch(t *testing.T) {
 				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
 			},
 			Expected: []task.Task{
-				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today, Meta: "workflow=batch.toml"},
-				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today, Meta: "workflow=batch.toml"},
-				{Type: "meta-batch", Info: "?name=c&value=3&day=" + today, Meta: "workflow=batch.toml"},
+				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today, Meta: "cron=" + toHour + "&name=a&value=1&workflow=batch.toml"},
+				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today, Meta: "cron=" + toHour + "&name=b&value=2&workflow=batch.toml"},
+				{Type: "meta-batch", Info: "?name=c&value=3&day=" + today, Meta: "cron=" + toHour + "&name=c&value=3&workflow=batch.toml"},
 			},
 		},
 		"file": {
@@ -385,10 +386,10 @@ func TestTaskMaster_Batch(t *testing.T) {
 				Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
 			},
 			Expected: []task.Task{
-				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797", Meta: "workflow=batch.toml"},
-				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801", Meta: "workflow=batch.toml"},
-				{Type: "batch-president", Info: "?president=thomas jefferson&start=1801&end=1809", Meta: "workflow=batch.toml"},
-				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817", Meta: "workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797", Meta: "cron=" + toHour + "&end=1797&name=george washington&start=1789&workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801", Meta: "cron=" + toHour + "&end=1801&name=john adams&start=1797&workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=thomas jefferson&start=1801&end=1809", Meta: "cron=" + toHour + "&end=1809&name=thomas jefferson&start=1801&workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817", Meta: "cron=" + toHour + "&end=1817&name=james madison&start=1809&workflow=batch.toml"},
 			},
 		},
 	}

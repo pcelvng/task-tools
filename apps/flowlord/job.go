@@ -172,23 +172,29 @@ func (b *batchJob) Batch(t time.Time) ([]task.Task, error) {
 	tasks := make([]task.Task, 0)
 	for t := start; end.Sub(t) >= 0; t = byIter(t) {
 		info := tmpl.Parse(b.Template, t)
+		tskMeta := make(url.Values)
+		tskMeta.Set("workflow", b.Workflow)
+		tskMeta.Set("cron", t.Format(DateHour))
+		job := b.Name
+		if job != "" {
+			tskMeta.Set("job", job)
+		}
 		for _, d := range data { // meta data tasks
-			tsk := *task.New(b.Topic, tmpl.Meta(info, d))
+			i, keys := tmpl.Meta(info, d)
+			tsk := *task.New(b.Topic, i)
+			tsk.Job = job
 
-			tsk.Meta = "workflow=" + b.Workflow
-			if b.Name != "" {
-				tsk.Job = b.Name
-				tsk.Meta += "&job=" + b.Name
+			// add matching keys as meta data
+			for _, k := range keys {
+				tskMeta.Set(k, d.Get(k))
 			}
+			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
 			tasks = append(tasks, tsk)
 		}
 		if len(data) == 0 { // time only tasks
 			tsk := *task.New(b.Topic, info)
-			tsk.Meta = "workflow=" + b.Workflow
-			if b.Name != "" {
-				tsk.Job = b.Name
-				tsk.Meta += "&job=" + b.Name
-			}
+			tsk.Job = job
+			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
 			tasks = append(tasks, tsk)
 		}
 	}

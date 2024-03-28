@@ -345,7 +345,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if !isReady(p.Rule, t.Meta) {
 				continue
 			}
-			info := tmpl.Meta(p.Template, meta)
+			info, _ := tmpl.Meta(p.Template, meta)
 
 			taskTime := tmpl.InfoTime(t.Info)
 			if cronTime := meta.Get("cron"); cronTime != "" && taskTime.IsZero() {

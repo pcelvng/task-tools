@@ -179,7 +179,7 @@ func (tm *taskMaster) generate(info string) error {
 				}
 
 				info := tmpl.Parse(iOpts.Template, t)
-				info = tmpl.Meta(info, vals)
+				info, _ = tmpl.Meta(info, vals)
 				tsk := task.New(iOpts.TaskType, info)
 				m := task.NewMeta()
 				for k, v := range iOpts.Meta {
