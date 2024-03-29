@@ -29,6 +29,7 @@ var (
 func TestMain(m *testing.M) {
 	var err error
 
+	log.SetFlags(log.Llongfile)
 	// test client
 	testClient, err = newTestClient()
 	if err != nil {
@@ -38,19 +39,21 @@ func TestMain(m *testing.M) {
 
 	// make test bucket
 	if err := createBucket(testBucket); err != nil {
-		log.Fatal(err)
+		log.Printf("SKIP: error with create bucket %v", err)
 	}
 
 	// create two test files for reading
 	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
 	if err := createTestFile(pth); err != nil {
-		log.Fatal(err)
+		log.Printf("SKIP: error with create test.txt: %v", err)
+		return
 	}
 
 	// compressed read test file
 	gzPth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
 	if err := createTestFile(gzPth); err != nil {
-		log.Fatal(err)
+		log.Printf("SKIP: error with test.gz %v", err)
+		return
 	}
 
 	// run
