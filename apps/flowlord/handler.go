@@ -2,10 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/jbsmith7741/uri"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -31,6 +35,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
 	router.Get("/workflow/*", tm.workflowFiles)
+	router.Get("/workflow", tm.workflowFiles)
 	router.Get("/notify", func(w http.ResponseWriter, r *http.Request) {
 		sts := stats{
 			AppName: "flowlord",
@@ -233,13 +238,20 @@ func (tm *taskMaster) recapHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
-	f := chi.URLParam(r, "*")
+	fName := chi.URLParam(r, "*")
 
-	if strings.Contains(f, "../") {
+	if strings.Contains(fName, "../") {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	pth := tm.path + "/" + f
+	var pth string
+	// support directory and single file for workflow path lookup.
+	if _, f := path.Split(tm.path); f == "" {
+		pth = tm.path + "/" + fName
+	} else {
+		// for single file show the file regardless of the file param
+		pth = tm.path
+	}
 
 	sts, err := file.Stat(pth, tm.fOpts)
 	if err != nil {
@@ -262,7 +274,7 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
-	ext := strings.TrimLeft(filepath.Ext(f), ".")
+	ext := strings.TrimLeft(filepath.Ext(fName), ".")
 	switch ext {
 	case "toml":
 		w.Header().Set("Content-Type", "application/toml")
@@ -284,7 +296,8 @@ type request struct {
 	At   string // single time
 	By   string // month | day | hour // default by day,
 
-	Meta     map[string]string
+	Meta     Meta
+	Metafile string `json:"meta-file"`
 	Template string // should pull from workflow if possible
 	Execute  bool
 }
@@ -374,26 +387,52 @@ func (tm *taskMaster) backload(req request) response {
 		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
 	}
 
-	// handle meta data
-	if req.Meta == nil {
-		req.Meta = make(map[string]string)
-	}
-	if w, template := tm.Cache.Search(req.Task, req.Job); w != "" {
-		msg = append(msg, "phase found in "+w)
-		req.Meta["workflow"] = w
-		req.Template = template
+	workflowPath, phase := tm.Cache.Search(req.Task, req.Job)
+	if workflowPath != "" {
+		msg = append(msg, "phase found in "+workflowPath)
+		req.Template = phase.Template
 	}
 	if req.Template == "" {
 		return response{Status: "no template found for " + req.Task, code: http.StatusBadRequest}
 	}
-
-	if req.Job != "" {
-		req.Meta["job"] = req.Job
+	rules := struct {
+		MetaFile string              `uri:"meta-file"`
+		Meta     map[string][]string `uri:"meta"`
+	}{}
+	// todo: replace with uri.UnmarshalQuery when released
+	if err := uri.Unmarshal((&url.URL{RawQuery: phase.Rule}).String(), &rules); err != nil {
+		return response{Status: "invalid rule found for " + req.Task, code: http.StatusBadRequest}
 	}
 
-	vals := toUrlValues(req.Meta)
-	req.Template = tmpl.Meta(req.Template, vals)
-	meta, _ := url.QueryUnescape(vals.Encode())
+	// If no meta/meta-file is provided use phase defaults
+	if req.Meta == nil && req.Metafile == "" {
+		req.Meta = rules.Meta
+		req.Metafile = rules.MetaFile
+	}
+
+	if len(req.Meta) > 0 && req.Metafile != "" {
+		return response{Status: "Unsupported: meta and meta-file both used, use one only", code: http.StatusBadRequest}
+	}
+
+	data, err := createMeta(req.Meta)
+	if err != nil {
+		return response{Status: err.Error(), code: http.StatusBadRequest}
+	}
+	if req.Metafile != "" {
+		reader, err := file.NewGlobReader(req.Metafile, tm.fOpts)
+		if err != nil {
+			return response{Status: fmt.Sprintf("file %q error %v", req.Metafile, err), code: http.StatusInternalServerError}
+		}
+		scanner := file.NewScanner(reader)
+
+		for scanner.Scan() {
+			row := make(tmpl.GetMap)
+			if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
+				return response{Status: fmt.Sprintf("issue processing file %v %v", req.Metafile, err), code: http.StatusInternalServerError}
+			}
+			data = append(data, row)
+		}
+	}
 
 	tasks := make([]task.Task, 0)
 
@@ -407,9 +446,36 @@ func (tm *taskMaster) backload(req request) response {
 	}
 
 	for t := start; end.Sub(t) >= 0; t = byIter(t) {
-		tsk := *task.New(req.Task, tmpl.Parse(req.Template, t))
-		tsk.Meta = meta
-		tasks = append(tasks, tsk)
+		info := tmpl.Parse(req.Template, t)
+		tskMeta := make(url.Values)
+		tskMeta.Set("cron", t.Format(DateHour))
+		if workflowPath != "" {
+			tskMeta.Set("workflow", workflowPath)
+		}
+		job := req.Job
+		if job != "" {
+			tskMeta.Set("job", job)
+		}
+
+		for _, d := range data { // meta data tasks
+			i, keys := tmpl.Meta(info, d)
+			tsk := *task.New(req.Task, i)
+			tsk.Job = job
+
+			// add matching keys as meta data
+			for _, k := range keys {
+				tskMeta.Set(k, d.Get(k))
+			}
+			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
+			tasks = append(tasks, tsk)
+		}
+		if len(data) == 0 { // time only tasks
+
+			tsk := *task.New(req.Task, info)
+			tsk.Job = job
+			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
+			tasks = append(tasks, tsk)
+		}
 	}
 
 	if reverseTasks {
@@ -423,14 +489,6 @@ func (tm *taskMaster) backload(req request) response {
 	return response{Tasks: tasks, Count: len(tasks), Status: strings.Join(msg, ", ")}
 }
 
-func toUrlValues(m map[string]string) url.Values {
-	u := make(url.Values)
-	for k, v := range m {
-		u[k] = []string{v}
-	}
-	return u
-}
-
 func parseTime(s string) time.Time {
 	t, err := time.Parse("2006-01-02", s)
 	if err == nil {
@@ -442,4 +500,23 @@ func parseTime(s string) time.Time {
 	}
 	t, _ = time.Parse(time.RFC3339, s)
 	return t
+}
+
+type Meta map[string][]string
+
+// UnmarshalJSON with the format of map[string]string and map[string][]string
+func (m Meta) UnmarshalJSON(d []byte) error {
+	if m == nil {
+		return errors.New("assignment to nil map")
+	}
+	v := make(map[string]string)
+	if err := json.Unmarshal(d, &v); err == nil {
+		for k, v := range v {
+			m[k] = []string{v}
+		}
+		return nil
+	}
+
+	m2 := (map[string][]string)(m)
+	return json.Unmarshal(d, &m2)
 }

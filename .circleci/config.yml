@@ -3,7 +3,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: cimg/go:1.21
+      - image: cimg/go:1.22
     working_directory: ~/task-tools
     steps:
       - checkout

@@ -231,18 +231,18 @@ func InfoTime(info string) time.Time {
 
 var regexMeta = regexp.MustCompile(`{meta:(\w+)}`)
 
-// Meta will parse a template string according to the provided
-// metadata query params
-// all token should be prefixed with meta
-// {meta:key}
-func Meta(s string, meta Getter) string {
-	for _, match := range regexMeta.FindAllStringSubmatch(s, -1) {
+// Meta populates a template string with the data provided in the Getter map
+// it replaces values of `{meta:key}` with the value in the map[key]
+// and returns a list of all matching keys in the template
+func Meta(tmpl string, meta Getter) (s string, keys []string) {
+	for _, match := range regexMeta.FindAllStringSubmatch(tmpl, -1) {
 		// replace the original match with the meta value from the key
 		v, key := match[0], match[1]
-		s = strings.Replace(s, v, meta.Get(key), -1)
+		keys = append(keys, key)
+		tmpl = strings.Replace(tmpl, v, meta.Get(key), -1)
 	}
 
-	return s
+	return tmpl, keys
 }
 
 type GetMap map[string]any

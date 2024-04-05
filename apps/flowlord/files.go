@@ -110,7 +110,7 @@ func (tm *taskMaster) matchFile(sts stat.Stats) error {
 
 		// populate the info string
 		info := tmpl.Parse(f.Template, t)
-		info = tmpl.Meta(info, meta)
+		info, _ = tmpl.Meta(info, meta)
 
 		tsk := task.New(f.Topic(), info)
 		tsk.Meta, _ = url.QueryUnescape(meta.Encode())

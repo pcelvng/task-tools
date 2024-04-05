@@ -254,45 +254,50 @@ func TestParseMeta(t *testing.T) {
 		m        map[string]string
 		template string
 	}
-	fn := func(in input) (s string, err error) {
+	type expect struct {
+		Out  string
+		Keys []string
+	}
+	fn := func(in input) (exp expect, err error) {
 		var meta Getter
 		if in.url != "" {
 			meta, err = url.ParseQuery(in.url)
 			if err != nil {
-				return "", err
+				return expect{}, err
 			}
 		} else {
 			meta = TMap[string](in.m)
 		}
-		return Meta(in.template, meta), nil
+		s, keys := Meta(in.template, meta)
+		return expect{Out: s, Keys: keys}, nil
 	}
-	cases := trial.Cases[input, string]{
+	cases := trial.Cases[input, expect]{
 		"{file}": {
 			Input:    input{template: "{meta:file}", url: "file=s3://path/to/file.txt"},
-			Expected: "s3://path/to/file.txt",
+			Expected: expect{Out: "s3://path/to/file.txt", Keys: []string{"file"}},
 		},
 		"missing key": { // populate with a blank if missing the key
 			Input:    input{template: "{meta:file}"},
-			Expected: "",
+			Expected: expect{Keys: []string{"file"}},
 		},
 		"no change": {
 			Input:    input{template: "the quick brown fox jumped over the lazy dog"},
-			Expected: "the quick brown fox jumped over the lazy dog",
+			Expected: expect{Out: "the quick brown fox jumped over the lazy dog"},
 		},
 		"invalid match": {
 			Input:    input{template: "{meta:da ta}"},
-			Expected: "{meta:da ta}",
+			Expected: expect{Out: "{meta:da ta}"},
 		},
 		"complex": {
 			Input:    input{template: "{meta:file}?hour={meta:time}&key=value&pass={meta:pass}", url: "file=gs://bucket/test.gz&time=2019-03-04&pass=r$kE43"},
-			Expected: "gs://bucket/test.gz?hour=2019-03-04&key=value&pass=r$kE43",
+			Expected: expect{Out: "gs://bucket/test.gz?hour=2019-03-04&key=value&pass=r$kE43", Keys: []string{"file", "time", "pass"}},
 		},
 		"map": {
 			Input: input{
 				template: "{meta:name}&{meta:v}",
 				m:        map[string]string{"name": "john", "v": "123"},
 			},
-			Expected: "john&123",
+			Expected: expect{Out: "john&123", Keys: []string{"name", "v"}},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
