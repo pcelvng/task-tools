@@ -17,6 +17,8 @@ APPS = filewatcher sort2file deduper recap filecopy logger json2csv csv2json sql
 
 all: $(APPS) flowlord
 
+$(APPS): %: $(BLDDIR)/%
+
 $(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
 	cd apps; \
@@ -35,7 +37,7 @@ install: $(APPS)
 	for APP in $^ ; do install -m 755 ${BLDDIR}/$$APP ${DESTDIR}${BINDIR}/$$APP${EXT} ; done
 	rm -rf build
 
-docker: $(APPS)
+docker: all
 	docker build -t hydronica/task-tools:${version} .
 	docker push hydronica/task-tools:${version}
 
