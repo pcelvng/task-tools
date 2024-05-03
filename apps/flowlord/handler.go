@@ -303,7 +303,9 @@ type request struct {
 }
 
 func (tm *taskMaster) Backloader(w http.ResponseWriter, r *http.Request) {
-	req := request{}
+	req := request{
+		Meta: make(Meta), 
+	}
 	b, _ := io.ReadAll(r.Body)
 	if err := json.Unmarshal(b, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
