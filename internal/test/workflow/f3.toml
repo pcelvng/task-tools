@@ -17,7 +17,7 @@ template = "{meta:file}"
 
 [[phase]]
 task = "batch-president"
-rule = "meta_file=test/presidents.json"
+rule = "meta-file=test/presidents.json"
 template = "?president={meta:name}&start={meta:start}&end={meta:end}"
 
 [[phase]]
