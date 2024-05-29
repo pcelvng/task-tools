@@ -2,10 +2,11 @@ package main
 
 import (
 	"errors"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
@@ -26,6 +27,7 @@ func TestBackloader(t *testing.T) {
 		Cache: cache,
 	}
 	fn := func(req request) (response, error) {
+
 		resp := tm.backload(req)
 
 		if resp.code >= 400 {
@@ -187,6 +189,24 @@ func TestBackloader(t *testing.T) {
 						Type: "mfile",
 						Info: "?president=james madison&start=1809&end=1817",
 						Meta: "cron=" + toHour + "&end=1817&name=james madison&start=1809",
+					},
+				},
+				Count: 4,
+			},
+		},
+		"meta-default": {
+			Input: request{
+				Task: "batch-president",
+			},
+			Expected: response{
+				Tasks: []task.Task{
+					{
+						Type: "batch-president", Info: "?president=george washington&start=1789&end=1797",
+						Meta: "cron=" + toHour + "&end=1797&name=george washington&start=1789&workflow=f3.toml"},
+					{
+						Type: "batch-president",
+						Info: "?president=james madison&start=1809&end=1817",
+						Meta: "cron=" + toHour + "&end=1817&name=james madison&start=1809&workflow=f3.toml",
 					},
 				},
 				Count: 4,

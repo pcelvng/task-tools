@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jbsmith7741/uri"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jbsmith7741/uri"
 
 	"github.com/pcelvng/task-tools/slack"
 
@@ -303,7 +304,9 @@ type request struct {
 }
 
 func (tm *taskMaster) Backloader(w http.ResponseWriter, r *http.Request) {
-	req := request{}
+	req := request{
+		Meta: make(Meta),
+	}
 	b, _ := io.ReadAll(r.Body)
 	if err := json.Unmarshal(b, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -393,19 +396,24 @@ func (tm *taskMaster) backload(req request) response {
 		req.Template = phase.Template
 	}
 	if req.Template == "" {
-		return response{Status: "no template found for " + req.Task, code: http.StatusBadRequest}
+		name := req.Task
+		if req.Job != "" {
+			name = req.Task + ":" + req.Job
+		}
+		return response{Status: "no template found for " + name, code: http.StatusBadRequest}
 	}
 	rules := struct {
 		MetaFile string              `uri:"meta-file"`
 		Meta     map[string][]string `uri:"meta"`
 	}{}
+
 	// todo: replace with uri.UnmarshalQuery when released
 	if err := uri.Unmarshal((&url.URL{RawQuery: phase.Rule}).String(), &rules); err != nil {
 		return response{Status: "invalid rule found for " + req.Task, code: http.StatusBadRequest}
 	}
 
 	// If no meta/meta-file is provided use phase defaults
-	if req.Meta == nil && req.Metafile == "" {
+	if len(req.Meta) == 0 && req.Metafile == "" {
 		req.Meta = rules.Meta
 		req.Metafile = rules.MetaFile
 	}
