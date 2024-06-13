@@ -83,7 +83,8 @@ func (s *Slack) Notify(message string, level int) error {
 			if resp.Body != nil {
 				b, _ = io.ReadAll(resp.Body)
 			}
-			log.Printf("slack: %d %q", resp.StatusCode, string(b))
+			
+			return fmt.Errorf("slack: %d %q", resp.StatusCode, string(b))
 		}
 	}
 
@@ -156,7 +157,7 @@ type Accessory struct {
 // on an overflow Option you cannot have more than 5 items
 type Option struct {
 	*Text `json:"text,omitempty"` // type on this text must always be "plain_text"
-	Value string                  `json:"value"`
+	Value string `json:"value"`
 }
 
 func (s *Slack) NewMessage(msg string) *Message {
