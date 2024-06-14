@@ -4,6 +4,9 @@ jobs:
   build:
     docker:
       - image: cimg/go:1.22
+    services: 
+      - name: minio/minio
+        command: ["server", "/data"]
     working_directory: ~/task-tools
     steps:
       - checkout
