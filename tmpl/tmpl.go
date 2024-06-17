@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pcelvng/task"
 )
+
+const DateHour = "2006-01-02T15"
 
 var (
 	regYear             = regexp.MustCompile(`{(Y|y){4}}`)
@@ -192,7 +195,20 @@ var (
 	timestampRegex = regexp.MustCompile(`time(?:stamp)?[=:](\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`)
 )
 
-// InfoTime will attempting to pull a timestamp from a info string
+// TaskTime will get the task process time by
+// 1. use the metadata `cron` timestamp
+// 2. look for specific values in the info query params
+// 3. look at the file path to pull the timestamp
+func TaskTime(t task.Task) time.Time {
+	q, _ := url.ParseQuery(t.Meta)
+	if t, err := time.Parse(q.Get("cron"), DateHour); err == nil {
+		return t
+	}
+
+	return InfoTime(t.Info)
+}
+
+// InfoTime will attempting to pull a timestamp from the info string
 // through the query params and file path and name
 // Order of priority and supported formats
 // ?day=2006-01-02
