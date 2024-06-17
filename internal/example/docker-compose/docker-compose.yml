@@ -1,0 +1,106 @@
+flowlord:
+  networks:
+    - nsqnet
+  image: "hydronica/task-tools:v0.26.0"
+  container_name: flowlord
+  restart: unless-stopped
+  ports:
+    - "8080:8080"
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50k"
+      max-file: "10"
+
+sql-load:
+  networks:
+    - nsqnet
+  image: "hydronica/task-tools:v0.26.0"
+  container_name: sql-load
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50k"
+      max-file: "10"
+
+  sql-readx:
+    networks:
+      - nsqnet
+    image: "hydronica/task-tools:v0.26.0"
+    container_name: sql-readx
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50k"
+        max-file: "10"
+
+logger:
+  networks:
+    - nsqnet
+  image: "hydronica/task-tools:v0.26.0"
+  container_name: logger
+  restart: unless-stopped
+  volumes:
+    - /task-files:/opt/var
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50k"
+      max-file: "10"
+
+nsqlookupd:
+  networks:
+    - nsqnet
+  image: nsqio/nsq
+  container_name: nsqlookupd
+  restart: unless-stopped
+  command: /nsqlookupd
+  ports:
+    - "4160:4160"
+    - "4161:4161"
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10k"
+      max-file: "10"
+
+nsqd:
+  networks:
+    - nsqnet
+  image: nsqio/nsq
+  container_name: nsqd
+  restart: unless-stopped
+  command: /nsqd  -broadcast-address=$HOST_IP_ADDRESS --lookupd-tcp-address=nsqlookupd:4160
+  depends_on:
+    - nsqlookupd
+  ports:
+    - "4150:4150"
+    - "4151:4151"
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10k"
+      max-file: "10"
+
+nsqadmin:
+  networks:
+    - nsqnet
+  image: nsqio/nsq
+  container_name: nsqadmin
+  restart: unless-stopped
+  command: /nsqadmin --lookupd-http-address=nsqlookupd:4161
+  depends_on:
+    - nsqlookupd
+  ports:
+    - "4171:4171"
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10k"
+      max-file: "10"
+
+networks:
+  nsqnet:
+    name: nsq_network_default

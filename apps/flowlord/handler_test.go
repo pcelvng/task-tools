@@ -113,6 +113,22 @@ func TestBackloader(t *testing.T) {
 				Count: 12,
 			},
 		},
+		"weekly": {
+			Input: request{
+				Task:     "week",
+				Template: "?date={YYYY}-{MM}-{DD}",
+				From:     "2020-01-01",
+				To:       "2020-02-01",
+				By:       "week",
+			},
+			Expected: response{
+				Tasks: []task.Task{
+					{Type: "week", Info: "?date=2020-01-01", Meta: "cron=2020-01-01T00"},
+					{Type: "week", Info: "?date=2020-01-29", Meta: "cron=2020-01-29T00"},
+				},
+				Count: 5,
+			},
+		},
 		"meta_template": {
 			Input: request{
 				Task:     "meta",

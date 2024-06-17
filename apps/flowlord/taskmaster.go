@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"log"
 	"math/rand"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/pcelvng/task"
@@ -347,13 +348,13 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			}
 			info, _ := tmpl.Meta(p.Template, meta)
 
-			taskTime := tmpl.InfoTime(t.Info)
+			taskTime := tmpl.TaskTime(*t)
 			if cronTime := meta.Get("cron"); cronTime != "" && taskTime.IsZero() {
 				taskTime, _ = time.Parse(DateHour, cronTime)
 			}
-			if !taskTime.IsZero() {
-				info = tmpl.Parse(info, taskTime)
-			}
+
+			info = tmpl.Parse(info, taskTime)
+
 			child := task.NewWithID(p.Topic(), info, t.ID)
 			child.Job = p.Job()
 
@@ -491,7 +492,7 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 					m[key] = v
 				}
 				v.count++
-				v.times = append(v.times, tmpl.InfoTime(tsk.Info))
+				v.times = append(v.times, tmpl.TaskTime(tsk))
 			}
 
 			var s string
