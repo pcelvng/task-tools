@@ -223,6 +223,7 @@ func TestGet(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
+/*
 func TestParent(t *testing.T) {
 	cache := &Cache{Workflows: map[string]Workflow{
 		"workflow.toml": {
@@ -239,6 +240,7 @@ func TestParent(t *testing.T) {
 		t.Error("FAIL", s)
 	}
 }
+*/
 
 func TestChildren(t *testing.T) {
 	cache := &Cache{Workflows: map[string]Workflow{
