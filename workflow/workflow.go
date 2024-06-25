@@ -11,6 +11,7 @@ import (
 	"github.com/hydronica/toml"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/file"
 )
 
@@ -80,6 +81,7 @@ func New(path string, opts *file.Options) (*Cache, error) {
 	return c, err
 }
 
+/*
 // Parent phase for the specified workflow file.
 // A parent phase is one that doesn't depend on any other tasks
 func (r Workflow) Parent() (p []Phase) {
@@ -89,7 +91,7 @@ func (r Workflow) Parent() (p []Phase) {
 		}
 	}
 	return p
-}
+} */
 
 // Search the all workflows within the cache anc return the first
 // matching phase with the specific task and job (optional)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"log"
 	"math/rand"
 	"net/url"
@@ -19,6 +18,7 @@ import (
 	"github.com/pcelvng/task/bus"
 	"github.com/robfig/cron/v3"
 
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -100,7 +100,7 @@ func New(opts *options) *taskMaster {
 	opts.Slack.file = opts.File
 	tm := &taskMaster{
 		initTime:     time.Now(),
-		taskCache:    cache.NewMemory(120),
+		taskCache:    cache.NewMemory(opts.TaskTTL),
 		path:         opts.Workflow,
 		doneTopic:    opts.DoneTopic,
 		failedTopic:  opts.FailedTopic,
@@ -241,7 +241,7 @@ func (tm *taskMaster) schedule() (err error) {
 		return fmt.Errorf("no workflows found check path %s", tm.path)
 	}
 	for path, workflow := range tm.Workflows {
-		for _, w := range workflow.Parent() {
+		for _, w := range workflow.Phases {
 			rules, _ := url.ParseQuery(w.Rule)
 			cronSchedule := rules.Get("cron")
 			if f := rules.Get("files"); f != "" {
