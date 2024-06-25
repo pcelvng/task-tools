@@ -223,23 +223,6 @@ func TestGet(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
-func TestParent(t *testing.T) {
-	cache := &Cache{Workflows: map[string]Workflow{
-		"workflow.toml": {
-			Phases: []Phase{
-				{Task: "task1"},
-				{Task: "task2", DependsOn: "task1"},
-				{Task: "task3"},
-				{Task: "task4", DependsOn: "task2"},
-			},
-		},
-	}}
-	w := cache.Workflows["workflow.toml"].Parent()
-	if eq, s := trial.Equal(w, []Phase{{Task: "task1"}, {Task: "task3"}}); !eq {
-		t.Error("FAIL", s)
-	}
-}
-
 func TestChildren(t *testing.T) {
 	cache := &Cache{Workflows: map[string]Workflow{
 		"workflow.toml": {

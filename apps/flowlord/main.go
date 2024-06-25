@@ -34,6 +34,7 @@ Field | Field name   | Allowed values  | Allowed special characters
 type options struct {
 	Workflow    string        `toml:"workflow" comment:"path to workflow file or directory"`
 	Refresh     time.Duration `toml:"refresh" comment:"the workflow changes refresh duration value default is 15 min"`
+	TaskTTL     time.Duration `toml:"task-ttl" comment:"time that tasks are expected to have completed in. This values tells the cache how long to keep track of items and alerts if items haven't completed when the cache is cleared"`
 	DoneTopic   string        `toml:"done_topic" comment:"default is done"`
 	FileTopic   string        `toml:"file_topic" comment:"file topic for file watching"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
@@ -47,6 +48,7 @@ func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	opts := &options{
 		Refresh:     time.Minute * 15,
+		TaskTTL:     4 * time.Hour,
 		DoneTopic:   "done",
 		FailedTopic: "retry-failed",
 		File:        file.NewOptions(),

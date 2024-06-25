@@ -16,18 +16,21 @@ type Cache interface {
 	// todo: listener for cache expiry?
 }
 
-func NewMemory(ttl_minutes int) *Memory {
+func NewMemory(ttl time.Duration) *Memory {
+	if ttl < time.Hour {
+		ttl = time.Hour
+	}
 	return &Memory{
-		ttl_Minute: ttl_minutes,
-		cache:      make(map[string]TaskJob),
+		ttl:   ttl,
+		cache: make(map[string]TaskJob),
 	}
 
 }
 
 type Memory struct {
-	ttl_Minute int // time-to-live in minutes?
-	cache      map[string]TaskJob
-	mu         sync.RWMutex
+	ttl   time.Duration
+	cache map[string]TaskJob
+	mu    sync.RWMutex
 }
 
 // todo: name to describe info about completed tasks that are within the cache
@@ -51,12 +54,11 @@ type Stat struct {
 func (c *Memory) Recycle() Stat {
 	tasks := make([]task.Task, 0)
 	t := time.Now()
-	ttl := time.Duration(c.ttl_Minute) * time.Minute
 	total := len(c.cache)
 	c.mu.Lock()
 	for k, v := range c.cache {
 		// remove expired items
-		if t.Sub(v.LastUpdate) > ttl {
+		if t.Sub(v.LastUpdate) > c.ttl {
 			if !v.Completed {
 				tasks = append(tasks, v.Events[len(v.Events)-1])
 			}

@@ -11,9 +11,10 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/workflow"
 	"github.com/pcelvng/task/bus/nop"
 	"github.com/robfig/cron/v3"
+
+	"github.com/pcelvng/task-tools/workflow"
 )
 
 const base_test_path string = "../../internal/test/"
@@ -323,7 +324,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		},
 	}
 
-	trial.New(fn, cases).EqualFn(trial.EqualOpt(trial.IgnoreAllUnexported)).Test(t)
+	trial.New(fn, cases).Comparer(trial.EqualOpt(trial.IgnoreAllUnexported)).SubTest(t)
 }
 
 func TestTaskMaster_Batch(t *testing.T) {
