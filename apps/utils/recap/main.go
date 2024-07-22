@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -61,7 +62,7 @@ func doneTopic(scanner *bufio.Scanner) []string {
 			topic += ":" + j
 		}
 		if *path {
-			topic += "\t" + rootPath(tsk.Info, tmpl.InfoTime(tsk.Info))
+			topic += "\t" + rootPath(tsk.Info, tmpl.TaskTime(tsk))
 		}
 		if v, found := data[topic]; !found {
 			data[topic] = stats

@@ -7,6 +7,7 @@ import (
 
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/tmpl"
 )
 
@@ -100,7 +101,7 @@ func (s *DurationStats) String() string {
 }
 
 func (stats *Stats) Add(tsk task.Task) {
-	tm := tmpl.InfoTime(tsk.Info)
+	tm := tmpl.TaskTime(tsk)
 	if tsk.Result == task.ErrResult {
 		stats.ErrorCount++
 		stats.ErrorTimes = append(stats.ErrorTimes, tm)

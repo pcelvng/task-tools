@@ -381,6 +381,8 @@ func (tm *taskMaster) backload(req request) response {
 	switch req.By {
 	case "hour":
 		byIter = func(t time.Time) time.Time { return t.Add(time.Hour) }
+	case "week":
+		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 7) }
 	case "month":
 		byIter = func(t time.Time) time.Time { return t.AddDate(0, 1, 0) }
 	default:
