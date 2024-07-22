@@ -116,7 +116,7 @@ func TestAdd(t *testing.T) {
 func TestRecycle(t *testing.T) {
 	now := time.Now()
 	cache := Memory{
-		ttl_Minute: 60, // 1 hour
+		ttl: time.Hour,
 		cache: map[string]TaskJob{
 			"keep": {
 				Completed:  false,
