@@ -39,5 +39,37 @@ Example tasks:
 
 ## Technical: 
 
+### JSON and ARRAY postgres types
+When loading json or jsonb column types you can load the following examples
+- `["1","2","3"]`
+- `{"column_name":{"field":"value"}}`
+
+When loading ARRAY postgres types, if the value is a json object array it can be loaded normally.
+- `[1,"two","three"]`
+
+When loading a quoted string for an ARRAY type it must be enclosed in `{}` curly braces
+- `"{1,2,3}"`
+
+### Below are examples of data loading for CSV and JSON files
+
+#### CSV files and loading JSON and ARRAY postgres types
+When loading a csv file that has json types values, or array types.
+You must double the double quotes to escape the double quotes correctly.
+Here is an example of a properly formatted csv file with json and array types.
+```csv
+id,name,json_field,jsonb_field,array_string_type,array_int_type
+2,"2a name","{""test"":[""1"",""2"",""3""]}"
+3,3a name,"{""key2"":""value2""}","{""test"":[""1"",""2"",""3""]}","{""a"",""b"",""c""}","{1,2,3}"
+```
+
+#### JSON loading with JSON and ARRAY postgres types
+When loading JSON values as part of a JSON row, values can be loaded either as quoted strings, or as actual json objects.
+For example here are two rows to load that have the same data formatted as a escaped string or as an actual json object.
+```json
+{"id":12, "name": "12a name", "json_field": {"one":1,"string":"string","array":["a","b","c"]}, "array_string_type":[1,"two","three"], "array_int_type":"{6,7,8}"}
+{"id":13, "name": "13a name", "jsonb_field": {"one":1,"string":"string","array":["a","b","c"]}, "array_string_type":"{1,\"two\",\"three\"}", "array_int_type":[6,7,8]}
+```
+
+
 ### data flow through channels 
 ![](./sqlload.drawio.svg)

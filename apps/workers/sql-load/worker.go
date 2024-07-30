@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -18,7 +19,6 @@ import (
 	"github.com/inhies/go-bytesize"
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/uri"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
@@ -46,19 +46,20 @@ type worker struct {
 
 	//flist    []string // list of full path file(s)
 	fReader  file.Reader
-	ds       *DataSet // the processing data for loading
-	delQuery string   // query statement built from DeleteMap
+	ds       *MetaData // the table meta data for loading
+	delQuery string    // query statement built from DeleteMap
 
 	queryRunTime time.Duration // query running time
 }
 
-type JsonData map[string]interface{}
+type JsonData map[string]any
 type CsvData []string
-type Row []interface{} // each row to be inserted
+type Row []any
 
-type DataSet struct {
+type MetaData struct {
 	dbSchema   []DbColumn // the database schema for each column
 	insertCols []string   // the actual db column names, must match dbrows
+	typeCols   []string   // the actual db column types
 	rowCount   int32
 	skipCount  int
 
@@ -75,12 +76,10 @@ type DbColumn struct {
 	DataType   string  // DB data type
 	IsNullable string  // DB YES or NO string values
 	Default    *string // DB default function / value
-	TypeName   string  // string, int, float
+	TypeName   string  // string, int, float, json
 	FieldKey   string  // matching json or csv header key name
 	Nullable   bool    // bool value if column is nullable (true) or not (false)
 }
-
-var json = jsoniter.ConfigFastest
 
 func (o *options) newWorker(info string) task.Worker {
 	w := &worker{
@@ -138,9 +137,9 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	defer cancelFn()
 	// read the files for loading, verify columns types
 
-	rowChan := make(chan Row, 100)
-	w.ds.dbSchema, w.ds.insertCols = PrepareMeta(w.ds.dbSchema, w.Params.FieldsMap)
+	w.ds.PrepareMeta(w.Params.FieldsMap)
 
+	rowChan := make(chan Row, 100)
 	go w.ds.ReadFiles(ctx, w.fReader, rowChan, w.Params.SkipErr)
 	retry := 0
 
@@ -158,7 +157,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 		// create batched inserts
 		queryChan := make(chan string, 10)
-		go CreateInserts(rowChan, queryChan, tempTable, w.ds.insertCols, w.Params.BatchSize)
+		go CreateInserts(rowChan, queryChan, tempTable, w.ds.insertCols, w.ds.typeCols, w.Params.BatchSize)
 
 		tableCreated := false
 		// load data into temp table
@@ -325,6 +324,12 @@ func (w *worker) QuerySchema() (err error) {
 				strings.Contains(c.DataType, "fixed") || strings.Contains(c.DataType, "float") {
 				w.ds.dbSchema[idx].TypeName = "float"
 			}
+			if strings.Contains(c.DataType, "ARRAY") {
+				w.ds.dbSchema[idx].TypeName = "array"
+			}
+			if strings.Contains(c.DataType, "json") {
+				w.ds.dbSchema[idx].TypeName = "json"
+			}
 		}
 	}
 	return nil
@@ -332,7 +337,7 @@ func (w *worker) QuerySchema() (err error) {
 
 // ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
-func (ds *DataSet) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
+func (ds *MetaData) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
 	errChan := make(chan error, 2)
 	dataIn := make(chan []byte, 20)
 	var header []string
@@ -436,8 +441,8 @@ loop:
 	close(errChan)
 }
 
-func NewDataSet(csv bool, delim rune) *DataSet {
-	return &DataSet{
+func NewDataSet(csv bool, delim rune) *MetaData {
+	return &MetaData{
 		dbSchema:   make([]DbColumn, 0),
 		insertCols: make([]string, 0),
 		csv:        csv,
@@ -449,10 +454,11 @@ func NewDataSet(csv bool, delim rune) *DataSet {
 // all fields are accounted for, if it cannot find a db col in the jRow
 // it will set that missing jRow value to nil if it's nullable in the db
 // it will also check the json jRow key values against the cols list
-func PrepareMeta(dbSchema []DbColumn, fieldMap map[string]string) (meta []DbColumn, cols []string) {
+func (ds *MetaData) PrepareMeta(fieldMap map[string]string) {
 	// for the json record, add the json data keys
 	// but only where the column was found in the database schema
-	for _, k := range dbSchema {
+	newSchema := make([]DbColumn, 0)
+	for _, k := range ds.dbSchema {
 		jKey := k.Name
 		if v := fieldMap[k.Name]; v != "" {
 			jKey = v
@@ -476,12 +482,15 @@ func PrepareMeta(dbSchema []DbColumn, fieldMap map[string]string) (meta []DbColu
 			strings.Contains(*k.Default, ")") {
 			continue
 		}
-		cols = append(cols, k.Name) // db column names
-		k.FieldKey = jKey
-		meta = append(meta, k)
-	}
 
-	return meta, cols
+		k.FieldKey = jKey
+		newSchema = append(newSchema, k)
+
+		ds.insertCols = append(ds.insertCols, k.Name) // json key names
+		ds.typeCols = append(ds.typeCols, k.TypeName) // json key types
+		ds.dbSchema = append(ds.dbSchema, k)
+	}
+	ds.dbSchema = newSchema
 }
 
 // MakeCsvHeader creates a string slice based on the first row of the file
@@ -496,10 +505,13 @@ func MakeCsvHeader(line []byte, delim rune) (header []string, err error) {
 }
 
 // MakeCsvRow creates a Row from byte slice data
+// escaped quotes must be double quotes i.e., two double quotes for each escaped quote ""start""
 func MakeCsvRow(dbSchema []DbColumn, line []byte, header []string, delim rune) (row Row, err error) {
 	row = make(Row, len(dbSchema))
 	reader := csv.NewReader(bytes.NewReader(line)) // push a csv record line into a csv reader to parse
 	reader.Comma = delim
+	reader.FieldsPerRecord = -1 // allows variable number of fields per record
+	reader.ReuseRecord = true   // for performance
 
 	r, err := reader.Read()
 	if err != nil {
@@ -519,7 +531,19 @@ func MakeCsvRow(dbSchema []DbColumn, line []byte, header []string, delim rune) (
 				break
 			}
 		}
-
+		// if the field was not found and the field is nullable set to nil (field will be NULL)
+		if !found && f.Nullable {
+			row[k] = nil
+			continue
+		}
+		// there isn't any more record data for the row, set the rest of the fields to nil if nullable
+		if len(r)-1 < idx {
+			if f.Nullable {
+				row[k] = nil
+				continue
+			}
+			return nil, fmt.Errorf("%v is required", f.FieldKey)
+		}
 		// if the field was not found in the header set to default value
 		if !found && !f.Nullable {
 			if f.Default == nil {
@@ -559,6 +583,8 @@ func MakeRow(dbSchema []DbColumn, j JsonData) (row Row, err error) {
 				j[f.FieldKey], err = strconv.ParseInt(x, 10, 64)
 			} else if dbSchema[k].TypeName == "float" {
 				j[f.FieldKey], err = strconv.ParseFloat(x, 64)
+			} else if dbSchema[k].TypeName == "json" {
+				err = json.Unmarshal([]byte(x), &v)
 			}
 
 		case float64:
@@ -624,12 +650,12 @@ func RandString(n int) string {
 	return string(b)
 }
 
-func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, cols []string, batchSize int) {
+func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, colNames, colTypes []string, batchSize int) {
 	if batchSize < 0 {
 		batchSize = 10000
 	}
 
-	fields := strings.Join(cols, ",")
+	fields := strings.Join(colNames, ",")
 	header := "insert into " + tableName + "(" + fields + ")\n" + "  VALUES \n"
 
 	var f bytes.Buffer
@@ -638,6 +664,7 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 	for row := range rowChan {
 		// create row
 		f.WriteString("(")
+		// loops though all the insert values for the row
 		for ir, r := range row {
 			switch x := r.(type) {
 			case int64:
@@ -647,9 +674,7 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 			case float64:
 				f.WriteString(strconv.FormatFloat(x, 'f', -1, 64))
 			case string:
-				f.WriteString("'")
-				f.WriteString(strings.Replace(x, "'", "''", -1))
-				f.WriteString("'")
+				f.WriteString("'" + strings.Replace(x, "'", "''", -1) + "'")
 			case bool:
 				if x {
 					f.WriteString("true")
@@ -657,29 +682,28 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 					f.WriteString("false")
 				}
 			case time.Duration:
-				f.WriteString("'")
-				f.WriteString(x.String())
-				f.WriteString("'")
-			case []any:
-				f.WriteString(`'{`)
+				f.WriteString("'" + x.String() + "'")
+			case []string:
+				writeBracket(&f, colTypes[ir], true)
 				for i := 0; i < len(x); i++ {
-					switch v := x[i].(type) {
-					case string:
-						f.WriteString(`"`)
-						f.WriteString(strings.Replace(v, "'", "''", -1))
-						f.WriteString(`"`)
-					case int:
-						f.WriteString(strconv.Itoa(v))
-					case int64:
-						f.WriteString(strconv.FormatInt(v, 10))
-					case float64:
-						f.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
-					}
+					processField(&f, x[i])
 					if i != len(x)-1 {
 						f.WriteString(",")
 					}
 				}
-				f.WriteString(`}'`)
+				writeBracket(&f, colTypes[ir], false)
+			case []any:
+				writeBracket(&f, colTypes[ir], true)
+				for i := 0; i < len(x); i++ {
+					processField(&f, x[i])
+					if i != len(x)-1 {
+						f.WriteString(",")
+					}
+				}
+				writeBracket(&f, colTypes[ir], false)
+			case any:
+				b, _ := json.Marshal(x)
+				f.WriteString("'" + strings.Replace(string(b), "'", "''", -1) + "'")
 			default:
 				if x == nil {
 					f.WriteString("NULL")
@@ -713,4 +737,34 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 		queryChan <- f.String()
 	}
 	close(queryChan)
+}
+
+func writeBracket(f *bytes.Buffer, t string, start bool) {
+	if start {
+		if t == "json" {
+			f.WriteString(`'[`)
+		} else {
+			f.WriteString(`'{`)
+		}
+		return
+	}
+	if t == "json" {
+		f.WriteString(`]'`)
+	} else {
+		f.WriteString(`}'`)
+	}
+}
+
+func processField(f *bytes.Buffer, v any) {
+	switch x := v.(type) {
+	case string:
+		f.WriteString(`"` + strings.Replace(x, "'", "''", -1) + `"`)
+	case int:
+		f.WriteString(strconv.Itoa(x))
+	case int64:
+		f.WriteString(strconv.FormatInt(x, 10))
+	case float64:
+		f.WriteString(strconv.FormatFloat(x, 'f', -1, 64))
+	}
+
 }

@@ -44,115 +44,128 @@ func TestDefaultUpdate(t *testing.T) {
 func TestPrepareMeta(t *testing.T) {
 	type input struct {
 		fields map[string]string
-		schema []DbColumn
+		meta   *MetaData
 	}
-	type output struct {
-		schema  []DbColumn
-		columns []string
-	}
-	fn := func(in input) (output, error) {
 
-		o := output{}
-		o.schema, o.columns = PrepareMeta(in.schema, in.fields)
+	fn := func(in input) (*MetaData, error) {
+		in.meta.PrepareMeta(in.fields)
 
 		// because we are dealing with a map for the jRow data
 		// we need to sort the output, not required in actual processing
-		sort.Strings(o.columns)
+		sort.Strings(in.meta.insertCols)
 
-		return o, nil
+		return in.meta, nil
 	}
 
 	// testing cases
-	cases := trial.Cases[input, output]{
+	cases := trial.Cases[input, *MetaData]{
 		"no field map": { // missing keys in the json will be ignored
 			Input: input{
-				schema: []DbColumn{
-					{Name: "C1"}, {Name: "C2"},
+				meta: &MetaData{
+					dbSchema: []DbColumn{
+						{Name: "C1"}, {Name: "C2"},
+					},
 				},
 				fields: map[string]string{},
 			},
-			Expected: output{
-				schema: []DbColumn{
+			Expected: &MetaData{
+				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "C1"},
 					{Name: "C2", FieldKey: "C2"},
 				},
-				columns: []string{"C1", "C2"},
+				insertCols: []string{"C1", "C2"},
+				typeCols:   []string{"", ""},
 			},
 		},
 		"transpose fields": {
 			Input: input{
-				schema: []DbColumn{
-					{Name: "C1"}, {Name: "C2"},
+				meta: &MetaData{
+					dbSchema: []DbColumn{
+						{Name: "C1"}, {Name: "C2"},
+					},
 				},
 				fields: map[string]string{"C1": "J1", "C2": "J2"},
 			},
-			Expected: output{
-				schema: []DbColumn{
+			Expected: &MetaData{
+				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "J1", Default: trial.StringP("")},
 					{Name: "C2", FieldKey: "J2", Default: trial.StringP("")},
 				},
-				columns: []string{"C1", "C2"},
+				insertCols: []string{"C1", "C2"},
+				typeCols:   []string{"", ""},
 			},
 		},
 		"Partial json mapping": {
 			Input: input{
-				schema: []DbColumn{
-					{Name: "C1", Nullable: true}, {Name: "C2", Nullable: true},
+				meta: &MetaData{
+					dbSchema: []DbColumn{
+						{Name: "C1", Nullable: true}, {Name: "C2", Nullable: true},
+					},
 				},
 				fields: map[string]string{"C1": "J1", "C3": "J2"},
 			},
-			Expected: output{
-				schema: []DbColumn{
+			Expected: &MetaData{
+				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "J1", Nullable: true},
 					{Name: "C2", FieldKey: "C2", Nullable: true},
 				},
-				columns: []string{"C1", "C2"},
+				insertCols: []string{"C1", "C2"},
+				typeCols:   []string{"", ""},
 			},
 		},
 		"Ignore Funcs": {
 			Input: input{
-				schema: []DbColumn{
-					{Name: "C1", Default: trial.StringP("new()")}, {Name: "C2"},
+				meta: &MetaData{
+					dbSchema: []DbColumn{
+						{Name: "C1", Default: trial.StringP("new()")}, {Name: "C2"},
+					},
 				},
 				fields: map[string]string{},
 			},
-			Expected: output{
-				schema: []DbColumn{
+			Expected: &MetaData{
+				dbSchema: []DbColumn{
 					{Name: "C2", FieldKey: "C2"},
 				},
-				columns: []string{"C2"},
+				insertCols: []string{"C2"},
+				typeCols:   []string{""},
 			},
 		},
 		"Ignore -": {
 			Input: input{
-				schema: []DbColumn{
-					{Name: "C1"}, {Name: "C2"}, {Name: "C3"},
+				meta: &MetaData{
+					dbSchema: []DbColumn{
+						{Name: "C1"}, {Name: "C2"}, {Name: "C3"},
+					},
 				},
 				fields: map[string]string{"C2": "-"},
 			},
-			Expected: output{
-				schema: []DbColumn{
+			Expected: &MetaData{
+				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "C1"}, {Name: "C3", FieldKey: "C3"},
 				},
-				columns: []string{"C1", "C3"},
+				insertCols: []string{"C1", "C3"},
+				typeCols:   []string{"", ""},
 			},
 		},
 		"add defaults when in fieldMap": {
 			Input: input{
-				schema: []DbColumn{
-					{Name: "id", Nullable: false, TypeName: "int"},
-					{Name: "name", Nullable: false, TypeName: "string"},
-					{Name: "value", Nullable: false, TypeName: "float"},
+				meta: &MetaData{
+					dbSchema: []DbColumn{
+						{Name: "id", Nullable: false, TypeName: "int"},
+						{Name: "name", Nullable: false, TypeName: "string"},
+						{Name: "value", Nullable: false, TypeName: "float"},
+					},
 				},
 				fields: map[string]string{"id": "json_id", "name": "jName", "value": "jvalue"},
 			},
-			Expected: output{
-				schema: []DbColumn{
+			Expected: &MetaData{
+				dbSchema: []DbColumn{
 					{Name: "id", FieldKey: "json_id", Default: trial.StringP("0"), Nullable: false, TypeName: "int"},
 					{Name: "name", FieldKey: "jName", Default: trial.StringP(""), Nullable: false, TypeName: "string"},
 					{Name: "value", FieldKey: "jvalue", Default: trial.StringP("0.0"), Nullable: false, TypeName: "float"},
 				},
-				columns: []string{"id", "name", "value"},
+				insertCols: []string{"id", "name", "value"},
+				typeCols:   []string{"int", "string", "float"},
 			},
 		},
 	}
@@ -213,12 +226,19 @@ func TestMakeCsvRow(t *testing.T) {
 }
 
 func TestMakeRow(t *testing.T) {
+	// testing struct for loading json data
+	type jsonStruct struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+
 	schema := []DbColumn{
 		{Name: "id", FieldKey: "id"},
 		{Name: "name", FieldKey: "name", Nullable: true},
 		{Name: "count", FieldKey: "count", TypeName: "int", Default: trial.StringP("0")},
 		{Name: "percent", FieldKey: "percent", TypeName: "float", Nullable: true},
 		{Name: "num", FieldKey: "num", TypeName: "int", Nullable: true},
+		{Name: "json_field", FieldKey: "json_field", TypeName: "json", Nullable: true},
 	}
 	fn := func(in map[string]any) (Row, error) {
 		return MakeRow(schema, in)
@@ -226,23 +246,25 @@ func TestMakeRow(t *testing.T) {
 	cases := trial.Cases[map[string]any, Row]{
 		"full row": {
 			Input: map[string]interface{}{
-				"id":      "1234",
-				"name":    "apple",
-				"count":   10,
-				"percent": 0.24,
-				"num":     2,
+				"id":         "1234",
+				"name":       "apple",
+				"count":      10,
+				"percent":    0.24,
+				"num":        2,
+				"json_field": jsonStruct{ID: 1234, Name: "json_test_full_row"},
 			},
-			Expected: Row{"1234", "apple", 10, 0.24, 2},
+			Expected: Row{"1234", "apple", 10, 0.24, 2, jsonStruct{ID: 1234, Name: "json_test_full_row"}},
 		},
 		"strings": {
 			Input: map[string]interface{}{
-				"id":      "1234",
-				"name":    "apple",
-				"count":   "10",
-				"percent": "0.24",
-				"num":     "2",
+				"id":         "1234",
+				"name":       "apple",
+				"count":      "10",
+				"percent":    "0.24",
+				"num":        "2",
+				"json_field": `{"id":1234,"name":"json_test_strings"}`,
 			},
-			Expected: Row{"1234", "apple", int64(10), 0.24, int64(2)},
+			Expected: Row{"1234", "apple", int64(10), 0.24, int64(2), `{"id":1234,"name":"json_test_strings"}`},
 		},
 		"float to int": {
 			Input: map[string]interface{}{
@@ -252,14 +274,14 @@ func TestMakeRow(t *testing.T) {
 				"percent": 0.24,
 				"num":     2.00,
 			},
-			Expected: Row{"1234", "apple", 10, 0.24, int64(2)},
+			Expected: Row{"1234", "apple", 10, 0.24, int64(2), nil},
 		},
 		"nulls": {
 			Input: map[string]interface{}{
 				"id":    "1234",
 				"count": "10",
 			},
-			Expected: Row{"1234", nil, int64(10), nil, nil},
+			Expected: Row{"1234", nil, int64(10), nil, nil, nil},
 		},
 		"missing required": {
 			Input:       map[string]interface{}{},
@@ -276,7 +298,7 @@ func TestMakeRow(t *testing.T) {
 			Input: map[string]interface{}{
 				"id": "1234",
 			},
-			Expected: Row{"1234", nil, "0", nil, nil},
+			Expected: Row{"1234", nil, "0", nil, nil, nil},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
@@ -396,6 +418,7 @@ func TestCreateInserts(t *testing.T) {
 		columns   []string
 		rows      []Row
 		batchSize int
+		colTypes  []string
 	}
 	fn := func(in input) ([]string, error) {
 		inChan := make(chan Row)
@@ -414,12 +437,41 @@ func TestCreateInserts(t *testing.T) {
 			}
 			close(doneChan)
 		}()
-		CreateInserts(inChan, outChan, in.table, in.columns, in.batchSize)
+		if len(in.colTypes) == 0 {
+			in.colTypes = make([]string, len(in.columns))
+		}
+		CreateInserts(inChan, outChan, in.table, in.columns, in.colTypes, in.batchSize)
 		<-doneChan
 		return result, nil
 	}
 
 	cases := trial.Cases[input, []string]{
+		"json_object": {
+			Input: input{
+				table:   "test",
+				columns: []string{"json_column"},
+				rows: []Row{
+					{map[string]any{"array": []string{"a", "b", "c"}, "one": 1, "string": "string"}}, // insert data
+				},
+				batchSize: 10,
+				colTypes:  []string{"json"}, // data type
+			},
+			Expected: []string{
+				"insert into test(json_column)\n  VALUES \n('" + `{"array":["a","b","c"],"one":1,"string":"string"}` + "');\n",
+			},
+		},
+		"json_array": {
+			Input: input{
+				table:     "test",
+				columns:   []string{"json_column"},
+				rows:      []Row{{[]string{"a", "b", "c"}}},
+				batchSize: 10,
+				colTypes:  []string{"array"},
+			},
+			Expected: []string{
+				"insert into test(json_column)\n  VALUES \n('{\"a\",\"b\",\"c\"}');\n",
+			},
+		},
 		"basic": {
 			Input: input{
 				table:     "test",
@@ -429,7 +481,7 @@ func TestCreateInserts(t *testing.T) {
 			},
 			Expected: []string{"insert into test(ab,cd,ef)\n  VALUES \n(1,2,3);\n"},
 		},
-		"2 batches": {
+		"2_batches": {
 			Input: input{
 				table:     "test",
 				columns:   []string{"ab", "cd", "ef"},
@@ -441,7 +493,7 @@ func TestCreateInserts(t *testing.T) {
 				"insert into test(ab,cd,ef)\n  VALUES \n(1,2,3);\n",
 			},
 		},
-		"4 lines": {
+		"4_records": {
 			Input: input{
 				table:     "test",
 				columns:   []string{"ab", "cd", "ef"},
@@ -465,12 +517,23 @@ func TestCreateInserts(t *testing.T) {
 		},
 		"array_string": {
 			Input: input{
-				table:   "test",
-				columns: []string{"string_array"},
-				rows: []Row{
-					{[]any{"a", "b", "c"}},
-				},
+				table:     "test",
+				columns:   []string{"string_array"},
+				rows:      []Row{{[]any{"a", "b", "c"}}},
 				batchSize: 10,
+				colTypes:  []string{"json"},
+			},
+			Expected: []string{
+				"insert into test(string_array)\n  VALUES \n('[\"a\",\"b\",\"c\"]');\n",
+			},
+		},
+		"array_column_string": {
+			Input: input{
+				table:     "test",
+				columns:   []string{"string_array"},
+				rows:      []Row{{[]any{"a", "b", "c"}}},
+				batchSize: 10,
+				colTypes:  []string{"array"},
 			},
 			Expected: []string{
 				"insert into test(string_array)\n  VALUES \n('{\"a\",\"b\",\"c\"}');\n",
@@ -478,23 +541,19 @@ func TestCreateInserts(t *testing.T) {
 		},
 		"array_quote_string": {
 			Input: input{
-				table:   "test",
-				columns: []string{"string_array"},
-				rows: []Row{
-					{
-						[]any{"a'b", "cd", "ef"},
-					},
-				},
+				table:    "test",
+				columns:  []string{"string_array"},
+				rows:     []Row{{[]any{"a'b", "cd", "ef"}}},
+				colTypes: []string{"array"},
 			},
 			Expected: []string{"insert into test(string_array)\n  VALUES \n('{\"a''b\",\"cd\",\"ef\"}');\n"},
 		},
 		"array_int": {
 			Input: input{
-				table:   "test",
-				columns: []string{"int_array"},
-				rows: []Row{
-					{[]any{1, 2, 3}},
-				},
+				table:     "test",
+				columns:   []string{"int_array"},
+				colTypes:  []string{"array"},
+				rows:      []Row{{[]any{1, 2, 3}}},
 				batchSize: 10,
 			},
 			Expected: []string{
@@ -503,11 +562,9 @@ func TestCreateInserts(t *testing.T) {
 		},
 		"array_int64": {
 			Input: input{
-				table:   "test",
-				columns: []string{"int_array"},
-				rows: []Row{
-					{[]any{int64(6), int64(7), int64(8)}},
-				},
+				table:     "test",
+				columns:   []string{"int_array"},
+				rows:      []Row{{[]any{int64(6), int64(7), int64(8)}}},
 				batchSize: 10,
 			},
 			Expected: []string{
@@ -516,12 +573,11 @@ func TestCreateInserts(t *testing.T) {
 		},
 		"array_float64": {
 			Input: input{
-				table:   "test",
-				columns: []string{"float_array"},
-				rows: []Row{
-					{[]any{2.71828, 3.14159, 1.61803}},
-				},
+				table:     "test",
+				columns:   []string{"float_array"},
+				rows:      []Row{{[]any{2.71828, 3.14159, 1.61803}}},
 				batchSize: 10,
+				colTypes:  []string{"array"},
 			},
 			Expected: []string{
 				"insert into test(float_array)\n  VALUES \n('{2.71828,3.14159,1.61803}');\n",
@@ -529,10 +585,9 @@ func TestCreateInserts(t *testing.T) {
 		},
 		"internal": {
 			Input: input{
-				table:   "test",
-				columns: []string{"interval"},
-				rows: []Row{
-					{10 * time.Second}},
+				table:     "test",
+				columns:   []string{"interval"},
+				rows:      []Row{{10 * time.Second}},
 				batchSize: 10,
 			},
 			Expected: []string{
@@ -540,7 +595,8 @@ func TestCreateInserts(t *testing.T) {
 			},
 		},
 	}
-	trial.New(fn, cases).Timeout(5 * time.Second).SubTest(t)
+
+	trial.New(fn, cases).SubTest(t)
 }
 
 func TestReadFiles(t *testing.T) { // flaky test
@@ -556,7 +612,7 @@ func TestReadFiles(t *testing.T) { // flaky test
 		skipCount int
 	}
 	fn := func(in input) (out, error) {
-		ds := DataSet{
+		ds := MetaData{
 			dbSchema: []DbColumn{
 				{Name: "id", FieldKey: "id"},
 				{Name: "name", FieldKey: "name", Nullable: true},
@@ -573,6 +629,8 @@ func TestReadFiles(t *testing.T) { // flaky test
 		}()
 		ds.ReadFiles(context.Background(), reader, rowChan, in.skipErrors)
 		<-doneChan
+		time.Sleep(time.Millisecond * 5) // still getting race conditions where the test ends before the go routine
+
 		return out{rowCount: ds.rowCount, skipCount: ds.skipCount}, ds.err // number of rows or error
 	}
 	cases := trial.Cases[input, out]{
@@ -639,7 +697,7 @@ func TestCSVReadFiles(t *testing.T) {
 		if in.delimiter == "" {
 			in.delimiter = ","
 		}
-		ds := DataSet{
+		ds := MetaData{
 			csv:       true,
 			delimiter: []rune(in.delimiter)[0],
 			dbSchema: []DbColumn{
