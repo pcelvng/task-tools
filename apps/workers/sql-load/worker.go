@@ -46,8 +46,8 @@ type worker struct {
 
 	//flist    []string // list of full path file(s)
 	fReader  file.Reader
-	ds       *MetaData // the table meta data for loading
-	delQuery string    // query statement built from DeleteMap
+	ds       *TableMeta // the table meta data for loading
+	delQuery string     // query statement built from DeleteMap
 
 	queryRunTime time.Duration // query running time
 }
@@ -56,12 +56,12 @@ type JsonData map[string]any
 type CsvData []string
 type Row []any
 
-type MetaData struct {
-	dbSchema   []DbColumn // the database schema for each column
-	insertCols []string   // the actual db column names, must match dbrows
-	typeCols   []string   // the actual db column types
-	rowCount   int32
-	skipCount  int
+type TableMeta struct {
+	dbSchema  []DbColumn // the database schema for each column
+	colNames  []string   // the actual db column names, must match dbrows
+	colTypes  []string   // the actual db column types
+	rowCount  int32
+	skipCount int
 
 	csv       bool // is the dataset for csv data (not json)
 	delimiter rune // csv delimiter value default is comma
@@ -101,7 +101,7 @@ func (o *options) newWorker(info string) task.Worker {
 		log.Println("loading csv file(s)", w.Params.FilePath)
 	}
 
-	w.ds = NewDataSet(w.Params.FileType == "csv", []rune(w.Params.Delimiter)[0])
+	w.ds = NewTableMeta(w.Params.FileType == "csv", []rune(w.Params.Delimiter)[0])
 
 	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
 	if err != nil {
@@ -157,7 +157,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 		// create batched inserts
 		queryChan := make(chan string, 10)
-		go CreateInserts(rowChan, queryChan, tempTable, w.ds.insertCols, w.ds.typeCols, w.Params.BatchSize)
+		go CreateInserts(rowChan, queryChan, tempTable, w.ds.colNames, w.ds.colTypes, w.Params.BatchSize)
 
 		tableCreated := false
 		// load data into temp table
@@ -196,7 +196,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		} else if w.Params.Truncate {
 			q += "delete from " + w.Params.Table + ";\n"
 		}
-		fields := strings.Join(w.ds.insertCols, ",")
+		fields := strings.Join(w.ds.colNames, ",")
 		q += "insert into " + w.Params.Table + "(" + fields + ")\n select " + fields + " from " + tempTable + ";\n" + "COMMIT;"
 		for ; retry <= 2; retry++ {
 			if retry > 2 { // we will retry the transaction 3 times only
@@ -231,7 +231,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 		b.Delete(w.delQuery)
 		start := time.Now()
-		stats, err := b.Commit(ctx, w.Params.Table, w.ds.insertCols...)
+		stats, err := b.Commit(ctx, w.Params.Table, w.ds.colNames...)
 		if err != nil {
 			return task.Failed(fmt.Errorf("commit to db failed %w", err))
 		}
@@ -337,7 +337,7 @@ func (w *worker) QuerySchema() (err error) {
 
 // ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
-func (ds *MetaData) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
+func (ds *TableMeta) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
 	errChan := make(chan error, 2)
 	dataIn := make(chan []byte, 20)
 	var header []string
@@ -441,12 +441,12 @@ loop:
 	close(errChan)
 }
 
-func NewDataSet(csv bool, delim rune) *MetaData {
-	return &MetaData{
-		dbSchema:   make([]DbColumn, 0),
-		insertCols: make([]string, 0),
-		csv:        csv,
-		delimiter:  delim,
+func NewTableMeta(csv bool, delim rune) *TableMeta {
+	return &TableMeta{
+		dbSchema:  make([]DbColumn, 0),
+		colNames:  make([]string, 0),
+		csv:       csv,
+		delimiter: delim,
 	}
 }
 
@@ -454,7 +454,7 @@ func NewDataSet(csv bool, delim rune) *MetaData {
 // all fields are accounted for, if it cannot find a db col in the jRow
 // it will set that missing jRow value to nil if it's nullable in the db
 // it will also check the json jRow key values against the cols list
-func (ds *MetaData) PrepareMeta(fieldMap map[string]string) {
+func (ds *TableMeta) PrepareMeta(fieldMap map[string]string) {
 	// for the json record, add the json data keys
 	// but only where the column was found in the database schema
 	newSchema := make([]DbColumn, 0)
@@ -486,8 +486,8 @@ func (ds *MetaData) PrepareMeta(fieldMap map[string]string) {
 		k.FieldKey = jKey
 		newSchema = append(newSchema, k)
 
-		ds.insertCols = append(ds.insertCols, k.Name) // json key names
-		ds.typeCols = append(ds.typeCols, k.TypeName) // json key types
+		ds.colNames = append(ds.colNames, k.Name)     // json key names
+		ds.colTypes = append(ds.colTypes, k.TypeName) // json key types
 		ds.dbSchema = append(ds.dbSchema, k)
 	}
 	ds.dbSchema = newSchema
@@ -739,16 +739,16 @@ func CreateInserts(rowChan chan Row, queryChan chan string, tableName string, co
 	close(queryChan)
 }
 
-func writeBracket(f *bytes.Buffer, t string, start bool) {
+func writeBracket(f *bytes.Buffer, colType string, start bool) {
 	if start {
-		if t == "json" {
+		if colType == "json" {
 			f.WriteString(`'[`)
 		} else {
 			f.WriteString(`'{`)
 		}
 		return
 	}
-	if t == "json" {
+	if colType == "json" {
 		f.WriteString(`]'`)
 	} else {
 		f.WriteString(`}'`)

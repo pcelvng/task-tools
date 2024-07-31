@@ -40,7 +40,7 @@ Example tasks:
 ## Technical: 
 
 ### JSON and ARRAY postgres types
-When loading json or jsonb column types you can load the following examples
+When loading json or jsonb column types you can load the following:
 - `["1","2","3"]`
 - `{"column_name":{"field":"value"}}`
 
@@ -53,8 +53,9 @@ When loading a quoted string for an ARRAY type it must be enclosed in `{}` curly
 ### Below are examples of data loading for CSV and JSON files
 
 #### CSV files and loading JSON and ARRAY postgres types
-When loading a csv file that has json types values, or array types.
-You must double the double quotes to escape the double quotes correctly.
+When loading a csv file that has json or array types,
+you must escape quotes by double quoting them. See below:
+
 Here is an example of a properly formatted csv file with json and array types.
 ```csv
 id,name,json_field,jsonb_field,array_string_type,array_int_type

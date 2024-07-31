@@ -44,112 +44,112 @@ func TestDefaultUpdate(t *testing.T) {
 func TestPrepareMeta(t *testing.T) {
 	type input struct {
 		fields map[string]string
-		meta   *MetaData
+		meta   *TableMeta
 	}
 
-	fn := func(in input) (*MetaData, error) {
+	fn := func(in input) (*TableMeta, error) {
 		in.meta.PrepareMeta(in.fields)
 
 		// because we are dealing with a map for the jRow data
 		// we need to sort the output, not required in actual processing
-		sort.Strings(in.meta.insertCols)
+		sort.Strings(in.meta.colNames)
 
 		return in.meta, nil
 	}
 
 	// testing cases
-	cases := trial.Cases[input, *MetaData]{
+	cases := trial.Cases[input, *TableMeta]{
 		"no field map": { // missing keys in the json will be ignored
 			Input: input{
-				meta: &MetaData{
+				meta: &TableMeta{
 					dbSchema: []DbColumn{
 						{Name: "C1"}, {Name: "C2"},
 					},
 				},
 				fields: map[string]string{},
 			},
-			Expected: &MetaData{
+			Expected: &TableMeta{
 				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "C1"},
 					{Name: "C2", FieldKey: "C2"},
 				},
-				insertCols: []string{"C1", "C2"},
-				typeCols:   []string{"", ""},
+				colNames: []string{"C1", "C2"},
+				colTypes: []string{"", ""},
 			},
 		},
 		"transpose fields": {
 			Input: input{
-				meta: &MetaData{
+				meta: &TableMeta{
 					dbSchema: []DbColumn{
 						{Name: "C1"}, {Name: "C2"},
 					},
 				},
 				fields: map[string]string{"C1": "J1", "C2": "J2"},
 			},
-			Expected: &MetaData{
+			Expected: &TableMeta{
 				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "J1", Default: trial.StringP("")},
 					{Name: "C2", FieldKey: "J2", Default: trial.StringP("")},
 				},
-				insertCols: []string{"C1", "C2"},
-				typeCols:   []string{"", ""},
+				colNames: []string{"C1", "C2"},
+				colTypes: []string{"", ""},
 			},
 		},
 		"Partial json mapping": {
 			Input: input{
-				meta: &MetaData{
+				meta: &TableMeta{
 					dbSchema: []DbColumn{
 						{Name: "C1", Nullable: true}, {Name: "C2", Nullable: true},
 					},
 				},
 				fields: map[string]string{"C1": "J1", "C3": "J2"},
 			},
-			Expected: &MetaData{
+			Expected: &TableMeta{
 				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "J1", Nullable: true},
 					{Name: "C2", FieldKey: "C2", Nullable: true},
 				},
-				insertCols: []string{"C1", "C2"},
-				typeCols:   []string{"", ""},
+				colNames: []string{"C1", "C2"},
+				colTypes: []string{"", ""},
 			},
 		},
 		"Ignore Funcs": {
 			Input: input{
-				meta: &MetaData{
+				meta: &TableMeta{
 					dbSchema: []DbColumn{
 						{Name: "C1", Default: trial.StringP("new()")}, {Name: "C2"},
 					},
 				},
 				fields: map[string]string{},
 			},
-			Expected: &MetaData{
+			Expected: &TableMeta{
 				dbSchema: []DbColumn{
 					{Name: "C2", FieldKey: "C2"},
 				},
-				insertCols: []string{"C2"},
-				typeCols:   []string{""},
+				colNames: []string{"C2"},
+				colTypes: []string{""},
 			},
 		},
 		"Ignore -": {
 			Input: input{
-				meta: &MetaData{
+				meta: &TableMeta{
 					dbSchema: []DbColumn{
 						{Name: "C1"}, {Name: "C2"}, {Name: "C3"},
 					},
 				},
 				fields: map[string]string{"C2": "-"},
 			},
-			Expected: &MetaData{
+			Expected: &TableMeta{
 				dbSchema: []DbColumn{
 					{Name: "C1", FieldKey: "C1"}, {Name: "C3", FieldKey: "C3"},
 				},
-				insertCols: []string{"C1", "C3"},
-				typeCols:   []string{"", ""},
+				colNames: []string{"C1", "C3"},
+				colTypes: []string{"", ""},
 			},
 		},
 		"add defaults when in fieldMap": {
 			Input: input{
-				meta: &MetaData{
+				meta: &TableMeta{
 					dbSchema: []DbColumn{
 						{Name: "id", Nullable: false, TypeName: "int"},
 						{Name: "name", Nullable: false, TypeName: "string"},
@@ -158,14 +158,14 @@ func TestPrepareMeta(t *testing.T) {
 				},
 				fields: map[string]string{"id": "json_id", "name": "jName", "value": "jvalue"},
 			},
-			Expected: &MetaData{
+			Expected: &TableMeta{
 				dbSchema: []DbColumn{
 					{Name: "id", FieldKey: "json_id", Default: trial.StringP("0"), Nullable: false, TypeName: "int"},
 					{Name: "name", FieldKey: "jName", Default: trial.StringP(""), Nullable: false, TypeName: "string"},
 					{Name: "value", FieldKey: "jvalue", Default: trial.StringP("0.0"), Nullable: false, TypeName: "float"},
 				},
-				insertCols: []string{"id", "name", "value"},
-				typeCols:   []string{"int", "string", "float"},
+				colNames: []string{"id", "name", "value"},
+				colTypes: []string{"int", "string", "float"},
 			},
 		},
 	}
@@ -612,7 +612,7 @@ func TestReadFiles(t *testing.T) { // flaky test
 		skipCount int
 	}
 	fn := func(in input) (out, error) {
-		ds := MetaData{
+		ds := TableMeta{
 			dbSchema: []DbColumn{
 				{Name: "id", FieldKey: "id"},
 				{Name: "name", FieldKey: "name", Nullable: true},
@@ -697,7 +697,7 @@ func TestCSVReadFiles(t *testing.T) {
 		if in.delimiter == "" {
 			in.delimiter = ","
 		}
-		ds := MetaData{
+		ds := TableMeta{
 			csv:       true,
 			delimiter: []rune(in.delimiter)[0],
 			dbSchema: []DbColumn{
