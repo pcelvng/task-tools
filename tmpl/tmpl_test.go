@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/hydronica/trial"
+	"github.com/pcelvng/task"
 )
 
 func TestParse(t *testing.T) {
@@ -183,6 +184,38 @@ func TestParseUUID(t *testing.T) {
 	}
 }
 
+func TestTaskTime(t *testing.T) {
+	fn := func(in task.Task) (time.Time, error) {
+		return TaskTime(in), nil
+	}
+	cases := trial.Cases[task.Task, time.Time]{
+		"cron": {
+			Input:    task.Task{Meta: "cron=2024-08-18T12"},
+			Expected: trial.TimeHour("2024-08-18T12"),
+		},
+		"invalid-cron": {
+			Input:    task.Task{Meta: "cron=2024-08-180T12"},
+			Expected: time.Time{},
+		},
+		"param-hour": {
+			Input:    task.Task{Info: "?hour=2024-01-02T13"},
+			Expected: trial.TimeHour("2024-01-02T13"),
+		},
+		"file-path": {
+			Input:    task.Task{Info: "s3://path/2024/08/02/07"},
+			Expected: trial.TimeHour("2024-08-02T07"),
+		},
+		"priority-check": {
+			Input: task.Task{
+				Meta: "cron=2024-08-18T12",
+				Info: "s3://path/2024/08/02/07?hour=2024-01-02T13",
+			},
+			Expected: trial.TimeHour("2024-08-18T12"),
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
 func TestInfoTime(t *testing.T) {
 	fn := func(in string) (time.Time, error) {
 		return InfoTime(in), nil
@@ -204,6 +237,15 @@ func TestInfoTime(t *testing.T) {
 			Input:    "?map=date:2020-03-05",
 			Expected: trial.TimeDay("2020-03-05"),
 		},
+		"date full": {
+			Input:    "?date=2020-03-05T15:16:17Z",
+			Expected: trial.Time(time.RFC3339, "2020-03-05T15:16:17Z"),
+		},
+		"date hour": {
+			Input:    "?date=2020-03-05T15",
+			Expected: trial.TimeHour("2020-03-05T15"),
+		},
+
 		"hour": {
 			Input:    "?date=something&hour=2020-03-05T11",
 			Expected: trial.TimeHour("2020-03-05T11"),
