@@ -55,7 +55,7 @@ func init() {
 // {POD}  kubernetes unique pod name
 // {UUID} creates an 8 character unique id
 //
-// Template values are case sensitive.
+// Template values are case-sensitive.
 //
 // Items can be commented out by a hash sign #
 // anything after the # will be ignored
@@ -110,8 +110,8 @@ func Parse(s string, t time.Time) string {
 	hour := fmt.Sprintf("%02d", t.Hour())
 	s = regHour.ReplaceAllString(s, hour)
 
-	min := fmt.Sprintf("%02d", t.Minute())
-	s = strings.ReplaceAll(s, "{min}", min)
+	minute := fmt.Sprintf("%02d", t.Minute())
+	s = strings.ReplaceAll(s, "{min}", minute)
 
 	// {HOST}
 	s = regHost.ReplaceAllString(s, hostName)
@@ -191,8 +191,8 @@ func PathTime(pth string) time.Time {
 
 var (
 	dayRegex       = regexp.MustCompile(`(?:day|date)[=:](\d{4}-\d{2}-\d{2})`)
-	hourRegex      = regexp.MustCompile(`(?:hour|hour_utc)[=:](\d{4}-\d{2}-\d{2}T\d{2})`)
-	timestampRegex = regexp.MustCompile(`time(?:stamp)?[=:](\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`)
+	hourRegex      = regexp.MustCompile(`(?:date|hour|hour_utc)[=:](\d{4}-\d{2}-\d{2}T\d{2})`)
+	timestampRegex = regexp.MustCompile(`(?:day|date|time|timestamp)[=:](\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`)
 )
 
 // TaskTime will get the task process time by
@@ -201,7 +201,7 @@ var (
 // 3. look at the file path to pull the timestamp
 func TaskTime(t task.Task) time.Time {
 	q, _ := url.ParseQuery(t.Meta)
-	if t, err := time.Parse(q.Get("cron"), DateHour); err == nil {
+	if t, err := time.Parse(DateHour, q.Get("cron")); err == nil {
 		return t
 	}
 
@@ -222,8 +222,8 @@ func InfoTime(info string) time.Time {
 		return time.Time{}
 	}
 
-	if v := dayRegex.FindStringSubmatch(info); len(v) > 1 {
-		t, err := time.Parse("2006-01-02", v[1])
+	if v := timestampRegex.FindStringSubmatch(info); len(v) > 1 {
+		t, err := time.Parse(time.RFC3339, v[1])
 		if err == nil {
 			return t
 		}
@@ -234,8 +234,8 @@ func InfoTime(info string) time.Time {
 			return t
 		}
 	}
-	if v := timestampRegex.FindStringSubmatch(info); len(v) > 1 {
-		t, err := time.Parse(time.RFC3339, v[1])
+	if v := dayRegex.FindStringSubmatch(info); len(v) > 1 {
+		t, err := time.Parse("2006-01-02", v[1])
 		if err == nil {
 			return t
 		}

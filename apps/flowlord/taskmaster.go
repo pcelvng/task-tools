@@ -15,13 +15,14 @@ import (
 
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+	"github.com/robfig/cron/v3"
+
 	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
-	"github.com/pcelvng/task/bus"
-	"github.com/robfig/cron/v3"
 )
 
 type taskMaster struct {
@@ -347,9 +348,6 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			info, _ := tmpl.Meta(p.Template, meta)
 
 			taskTime := tmpl.TaskTime(*t)
-			if cronTime := meta.Get("cron"); cronTime != "" && taskTime.IsZero() {
-				taskTime, _ = time.Parse(DateHour, cronTime)
-			}
 
 			info = tmpl.Parse(info, taskTime)
 
