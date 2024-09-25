@@ -8,9 +8,10 @@ import (
 	"syscall"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/pcelvng/task/bus"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
-	"github.com/pcelvng/task/bus"
 )
 
 const (
@@ -28,11 +29,13 @@ example rule:
 type options struct {
 	Bus *bus.Options `toml:"bus"`
 
-	AccessKey  string  `toml:"access_key" desc:"secret token for S3/GCS access "`
-	SecretKey  string  `toml:"secret_key" desc:"secret key for S3/GCS access "`
-	FilesTopic string  `toml:"files_topic" desc:"topic override (default is files) disable with -"`
-	TaskTopic  string  `toml:"task_topic" desc:"topic to send new task"`
-	Rules      []*Rule `toml:"rule"`
+	FilesTopic string `toml:"files_topic" desc:"topic override (default is files) disable with -"`
+	TaskTopic  string `toml:"task_topic" desc:"topic to send new task"`
+
+	AccessKey string `toml:"access_key" desc:"secret token for S3/GCS access "`
+	SecretKey string `toml:"secret_key" desc:"secret key for S3/GCS access "`
+
+	Rules []*Rule `toml:"rule"`
 }
 
 type Rule struct {
@@ -45,7 +48,7 @@ type Rule struct {
 func (o options) Validate() error {
 	errs := appenderr.New()
 	if o.AccessKey == "" || o.SecretKey == "" {
-		log.Println("AWS Credentials are blank")
+		log.Println("File credentials are blank")
 	}
 	if len(o.Rules) == 0 {
 		errs.Add(errors.New("at least one rule is required"))
@@ -62,14 +65,15 @@ func main() {
 		FilesTopic: "files",
 		Rules: []*Rule{
 			{
-				HourLookback: 24,
+				HourLookback: defaultLookback,
 				PathTemplate: "gs://folder/{HOUR_SLUG}/*.json",
-				Frequency:    "1h",
-				TaskTemplate: "{FILE_PATH}?&param=other-param&dest=gs://folder/{HOUR_SLUG}/file.json",
+				Frequency:    defaultFrequency,
+				TaskTemplate: "",
 			},
 		},
 	}
 
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	bootstrap.NewUtility(appName, opt).
 		Description(description).
 		Version(tools.String()).Initialize()

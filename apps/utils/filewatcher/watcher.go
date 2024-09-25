@@ -8,10 +8,11 @@ import (
 	"github.com/dustinevan/chron"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
-	"github.com/pcelvng/task/bus"
 )
 
 var (
@@ -43,10 +44,6 @@ func newWatchers(appOpt *options) (watchers []*watcher, err error) {
 	}
 
 	for _, r := range appOpt.Rules {
-		if r.HourLookback == 0 {
-			r.HourLookback = defaultLookback
-		}
-
 		if r.Frequency == "" {
 			r.Frequency = defaultFrequency
 		}
@@ -144,10 +141,10 @@ func (w watcher) currentFiles(paths ...string) fileList {
 			SecretKey: w.appOpt.SecretKey,
 		})
 		if err != nil {
-			log.Println(err)
+			log.Printf("issue listing %v: %v", p, err)
 			continue
 		}
-		// iterate over the list to setup the new complete fileList
+		// iterate over the list to set up the new complete fileList
 		for i := range list {
 			if list[i].IsDir {
 				continue
@@ -170,12 +167,13 @@ func (w *watcher) sendFiles(files fileList) {
 			w.producer.Send(w.appOpt.FilesTopic, b)
 		}
 
-		if w.appOpt.TaskTopic != "" {
+		if w.appOpt.TaskTopic != "" && w.rule.TaskTemplate != "" {
 			t := tmpl.PathTime(f.Path)
 			info := tmpl.Parse(w.rule.TaskTemplate, t)
 			info = strings.Replace(info, "{WATCH_FILE}", f.Path, -1)
 
 			tsk := task.New(w.appOpt.TaskTopic, info)
+			tsk.Job = "filewatcher"
 			meta := task.NewMeta()
 			meta.SetMeta("job", "filewatcher")
 			tsk.Meta = meta.GetMeta().Encode()
