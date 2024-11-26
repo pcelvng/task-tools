@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	"google.golang.org/api/option"
 
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/file/buf"
 )
 
 type worker struct {
@@ -27,7 +25,6 @@ type worker struct {
 	File      string            `uri:"origin" required:"true"`      // if not GCS ref must be file, can be folder (for GCS)
 	FromGCS   bool              `uri:"direct_load" default:"false"` // load directly from GCS ref, can use wildcards *
 	Truncate  bool              `uri:"truncate"`                    //remove all data in table before insert
-	Append    bool              `uri:"append"`                      // append data to table
 	DeleteMap map[string]string `uri:"delete"`                      // map of fields with value to check and delete
 
 	delete bool
@@ -49,11 +46,8 @@ func (o *options) NewWorker(info string) task.Worker {
 		return task.InvalidWorker("truncate and delete options must be selected independently")
 	}
 
-	if !(w.delete || w.Truncate || w.Append) {
+	if !(w.delete || w.Truncate) {
 		return task.InvalidWorker("insert rule required (append|truncate|delete)")
-	}
-	if w.delete {
-		w.Append = true
 	}
 
 	return w
@@ -68,8 +62,6 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	if err != nil {
 		return task.Failf("bigquery client init %s", err)
 	}
-
-	//r, err := processFile(w.File, w.Fopts)
 
 	var loader *bigquery.Loader
 
@@ -136,26 +128,5 @@ func delStatement(m map[string]string, d Destination) string {
 		s = append(s, k+" = "+v)
 	}
 	sort.Sort(sort.StringSlice(s))
-	return fmt.Sprintf("delete from `%s.%s.%s` where %s", d.Project, d.Dataset, d.Table, strings.Join(s, " and "))
-}
-
-func processFile(path string, fOpts file.Options) (io.Reader, error) {
-	r, err := file.NewReader(path, &fOpts)
-	if err != nil {
-		return nil, err
-	}
-	writer, err := buf.NewBuffer(&buf.Options{UseFileBuf: true})
-	if err != nil {
-		return nil, err
-	}
-	scanner := file.NewScanner(r)
-	for scanner.Scan() {
-		line := scanner.Text()
-		writer.WriteLine([]byte(line))
-	}
-	if err := scanner.Err(); err != nil {
-		writer.Abort()
-		return nil, err
-	}
-	return writer, writer.Close()
+	return fmt.Sprintf("delete from `%s` where %s", d.String(), strings.Join(s, " and "))
 }

@@ -1,13 +1,17 @@
 # bq-load 
-takes one of more line deliminated json files and loads them into a bigquery table. 
+load line deliminated json files into BigQuery
 
 [Google Cloud Docs](https://cloud.google.com/bigquery/docs/loading-data-local)
 
-## Task info string 
+## Info Params 
 
-- origin: (gs://path/file.json) - location of file to be uploaded (s3, gs or local)
-- *Insertion Option* - 1 of 3
-  - `truncate`: truncate the table before insertion 
-  - `append`:   (default) append the file to the table
-  - `delete`:    a map of key, values used to delete data before insertion i.e., (delete=date:2020-01-02)
-  - `direct_load` use this option if you would like BigQuery to load from a google storage location BigQuery auth will have to have access to this location
+- origin: [required] file to be inserted (gs://path/file.json)
+- dest_table: [required] project.dataset.table to be inserted into
+  - direct_load: bool; Its fastest to load directly for GCS, but the bucket must be in the same project.
+- Optional pre-insert table cleanup to prevent duplicates
+  - `truncate`: delete everything and insert
+  - `delete`: create a delete statement based the column matches the values passed in the map (delete=id:10|date:2020-01-02)
+
+## Examples task
+{"task":"bq_load", "info":"gs://my-bucket/data.json?dest_table=project.reports.impressions&delete=date:2020-01-02|id:11&direct_load"}
+{"task":"bq_load", "info":"./data/*.json?dest_table=project.reports.impressions&from_gcs=true&append=true"}`
