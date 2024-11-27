@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	"cloud.google.com/go/bigquery"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
@@ -16,9 +18,9 @@ const taskType = "bq_load"
 var desc string
 
 type options struct {
-	BqAuth string `toml:"bq_auth" comment:"file path to service file"`
-
-	Fopts file.Options `toml:"file"`
+	BqAuth  string       `toml:"bq_auth" comment:"file path to service file"`
+	Project string       `toml:"project"`
+	Fopts   file.Options `toml:"file"`
 }
 
 func (o *options) Validate() error {
@@ -52,4 +54,8 @@ func (d *Destination) UnmarshalText(text []byte) error {
 
 func (d Destination) String() string {
 	return d.Project + "." + d.Dataset + "." + d.Table
+}
+
+func (d Destination) BqTable(client *bigquery.Client) *bigquery.Table {
+	return client.DatasetInProject(d.Project, d.Dataset).Table(d.Project)
 }

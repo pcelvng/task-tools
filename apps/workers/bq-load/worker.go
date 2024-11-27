@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -22,7 +23,7 @@ type worker struct {
 	task.Meta
 	options
 
-	Destination `uri:"dest_table"` // BQ table to load data into
+	DestTable Destination `uri:"dest_table"` // BQ table to load data into
 
 	File      string            `uri:"origin" required:"true"`      // if not GCS ref must be file, can be folder (for GCS)
 	FromGCS   bool              `uri:"direct_load" default:"false"` // load directly from GCS ref, can use wildcards *
@@ -62,29 +63,48 @@ func (o *options) NewWorker(info string) task.Worker {
 	return w
 }
 
+// ExportToFile will add meta data to the end of the query that will cause the results query to be exported to a file
+func prepQuery(query []byte, destPath string, format bigquery.DataFormat) string {
+	var w bytes.Buffer
+	w.WriteString("EXPORT DATA OPTIONS(\n")
+	w.WriteString("overwrite=true,\n")
+	switch format {
+	case bigquery.JSON:
+		w.WriteString("format=JSON,\n")
+	case bigquery.CSV:
+		w.WriteString("format=CSV,\n")
+	}
+	w.WriteString("uri='" + destPath + "') AS \n")
+	w.Write(query)
+	return w.String()
+}
+
 func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	opts := make([]option.ClientOption, 0)
 	if w.BqAuth != "" {
 		opts = append(opts, option.WithCredentialsFile(w.BqAuth))
 	}
 	client, err := bigquery.NewClient(ctx, w.Project, opts...)
+	defer client.Close()
 	if err != nil {
 		return task.Failf("bigquery client init %s", err)
 	}
 
 	var format bigquery.DataFormat
 	switch filepath.Ext(w.File) {
-	case "sql":
+	case ".sql":
 		f, err := file.NewReader(w.File, &w.Fopts)
 		if err != nil {
 			return task.Failf("read error: %v %v", w.File, err)
 		}
-		q, _ := io.ReadAll(f)
-		return w.Query(ctx, client, string(q))
-	case "json":
+		b, _ := io.ReadAll(f)
+
+		// TODO: export to GCS when using gs://.../* otherwise extract the data from the query and write to a single file.
+		return w.Query(ctx, client, prepQuery(b, w.DestPath, bigquery.CSV))
+	case ".json":
 		format = bigquery.JSON
 		return w.Load(ctx, client, format)
-	case "csv":
+	case ".csv":
 		format = bigquery.CSV
 		return w.Load(ctx, client, format)
 	}
@@ -102,9 +122,9 @@ func (w *worker) Query(ctx context.Context, client *bigquery.Client, query strin
 		bq.Priority = bigquery.BatchPriority
 	}
 
-	if w.Destination.String() != "" && w.DestPath == "" {
+	if w.DestTable.String() != "" && w.DestPath == "" {
 		// project is defined in the client
-		bq.Dst = client.Dataset(w.Dataset).Table(w.Table)
+		bq.Dst = w.DestTable.BqTable(client)
 		bq.WriteDisposition = bigquery.WriteAppend
 	}
 	job, err := bq.Run(ctx)
@@ -115,7 +135,9 @@ func (w *worker) Query(ctx context.Context, client *bigquery.Client, query strin
 	if err != nil {
 		return task.Failf("wait: %v", err)
 	}
+
 	if bqStats, ok := status.Statistics.Details.(*bigquery.QueryStatistics); ok {
+
 		w.SetMeta("bq_bytes_billed", strconv.FormatInt(bqStats.TotalBytesBilled, 10))
 		w.SetMeta("bq_query_time", status.Statistics.EndTime.Sub(status.Statistics.StartTime).String())
 	}
@@ -129,7 +151,7 @@ func (w *worker) Load(ctx context.Context, client *bigquery.Client, format bigqu
 	if w.FromGCS { // load from Google Cloud Storage
 		gcsRef := bigquery.NewGCSReference(w.File)
 		gcsRef.SourceFormat = format
-		loader = client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(gcsRef)
+		loader = w.DestTable.BqTable(client).LoaderFrom(gcsRef)
 	} else { // load from file reader
 		r, err := file.NewReader(w.File, &w.Fopts)
 		if err != nil {
@@ -138,12 +160,12 @@ func (w *worker) Load(ctx context.Context, client *bigquery.Client, format bigqu
 		bqRef := bigquery.NewReaderSource(r)
 		bqRef.SourceFormat = format
 		bqRef.MaxBadRecords = 1
-		loader = client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(bqRef)
+		loader = w.DestTable.BqTable(client).LoaderFrom(bqRef)
 	}
 
 	loader.WriteDisposition = bigquery.WriteAppend
 	if len(w.DeleteMap) > 0 {
-		q := delStatement(w.DeleteMap, w.Destination)
+		q := delStatement(w.DeleteMap, w.DestTable)
 		j, err := client.Query(q).Run(ctx)
 		if err != nil {
 			return task.Failf("delete statement: %s", err)
