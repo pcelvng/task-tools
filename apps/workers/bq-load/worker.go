@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,15 +22,25 @@ type worker struct {
 	task.Meta
 	options
 
-	Destination `uri:"dest_table" required:"true"` // BQ table to load data into
+	Destination `uri:"dest_table"` // BQ table to load data into
 
 	File      string            `uri:"origin" required:"true"`      // if not GCS ref must be file, can be folder (for GCS)
 	FromGCS   bool              `uri:"direct_load" default:"false"` // load directly from GCS ref, can use wildcards *
 	Truncate  bool              `uri:"truncate"`                    //remove all data in table before insert
 	DeleteMap map[string]string `uri:"delete"`                      // map of fields with value to check and delete
 
+	// Read options
+	Interactive bool   `uri:"interactive"` // makes queries run faster for local development
+	DestPath    string `uri:"dest_path"`
+
 	delete bool
 }
+
+// TODO: Add bq read support
+// run a query that can export data into another table
+// Run a query that can export data into a local file
+// run a query that Bigquery will export to GCS
+// Allow using Query Params. Prefer BQ native
 
 func (o *options) NewWorker(info string) task.Worker {
 	w := &worker{
@@ -46,10 +58,7 @@ func (o *options) NewWorker(info string) task.Worker {
 		return task.InvalidWorker("truncate and delete options must be selected independently")
 	}
 
-	if !(w.delete || w.Truncate) {
-		return task.InvalidWorker("insert rule required (append|truncate|delete)")
-	}
-
+	//TODO: verify destination is required for all loading, but only for reading in the dest_path is empty
 	return w
 }
 
@@ -63,11 +72,63 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		return task.Failf("bigquery client init %s", err)
 	}
 
-	var loader *bigquery.Loader
+	var format bigquery.DataFormat
+	switch filepath.Ext(w.File) {
+	case "sql":
+		f, err := file.NewReader(w.File, &w.Fopts)
+		if err != nil {
+			return task.Failf("read error: %v %v", w.File, err)
+		}
+		q, _ := io.ReadAll(f)
+		return w.Query(ctx, client, string(q))
+	case "json":
+		format = bigquery.JSON
+		return w.Load(ctx, client, format)
+	case "csv":
+		format = bigquery.CSV
+		return w.Load(ctx, client, format)
+	}
 
+	return task.Failf("unsupported file format %v, expected:sql|json|csv", filepath.Ext(w.File))
+}
+
+func (w *worker) Query(ctx context.Context, client *bigquery.Client, query string) (task.Result, string) {
+	bq := client.Query(query)
+	// TODO: add query params with @name
+
+	if w.Interactive {
+		bq.Priority = bigquery.InteractivePriority
+	} else {
+		bq.Priority = bigquery.BatchPriority
+	}
+
+	if w.Destination.String() != "" && w.DestPath == "" {
+		// project is defined in the client
+		bq.Dst = client.Dataset(w.Dataset).Table(w.Table)
+		bq.WriteDisposition = bigquery.WriteAppend
+	}
+	job, err := bq.Run(ctx)
+	if err != nil {
+		return task.Failf("bq build: %v", err)
+	}
+	status, err := job.Wait(ctx)
+	if err != nil {
+		return task.Failf("wait: %v", err)
+	}
+	if bqStats, ok := status.Statistics.Details.(*bigquery.QueryStatistics); ok {
+		w.SetMeta("bq_bytes_billed", strconv.FormatInt(bqStats.TotalBytesBilled, 10))
+		w.SetMeta("bq_query_time", status.Statistics.EndTime.Sub(status.Statistics.StartTime).String())
+	}
+
+	// TODO: write data to file
+	return task.Completed("BQ byte processed: %v", humanize.Bytes(uint64(status.Statistics.TotalBytesProcessed)))
+}
+
+func (w *worker) Load(ctx context.Context, client *bigquery.Client, format bigquery.DataFormat) (task.Result, string) {
+	var loader *bigquery.Loader
 	if w.FromGCS { // load from Google Cloud Storage
 		gcsRef := bigquery.NewGCSReference(w.File)
-		gcsRef.SourceFormat = bigquery.JSON
+		gcsRef.SourceFormat = format
 		loader = client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(gcsRef)
 	} else { // load from file reader
 		r, err := file.NewReader(w.File, &w.Fopts)
@@ -75,7 +136,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			return task.Failf("problem with file: %s", err)
 		}
 		bqRef := bigquery.NewReaderSource(r)
-		bqRef.SourceFormat = bigquery.JSON
+		bqRef.SourceFormat = format
 		bqRef.MaxBadRecords = 1
 		loader = client.Dataset(w.Dataset).Table(w.Table).LoaderFrom(bqRef)
 	}

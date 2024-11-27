@@ -32,12 +32,11 @@ func TestNewWorker(t *testing.T) {
 			ExpectedErr: errors.New("insert rule required"),
 		},
 		"append": {
-			Input: "gs://file.json?dest_table=p.d.t&append",
+			Input: "gs://file.json?dest_table=p.d.t",
 			Expected: &worker{
 				Meta:        task.NewMeta(),
 				File:        "gs://file.json",
 				Destination: Destination{"p", "d", "t"},
-				Append:      true,
 			},
 		},
 		"truncate": {
@@ -56,7 +55,6 @@ func TestNewWorker(t *testing.T) {
 				File:        "gs://file.json",
 				Destination: Destination{"p", "d", "t"},
 				delete:      true,
-				Append:      true,
 				DeleteMap:   map[string]string{"id": "10"},
 			},
 		},
