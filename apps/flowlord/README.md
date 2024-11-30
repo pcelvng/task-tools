@@ -87,7 +87,7 @@ template = "?date={yyyy}-{mm}-{dd}T{hh}"
 ### files 
 schedule a task after a specified file is written. This should be used with the filewatcher taskmaster or GCP file watching service. File matching is done using the stdlib filepath.Match which does not support `**` matching. Flowlord will attempt to pull the timestamp from the filepath which will be used to populate the date-time in phase's template `{yyyy}|{dd}|{mm}|{hh}`. The matching file can be referenced in the phase's template with `{meta:file}.`. The filename can be references with `{meta:filename}`.
 
-```
+``` toml 
 [[Phase]]
 task = "topic"
 rule = "files=/folder/*/*/*.txt"
@@ -98,7 +98,7 @@ template = "{meta:file}?opt=true"
 
 used to indicate a required field or value before starting a child process. 
 
-```
+``` toml 
 [[Phase]]
 task = "child:job"
 rule = "require:{meta:file}"
@@ -114,4 +114,28 @@ batching is a way to create multiple tasks when the phase is run. This can be do
   * by: time iterator Ex: hour, day, month 
   * meta: comma separated data associate with a key. Each item will generate a new task Ex: meta=key:a,b,c|key2=1,2,3 
   * meta_file: a line deliminated data file. each row (line) will generate a new task. 
+
+``` toml 
+# run every day at 2:01:00 for multiple items
+# generates 3 tasks with the info of 
+# ?name=a&value=1 AND ?name=b&value=2 AND ?name=c&value=3
+[[Phase]]
+task="worker:job-meta"
+rule="cron=0 1 2 * * *&meta=name:a,b,c|value:1,2,3" 
+template="?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}"
+
+# run every day at 5:05:00
+# generates a task for every line in the file
+[[Phase]]
+task="worker:job-file"
+rule="cron=0 5 5 * * *&meta_file=data.json" 
+template="?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}"
+
+# run every day for the last week 
+# generates 8 tasks from today to 7 days ago
+[[Phase]] 
+task="worker:lastweek"
+rule="cron=0 7 7 * * *&for=-168h&by=day
+template=?day={yyyy}-{mm}-{dd}
+```
 

@@ -368,6 +368,18 @@ func TestTaskMaster_Batch(t *testing.T) {
 				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "cron=2024-01-13T00&workflow=batch.toml"},
 			},
 		},
+		"for-48h +offset": {
+			Input: workflow.Phase{
+				Task:     "batch-date",
+				Rule:     "for=-48h&offset=-48h",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			Expected: []task.Task{
+				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "cron=2024-01-13T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-12", Meta: "cron=2024-01-12T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-11", Meta: "cron=2024-01-11T00&workflow=batch.toml"},
+			},
+		},
 		"metas": {
 			Input: workflow.Phase{
 				Task:     "meta-batch",
