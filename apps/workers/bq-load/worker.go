@@ -34,7 +34,8 @@ type worker struct {
 	Interactive bool   `uri:"interactive"` // makes queries run faster for local development
 	DestPath    string `uri:"dest_path"`
 
-	delete bool
+	writeToFile bool
+	delete      bool
 }
 
 // TODO: Add bq read support
@@ -98,9 +99,13 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			return task.Failf("read error: %v %v", w.File, err)
 		}
 		b, _ := io.ReadAll(f)
-
-		// TODO: export to GCS when using gs://.../* otherwise extract the data from the query and write to a single file.
-		return w.Query(ctx, client, prepQuery(b, w.DestPath, bigquery.CSV))
+		query := string(b)
+		if isGCSExport(w.DestPath) {
+			query = prepQuery(b, w.DestPath, bigquery.CSV)
+		} else if w.DestPath != "" {
+			w.writeToFile = true
+		}
+		return w.Query(ctx, client, query)
 	case ".json":
 		format = bigquery.JSON
 		return w.Load(ctx, client, format)
@@ -142,7 +147,17 @@ func (w *worker) Query(ctx context.Context, client *bigquery.Client, query strin
 		w.SetMeta("bq_query_time", status.Statistics.EndTime.Sub(status.Statistics.StartTime).String())
 	}
 
-	// TODO: write data to file
+	// process query and save to file
+	if w.writeToFile {
+		writer, err := file.NewWriter(w.DestPath, &w.Fopts)
+		if err != nil {
+			return task.Failf("write to %v: %v", w.DestPath, err)
+		}
+		format := strings.Trim(filepath.Ext(w.DestPath), ".")
+		if err := writeToFile(ctx, job, writer, format); err != nil {
+			return task.Failed(err)
+		}
+	}
 	return task.Completed("BQ byte processed: %v", humanize.Bytes(uint64(status.Statistics.TotalBytesProcessed)))
 }
 
@@ -210,6 +225,17 @@ func delStatement(m map[string]string, d Destination) string {
 	for k, v := range m {
 		s = append(s, k+" = "+v)
 	}
-	sort.Sort(sort.StringSlice(s))
+	sort.Strings(s)
 	return fmt.Sprintf("delete from `%s` where %s", d.String(), strings.Join(s, " and "))
+}
+
+// isGCSExport checks in the url path will work for exporting to GCS
+// - starts with gs://
+// - must contain a single asterisk * in the filename
+func isGCSExport(s string) bool {
+	if !strings.HasPrefix(s, "gs://") {
+		return false
+	}
+	d, f := filepath.Split(s)
+	return !strings.Contains(d, "*") && strings.Count(f, "*") == 1
 }
