@@ -9,8 +9,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/civil"
 	"github.com/dustin/go-humanize"
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
@@ -25,10 +27,11 @@ type worker struct {
 
 	DestTable Destination `uri:"dest_table"` // BQ table to load data into
 
-	File      string            `uri:"origin" required:"true"`      // if not GCS ref must be file, can be folder (for GCS)
-	FromGCS   bool              `uri:"direct_load" default:"false"` // load directly from GCS ref, can use wildcards *
-	Truncate  bool              `uri:"truncate"`                    //remove all data in table before insert
-	DeleteMap map[string]string `uri:"delete"`                      // map of fields with value to check and delete
+	File        string            `uri:"origin" required:"true"`      // if not GCS ref must be file, can be folder (for GCS)
+	FromGCS     bool              `uri:"direct_load" default:"false"` // load directly from GCS ref, can use wildcards *
+	Truncate    bool              `uri:"truncate"`                    //remove all data in table before insert
+	DeleteMap   map[string]string `uri:"delete"`                      // map of fields with value to check and delete
+	QueryParams map[string]string `uri:"params"`                      // query parameters in format param=value
 
 	// Read options
 	Interactive bool   `uri:"interactive"` // makes queries run faster for local development
@@ -37,12 +40,6 @@ type worker struct {
 	writeToFile bool
 	delete      bool
 }
-
-// TODO: Add bq read support
-// run a query that can export data into another table
-// Run a query that can export data into a local file
-// run a query that Bigquery will export to GCS
-// Allow using Query Params. Prefer BQ native
 
 func (o *options) NewWorker(info string) task.Worker {
 	w := &worker{
@@ -119,7 +116,20 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 
 func (w *worker) Query(ctx context.Context, client *bigquery.Client, query string) (task.Result, string) {
 	bq := client.Query(query)
-	// TODO: add query params with @name
+
+	// Add query parameters if provided
+	if len(w.QueryParams) > 0 {
+		params := []bigquery.QueryParameter{}
+		for name, value := range w.QueryParams {
+			// Remove @ if present in parameter name
+			name = strings.TrimPrefix(name, "@")
+
+			// Try to determine the parameter type and convert value accordingly
+			param := inferQueryParameter(name, value)
+			params = append(params, param)
+		}
+		bq.Parameters = params
+	}
 
 	if w.Interactive {
 		bq.Priority = bigquery.InteractivePriority
@@ -238,4 +248,32 @@ func isGCSExport(s string) bool {
 	}
 	d, f := filepath.Split(s)
 	return !strings.Contains(d, "*") && strings.Count(f, "*") == 1
+}
+
+// Add new helper function to infer parameter types
+func inferQueryParameter(name, value string) bigquery.QueryParameter {
+	// Try to parse as date first - expected format YYYY-MM-DD
+	if strings.Count(value, "-") == 2 {
+		if t, err := time.Parse("2006-01-02", value); err == nil {
+			return bigquery.QueryParameter{Name: name, Value: civil.DateOf(t)}
+		}
+	}
+
+	// Try to convert to int64
+	if i, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return bigquery.QueryParameter{Name: name, Value: i}
+	}
+
+	// Try to convert to float64
+	if f, err := strconv.ParseFloat(value, 64); err == nil {
+		return bigquery.QueryParameter{Name: name, Value: f}
+	}
+
+	// Try to convert to bool
+	if b, err := strconv.ParseBool(value); err == nil {
+		return bigquery.QueryParameter{Name: name, Value: b}
+	}
+
+	// Default to string
+	return bigquery.QueryParameter{Name: name, Value: value}
 }
