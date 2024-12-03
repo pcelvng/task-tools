@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,7 +13,64 @@ import (
 	"cloud.google.com/go/bigquery"
 
 	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task-tools/file/stat"
 )
+
+func writeToFile(ctx context.Context, j *bigquery.Job, w file.Writer, format string) (sts stat.Stats, err error) {
+	rows, err := j.Read(ctx)
+	if err != nil {
+		return sts, fmt.Errorf("row: %w", err)
+	}
+
+	loader := &bqValueLoader{}
+
+	// Set header for CSV format
+	if format == "csv" {
+		schema := rows.Schema
+		header := make([]string, len(schema))
+		for i, field := range schema {
+			header[i] = field.Name
+		}
+		loader.Header = header
+
+		// Write header row
+		err = w.WriteLine([]byte(strings.Join(header, ",")))
+		if err != nil {
+			return sts, fmt.Errorf("write header: %w", err)
+		}
+	}
+
+	for err = rows.Next(loader); err == nil; err = rows.Next(loader) {
+		var line []byte
+		if format == "csv" {
+			line = []byte(loader.ToCSV())
+		} else {
+			line, _ = json.Marshal(loader)
+		}
+
+		err = w.WriteLine(line)
+		if err != nil {
+			return sts, fmt.Errorf("write: %w", err)
+		}
+	}
+	return w.Stats(), w.Close()
+}
+
+// addExportToGCS prepends details to the query so that it is properly exported to GCS
+func addExportToGCS(query []byte, destPath string, format bigquery.DataFormat) string {
+	var w bytes.Buffer
+	w.WriteString("EXPORT DATA OPTIONS(\n")
+	w.WriteString("overwrite=true,\n")
+	switch format {
+	case bigquery.JSON:
+		w.WriteString("format=JSON,\n")
+	case bigquery.CSV:
+		w.WriteString("format=CSV,\n")
+	}
+	w.WriteString("uri='" + destPath + "') AS \n")
+	w.Write(query)
+	return w.String()
+}
 
 // bqValueLoader implements bigquery.ValueLoader and can be marshaled to JSON
 type bqValueLoader struct {
@@ -36,12 +94,12 @@ func (b *bqValueLoader) Load(vs []bigquery.Value, schema bigquery.Schema) error 
 	return nil
 }
 
-// MarshalJSON implements json.Marshaler
+// MarshalJSON implements json.Marshaler to marshal under laying data
 func (b *bqValueLoader) MarshalJSON() ([]byte, error) {
 	return json.Marshal(b.data)
 }
 
-// ToCSV converts the loaded data to a CSV string based on the Header order
+// ToCSV creates a CSV line based on the Header order
 func (b *bqValueLoader) ToCSV() string {
 	if len(b.Header) == 0 {
 		return ""
@@ -50,13 +108,14 @@ func (b *bqValueLoader) ToCSV() string {
 	values := make([]string, len(b.Header))
 	for i, field := range b.Header {
 		val := b.data[field]
-		values[i] = convertToString(val)
+		values[i] = toCsvString(val)
 	}
 	return strings.Join(values, ",")
 }
 
-// convertToString converts a value to its string representation for CSV
-func convertToString(v interface{}) string {
+// toCsvString converts a value to a valid CSV string
+// this required escaping certain characters and values
+func toCsvString(v any) string {
 	if v == nil {
 		return ""
 	}
@@ -90,7 +149,7 @@ func convertToString(v interface{}) string {
 }
 
 // convertBQValue converts BigQuery types to JSON-compatible types
-func convertBQValue(v interface{}) interface{} {
+func convertBQValue(v any) any {
 	if v == nil {
 		return nil
 	}
@@ -122,44 +181,4 @@ func convertBQValue(v interface{}) interface{} {
 	default:
 		return v
 	}
-}
-
-func writeToFile(ctx context.Context, j *bigquery.Job, w file.Writer, format string) error {
-	rows, err := j.Read(ctx)
-	if err != nil {
-		return fmt.Errorf("row: %w", err)
-	}
-
-	loader := &bqValueLoader{}
-
-	// Set header for CSV format
-	if format == "csv" {
-		schema := rows.Schema
-		header := make([]string, len(schema))
-		for i, field := range schema {
-			header[i] = field.Name
-		}
-		loader.Header = header
-
-		// Write header row
-		err = w.WriteLine([]byte(strings.Join(header, ",")))
-		if err != nil {
-			return fmt.Errorf("write header: %w", err)
-		}
-	}
-
-	for err = rows.Next(loader); err == nil; err = rows.Next(loader) {
-		var line []byte
-		if format == "csv" {
-			line = []byte(loader.ToCSV())
-		} else {
-			line, _ = json.Marshal(loader)
-		}
-
-		err = w.WriteLine(line)
-		if err != nil {
-			return fmt.Errorf("write: %w", err)
-		}
-	}
-	return w.Close()
 }

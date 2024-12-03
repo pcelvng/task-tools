@@ -57,5 +57,5 @@ func (d Destination) String() string {
 }
 
 func (d Destination) BqTable(client *bigquery.Client) *bigquery.Table {
-	return client.DatasetInProject(d.Project, d.Dataset).Table(d.Project)
+	return client.DatasetInProject(d.Project, d.Dataset).Table(d.Table)
 }
