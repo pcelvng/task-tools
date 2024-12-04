@@ -13,7 +13,7 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = filewatcher sort2file deduper recap filecopy logger json2csv csv2json sql-load sql-readx bq-load transform db-check
+APPS = filewatcher sort2file deduper recap filecopy logger json2csv csv2json sql-load sql-readx bigquery transform db-check
 
 all: $(APPS) flowlord
 

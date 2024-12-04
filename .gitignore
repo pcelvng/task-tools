@@ -1,6 +1,7 @@
 .idea/
 *.toml
 *.json
+*.csv
 
 .vscode/
 
