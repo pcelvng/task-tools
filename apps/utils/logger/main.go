@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/pcelvng/task/bus"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
-	"github.com/pcelvng/task/bus"
 )
 
 type app struct {
@@ -38,11 +39,12 @@ func New() *app {
 	a := &app{
 		StatusPort: 0,
 		Bus: bus.Options{
-			Bus:       "pubsub",
-			InChannel: "logger",
+			Bus:          "nsq",
+			InChannel:    "logger",
+			LookupdHosts: []string{"localhost:4161"},
 		},
 		PollPeriod: time.Minute,
-		LogPath:    "./{TS}-{topic}.json.gz",
+		LogPath:    "./{TS}-{topic}.json",
 		topics:     make(map[string]*Logger),
 	}
 
