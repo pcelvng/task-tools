@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
 )
 
 type Cache interface {
@@ -134,4 +135,12 @@ func (c *Memory) Get(id string) TaskJob {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.cache[id]
+}
+
+// SendFunc extends the given producers send function by adding any task sent to the cache.
+func (m *Memory) SendFunc(p bus.Producer) func(string, *task.Task) error {
+	return func(topic string, tsk *task.Task) error {
+		m.Add(*tsk)
+		return p.Send(topic, tsk.JSONBytes())
+	}
 }

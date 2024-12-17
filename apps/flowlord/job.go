@@ -12,11 +12,11 @@ import (
 	"github.com/jbsmith7741/uri"
 
 	"github.com/pcelvng/task"
+	"github.com/robfig/cron/v3"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
-	"github.com/pcelvng/task/bus"
-	"github.com/robfig/cron/v3"
 )
 
 const DateHour = "2006-01-02T15"
@@ -30,7 +30,8 @@ type Cronjob struct {
 	Template string        `uri:"-"`
 
 	// inherited from tm
-	producer bus.Producer `uri:"-"`
+	sendFunc func(topic string, tsk *task.Task) error `uri:"-"`
+	alerts   chan task.Task
 }
 
 func (j *Cronjob) Run() {
@@ -44,7 +45,11 @@ func (j *Cronjob) Run() {
 		tsk.Meta += "&job=" + j.Name
 	}
 
-	j.producer.Send(j.Topic, tsk.JSONBytes())
+	if err := j.sendFunc(j.Topic, tsk); err != nil {
+		tsk.Result = task.ErrResult
+		tsk.Msg = err.Error()
+		j.alerts <- *tsk
+	}
 }
 
 func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
@@ -59,10 +64,10 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 			Topic:    ph.Topic(),
 			//Schedule: pull from uri,
 			Template: ph.Template,
-			producer: tm.producer,
+			sendFunc: tm.taskCache.SendFunc(tm.producer),
+			alerts:   tm.alerts,
 		},
-		alerts: tm.alerts,
-		fOpts:  fOps,
+		fOpts: fOps,
 	}
 
 	u := url.URL{}
@@ -90,8 +95,6 @@ type batchJob struct {
 	Meta     map[string][]string `uri:"meta"`
 	FilePath string              `uri:"meta-file"`
 	fOpts    file.Options
-
-	alerts chan task.Task
 }
 
 // Run a batchJob
@@ -108,7 +111,7 @@ func (b *batchJob) Run() {
 		return
 	}
 	for _, t := range tasks {
-		if err := b.producer.Send(t.Type, t.JSONBytes()); err != nil {
+		if err := b.sendFunc(t.Type, &t); err != nil {
 			t.Result = task.ErrResult
 			t.Msg = err.Error()
 			b.alerts <- t //notify flowlord of issues
