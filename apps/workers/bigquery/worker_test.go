@@ -27,9 +27,9 @@ func TestNewWorker(t *testing.T) {
 			Input:       "gs://file.json?dest_table=apple",
 			ExpectedErr: errors.New("requires (project.dataset.table)"),
 		},
-		"missing insert rule": {
-			Input:       "gs://file.json?dest_table=p.d.t",
-			ExpectedErr: errors.New("insert rule required"),
+		"no insert destination": {
+			Input:       "gs://file.json",
+			ExpectedErr: errors.New("requires dest_table (project.dataset.table)"),
 		},
 		"append": {
 			Input: "gs://file.json?dest_table=p.d.t",
@@ -61,6 +61,21 @@ func TestNewWorker(t *testing.T) {
 		"invalid delete": {
 			Input:       "gs://file.json?dest_table=p.d.t&delete=id:10&truncate",
 			ExpectedErr: errors.New("truncate and delete"),
+		},
+		"read_with_path": {
+			Input: "gs://query.sql?dest_path=output.json",
+			Expected: &worker{
+				Meta:     task.NewMeta(),
+				File:     "gs://query.sql",
+				DestPath: "output.json",
+			},
+		},
+		"query_without_dest": {
+			Input: "gs://query.sql",
+			Expected: &worker{
+				Meta: map[string][]string{"warn": {"query ran with no destination"}},
+				File: "gs://query.sql",
+			},
 		},
 	}
 	trial.New(fn, cases).Test(t)

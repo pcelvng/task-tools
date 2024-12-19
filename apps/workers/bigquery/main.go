@@ -12,7 +12,7 @@ import (
 	"github.com/pcelvng/task-tools/file"
 )
 
-const taskType = "bq_load"
+const taskType = "bigquery"
 
 //go:embed README.md
 var desc string
@@ -50,6 +50,10 @@ func (d *Destination) UnmarshalText(text []byte) error {
 
 	d.Project, d.Dataset, d.Table = l[0], l[1], l[2]
 	return nil
+}
+
+func (d *Destination) IsZero() bool {
+	return d.Project == "" && d.Dataset == "" && d.Table == ""
 }
 
 func (d Destination) String() string {

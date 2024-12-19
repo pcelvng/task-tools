@@ -1,4 +1,4 @@
-# bq-load 
+# bigquery
 Load line deliminated json files into BigQuery or execute SQL queries
 
 [Google Cloud Docs](https://cloud.google.com/bigquery/docs/loading-data-local)

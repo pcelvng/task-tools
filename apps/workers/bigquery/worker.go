@@ -56,7 +56,12 @@ func (o *options) NewWorker(info string) task.Worker {
 		return task.InvalidWorker("truncate and delete options must be selected independently")
 	}
 
-	//TODO: verify destination is required for all loading, but only for reading in the dest_path is empty
+	if w.DestPath == "" && w.DestTable.IsZero() {
+		if filepath.Ext(w.File) != ".sql" {
+			return task.InvalidWorker("requires dest_table (project.dataset.table)")
+		}
+		w.SetMeta("warn", "query ran with no destination")
+	}
 	return w
 }
 
@@ -137,7 +142,7 @@ func (w *worker) Load(ctx context.Context, client *bigquery.Client, format bigqu
 			return task.Failf("delete wait: %s", err)
 		}
 		if status.Err() != nil {
-			return task.Failf("delete: %s", err)
+			return task.Failf("delete: %s", status.Err())
 		}
 		status = j.LastStatus()
 		if qSts, ok := status.Statistics.Details.(*bigquery.QueryStatistics); ok {
