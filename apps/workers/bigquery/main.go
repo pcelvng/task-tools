@@ -1,36 +1,26 @@
 package main
 
 import (
+	_ "embed"
 	"errors"
 	"strings"
+
+	"cloud.google.com/go/bigquery"
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
 )
 
-const (
-	taskType = "bq_load"
-	desc     = `load a delimited json file into BigQuery 
+const taskType = "bigquery"
 
-info params 
- - origin: (required)  file to be loaded (gs://path/file.json)
- - destination: (required) project.dataset.table to be insert into
- - truncate: truncate the table (delete ALL and insert). Default behavior is to append data 
- - delete: map field defines the column and values to delete before inserting (delete=id:10|date:2020-01-02)
-
-
-example for file reader:
-{"task":"bq_load", "info":"gs://my/data.json?dest_table=project.reports.impressions&delete=date:2020-01-02|id:11"}
-
-example for GCS reference:
-{"task":"bq_load", "info":"gs://folder/*.json?dest_table=project.reports.impressions&from_gcs=true&append=true"}`
-)
+//go:embed README.md
+var desc string
 
 type options struct {
-	BqAuth string `toml:"bq_auth" comment:"file path to service file"`
-
-	Fopts file.Options `toml:"file"`
+	BqAuth  string       `toml:"bq_auth" comment:"file path to service file"`
+	Project string       `toml:"project"`
+	Fopts   file.Options `toml:"file"`
 }
 
 func (o *options) Validate() error {
@@ -62,6 +52,14 @@ func (d *Destination) UnmarshalText(text []byte) error {
 	return nil
 }
 
+func (d *Destination) IsZero() bool {
+	return d.Project == "" && d.Dataset == "" && d.Table == ""
+}
+
 func (d Destination) String() string {
 	return d.Project + "." + d.Dataset + "." + d.Table
+}
+
+func (d Destination) BqTable(client *bigquery.Client) *bigquery.Table {
+	return client.DatasetInProject(d.Project, d.Dataset).Table(d.Table)
 }

@@ -477,8 +477,7 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 				log.Println(err)
 			}
 			for _, tsk := range tasks {
-				b, _ := json.Marshal(tsk)
-				writer.WriteLine(b)
+				writer.WriteLine(tsk.JSONBytes())
 
 				meta, _ := url.ParseQuery(tsk.Meta)
 				key := tsk.Type + ":" + meta.Get("job")

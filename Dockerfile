@@ -21,3 +21,5 @@ RUN echo -e "#!/bin/sh \n ls -Alhp \$1" > /usr/local/bin/ll
 RUN chmod +x /usr/local/bin/ll
 
 COPY build/linux/ /usr/local/bin/
+# backward compatability for bq-load
+RUN ln -s /usr/local/bin/bigquery /usr/local/bin/bq-load
