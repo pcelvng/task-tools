@@ -7,8 +7,9 @@ Load line deliminated json files into BigQuery or execute SQL queries
 
 - `origin`: [required] file to be inserted (gs://path/file.json) or SQL query to be run (.sql)
 - Destination: (at least one)  
-  - `dest_table`: [required for load] project.dataset.table to be inserted into 
+  - `dest_table`: [required for load] project.dataset.table to be inserted into
   - `dest_path`: string; export query results to a file. Will automatically export to GCS if a star is in the path
+- `dest_src`: [optional] project.dataset.table used to template project, dataset or table which can't be done with query params
 - `direct_load`: bool; fastest way to load but the bucket must be in the same project
 - pre-insert: [optional] table cleanup to prevent duplicates
   - `truncate`: delete everything and insert

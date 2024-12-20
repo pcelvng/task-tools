@@ -25,12 +25,13 @@ type worker struct {
 	options
 
 	DestTable Destination `uri:"dest_table"` // BQ table to load data into
+	SrcTable  Destination `uri:"src_table"`  // Used for table templating
 
 	File        string            `uri:"origin" required:"true"`      // if not GCS ref must be file, can be folder (for GCS)
 	FromGCS     bool              `uri:"direct_load" default:"false"` // load directly from GCS ref, can use wildcards *
 	Truncate    bool              `uri:"truncate"`                    //remove all data in table before insert
 	DeleteMap   map[string]string `uri:"delete"`                      // map of fields with value to check and delete
-	QueryParams map[string]string `uri:"params"`                      // query parameters in format param=value
+	QueryParams map[string]string `uri:"params"`                      // query parameters in format param:value
 
 	// Read options
 	Interactive bool   `uri:"interactive"` // makes queries run faster for local development
@@ -84,7 +85,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 			return task.Failf("read error: %v %v", w.File, err)
 		}
 		b, _ := io.ReadAll(f)
-		query := string(b)
+		query := w.SrcTable.templateQuery(string(b))
 		if isGCSExport(w.DestPath) {
 			query = addExportToGCS(b, w.DestPath, bigquery.CSV)
 		} else if w.DestPath != "" {
@@ -100,6 +101,17 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 	}
 
 	return task.Failf("unsupported file format %v, expected:sql|json|csv", filepath.Ext(w.File))
+}
+
+// templateQuery lets users template project, dataset and tables values in the query.
+// These value are signified with surrounding brackets
+// {project} {dataset} {table} {src_table} for full path
+func (d Destination) templateQuery(q string) string {
+	q = strings.ReplaceAll(q, "{src_table}", d.String())
+	q = strings.ReplaceAll(q, "{table}", d.Table)
+	q = strings.ReplaceAll(q, "{dataset}", d.Dataset)
+	q = strings.ReplaceAll(q, "{project}", d.Project)
+	return q
 }
 
 // isGCSExport checks the url path to see it is meant to be exported to GCS through BigQuery
@@ -240,7 +252,7 @@ func (w *worker) Query(ctx context.Context, client *bigquery.Client, query strin
 		}
 
 	}
-	return task.Completed("BQ byte processed: %v"+msg, humanize.Bytes(uint64(status.Statistics.TotalBytesProcessed)))
+	return task.Completed("BQ byte processed: %v "+msg, humanize.Bytes(uint64(status.Statistics.TotalBytesProcessed)))
 }
 
 var timeFormats = [...]string{
