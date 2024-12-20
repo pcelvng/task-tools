@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"strconv"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/bigquery"
+	"google.golang.org/api/iterator"
 
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
@@ -54,8 +55,8 @@ func writeToFile(ctx context.Context, j *bigquery.Job, w file.Writer, format str
 			return sts.Clone(), fmt.Errorf("write: %w", err)
 		}
 	}
-	if err != io.EOF {
-		return sts.Clone(), fmt.Errorf("row iteration error: %w", err)
+	if !errors.Is(err, iterator.Done) {
+		return sts.Clone(), fmt.Errorf("row iterator: %T %w", err, err)
 	}
 
 	return w.Stats(), w.Close()
