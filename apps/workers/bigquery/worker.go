@@ -242,11 +242,11 @@ func (w *worker) Query(ctx context.Context, client *bigquery.Client, query strin
 	if w.writeToFile {
 		writer, err := file.NewWriter(w.DestPath, &w.Fopts)
 		if err != nil {
-			return task.Failf("write to %v: %v", w.DestPath, err)
+			return task.Failf("writer create(%v): %v", w.DestPath, err)
 		}
 		format := strings.Trim(filepath.Ext(w.DestPath), ".")
 		if sts, err := writeToFile(ctx, job, writer, format); err != nil {
-			return task.Failed(err)
+			return task.Failf("write to %v: %v", w.DestPath, err)
 		} else {
 			msg = fmt.Sprintf("%d lines writen to %v", sts.LineCnt, sts.Path)
 		}

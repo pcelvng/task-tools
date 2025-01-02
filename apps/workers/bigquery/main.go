@@ -32,7 +32,7 @@ func main() {
 	app := bootstrap.NewWorkerApp(taskType, opts.NewWorker, opts).
 		Description(desc).
 		Version(tools.Version).Initialize()
-
+	
 	app.Run()
 }
 
