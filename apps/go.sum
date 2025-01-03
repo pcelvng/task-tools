@@ -201,6 +201,8 @@ github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hydronica/go-config v0.2.6 h1:5RXa/MoZ29VLoWDIbFshZQ2YQujBeNoClvoobrP7eNw=
 github.com/hydronica/go-config v0.2.6/go.mod h1:cXg/HkitVe1beAlMLaTigI0kawUSC8QHBMJR4HYtCy8=
+github.com/hydronica/go-config v0.2.7-0.20250103214219-f4e5f2c60aae h1:CFg9LLPNrOxKiqwOScBpXxlXGkKzw6WGafA7HbMK0MQ=
+github.com/hydronica/go-config v0.2.7-0.20250103214219-f4e5f2c60aae/go.mod h1:F9bsaa0358L5lgnVGnl6W1TpFBOrswCJVRrY/t+mSDs=
 github.com/hydronica/toml v0.4.1/go.mod h1:c7QhbYq3Wp9SlOWuG7MAieKUyXP2P/hXhy/YqWfbS/4=
 github.com/hydronica/toml v0.5.0 h1:T/hYdVy/nS8qiNAR5J4Of7cnEi0hyXouxfa4E5ygcKk=
 github.com/hydronica/toml v0.5.0/go.mod h1:Q9+UHpFO5nQGzW1D6WWuWcBVE6MaCyxmuB8GWQeF8Pc=
