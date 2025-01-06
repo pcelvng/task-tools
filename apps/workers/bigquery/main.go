@@ -19,7 +19,7 @@ var desc string
 
 type options struct {
 	BqAuth  string       `toml:"bq_auth" comment:"file path to service file"`
-	Project string       `toml:"project"`
+	Project string       `toml:"project" comment:"project to run query under"`
 	Fopts   file.Options `toml:"file"`
 }
 
@@ -32,7 +32,7 @@ func main() {
 	app := bootstrap.NewWorkerApp(taskType, opts.NewWorker, opts).
 		Description(desc).
 		Version(tools.Version).Initialize()
-
+	
 	app.Run()
 }
 
