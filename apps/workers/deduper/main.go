@@ -54,9 +54,6 @@ Example:
 
 NOTE: \t or tab must be url encoded %09 
 `
-
-	fOpt        *file.Options
-	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 )
 
 func main() {
@@ -69,7 +66,7 @@ func main() {
 		Description(description)
 	app.Initialize()
 	if appOpt.FileTopic != "-" {
-		producer = app.NewProducer()
+		appOpt.Producer = app.NewProducer()
 	}
 	app.Run()
 }
@@ -77,6 +74,8 @@ func main() {
 type options struct {
 	FileTopic string       `toml:"file_topic" commented:"true" comment:"topic to publish written file stats"` // topic to publish information about written files
 	FOpts     file.Options `toml:"file"`
+
+	Producer bus.Producer
 }
 
 func (o *options) Validate() error { return nil }

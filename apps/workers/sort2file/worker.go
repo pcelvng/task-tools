@@ -13,7 +13,6 @@ import (
 
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus"
 
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
@@ -120,10 +119,9 @@ func (o *options) newWorker(info string) task.Worker {
 
 	return &worker{
 		iOpt:        *iOpt,
-		fOpt:        o.Fopt,
+		options:     *o,
 		stsRdrs:     stsRdrs,
 		w:           w,
-		fileTopic:   o.FileTopic,
 		extractDate: extractor,
 	}
 }
@@ -135,14 +133,11 @@ type statsReader struct {
 
 type worker struct {
 	iOpt         infoOptions
-	fOpt         file.Options
 	stsRdrs      []*statsReader
 	w            *file.WriteByHour
 	extractDate  file.DateExtractor
 	discardedCnt int64 // number of records discarded
-
-	producer  bus.Producer
-	fileTopic string
+	options
 }
 
 func (wkr *worker) DoTask(ctx context.Context) (task.Result, string) {
@@ -233,7 +228,7 @@ func (wkr *worker) done(ctx context.Context) (task.Result, string) {
 	allSts := wkr.w.Stats()
 	for _, sts := range allSts {
 		if sts.Size > 0 { // only successful files
-			wkr.producer.Send(wkr.fileTopic, sts.JSONBytes())
+			wkr.Producer.Send(wkr.FileTopic, sts.JSONBytes())
 		}
 	}
 

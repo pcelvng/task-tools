@@ -33,9 +33,6 @@ type Worker struct {
 	newWkr   task.NewWorker // application MakeWorker function
 	launcher *task.Launcher
 
-	consumer bus.Consumer
-	producer bus.Producer
-
 	info Info // info stats on various worker types
 }
 
@@ -52,18 +49,8 @@ func (w *Worker) InfoStats() Info {
 	w.info.AppName = w.tskType
 	w.info.Version = w.version
 
-	if w.consumer != nil {
-		cs := w.consumer.Info()
-		w.info.ConsumerStats = &cs
-	}
-
 	if w.launcher != nil {
 		w.info.LauncherStats = w.launcher.Stats()
-	}
-
-	if w.producer != nil {
-		ps := w.producer.Info()
-		w.info.ProducerStats = &ps
 	}
 
 	return w.info
@@ -222,5 +209,6 @@ func (w *Worker) TaskType() string {
 }
 
 func (w *Worker) NewProducer() bus.Producer {
-	return w.producer
+	p, _ := bus.NewProducer(w.BusOpt)
+	return p
 }

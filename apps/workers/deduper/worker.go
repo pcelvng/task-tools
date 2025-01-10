@@ -77,7 +77,7 @@ func (o *options) newWorker(info string) task.Worker {
 	}
 
 	// all paths (if pth is directory)
-	fSts, _ := file.List(iOpt.SrcPath, fOpt)
+	fSts, _ := file.List(iOpt.SrcPath, &o.FOpts)
 
 	// path not directory - assume just one file
 	if len(fSts) == 0 {
@@ -160,7 +160,7 @@ type worker struct {
 func (wkr *worker) DoTask(ctx context.Context) (task.Result, string) {
 	// read/write loop
 	for _, rdr := range wkr.stsFiles { // loop through all readers
-		r, err := file.NewReader(rdr.Path, fOpt)
+		r, err := file.NewReader(rdr.Path, &wkr.FOpts)
 		if err != nil {
 			return task.Failed(err)
 		}
@@ -235,7 +235,7 @@ func (wkr *worker) done() (task.Result, string) {
 	// publish files stats
 	sts := wkr.w.Stats()
 	if sts.Size > 0 { // only successful files
-		producer.Send(wkr.FileTopic, sts.JSONBytes())
+		wkr.Producer.Send(wkr.FileTopic, sts.JSONBytes())
 	}
 
 	// msg
