@@ -1,10 +1,11 @@
 package main
 
 import (
+	"github.com/pcelvng/task/bus"
+
 	"github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task/bus"
 )
 
 var (
@@ -54,28 +55,28 @@ Example:
 NOTE: \t or tab must be url encoded %09 
 `
 
-	appOpt = &options{
-		FileTopic: "files", // default
-	}
 	fOpt        *file.Options
 	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 )
 
 func main() {
-	app := bootstrap.NewWorkerApp(taskType, newWorker, appOpt).
+	appOpt := &options{
+		FileTopic: "files", // default
+
+	}
+	app := bootstrap.NewWorkerApp(taskType, appOpt.newWorker, appOpt).
 		Version(tools.String()).
-		Description(description).
-		FileOpts()
+		Description(description)
 	app.Initialize()
 	if appOpt.FileTopic != "-" {
 		producer = app.NewProducer()
 	}
-	fOpt = app.GetFileOpts()
 	app.Run()
 }
 
 type options struct {
-	FileTopic string `toml:"file_topic" commented:"true" comment:"topic to publish written file stats"` // topic to publish information about written files
+	FileTopic string       `toml:"file_topic" commented:"true" comment:"topic to publish written file stats"` // topic to publish information about written files
+	FOpts     file.Options `toml:"file"`
 }
 
 func (o *options) Validate() error { return nil }

@@ -20,6 +20,8 @@ type Utility struct {
 	description string
 	version     string
 	config      interface{}
+
+	flags
 }
 
 func NewUtility(name string, config interface{}) *Utility {
@@ -92,13 +94,13 @@ func (u *Utility) checkFlags() {
 		flag.Parse()
 	}
 
-	if *showVersion || *ver && u.version != "" {
+	if u.showVersion && u.version != "" {
 		fmt.Println(u.version)
 		os.Exit(0)
 	}
 
 	// gen config (sent to stdout)
-	if *genConfig || *g {
+	if u.GenConfig {
 		cfg := u.config
 		if v := reflect.ValueOf(cfg); v.Kind() == reflect.Ptr {
 			cfg = v.Elem().Interface()
@@ -108,17 +110,12 @@ func (u *Utility) checkFlags() {
 		os.Exit(0)
 	}
 
-	var path string
 	// configPth required
-	if *configPth == "" && *c == "" {
+	if u.configPath == "" {
 		log.Fatal("-config (-c) config file path required")
-	} else if *configPth != "" {
-		path = *configPth
-	} else {
-		path = *c
 	}
 
-	_, err := btoml.DecodeFile(path, u.config)
+	_, err := btoml.DecodeFile(u.configPath, u.config)
 	if err != nil {
 		log.Fatal("Error parsing config file", err)
 	}

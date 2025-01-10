@@ -13,6 +13,8 @@ import (
 
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 )
@@ -60,7 +62,7 @@ func (i *infoOptions) validate() error {
 	return nil
 }
 
-func newWorker(info string) task.Worker {
+func (o *options) newWorker(info string) task.Worker {
 	iOpt, _ := newInfoOptions(info)
 
 	// validate
@@ -86,16 +88,8 @@ func newWorker(info string) task.Worker {
 		)
 	}
 
-	// file opts
-	wfOpt := file.NewOptions()
-	wfOpt.UseFileBuf = iOpt.UseFileBuffer || fOpt.UseFileBuf
-	wfOpt.FileBufDir = fOpt.FileBufDir
-	wfOpt.FileBufPrefix = fOpt.FileBufPrefix
-	wfOpt.AccessKey = fOpt.AccessKey
-	wfOpt.SecretKey = fOpt.SecretKey
-
 	// all paths (if pth is directory)
-	fSts, _ := file.List(iOpt.SrcPath, wfOpt)
+	fSts, _ := file.List(iOpt.SrcPath, &o.Fopt)
 
 	// path not directory - assume just one file
 	if len(fSts) == 0 {
@@ -111,7 +105,7 @@ func newWorker(info string) task.Worker {
 			continue
 		}
 		sr := &statsReader{sts: &sts}
-		sr.r, err = file.NewReader(sts.Path, wfOpt)
+		sr.r, err = file.NewReader(sts.Path, &o.Fopt)
 		if err != nil {
 			return task.InvalidWorker(err.Error())
 		}
@@ -122,13 +116,14 @@ func newWorker(info string) task.Worker {
 	destTempl := parseTmpl(iOpt.SrcPath, iOpt.DestTemplate)
 
 	// writer
-	w := file.NewWriteByHour(destTempl, wfOpt)
+	w := file.NewWriteByHour(destTempl, &o.Fopt)
 
 	return &worker{
 		iOpt:        *iOpt,
-		fOpt:        *wfOpt,
+		fOpt:        o.Fopt,
 		stsRdrs:     stsRdrs,
 		w:           w,
+		fileTopic:   o.FileTopic,
 		extractDate: extractor,
 	}
 }
@@ -145,6 +140,9 @@ type worker struct {
 	w            *file.WriteByHour
 	extractDate  file.DateExtractor
 	discardedCnt int64 // number of records discarded
+
+	producer  bus.Producer
+	fileTopic string
 }
 
 func (wkr *worker) DoTask(ctx context.Context) (task.Result, string) {
@@ -235,7 +233,7 @@ func (wkr *worker) done(ctx context.Context) (task.Result, string) {
 	allSts := wkr.w.Stats()
 	for _, sts := range allSts {
 		if sts.Size > 0 { // only successful files
-			producer.Send(appOpt.FileTopic, sts.JSONBytes())
+			wkr.producer.Send(wkr.fileTopic, sts.JSONBytes())
 		}
 	}
 
@@ -252,13 +250,13 @@ func (wkr *worker) done(ctx context.Context) (task.Result, string) {
 
 // parseTmpl is a one-time tmpl parsing that supports the
 // following template tags:
-// - {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
-// - {SRC_TS}   source file timestamp (if available) in following format: 20060102T150405
-//              If reading from all files in a directory then SRC_TS is derived from the path
-//              slug. So a path with /2018/02/03/04/ would show 20180203T040000 and
-//              a path with /2018/02/03/ (but no hour) would show 20180203T000000
-//              a path with /2018/02/ (but no day) would show 20180200T000000. Only having
-//              a year value in the path time slug is not supported.
+//   - {SRC_FILE} string value of the source file. Not the full path. Just the file name, including extensions.
+//   - {SRC_TS}   source file timestamp (if available) in following format: 20060102T150405
+//     If reading from all files in a directory then SRC_TS is derived from the path
+//     slug. So a path with /2018/02/03/04/ would show 20180203T040000 and
+//     a path with /2018/02/03/ (but no hour) would show 20180203T000000
+//     a path with /2018/02/ (but no day) would show 20180200T000000. Only having
+//     a year value in the path time slug is not supported.
 //
 // If templ contains any of the supported template tokens but that token
 // is unable to be populated from srcPth then an error is returned. The existence

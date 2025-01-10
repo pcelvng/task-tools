@@ -4,11 +4,11 @@ import (
 	"time"
 
 	"github.com/pcelvng/task-tools"
-	"github.com/pcelvng/task-tools/bootstrap2"
+	"github.com/pcelvng/task-tools/bootstrap"
 )
 
 func main() {
-	app := bootstrap2.NewWorkerApp(taskType, newWorker, appOpt).
+	app := bootstrap.NewWorkerApp(taskType, newWorker, appOpt).
 		Version(tools.String()).
 		Description(description)
 	app.Initialize()

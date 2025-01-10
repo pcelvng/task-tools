@@ -22,9 +22,7 @@ func TestInfoStats(t *testing.T) {
 
 	nv := NilValidator{}
 	app := NewWorkerApp("test", dummyWorker, &nv)
-	app.wkrOpt.BusOpt = &bus.Options{Bus: "stdio"}
-	app.consumer = app.NewConsumer("test_topic", "test_channel")
-	app.producer = app.NewProducer()
+	app.BusOpt = &bus.Options{Bus: "stdio"}
 	app.Initialize()
 
 	i := app.InfoStats()

@@ -18,10 +18,11 @@ import (
 
 	btoml "github.com/hydronica/toml"
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/db"
-	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
 	ptoml "github.com/pelletier/go-toml"
+
+	"github.com/pcelvng/task-tools/db"
+	"github.com/pcelvng/task-tools/file"
 )
 
 type NewRunner func(*TaskMaster) Runner
@@ -35,8 +36,9 @@ type Runner interface {
 // *appName: defines the taskmaster name; acts as a name for identification and easy-of-use (required)
 // *mkr: MakeWorker function that the launcher will call to create a new worker.
 // *options: a struct pointer to additional specific application config options. Note that
-//          the bootstrapped WorkerApp already provides bus and launcher config options and the user
-//          can request to add postgres and mysql config options.
+//
+//	the bootstrapped WorkerApp already provides bus and launcher config options and the user
+//	can request to add postgres and mysql config options.
 func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMaster {
 	// signal handling - be ready to capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -70,6 +72,8 @@ type TaskMaster struct {
 	newRunner   NewRunner
 	runner      Runner
 
+	flags
+
 	// options
 	tmOpt     *tmOptions    // standard worker options (bus and launcher)
 	appOpt    Validator     // extra WorkerApp options; should be pointer to a Validator struct
@@ -98,7 +102,7 @@ type TaskMaster struct {
 // it is safe to move on.
 func (tm *TaskMaster) Initialize() *TaskMaster {
 	tm.setHelpOutput() // add description to help
-
+	tm.setupFlags()
 	// flags
 	if !flag.Parsed() {
 		flag.Parse()
@@ -148,17 +152,17 @@ func (tm *TaskMaster) logFatal(err error) {
 
 func (tm *TaskMaster) handleFlags() {
 	// version
-	if *showVersion || *ver {
+	if tm.flags.showVersion {
 		tm.showVersion()
 	}
 
 	// gen config (sent to stdout)
-	if *genConfig || *g {
+	if tm.flags.GenConfig {
 		tm.genConfig()
 	}
 
 	// configPth required
-	if *configPth == "" && *c == "" {
+	if tm.flags.configPath == "" {
 		tm.logFatal(errors.New("-config (-c) config file path required"))
 	}
 }
@@ -264,11 +268,7 @@ func (tm *TaskMaster) genConfig() {
 }
 
 func (tm *TaskMaster) loadOptions() error {
-	cpth := *configPth
-	if *c != "" {
-		cpth = *c
-	}
-
+	cpth := tm.flags.configPath
 	// status options
 	if _, err := btoml.DecodeFile(cpth, tm.statusPort); err != nil {
 		return err

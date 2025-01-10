@@ -13,6 +13,7 @@ import (
 
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/dedup"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
@@ -62,7 +63,7 @@ func (i *infoOptions) validate() error {
 	return nil
 }
 
-func newWorker(info string) task.Worker {
+func (o *options) newWorker(info string) task.Worker {
 	// parse info
 	iOpt, err := newInfoOptions(info)
 	if err != nil {
@@ -74,14 +75,6 @@ func newWorker(info string) task.Worker {
 	if err != nil {
 		return task.InvalidWorker(err.Error())
 	}
-
-	// file opts
-	wfOpt := file.NewOptions()
-	wfOpt.UseFileBuf = iOpt.UseFileBuffer
-	wfOpt.FileBufDir = fOpt.FileBufDir
-	wfOpt.FileBufPrefix = fOpt.FileBufPrefix
-	wfOpt.AccessKey = fOpt.AccessKey
-	wfOpt.SecretKey = fOpt.SecretKey
 
 	// all paths (if pth is directory)
 	fSts, _ := file.List(iOpt.SrcPath, fOpt)
@@ -112,7 +105,7 @@ func newWorker(info string) task.Worker {
 	destPth := parseTmpl(iOpt.SrcPath, iOpt.DestTemplate)
 
 	// writer
-	w, err := file.NewWriter(destPth, fOpt)
+	w, err := file.NewWriter(destPth, &o.FOpts)
 	if err != nil {
 		return task.InvalidWorker(err.Error())
 	}
@@ -138,6 +131,7 @@ func newWorker(info string) task.Worker {
 	}
 
 	return &worker{
+		options:  *o,
 		iOpt:     *iOpt,
 		stsFiles: stsFiles,
 		dedup:    dedup.New(),
@@ -151,6 +145,7 @@ func newWorker(info string) task.Worker {
 var regexIndexRange = regexp.MustCompile(`^[0-9]*[-][0-9]*$`)
 
 type worker struct {
+	options
 	iOpt         infoOptions
 	stsFiles     []StatsFile
 	linesWritten int64
@@ -240,7 +235,7 @@ func (wkr *worker) done() (task.Result, string) {
 	// publish files stats
 	sts := wkr.w.Stats()
 	if sts.Size > 0 { // only successful files
-		producer.Send(appOpt.FileTopic, sts.JSONBytes())
+		producer.Send(wkr.FileTopic, sts.JSONBytes())
 	}
 
 	// msg

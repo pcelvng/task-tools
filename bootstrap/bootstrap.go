@@ -2,23 +2,31 @@ package bootstrap
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
-	"github.com/pcelvng/task-tools/file"
+	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
+
+	"github.com/pcelvng/task-tools/file"
 )
 
-var (
-	sigChan     = make(chan os.Signal, 1) // signal handling
-	configPth   = flag.String("config", "", "application config toml file")
-	c           = flag.String("c", "", "alias to -config")
-	showVersion = flag.Bool("version", false, "show WorkerApp version and build info")
-	ver         = flag.Bool("v", false, "alias to -version")
-	genConfig   = flag.Bool("gen-config", false, "generate a config toml file to stdout")
-	g           = flag.Bool("g", false, "alias to -gen-config")
-)
+var sigChan = make(chan os.Signal, 1) // signal handling
+
+type flags struct {
+	configPath  string
+	showVersion bool
+	GenConfig   bool
+}
+
+func (f flags) setupFlags() {
+	flag.StringVar(&f.configPath, "config", "", "application config toml file")
+	flag.StringVar(&f.configPath, "c", "", "alias to -config")
+	flag.BoolVar(&f.showVersion, "v", false, "show app version and build info")
+	flag.BoolVar(&f.showVersion, "g", false, "generate a config toml file to stdout")
+}
 
 // Validator provides a standard
 // method for running underlying validation
@@ -124,4 +132,41 @@ func (d *Duration) UnmarshalText(text []byte) error {
 
 func (d *Duration) MarshalTOML() ([]byte, error) {
 	return []byte(d.Duration.String()), nil
+}
+
+// genBusOptions will generate a helpful config options output
+func genBusOptions(b *bus.Options) string {
+	s := `# task message bus (nsq, pubsub, file, stdio)
+# if in_bus and out_bus are blank they will default to the main bus. 
+[bus]
+`
+	s += fmt.Sprintf("  bus=\"%v\"\n", b.Bus)
+	s += fmt.Sprintf("  #%v=\"%v\"\n", "in_topic", b.InTopic)
+	s += fmt.Sprintf("  #%v=\"%v\"\n", "in_channel", b.InChannel)
+
+	if b.Bus == "pubsub" {
+		s += fmt.Sprintf("  #%v=\"%v\"\n", "pubsub_host", "emulator host")
+		s += fmt.Sprintf("  #%v=\"%v\"\n", "pubsub_id", b.ProjectID)
+		s += fmt.Sprintf("  #%v=\"%v\"\n", "json_auth", b.JSONAuth)
+	}
+	if b.Bus == "nsq" {
+		s += fmt.Sprintf("  #%v=%v\n", "lookupd_hosts", b.LookupdHosts)
+		s += fmt.Sprintf("  #%v=%v\n", "nsqd_hosts", b.NSQdHosts)
+	}
+
+	return s
+}
+
+// genBusOptions will generate a helpful config options output
+func genLauncherOptions(b *task.LauncherOptions) string {
+	s := `# optional config for how launcher works. 
+# max_in_progress is concurrent number of tasks allowed 
+# lifetime_workers number of tasks to complete before terminating app 
+# worker_kill_time how long the app waits before force stopping
+[launcher]
+`
+	s += fmt.Sprintf("  done_topic=\"%v\"\n", b.DoneTopic)
+	s += fmt.Sprintf("  %v=%v\n", "max_in_progress", b.MaxInProgress)
+
+	return s
 }
