@@ -4,9 +4,10 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/pcelvng/task/bus"
+
 	"github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
-	"github.com/pcelvng/task/bus"
 )
 
 const (
@@ -82,6 +83,8 @@ func main() {
 	log.Print(http.ListenAndServe(":"+tm.HttpPort, nil))
 
 }
+
+func (tm *httpMaster) Validate() error { return nil }
 
 func newOptions() *httpMaster {
 	return &httpMaster{

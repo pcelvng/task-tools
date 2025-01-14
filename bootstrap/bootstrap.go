@@ -22,10 +22,10 @@ type flags struct {
 }
 
 func (f flags) setupFlags() {
-	flag.StringVar(&f.configPath, "config", "", "application config toml file")
-	flag.StringVar(&f.configPath, "c", "", "alias to -config")
+	flag.StringVar(&f.configPath, "options", "", "application options toml file")
+	flag.StringVar(&f.configPath, "c", "", "alias to -options")
 	flag.BoolVar(&f.showVersion, "v", false, "show app version and build info")
-	flag.BoolVar(&f.showVersion, "g", false, "generate a config toml file to stdout")
+	flag.BoolVar(&f.showVersion, "g", false, "generate a options toml file to stdout")
 }
 
 // Validator provides a standard
@@ -83,7 +83,7 @@ type DBOptions struct {
 }
 
 // newConsumer is a convenience method that will use
-// the bus config information to create a new consumer
+// the bus options information to create a new consumer
 // instance. Can optionally provide a topic and channel
 // on which to consume. All other bus options are the same.
 // Note that bOpt is a copy of the original options since it's
@@ -104,9 +104,9 @@ func newConsumer(bOpt bus.Options, topic, channel string) bus.Consumer {
 	return consumer
 }
 
-// newProducer will use the bus config information
+// newProducer will use the bus options information
 // to create a new producer instance. Note that bOpt is
-// now a copy of the original config since it's not a pointer.
+// now a copy of the original options since it's not a pointer.
 func newProducer(bOpt bus.Options) bus.Producer {
 	producer, err := bus.NewProducer(&bOpt)
 	if err != nil {
@@ -118,7 +118,7 @@ func newProducer(bOpt bus.Options) bus.Producer {
 // Duration is a wrapper around time.Duration
 // and allows for automatic toml string parsing of
 // time.Duration values. Use this type in a
-// custom config for automatic serializing and
+// custom options for automatic serializing and
 // de-serializing of time.Duration.
 type Duration struct {
 	time.Duration
@@ -134,7 +134,7 @@ func (d *Duration) MarshalTOML() ([]byte, error) {
 	return []byte(d.Duration.String()), nil
 }
 
-// genBusOptions will generate a helpful config options output
+// genBusOptions will generate a helpful options options output
 func genBusOptions(b *bus.Options) string {
 	s := `# task message bus (nsq, pubsub, file, stdio)
 # if in_bus and out_bus are blank they will default to the main bus. 
@@ -157,9 +157,9 @@ func genBusOptions(b *bus.Options) string {
 	return s
 }
 
-// genBusOptions will generate a helpful config options output
+// genBusOptions will generate a helpful options options output
 func genLauncherOptions(b *task.LauncherOptions) string {
-	s := `# optional config for how launcher works. 
+	s := `# optional options for how launcher works. 
 # max_in_progress is concurrent number of tasks allowed 
 # lifetime_workers number of tasks to complete before terminating app 
 # worker_kill_time how long the app waits before force stopping

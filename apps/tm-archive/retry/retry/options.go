@@ -17,6 +17,8 @@ func NewOptions() *Options {
 	}
 }
 
+func (o *Options) Validate() error { return nil }
+
 type Options struct {
 	bus.Options `toml:"bus"`
 

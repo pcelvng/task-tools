@@ -1,13 +1,10 @@
 package bootstrap
 
 import (
-	"encoding/json"
 	"flag"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/davecgh/go-spew/spew"
@@ -19,16 +16,11 @@ import (
 )
 
 type Worker struct {
+	Utility
 	StatusPort int `toml:"status_port" comment:"http service port for request health status"`
-
-	options Validator `config:"-"`
 
 	BusOpt      *bus.Options          `toml:"bus"`
 	LauncherOpt *task.LauncherOptions `toml:"launcher"`
-
-	tskType     string // application task type
-	version     string // application version
-	description string // info help string that show expected info format
 
 	newWkr   task.NewWorker // application MakeWorker function
 	launcher *task.Launcher
@@ -45,8 +37,8 @@ type Info struct {
 }
 
 // InfoStats for the Worker app
-func (w *Worker) InfoStats() Info {
-	w.info.AppName = w.tskType
+func (w *Worker) InfoStats() any {
+	w.info.AppName = w.name
 	w.info.Version = w.version
 
 	if w.launcher != nil {
@@ -56,37 +48,13 @@ func (w *Worker) InfoStats() Info {
 	return w.info
 }
 
-// HandleRequest is a simple http handler function that takes the compiled status functions
-// that are called and the results marshaled to return as the body of the response
-func (w *Worker) HandleRequest(wr http.ResponseWriter, r *http.Request) {
-	wr.Header().Add("Content-Type", "application/json")
-	b, _ := json.MarshalIndent(w.InfoStats(), "", "  ")
-
-	wr.Write(b)
-}
-
-// Start will run the http server on the provided handler port
-func (w *Worker) start() {
-	if w.HttpPort() == 0 {
-		log.Printf("http status server has been disabled")
-		return
-	}
-	log.Printf("starting http status server on port %d", w.HttpPort())
-
-	http.HandleFunc("/", w.HandleRequest)
-	go func() {
-		err := http.ListenAndServe(":"+strconv.Itoa(w.HttpPort()), nil)
-		log.Fatal("http health service failed", err)
-	}()
-}
-
 // NewWorkerApp will create a new worker bootstrap application.
 // *tskType: defines the worker type; the type of tasks the worker is expecting. Also acts as a name for identification (required)
 // *mkr: MakeWorker function that the launcher will call to create a new worker.
-// *options: a struct pointer to additional specific application config options. Note that
+// *options: a struct pointer to additional specific application options options. Note that
 //
-//	the bootstrapped Worker already provides bus and launcher config options and the user
-//	can request to add postgres and mysql config options.
+//	the bootstrapped Worker already provides bus and launcher options options and the user
+//	can request to add postgres and mysql options options.
 func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Worker {
 	// signal handling - be ready to capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -98,9 +66,12 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 	}
 
 	return &Worker{
-		tskType: tskType,
-		newWkr:  newWkr,
-		options: options,
+		Utility: Utility{
+			name:    tskType,
+			options: options,
+		},
+		newWkr: newWkr,
+
 		BusOpt: &bus.Options{
 			Bus:       "stdio",
 			InTopic:   tskType,
@@ -113,8 +84,8 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Wor
 func (w *Worker) Initialize() *Worker {
 	var genConf bool
 	var showConf bool
-	flag.BoolVar(&genConf, "g", false, "generate config file")
-	flag.BoolVar(&showConf, "show", false, "show current config values")
+	flag.BoolVar(&genConf, "g", false, "generate options file")
+	flag.BoolVar(&showConf, "show", false, "show current options values")
 	config.New(w).
 		Version(w.version).Disable(config.OptGenConf | config.OptShow).
 		Description(w.description).
@@ -146,7 +117,7 @@ func (w *Worker) Initialize() *Worker {
 // and then exit.
 func (w *Worker) Run() {
 	// Start the http health status service
-	w.start()
+	w.AddInfo(w.InfoStats, w.StatusPort)
 
 	// do tasks
 	done, cncl := w.launcher.DoTasks()
@@ -177,38 +148,17 @@ func (w *Worker) genConfig() {
 	os.Exit(0)
 }
 
-// HttpPort gets the application http port for requesting
-// a heath check on the application itself. If the port is not provided
-// The port should alwasy be provided
-func (w *Worker) HttpPort() int {
-	return w.StatusPort
+func (w *Worker) NewProducer() bus.Producer {
+	p, _ := bus.NewProducer(w.BusOpt)
+	return p
 }
 
-// Version sets the application version. The version
-// is what is shown if the '-version' flag is specified
-// when running the Worker.
 func (w *Worker) Version(version string) *Worker {
 	w.version = version
 	return w
 }
 
-// Description allows the user to set a description of the
-// worker that will be shown with the help screen.
-//
-// The description should also include information about
-// what the worker expects from the NewWorker 'info' string.
 func (w *Worker) Description(description string) *Worker {
 	w.description = description
 	return w
-}
-
-// TaskType returns the TaskType initialized with
-// the Worker.
-func (w *Worker) TaskType() string {
-	return w.tskType
-}
-
-func (w *Worker) NewProducer() bus.Producer {
-	p, _ := bus.NewProducer(w.BusOpt)
-	return p
 }

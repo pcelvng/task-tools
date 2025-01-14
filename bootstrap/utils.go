@@ -4,45 +4,52 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"reflect"
 	"strconv"
 
-	btoml "github.com/hydronica/toml"
-	ptoml "github.com/pelletier/go-toml"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/hydronica/go-config"
+	"github.com/hydronica/toml"
 )
 
 type Utility struct {
 	name        string
 	description string
 	version     string
-	config      interface{}
-
-	flags
+	options     Validator `options:"-"`
 }
 
-func NewUtility(name string, config interface{}) *Utility {
+func NewUtility(name string, config Validator) *Utility {
 	return &Utility{
-		name:   name,
-		config: config,
+		name:    name,
+		options: config,
 	}
 }
 
-func (u *Utility) Initialize() {
-	setHelpOutput(u.name, u.description)
-	u.checkFlags()
-}
+func (u *Utility) Initialize() *Utility {
+	var genConf bool
+	var showConf bool
+	flag.BoolVar(&genConf, "g", false, "generate options file")
+	flag.BoolVar(&showConf, "show", false, "show current options values")
+	config.New(u).
+		Version(u.version).Disable(config.OptGenConf | config.OptShow).
+		Description(u.description).
+		LoadOrDie()
 
-func (u *Utility) Version(version string) *Utility {
-	u.version = version
-	return u
-}
+	if genConf {
+		enc := toml.NewEncoder(os.Stdout)
+		if err := enc.Encode(u.options); err != nil {
+			log.Fatal(err)
+		}
+		os.Exit(0)
+	}
+	if showConf {
+		spew.Dump(u.options)
+		os.Exit(0)
+	}
 
-func (u *Utility) Description(description string) *Utility {
-	u.description = description
 	return u
 }
 
@@ -73,51 +80,12 @@ func (u *Utility) AddInfo(info func() interface{}, port int) *Utility {
 	return u
 }
 
-func setHelpOutput(name, description string) {
-	// custom help screen
-	flag.Usage = func() {
-		if name != "" {
-			fmt.Fprintln(os.Stderr, name)
-			fmt.Fprintln(os.Stderr, "")
-		}
-		if description != "" {
-			fmt.Fprintln(os.Stderr, description)
-			fmt.Fprintln(os.Stderr, "")
-		}
-		fmt.Fprintln(os.Stderr, "Flag options:")
-		flag.PrintDefaults()
-	}
+func (u *Utility) Version(version string) *Utility {
+	u.version = version
+	return u
 }
 
-func (u *Utility) checkFlags() {
-	if !flag.Parsed() {
-		flag.Parse()
-	}
-
-	if u.showVersion && u.version != "" {
-		fmt.Println(u.version)
-		os.Exit(0)
-	}
-
-	// gen config (sent to stdout)
-	if u.GenConfig {
-		cfg := u.config
-		if v := reflect.ValueOf(cfg); v.Kind() == reflect.Ptr {
-			cfg = v.Elem().Interface()
-		}
-		b, _ := ptoml.Marshal(cfg)
-		fmt.Println(string(b))
-		os.Exit(0)
-	}
-
-	// configPth required
-	if u.configPath == "" {
-		log.Fatal("-config (-c) config file path required")
-	}
-
-	_, err := btoml.DecodeFile(u.configPath, u.config)
-	if err != nil {
-		log.Fatal("Error parsing config file", err)
-	}
-
+func (u *Utility) Description(description string) *Utility {
+	u.description = description
+	return u
 }

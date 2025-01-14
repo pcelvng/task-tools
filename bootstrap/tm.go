@@ -35,10 +35,10 @@ type Runner interface {
 // NewTaskMaster will create a new taskmaster bootstrap application.
 // *appName: defines the taskmaster name; acts as a name for identification and easy-of-use (required)
 // *mkr: MakeWorker function that the launcher will call to create a new worker.
-// *options: a struct pointer to additional specific application config options. Note that
+// *options: a struct pointer to additional specific application options options. Note that
 //
-//	the bootstrapped WorkerApp already provides bus and launcher config options and the user
-//	can request to add postgres and mysql config options.
+//	the bootstrapped WorkerApp already provides bus and launcher options options and the user
+//	can request to add postgres and mysql options options.
 func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMaster {
 	// signal handling - be ready to capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -77,8 +77,8 @@ type TaskMaster struct {
 	// options
 	tmOpt     *tmOptions    // standard worker options (bus and launcher)
 	appOpt    Validator     // extra WorkerApp options; should be pointer to a Validator struct
-	pgOpts    *pgOptions    // postgres config options
-	mysqlOpts *mysqlOptions // mysql config options
+	pgOpts    *pgOptions    // postgres options options
+	mysqlOpts *mysqlOptions // mysql options options
 	fileOpts  *fileOptions
 
 	lgr      *log.Logger // application logger instance
@@ -92,8 +92,8 @@ type TaskMaster struct {
 // Initialize is non-blocking and will perform application startup
 // tasks such as:
 // *Parsing and handling flags
-// *Parsing and validating the config file
-// *Setting config defaults
+// *Parsing and validating the options file
+// *Setting options defaults
 //
 // Note that start will handle application closure if there
 // was an error during startup or a flag option was provided
@@ -156,14 +156,14 @@ func (tm *TaskMaster) handleFlags() {
 		tm.showVersion()
 	}
 
-	// gen config (sent to stdout)
+	// gen options (sent to stdout)
 	if tm.flags.GenConfig {
 		tm.genConfig()
 	}
 
 	// configPth required
 	if tm.flags.configPath == "" {
-		tm.logFatal(errors.New("-config (-c) config file path required"))
+		tm.logFatal(errors.New("-options (-c) options file path required"))
 	}
 }
 
@@ -416,7 +416,7 @@ func (tm *TaskMaster) FileOpts() *TaskMaster {
 }
 
 // MySQLOpts will parse mysql db connection
-// options from the config toml file.
+// options from the options toml file.
 //
 // If using mysql options then a mysql db connection
 // is made during startup. The mysql db connection is
@@ -436,7 +436,7 @@ func (tm *TaskMaster) MySQLOpts() *TaskMaster {
 }
 
 // PostgresOpts will parse postgres db connection
-// options from the config toml file.
+// options from the options toml file.
 //
 // If using postgres options then a postgres db connection
 // is made during startup. The postgres db connection is
@@ -502,7 +502,7 @@ func (tm *TaskMaster) Logger() *log.Logger {
 }
 
 // NewConsumer is a convenience method that will use
-// the bus config information to create a new consumer
+// the bus options information to create a new consumer
 // instance. Can optionally provide a topic and channel
 // on which to consume. All other bus options are the same.
 func (tm *TaskMaster) NewConsumer() bus.Consumer {
@@ -520,7 +520,7 @@ func (tm *TaskMaster) GetBusOpts() *bus.Options {
 	return nil
 }
 
-// NewProducer will use the bus config information
+// NewProducer will use the bus options information
 // to create a new producer instance.
 func (tm *TaskMaster) NewProducer() bus.Producer {
 	var busOpt bus.Options

@@ -16,9 +16,10 @@ import (
 
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/bootstrap"
-	"github.com/pcelvng/task/bus"
 )
 
 const (
@@ -43,6 +44,8 @@ type app struct {
 	topics      map[string]*stat
 	SlackURL    string `toml:"slack" comment:"slack URL for sending"`
 }
+
+func (a *app) Validate() error { return nil }
 
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ltime)
