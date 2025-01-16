@@ -24,8 +24,6 @@ type Worker struct {
 
 	newWkr   task.NewWorker // application MakeWorker function
 	launcher *task.Launcher
-
-	info Info // info stats on various worker types
 }
 
 type Info struct {
@@ -38,14 +36,16 @@ type Info struct {
 
 // InfoStats for the Worker app
 func (w *Worker) InfoStats() any {
-	w.info.AppName = w.name
-	w.info.Version = w.version
-
-	if w.launcher != nil {
-		w.info.LauncherStats = w.launcher.Stats()
+	i := Info{
+		AppName: w.name,
+		Version: w.version,
 	}
 
-	return w.info
+	if w.launcher != nil {
+		i.LauncherStats = w.launcher.Stats()
+	}
+
+	return i
 }
 
 // NewWorkerApp will create a new worker bootstrap application.

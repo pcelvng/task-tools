@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -14,19 +13,6 @@ import (
 )
 
 var sigChan = make(chan os.Signal, 1) // signal handling
-
-type flags struct {
-	configPath  string
-	showVersion bool
-	GenConfig   bool
-}
-
-func (f flags) setupFlags() {
-	flag.StringVar(&f.configPath, "options", "", "application options toml file")
-	flag.StringVar(&f.configPath, "c", "", "alias to -options")
-	flag.BoolVar(&f.showVersion, "v", false, "show app version and build info")
-	flag.BoolVar(&f.showVersion, "g", false, "generate a options toml file to stdout")
-}
 
 // Validator provides a standard
 // method for running underlying validation

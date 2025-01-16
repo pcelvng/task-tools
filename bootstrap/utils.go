@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"log"
@@ -62,10 +61,8 @@ func (u *Utility) AddInfo(info func() interface{}, port int) *Utility {
 		w.Header().Add("Content-Type", "application/json")
 
 		b, err := json.MarshalIndent(info(), "", "  ")
-		if b != nil && err == nil {
-			// Replace the first { in the json string with the { + application name
-			b = bytes.Replace(b, []byte(`{`), []byte(`{
-"app_name":"`+u.name+`",`), 1)
+		if err != nil {
+			b = []byte(err.Error())
 		}
 		w.Write(b)
 	}

@@ -3,26 +3,21 @@ package bootstrap
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"reflect"
 	"strconv"
 	"syscall"
 
-	btoml "github.com/hydronica/toml"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/hydronica/go-config"
+	"github.com/hydronica/toml"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
-	ptoml "github.com/pelletier/go-toml"
-
-	"github.com/pcelvng/task-tools/db"
-	"github.com/pcelvng/task-tools/file"
 )
 
 type NewRunner func(*TaskMaster) Runner
@@ -50,43 +45,32 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMas
 	}
 
 	tm := &TaskMaster{
-		appName:    appName,
-		tmOpt:      newTMOptions(appName),
-		appOpt:     options,
-		newRunner:  initFn,
-		lgr:        log.New(os.Stderr, "", log.LstdFlags),
-		statusPort: &statsOptions{HttpPort: 0},
+		Utility: Utility{
+			options: options,
+			name:    appName,
+		},
+		newRunner: initFn,
 	}
 	tm.infoFn = tm.HandleRequest
 	return tm
 }
 
 func (tm *TaskMaster) AppOpt() interface{} {
-	return tm.appOpt
+	return tm.options
 }
 
 type TaskMaster struct {
-	appName     string // application task type
-	version     string // application version
-	description string // info help string that show expected info format
-	newRunner   NewRunner
-	runner      Runner
+	StatusPort int `toml:"status_port" comment:"http service port for request health status"`
+	Utility
 
-	flags
-
+	newRunner NewRunner
+	runner    Runner
+	
 	// options
-	tmOpt     *tmOptions    // standard worker options (bus and launcher)
-	appOpt    Validator     // extra WorkerApp options; should be pointer to a Validator struct
-	pgOpts    *pgOptions    // postgres options options
-	mysqlOpts *mysqlOptions // mysql options options
-	fileOpts  *fileOptions
+	BusOpt      *bus.Options          `toml:"bus"`
+	LauncherOpt *task.LauncherOptions `toml:"launcher"`
 
-	lgr      *log.Logger // application logger instance
-	mysql    *sql.DB     // mysql connection
-	postgres *sql.DB     // postgres connection
-
-	statusPort *statsOptions // health status options (currently http port for requests)
-	infoFn     func(w http.ResponseWriter, r *http.Request)
+	infoFn func(w http.ResponseWriter, r *http.Request)
 }
 
 // Initialize is non-blocking and will perform application startup
@@ -101,228 +85,44 @@ type TaskMaster struct {
 // So, if start is able to finish by returning, the user knows
 // it is safe to move on.
 func (tm *TaskMaster) Initialize() *TaskMaster {
-	tm.setHelpOutput() // add description to help
-	tm.setupFlags()
-	// flags
-	if !flag.Parsed() {
-		flag.Parse()
-	}
-	tm.handleFlags()
+	var genConf bool
+	var showConf bool
+	flag.BoolVar(&genConf, "g", false, "generate options file")
+	flag.BoolVar(&showConf, "show", false, "show current options values")
+	config.New(tm).
+		Version(tm.version).Disable(config.OptGenConf | config.OptShow).
+		Description(tm.description).
+		LoadOrDie()
 
-	// options
-	err := tm.loadOptions()
-	if err != nil {
-		tm.logFatal(err)
+	if genConf {
+		tm.genConfig()
+		os.Exit(0)
+	}
+	if showConf {
+		spew.Dump(tm.StatusPort)
+		spew.Dump(tm.options)
+		spew.Dump(tm.BusOpt)
+		spew.Dump(tm.LauncherOpt)
+		os.Exit(0)
 	}
 
-	// validate WorkerApp options
-	err = tm.appOpt.Validate()
-	if err != nil {
-		tm.logFatal(err)
-	}
 	tm.runner = tm.newRunner(tm)
 	return tm
 }
 
-func (tm *TaskMaster) setHelpOutput() {
-	// custom help screen
-	flag.Usage = func() {
-		if tm.AppName() != "" {
-			fmt.Fprintln(os.Stderr, tm.AppName()+" worker")
-			fmt.Fprintln(os.Stderr, "")
-		}
-		if tm.description != "" {
-			fmt.Fprintln(os.Stderr, tm.description)
-			fmt.Fprintln(os.Stderr, "")
-		}
-		fmt.Fprintln(os.Stderr, "Flag options:")
-		flag.PrintDefaults()
-	}
-}
-
-func (tm *TaskMaster) logFatal(err error) {
-	tm.lgr.SetFlags(0)
-	if tm.AppName() != "" {
-		tm.lgr.SetPrefix(tm.AppName() + ": ")
-	} else {
-		tm.lgr.SetPrefix("")
-	}
-	tm.lgr.Fatalln(err.Error())
-}
-
-func (tm *TaskMaster) handleFlags() {
-	// version
-	if tm.flags.showVersion {
-		tm.showVersion()
-	}
-
-	// gen options (sent to stdout)
-	if tm.flags.GenConfig {
-		tm.genConfig()
-	}
-
-	// configPth required
-	if tm.flags.configPath == "" {
-		tm.logFatal(errors.New("-options (-c) options file path required"))
-	}
-}
-
-func (tm *TaskMaster) showVersion() {
-	prefix := ""
-	if tm.AppName() != "" {
-		prefix = tm.AppName() + " "
-	}
-	if tm.version == "" {
-		fmt.Println(prefix + "version not specified")
-	} else {
-		fmt.Println(prefix + tm.version)
-	}
-	os.Exit(0)
-}
-
 func (tm *TaskMaster) genConfig() {
-	var appOptB, wkrOptB, fileOptB, pgOptB, mysqlOptB, statsOptB []byte
-	var err error
-
-	// TaskMaster options
-	appOptB, err = ptoml.Marshal(reflect.Indirect(reflect.ValueOf(tm.appOpt)).Interface())
-	if err != nil {
-		tm.lgr.SetFlags(0)
-		if tm.AppName() != "" {
-			tm.lgr.SetPrefix(tm.AppName() + ": ")
-		} else {
-			tm.lgr.SetPrefix("")
-		}
-		tm.lgr.Fatalln(err.Error())
+	writer := os.Stdout
+	writer.WriteString("status_port = 0\n\n")
+	enc := toml.NewEncoder(writer)
+	if err := enc.Encode(tm.options); err != nil {
+		log.Fatal(err)
 	}
-
-	// tm standard options
-	wkrOptB, err = ptoml.Marshal(*tm.tmOpt)
-	if err != nil {
-		tm.lgr.SetFlags(0)
-		if tm.AppName() != "" {
-			tm.lgr.SetPrefix(tm.AppName() + ": ")
-		} else {
-			tm.lgr.SetPrefix("")
-		}
-		tm.lgr.Fatalln(err.Error())
-	}
-
-	// file options
-	if tm.fileOpts != nil {
-		fileOptB, err = ptoml.Marshal(*tm.fileOpts)
-	}
-	if err != nil {
-		tm.lgr.SetFlags(0)
-		if tm.AppName() != "" {
-			tm.lgr.SetPrefix(tm.AppName() + ": ")
-		} else {
-			tm.lgr.SetPrefix("")
-		}
-		tm.lgr.Fatalln(err.Error())
-	}
-
-	// postgres options
-	if tm.pgOpts != nil {
-		pgOptB, err = ptoml.Marshal(*tm.pgOpts)
-	}
-	if err != nil {
-		tm.lgr.SetFlags(0)
-		if tm.AppName() != "" {
-			tm.lgr.SetPrefix(tm.AppName() + ": ")
-		} else {
-			tm.lgr.SetPrefix("")
-		}
-		tm.lgr.Fatalln(err.Error())
-	}
-
-	// mysql options
-	if tm.mysqlOpts != nil {
-		mysqlOptB, err = ptoml.Marshal(*tm.mysqlOpts)
-	}
-
-	if tm.statusPort != nil {
-		statsOptB, _ = ptoml.Marshal(*tm.statusPort)
-	}
-
-	// err
-	if err != nil {
-		tm.lgr.SetFlags(0)
-		if tm.AppName() != "" {
-			tm.lgr.SetPrefix(tm.AppName() + ": ")
-		} else {
-			tm.lgr.SetPrefix("")
-		}
-		tm.lgr.Fatalln(err.Error())
-	}
-
-	fmt.Printf("# '%v' taskmaster options\n", tm.AppName())
-	fmt.Print(string(statsOptB))
-	fmt.Print(string(appOptB))
-	fmt.Print(string(wkrOptB))
-	fmt.Print(string(fileOptB))
-	fmt.Print(string(pgOptB))
-	fmt.Print(string(mysqlOptB))
+	writer.Write([]byte("\n"))
+	writer.WriteString(genBusOptions(tm.BusOpt))
+	writer.Write([]byte("\n"))
+	writer.WriteString(genLauncherOptions(tm.LauncherOpt))
 
 	os.Exit(0)
-}
-
-func (tm *TaskMaster) loadOptions() error {
-	cpth := tm.flags.configPath
-	// status options
-	if _, err := btoml.DecodeFile(cpth, tm.statusPort); err != nil {
-		return err
-	}
-
-	// WorkerApp options
-	if _, err := btoml.DecodeFile(cpth, tm.appOpt); err != nil {
-		return err
-	}
-
-	// worker options
-	if _, err := btoml.DecodeFile(cpth, tm.tmOpt); err != nil {
-		return err
-	}
-
-	// file options
-	if tm.fileOpts != nil {
-		_, err := btoml.DecodeFile(cpth, tm.fileOpts)
-		if err != nil {
-			return err
-		}
-	}
-
-	// postgres options (if requested)
-	if tm.pgOpts != nil {
-		_, err := btoml.DecodeFile(cpth, tm.pgOpts)
-		if err != nil {
-			return err
-		}
-
-		// connect
-		pg := tm.pgOpts.Postgres
-		tm.postgres, err = db.PostgresTx(pg.Username, pg.Password, pg.Host, pg.DBName, pg.Serializable)
-		if err != nil {
-			return err
-		}
-	}
-
-	// mysql options (if requested)
-	if tm.mysqlOpts != nil {
-		_, err := btoml.DecodeFile(cpth, tm.mysqlOpts)
-		if err != nil {
-			return err
-		}
-
-		// connect
-		mysql := tm.mysqlOpts.MySQL
-		tm.mysql, err = db.MySQLTx(mysql.Username, mysql.Password, mysql.Host, mysql.DBName, mysql.Serializable)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // HandleRequest is a simple http handler function that takes the compiled status functions
@@ -333,33 +133,12 @@ func (tm *TaskMaster) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	b, err := json.MarshalIndent(tm.runner.Info(), "", "  ")
 	s := fmt.Sprintf(`{
   "app_name":"%s",
-  "version":"%s",`, tm.appName, tm.version)
+  "version":"%s",`, tm.name, tm.version)
 	if b != nil && err == nil {
 		// Replace the first { in the json string with the { + application name
 		b = bytes.Replace(b, []byte(`{`), []byte(s), 1)
 	}
 	w.Write(b)
-}
-
-// HttpPort gets the application http port for requesting
-// a heath check on the application itself.
-func (tm *TaskMaster) HttpPort() int {
-	return tm.statusPort.HttpPort
-}
-
-// Start will run the http server on the provided handler port
-func (tm *TaskMaster) start() {
-	if tm.HttpPort() == 0 {
-		log.Printf("http status server has been disabled")
-		return
-	}
-	log.Printf("starting http status server on port %d", tm.HttpPort())
-
-	http.HandleFunc("/", tm.infoFn)
-	go func() {
-		err := http.ListenAndServe(":"+strconv.Itoa(tm.HttpPort()), nil)
-		log.Fatal("http health service failed", err)
-	}()
 }
 
 // SetHandler will overwrite the current HandleRequest function on root requests
@@ -380,12 +159,27 @@ func (tm *TaskMaster) Run() {
 		}
 	}()
 
-	tm.Log("starting %v", tm.appName)
+	log.Println("starting %v", tm.name)
 	if err := tm.runner.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
 
 	os.Exit(0)
+}
+
+// Start will run the http server on the provided handler port
+func (tm *TaskMaster) start() {
+	if tm.StatusPort == 0 {
+		log.Printf("http status server has been disabled")
+		return
+	}
+	log.Printf("starting http status server on port %d", tm.StatusPort)
+
+	http.HandleFunc("/", tm.infoFn)
+	go func() {
+		err := http.ListenAndServe(":"+strconv.Itoa(tm.StatusPort), nil)
+		log.Fatal("http health service failed", err)
+	}()
 }
 
 // Version sets the application version. The version
@@ -406,101 +200,6 @@ func (tm *TaskMaster) Description(description string) *TaskMaster {
 	return tm
 }
 
-// FileOpts provides file options such as aws connection info.
-func (tm *TaskMaster) FileOpts() *TaskMaster {
-	if tm.fileOpts == nil {
-		tm.fileOpts = &fileOptions{}
-		tm.fileOpts.FileOpt.FileBufPrefix = tm.AppName()
-	}
-	return tm
-}
-
-// MySQLOpts will parse mysql db connection
-// options from the options toml file.
-//
-// If using mysql options then a mysql db connection
-// is made during startup. The mysql db connection is
-// available through the MySQL() method.
-//
-// MySQLOpts needs to be called before Start() to be effective.
-//
-// If the user needs more than one db connection then those
-// connection options need to be made available with the WorkerApp
-// initialization. Note that the DBOptions struct is available
-// to use in this way.
-func (tm *TaskMaster) MySQLOpts() *TaskMaster {
-	if tm.mysqlOpts == nil {
-		tm.mysqlOpts = &mysqlOptions{}
-	}
-	return tm
-}
-
-// PostgresOpts will parse postgres db connection
-// options from the options toml file.
-//
-// If using postgres options then a postgres db connection
-// is made during startup. The postgres db connection is
-// available through the Postgres() method.
-//
-// PostgresOpts needs to be called before Start() to be effective.
-//
-// If the user needs more than one db connection then those
-// connection options need to be made available with the WorkerApp
-// initialization. Note that the DBOptions struct is available
-// to use in this way.
-func (tm *TaskMaster) PostgresOpts() *TaskMaster {
-	if tm.pgOpts == nil {
-		tm.pgOpts = &pgOptions{}
-	}
-	return tm
-}
-
-func (tm *TaskMaster) GetFileOpts() *file.Options {
-	if tm.fileOpts == nil {
-		return nil
-	}
-	return &tm.fileOpts.FileOpt
-}
-
-// SetLogger allows the user to override the default
-// application logger (stdout) with a custom one.
-//
-// If the provided logger is nil the logger output is discarded.
-//
-// SetLogger should be called before initializing the application.
-func (tm *TaskMaster) SetLogger(lgr *log.Logger) *TaskMaster {
-	if lgr != nil {
-		tm.lgr = lgr
-	}
-
-	return tm
-}
-
-// AppName returns the AppName initialized with
-// the WorkerApp.
-func (tm *TaskMaster) AppName() string {
-	return tm.appName
-}
-
-// MySQLDB returns the MySQL sql.DB application connection.
-// Will be nil if called before Start() or MySQLOpts() was
-// not called.
-func (tm *TaskMaster) MySQLDB() *sql.DB {
-	return tm.mysql
-}
-
-// PostgresDB returns the Postgres sql.DB application connection.
-// Will be nil if called before Start() or PostgresOpts() was
-// not called.
-func (tm *TaskMaster) PostgresDB() *sql.DB {
-	return tm.postgres
-}
-
-// Logger returns a reference to the application logger.
-func (tm *TaskMaster) Logger() *log.Logger {
-	return tm.lgr
-}
-
 // NewConsumer is a convenience method that will use
 // the bus options information to create a new consumer
 // instance. Can optionally provide a topic and channel
@@ -508,16 +207,9 @@ func (tm *TaskMaster) Logger() *log.Logger {
 func (tm *TaskMaster) NewConsumer() bus.Consumer {
 	var busOpt bus.Options
 	if tm != nil {
-		busOpt = *tm.tmOpt.BusOpt
+		busOpt = *tm.BusOpt
 	}
 	return newConsumer(busOpt, busOpt.InTopic, busOpt.InChannel)
-}
-
-func (tm *TaskMaster) GetBusOpts() *bus.Options {
-	if tm != nil {
-		return tm.tmOpt.BusOpt
-	}
-	return nil
 }
 
 // NewProducer will use the bus options information
@@ -525,28 +217,7 @@ func (tm *TaskMaster) GetBusOpts() *bus.Options {
 func (tm *TaskMaster) NewProducer() bus.Producer {
 	var busOpt bus.Options
 	if tm != nil {
-		busOpt = *tm.tmOpt.BusOpt
+		busOpt = *tm.BusOpt
 	}
 	return newProducer(busOpt)
-}
-
-// Log is a wrapper around the application logger Printf method.
-func (tm *TaskMaster) Log(format string, v ...interface{}) {
-	tm.lgr.Printf(format, v...)
-}
-
-func newTMOptions(appName string) *tmOptions {
-	bOpt := task.NewBusOptions("stdio") // stdio default for bootstrapping
-	bOpt.InTopic = appName
-	bOpt.InChannel = appName
-
-	return &tmOptions{
-		BusOpt: bOpt,
-	}
-}
-
-// appOptions provides general options available to
-// all workers.
-type tmOptions struct {
-	BusOpt *bus.Options `toml:"bus"`
 }
