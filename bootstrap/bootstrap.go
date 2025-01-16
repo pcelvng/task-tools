@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
-
-	"github.com/pcelvng/task-tools/file"
 )
 
 var sigChan = make(chan os.Signal, 1) // signal handling
@@ -28,32 +25,6 @@ type NilValidator struct{}
 
 func (v *NilValidator) Validate() error {
 	return nil
-}
-
-// fileOptions are only included at the request of the user.
-// If added they are made available with the application file
-// options object which can be accessed from the WorkerApp object.
-type fileOptions struct {
-	FileOpt file.Options `toml:"file"`
-}
-
-// mysqlOptions are only added at the request of the user.
-// If they are added then the bootstrap WorkerApp will automatically
-// attempt to connect to mysql.
-type mysqlOptions struct {
-	MySQL DBOptions `toml:"mysql"`
-}
-
-// postgresOptions are only added at the request of the user.
-// If they are added then the bootstrap WorkerApp will automatically
-// attempt to connect to postgres.
-type pgOptions struct {
-	Postgres DBOptions `toml:"postgres"`
-}
-
-// general options for http-status health checks
-type statsOptions struct {
-	HttpPort int `toml:"status_port" comment:"http service port for request health status"`
 }
 
 type DBOptions struct {
@@ -101,26 +72,7 @@ func newProducer(bOpt bus.Options) bus.Producer {
 	return producer
 }
 
-// Duration is a wrapper around time.Duration
-// and allows for automatic toml string parsing of
-// time.Duration values. Use this type in a
-// custom options for automatic serializing and
-// de-serializing of time.Duration.
-type Duration struct {
-	time.Duration
-}
-
-func (d *Duration) UnmarshalText(text []byte) error {
-	var err error
-	d.Duration, err = time.ParseDuration(string(text))
-	return err
-}
-
-func (d *Duration) MarshalTOML() ([]byte, error) {
-	return []byte(d.Duration.String()), nil
-}
-
-// genBusOptions will generate a helpful options options output
+// genBusOptions will generate a helpful options output
 func genBusOptions(b *bus.Options) string {
 	s := `# task message bus (nsq, pubsub, file, stdio)
 # if in_bus and out_bus are blank they will default to the main bus. 
@@ -143,7 +95,7 @@ func genBusOptions(b *bus.Options) string {
 	return s
 }
 
-// genBusOptions will generate a helpful options options output
+// genBusOptions will generate a helpful options output
 func genLauncherOptions(b *task.LauncherOptions) string {
 	s := `# optional options for how launcher works. 
 # max_in_progress is concurrent number of tasks allowed 

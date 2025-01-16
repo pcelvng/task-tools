@@ -20,7 +20,7 @@ import (
 	"github.com/pcelvng/task/bus"
 )
 
-type NewRunner func(*TaskMaster) Runner
+type NewRunner func(*Starter) Runner
 
 type Runner interface {
 	Run(ctx context.Context) error
@@ -30,11 +30,9 @@ type Runner interface {
 // NewTaskMaster will create a new taskmaster bootstrap application.
 // *appName: defines the taskmaster name; acts as a name for identification and easy-of-use (required)
 // *mkr: MakeWorker function that the launcher will call to create a new worker.
-// *options: a struct pointer to additional specific application options options. Note that
-//
-//	the bootstrapped WorkerApp already provides bus and launcher options options and the user
-//	can request to add postgres and mysql options options.
-func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMaster {
+// *options: a struct pointer to additional specific application options.
+// Note that the bootstrapped WorkerApp already provides bus and launcher options
+func NewTaskMaster(appName string, initFn NewRunner, options Validator) *Starter {
 	// signal handling - be ready to capture signal early.
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
@@ -44,33 +42,81 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *TaskMas
 		options = &NilValidator{}
 	}
 
-	tm := &TaskMaster{
+	tm := &Starter{
 		Utility: Utility{
 			options: options,
 			name:    appName,
 		},
+		bType:     "master",
 		newRunner: initFn,
 	}
 	tm.infoFn = tm.HandleRequest
 	return tm
 }
 
-func (tm *TaskMaster) AppOpt() interface{} {
+// NewWorkerApp will create a new worker bootstrap application.
+// *tskType: defines the worker type; the type of tasks the worker is expecting. Also acts as a name for identification (required)
+// *mkr: MakeWorker function that the launcher will call to create a new worker.
+// *options: a struct pointer to additional specific application options.
+// Note that the bootstrapped Worker already provides bus and launcher options
+func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Starter {
+	// signal handling - be ready to capture signal early.
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	if options == nil {
+		options = &NilValidator{}
+	}
+
+	tm := &Starter{
+		Utility: Utility{
+			name:    tskType,
+			options: options,
+		},
+		bType:  "worker",
+		newWkr: newWkr,
+
+		BusOpt: &bus.Options{
+			Bus:       "stdio",
+			InTopic:   tskType,
+			InChannel: tskType,
+		},
+		LauncherOpt: task.NewLauncherOptions(tskType),
+	}
+	tm.SetHandler(
+		func(wr http.ResponseWriter, r *http.Request) {
+			wr.Header().Add("Content-Type", "application/json")
+			b, _ := json.MarshalIndent(tm.infoStats(), "", "  ")
+
+			wr.Write(b)
+		})
+	return tm
+}
+
+func (tm *Starter) AppOpt() interface{} {
 	return tm.options
 }
 
-type TaskMaster struct {
-	StatusPort int `toml:"status_port" comment:"http service port for request health status"`
+type Starter struct {
 	Utility
+	StatusPort int `toml:"status_port" comment:"http service port for request health status"`
 
-	newRunner NewRunner
-	runner    Runner
-	
 	// options
 	BusOpt      *bus.Options          `toml:"bus"`
 	LauncherOpt *task.LauncherOptions `toml:"launcher"`
 
+	// Type of bootstrap: worker or Starter
+	bType  string `toml:"-" flag:"-" env:"-"`
 	infoFn func(w http.ResponseWriter, r *http.Request)
+
+	// Starter vars
+	newRunner NewRunner
+	runner    Runner
+
+	// Worker vars
+	newWkr   task.NewWorker // application MakeWorker function
+	launcher *task.Launcher
 }
 
 // Initialize is non-blocking and will perform application startup
@@ -84,7 +130,7 @@ type TaskMaster struct {
 // that asked the application to show the version, for example.
 // So, if start is able to finish by returning, the user knows
 // it is safe to move on.
-func (tm *TaskMaster) Initialize() *TaskMaster {
+func (tm *Starter) Initialize() *Starter {
 	var genConf bool
 	var showConf bool
 	flag.BoolVar(&genConf, "g", false, "generate options file")
@@ -105,12 +151,20 @@ func (tm *TaskMaster) Initialize() *TaskMaster {
 		spew.Dump(tm.LauncherOpt)
 		os.Exit(0)
 	}
-
-	tm.runner = tm.newRunner(tm)
+	switch tm.bType {
+	case "worker":
+		var err error
+		tm.launcher, err = task.NewLauncher(tm.newWkr, tm.LauncherOpt, tm.BusOpt)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case "master":
+		tm.runner = tm.newRunner(tm)
+	}
 	return tm
 }
 
-func (tm *TaskMaster) genConfig() {
+func (tm *Starter) genConfig() {
 	writer := os.Stdout
 	writer.WriteString("status_port = 0\n\n")
 	enc := toml.NewEncoder(writer)
@@ -127,7 +181,7 @@ func (tm *TaskMaster) genConfig() {
 
 // HandleRequest is a simple http handler function that takes the compiled status functions
 // that are called and the results marshaled to return as the body of the response
-func (tm *TaskMaster) HandleRequest(w http.ResponseWriter, r *http.Request) {
+func (tm *Starter) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
 	b, err := json.MarshalIndent(tm.runner.Info(), "", "  ")
@@ -142,15 +196,32 @@ func (tm *TaskMaster) HandleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetHandler will overwrite the current HandleRequest function on root requests
-func (tm *TaskMaster) SetHandler(fn func(http.ResponseWriter, *http.Request)) {
+func (tm *Starter) SetHandler(fn func(http.ResponseWriter, *http.Request)) {
 	tm.infoFn = fn
 }
 
 // Run until the application is complete and then exit.
-func (tm *TaskMaster) Run() {
+func (tm *Starter) Run() {
 	// Start the http health status service
 	tm.start()
-	ctx, cancel := context.WithCancel(context.Background())
+	var ctx context.Context
+	var cancel context.CancelFunc
+
+	log.Println("starting %v", tm.name)
+	switch tm.bType {
+	case "worker":
+		// do tasks
+		ctx, cancel = tm.launcher.DoTasks()
+		log.Printf("listening for %s tasks on '%s'", tm.BusOpt.InBus, tm.BusOpt.InTopic)
+	case "master":
+		ctx, cancel = context.WithCancel(context.Background())
+		if err := tm.runner.Run(ctx); err != nil {
+			log.Fatal(err)
+		}
+	default:
+		log.Fatalf("unknown bootstrap type %q", tm.bType)
+	}
+
 	// do tasks
 	go func() {
 		select {
@@ -159,16 +230,11 @@ func (tm *TaskMaster) Run() {
 		}
 	}()
 
-	log.Println("starting %v", tm.name)
-	if err := tm.runner.Run(ctx); err != nil {
-		log.Fatal(err)
-	}
-
 	os.Exit(0)
 }
 
 // Start will run the http server on the provided handler port
-func (tm *TaskMaster) start() {
+func (tm *Starter) start() {
 	if tm.StatusPort == 0 {
 		log.Printf("http status server has been disabled")
 		return
@@ -182,10 +248,30 @@ func (tm *TaskMaster) start() {
 	}()
 }
 
+type Info struct {
+	AppName       string             `json:"app_name"`
+	Version       string             `json:"version"`
+	LauncherStats task.LauncherStats `json:"launcher,omitempty"`
+}
+
+// infoStats for the Worker app
+func (tm *Starter) infoStats() any {
+	i := Info{
+		AppName: tm.name,
+		Version: tm.version,
+	}
+
+	if tm.launcher != nil {
+		i.LauncherStats = tm.launcher.Stats()
+	}
+
+	return i
+}
+
 // Version sets the application version. The version
 // is what is shown if the '-version' flag is specified
 // when running the WorkerApp.
-func (tm *TaskMaster) Version(version string) *TaskMaster {
+func (tm *Starter) Version(version string) *Starter {
 	tm.version = version
 	return tm
 }
@@ -195,7 +281,7 @@ func (tm *TaskMaster) Version(version string) *TaskMaster {
 //
 // The description should also include information about
 // what the worker expects from the NewWorker 'info' string.
-func (tm *TaskMaster) Description(description string) *TaskMaster {
+func (tm *Starter) Description(description string) *Starter {
 	tm.description = description
 	return tm
 }
@@ -204,7 +290,7 @@ func (tm *TaskMaster) Description(description string) *TaskMaster {
 // the bus options information to create a new consumer
 // instance. Can optionally provide a topic and channel
 // on which to consume. All other bus options are the same.
-func (tm *TaskMaster) NewConsumer() bus.Consumer {
+func (tm *Starter) NewConsumer() bus.Consumer {
 	var busOpt bus.Options
 	if tm != nil {
 		busOpt = *tm.BusOpt
@@ -214,7 +300,7 @@ func (tm *TaskMaster) NewConsumer() bus.Consumer {
 
 // NewProducer will use the bus options information
 // to create a new producer instance.
-func (tm *TaskMaster) NewProducer() bus.Producer {
+func (tm *Starter) NewProducer() bus.Producer {
 	var busOpt bus.Options
 	if tm != nil {
 		busOpt = *tm.BusOpt

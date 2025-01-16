@@ -5,18 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pcelvng/task-tools/apps/tm-archive/batcher/timeframe"
-	"github.com/pcelvng/task-tools/file"
 	"log"
 	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/pcelvng/task-tools/apps/tm-archive/batcher/timeframe"
+	"github.com/pcelvng/task-tools/file"
+
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/tmpl"
-	"github.com/pcelvng/task/bus"
 )
 
 type taskMaster struct {
@@ -44,7 +46,7 @@ type infoOpts struct {
 	timeframe.TimeFrame
 }
 
-func (o *options) New(app *bootstrap.TaskMaster) bootstrap.Runner {
+func (o *options) New(app *bootstrap.Starter) bootstrap.Runner {
 	return &taskMaster{
 		initTime: time.Now(),
 		stats:    stats{Requests: make(map[string]int)},
