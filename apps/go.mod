@@ -12,7 +12,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.11
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/google/go-cmp v0.6.0
-	github.com/hydronica/go-config v0.2.7-0.20250103214219-f4e5f2c60aae
+	github.com/hydronica/go-config v0.3.0
 	github.com/hydronica/toml v0.5.0
 	github.com/hydronica/trial v0.7.2
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf

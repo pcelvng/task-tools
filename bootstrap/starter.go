@@ -207,7 +207,7 @@ func (tm *Starter) Run() {
 	var ctx context.Context
 	var cancel context.CancelFunc
 
-	log.Println("starting %v", tm.name)
+	log.Printf("starting %v", tm.name)
 	switch tm.bType {
 	case "worker":
 		// do tasks
