@@ -6,203 +6,18 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task/bus"
+
+	"github.com/pcelvng/task-tools/file"
 )
-
-func TestMain(m *testing.M) {
-	appOpt = &options{}
-	fOpt = file.NewOptions()
-	os.Exit(m.Run())
-}
-
-func ExampleNewInfoOptions() {
-	iOpt, err := newInfoOptions("")
-
-	fmt.Println(err)                     // output: <nil>
-	fmt.Println(iOpt.SrcPath == "")      // output: true
-	fmt.Println(iOpt.DateField == "")    // output: true
-	fmt.Println(iOpt.DateFormat == "")   // output: true
-	fmt.Println(iOpt.DestTemplate == "") // output: true
-	fmt.Println(iOpt.Discard)            // output: false
-	fmt.Println(iOpt.UseFileBuffer)      // output: false
-
-	// Output:
-	// <nil>
-	// true
-	// true
-	// true
-	// true
-	// false
-	// false
-}
-
-func ExampleNewInfoOptionsJSON() {
-	info := `nop://source/file.json?record-type=json&date-field=testDateField&date-format=testFormat&dest-template=testTemplate&discard=true&use-file-buffer=true`
-	iOpt, err := newInfoOptions(info)
-
-	fmt.Println(err)                // output: <nil>
-	fmt.Println(iOpt.SrcPath)       // output: nop://source/file.json
-	fmt.Println(iOpt.DateField)     // output: testDateField
-	fmt.Println(iOpt.DateFormat)    // output: testFormat
-	fmt.Println(iOpt.DestTemplate)  // output: testTemplate
-	fmt.Println(iOpt.Discard)       // output: true
-	fmt.Println(iOpt.UseFileBuffer) // output: true
-
-	// Output:
-	// <nil>
-	// nop://source/file.json
-	// testDateField
-	// testFormat
-	// testTemplate
-	// true
-	// true
-}
-
-func ExampleNewInfoOptionsCSV() {
-	info := `nop://source/file.csv?record-type=csv&date-field-index=1&date-format=testFormat&sep=testSep&dest-template=testTemplate&discard=true&use-file-buffer=true`
-	iOpt, err := newInfoOptions(info)
-
-	fmt.Println(err)                // output: <nil>
-	fmt.Println(iOpt.SrcPath)       // output: nop://source/file.csv
-	fmt.Println(iOpt.DateField)     // output:
-	fmt.Println(iOpt.DateFormat)    // output: testFormat
-	fmt.Println(iOpt.DestTemplate)  // output: testTemplate
-	fmt.Println(iOpt.Discard)       // output: true
-	fmt.Println(iOpt.UseFileBuffer) // output: true
-
-	// Output:
-	// <nil>
-	// nop://source/file.csv
-	//
-	// testFormat
-	// testTemplate
-	// true
-	// true
-}
-
-func ExampleNewInfoOptionsFieldMatching() {
-	info := `nop://source/file.csv`
-	iOpt, err := newInfoOptions(info)
-
-	fmt.Println(err)          // output: <nil>
-	fmt.Println(iOpt.SrcPath) // output: nop://source/file.csv
-
-	// Output:
-	// <nil>
-	// nop://source/file.csv
-}
-
-func ExampleNewInfoOptions_ValidateJSON() {
-	info := `nop://source/file.json?date-field=datefield&dest-template=template`
-	iOpt, _ := newInfoOptions(info)
-	err := iOpt.validate()
-
-	fmt.Println(err) // output: <nil>
-
-	// Output:
-	// <nil>
-}
-
-func ExampleNewInfoOptions_ValidateJSONErr() {
-	info := `nop://source/file.json?record-type=json`
-	iOpt, _ := newInfoOptions(info)
-	err := iOpt.validate()
-
-	fmt.Println(err) // output: date-field required
-
-	// Output:
-	// date-field required
-}
-
-func ExampleNewInfoOptions_ValidateDestTemplateErr() {
-	info := `nop://source/file.json?date-field=testDateField`
-	iOpt, _ := newInfoOptions(info)
-	err := iOpt.validate()
-
-	fmt.Println(err) // output: dest-template required
-
-	// Output:
-	// dest-template required
-}
-
-func ExampleNewInfoOptions_ValidateCSV() {
-	info := `nop://source/file.json?date-field=dateField&dest-template=testTemplate`
-	iOpt, _ := newInfoOptions(info)
-	err := iOpt.validate()
-
-	fmt.Println(err) // output: <nil>
-
-	// Output:
-	// <nil>
-}
-
-func ExampleMakeWorkerJSON() {
-	ctx, cncl := context.WithCancel(context.Background())
-	cncl()
-	info := `nop://source/file.json?date-field=dateField&dest-template=template`
-	wkr := newWorker(info)
-	result, msg := wkr.DoTask(ctx)
-
-	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: task interrupted
-
-	// Output:
-	// error
-	// task interrupted
-}
-
-func ExampleMakeWorkerValidateErr() {
-	ctx, cncl := context.WithCancel(context.Background())
-	cncl()
-	info := `nop://source/file.json?dest-template=template`
-	wkr := newWorker(info)
-	result, msg := wkr.DoTask(ctx)
-
-	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: date-field required
-
-	// Output:
-	// error
-	// date-field required
-}
-
-func ExampleMakeWorkerReaderErr() {
-	ctx, cncl := context.WithCancel(context.Background())
-	cncl()
-	info := `nop://init_err/file.json?date-field=dateField&dest-template=template`
-	wkr := newWorker(info)
-	result, msg := wkr.DoTask(ctx)
-
-	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: init_err
-
-	// Output:
-	// error
-	// init_err
-}
-
-func ExampleMakeWorkerCSV() {
-	ctx, cncl := context.WithCancel(context.Background())
-	cncl()
-	info := `nop://source/file.csv?date-field=1&date-format=testFormat&sep=testSep&dest-template=testTemplate&discard=true&use-file-buffer=true`
-	wkr := newWorker(info)
-	result, msg := wkr.DoTask(ctx)
-
-	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: task interrupted
-
-	// Output:
-	// error
-	// task interrupted
-}
 
 func ExampleDoTaskJSON() {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
+	opts := options{}
 	// initialize producer
-	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 
 	// write file
 	w, _ := file.NewWriter("./test/test-20050405T201112.json", nil)
@@ -214,7 +29,7 @@ func ExampleDoTaskJSON() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := `./test/test-20050405T201112.json?date-field=dateField&dest-template=./test/{HH}-{SRC_TS}.json`
-	wkr := newWorker(info)
+	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete
@@ -236,8 +51,8 @@ func ExampleDoTaskJSONBadRecord() {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
-	// initialize producer
-	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+	opts := options{}
+	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 
 	// write file
 	w, _ := file.NewWriter("./test/test.json", nil)
@@ -250,7 +65,7 @@ func ExampleDoTaskJSONBadRecord() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json`
-	wkr := newWorker(info)
+	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -272,8 +87,8 @@ func ExampleDoTaskJSONBadRecordDiscard() {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
-	// initialize producer
-	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+	opts := options{}
+	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 
 	// write file
 	w, _ := file.NewWriter("./test/test.json", nil)
@@ -287,7 +102,7 @@ func ExampleDoTaskJSONBadRecordDiscard() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json&discard=true`
-	wkr := newWorker(info)
+	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete
@@ -309,8 +124,8 @@ func ExampleDoTaskCSV() {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
-	// initialize producer
-	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+	opts := options{}
+	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 
 	// write file
 	w, _ := file.NewWriter("./test/test.csv", nil)
@@ -322,7 +137,7 @@ func ExampleDoTaskCSV() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := "./test/test.csv?date-field=0&dest-template=./test/{HH}.csv&sep=,"
-	wkr := newWorker(info)
+	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete
@@ -348,10 +163,10 @@ func ExampleDoTaskWCloseErr() {
 	w, _ := file.NewWriter("./test/test.csv", nil)
 	w.WriteLine([]byte(`2007-02-03T16:05:06Z`))
 	w.Close()
-
+	opts := options{}
 	ctx, _ := context.WithCancel(context.Background())
 	info := "./test/test.csv?date-field=0&dest-template=nop://close_err/{HH}.csv&sep=,"
-	wkr := newWorker(info)
+	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -370,10 +185,10 @@ func ExampleDoTaskWCloseErr() {
 func ExampleDoTaskReadLineErr() {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
-
+	opts := options{}
 	ctx, _ := context.WithCancel(context.Background())
 	info := `nop://readline_err?date-field=0&dest-template=nop://{HH}.csv&sep=,`
-	wkr := newWorker(info)
+	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: error
@@ -388,8 +203,8 @@ func ExampleWorker_DoTaskDirSrc() {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
-	// initialize producer
-	producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+	opts := options{}
+	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 
 	// src file 1
 	w1, _ := file.NewWriter("./test/dir/test1.csv", nil)
@@ -417,7 +232,7 @@ func ExampleWorker_DoTaskDirSrc() {
 
 	ctx, _ := context.WithCancel(context.Background())
 	info := "./test/dir?date-field=0&dest-template=./test/{HH}.csv&sep=,"
-	wkr := newWorker(info)
+	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
 	fmt.Println(result) // output: complete

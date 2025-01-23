@@ -49,7 +49,7 @@ func (o options) Validate() error {
 	return nil
 }
 
-func (appOpt *options) new(app *bootstrap.TaskMaster) bootstrap.Runner {
+func (appOpt *options) new(app *bootstrap.Starter) bootstrap.Runner {
 	doneCtx, doneCncl := context.WithCancel(context.Background())
 	tm := &tskMaster{
 		initTime: time.Now(),

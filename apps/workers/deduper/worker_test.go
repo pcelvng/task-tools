@@ -16,12 +16,6 @@ import (
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
-func TestMain(m *testing.M) {
-	appOpt = &options{}
-	fOpt = file.NewOptions()
-	os.Exit(m.Run())
-}
-
 func TestOptions_Validate(t *testing.T) {
 	fn := func(opt infoOptions) (interface{}, error) {
 		return nil, (&opt).validate()
@@ -311,10 +305,10 @@ func TestWorker_DoTask(t *testing.T) {
 	}
 
 	for sNum, s := range scenarios {
-		appOpt = s.appOpt
+		appOpt := s.appOpt
 		appOpt.FileTopic = fileTopic
-		producer = s.producer
-		wkr := newWorker(s.info)
+		appOpt.Producer = s.producer
+		wkr := appOpt.newWorker(s.info)
 		gotRslt, gotMsg := wkr.DoTask(context.Background())
 
 		// check result
@@ -493,9 +487,9 @@ func TestWorker_DoTask_Err(t *testing.T) {
 	}
 
 	for sNum, s := range scenarios {
-		appOpt = s.appOpt
-		producer = s.producer
-		wkr := newWorker(s.info)
+		appOpt := s.appOpt
+		appOpt.Producer = s.producer
+		wkr := appOpt.newWorker(s.info)
 		gotRslt, gotMsg := wkr.DoTask(s.ctx)
 
 		// check result

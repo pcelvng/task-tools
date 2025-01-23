@@ -20,6 +20,7 @@ import (
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
 )
@@ -103,7 +104,7 @@ func (o *options) newWorker(info string) task.Worker {
 
 	w.ds = NewTableMeta(w.Params.FileType == "csv", []rune(w.Params.Delimiter)[0])
 
-	r, err := file.NewGlobReader(w.Params.FilePath, w.fileOpts)
+	r, err := file.NewGlobReader(w.Params.FilePath, w.FOpts)
 	if err != nil {
 		return task.InvalidWorker("%v", err)
 	}

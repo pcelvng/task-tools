@@ -11,7 +11,6 @@ import (
 	"github.com/pcelvng/task-tools/bootstrap"
 	"github.com/pcelvng/task-tools/db"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task/bus"
 )
 
 type options struct {
@@ -20,9 +19,8 @@ type options struct {
 
 	sqlDB *sql.DB
 
-	producer bus.Producer
-	fileOpts *file.Options
-	dbDriver string // postgres, mysql - for the batchloader
+	FOpts    *file.Options `toml:"file"`
+	dbDriver string        // postgres, mysql - for the batchloader
 }
 
 var (
@@ -67,13 +65,9 @@ func main() {
 	opts := &options{}
 	app := bootstrap.NewWorkerApp(taskType, opts.newWorker, opts).
 		Version(tools.String()).
-		Description(description).
-		FileOpts()
+		Description(description)
 
 	app.Initialize()
-
-	opts.producer = app.NewProducer()
-	opts.fileOpts = app.GetFileOpts()
 
 	if opts.MySQL.Host != "" {
 		opts.dbDriver = "mysql"
