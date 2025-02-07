@@ -2,8 +2,9 @@ package file
 
 import (
 	"compress/gzip"
-	"context"
+	"fmt"
 	"io"
+	"iter"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -35,6 +36,9 @@ type Reader interface {
 	//
 	// A call to ReadLine after Close has undefined behavior.
 	ReadLine() ([]byte, error)
+
+	// Lines iterators through the file and return one line at a time
+	//Lines() iter.Seq[[]byte]
 
 	// Stats returns an instance of Stats.
 	Stats() stat.Stats
@@ -212,6 +216,35 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	return w, err
 }
 
+// Lines opens a file and returns an iterator to read through all the lines.
+// the file is closed after reading through all lines
+func Lines(path string, opts *Options) iter.Seq[[]byte] {
+	r, err := NewReader(path, opts)
+	if err != nil {
+		fmt.Println(err)
+		return func(yield func([]byte) bool) {}
+	}
+	return ReadAll(r)
+}
+
+// ReadAll the lines in a file and close it.
+func ReadAll(r Reader) iter.Seq[[]byte] {
+	return func(yield func([]byte) bool) {
+		var ln []byte
+		var err error
+		for ln, err = r.ReadLine(); err == nil; ln, err = r.ReadLine() {
+			if !yield(ln) {
+				r.Close()
+				return
+			}
+		}
+		if err == io.EOF {
+			yield(ln)
+		}
+		r.Close()
+	}
+}
+
 // List is a generic List function that will call the
 // correct type of implementation based on the file schema, aka
 // 's3://'. If there is no schema or if the schema is 'local://'
@@ -372,35 +405,4 @@ func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
 	}
 
 	return folders, nil
-}
-
-// ReadLines is a high-level utility that will read all the lines of a reader and call
-// f when the number of bytes is > 0. err will never be EOF and if cncl == true
-// then err will be nil.
-func ReadLines(ctx context.Context, r Reader, f func(ln []byte) error) (err error, cncl bool) {
-	for ctx.Err() == nil {
-		// read
-		ln, err := r.ReadLine()
-		if err != nil && err != io.EOF {
-			return err, false
-		}
-
-		// add record
-		if len(ln) > 0 {
-			if err = f(ln); err != nil {
-				return err, false
-			}
-		}
-
-		if err == io.EOF {
-			break
-		}
-	}
-
-	// check ctx
-	if ctx.Err() != nil {
-		return nil, true
-	}
-
-	return nil, false
 }

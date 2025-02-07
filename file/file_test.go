@@ -170,6 +170,14 @@ func TestGlob_Minio(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
+func TestReadFile(t *testing.T) {
+	var data string
+	for l := range Lines("../internal/test/nop.sql", nil) {
+		data += string(l)
+	}
+	fmt.Println(data)
+}
+
 func createFile(pth string, opt *Options) error {
 	w, err := NewWriter(pth, opt)
 	if err != nil {
