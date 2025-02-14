@@ -3,11 +3,11 @@ package local
 import (
 	"crypto/md5"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pcelvng/task-tools/file/stat"
 )
@@ -36,7 +36,7 @@ func Stat(pth string) (stat.Stats, error) {
 	}
 	// md5 the file
 	var checksum string
-	if b, err := ioutil.ReadFile(pth); err == nil {
+	if b, err := os.ReadFile(pth); err == nil {
 		checksum = fmt.Sprintf("%x", md5.Sum(b))
 	}
 	return stat.Stats{
@@ -58,23 +58,25 @@ func ListFiles(pth string) ([]stat.Stats, error) {
 	pth = rmLocalPrefix(pth)
 
 	pth, _ = filepath.Abs(pth)
-	filesInfo, err := ioutil.ReadDir(pth)
+	dirInfo, err := os.ReadDir(pth)
 	if err != nil {
 		return nil, err
 	}
 
 	allSts := make([]stat.Stats, 0)
-	for _, fInfo := range filesInfo {
-		sts := stat.New()
-		sts.SetCreated(fInfo.ModTime())
-		sts.SetPath(path.Join(pth, fInfo.Name())) // full abs path
-		sts.SetSize(fInfo.Size())
-		sts.IsDir = fInfo.IsDir()
+	for _, d := range dirInfo {
+		fInfo, _ := d.Info()
+		sts := stat.Stats{
+			Created: fInfo.ModTime().Format(time.RFC3339),
+			Path:    path.Join(pth, fInfo.Name()),
+			Size:    fInfo.Size(),
+			IsDir:   fInfo.IsDir(),
+		}
 
 		// md5 the file
 		if !sts.IsDir {
-			if b, err := ioutil.ReadFile(sts.Path); err == nil {
-				sts.Checksum = fmt.Sprintf("%x", md5.Sum(b))
+			if b, err := os.ReadFile(sts.Path); err == nil {
+				sts.Checksum = stat.CalcCheckSum(b)
 			}
 		}
 		allSts = append(allSts, sts)

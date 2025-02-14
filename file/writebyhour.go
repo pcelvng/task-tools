@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
+
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -152,7 +153,7 @@ func (w *WriteByHour) Close() error {
 	return err
 }
 
-// CloseWContext is just like close but accepts a context.
+// CloseWithContext is just like close but accepts a context.
 // ctx.Done is checked before starting each file close.
 //
 // Returns an error with body "interrupted" if prematurely

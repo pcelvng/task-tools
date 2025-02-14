@@ -23,16 +23,16 @@ func ExampleNewReader() {
 	if r == nil {
 		return
 	}
-
-	fmt.Println(err)                 // output: <nil>
-	fmt.Println(r.sts.Path != "")    // output: true
-	fmt.Println(r.sts.Size)          // output: 20
-	fmt.Println(r.sts.Created != "") // output: true
-	fmt.Println(r.f != nil)          // output: true
-	fmt.Println(r.rBuf != nil)       // output: true
-	fmt.Println(r.rGzip == nil)      // output: true
-	fmt.Println(r.rHshr != nil)      // output: true
-	fmt.Println(r.closed)            // output: false
+	sts := r.Stats()
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(sts.Path != "")    // output: true
+	fmt.Println(sts.Size)          // output: 20
+	fmt.Println(sts.Created != "") // output: true
+	fmt.Println(r.f != nil)        // output: true
+	fmt.Println(r.rBuf != nil)     // output: true
+	fmt.Println(r.rGzip == nil)    // output: true
+	fmt.Println(r.rHshr != nil)    // output: true
+	fmt.Println(r.closed)          // output: false
 
 	// cleanup
 	os.Remove(pth)
@@ -57,16 +57,17 @@ func ExampleNewReaderCompression() {
 	if r == nil {
 		return
 	}
+	sts := r.Stats()
 
-	fmt.Println(err)                 // output: <nil>
-	fmt.Println(r.sts.Path != "")    // output: true
-	fmt.Println(r.sts.Size)          // output: 20
-	fmt.Println(r.sts.Created != "") // output: true
-	fmt.Println(r.f != nil)          // output: true
-	fmt.Println(r.rBuf != nil)       // output: true
-	fmt.Println(r.rGzip != nil)      // output: true
-	fmt.Println(r.rHshr != nil)      // output: true
-	fmt.Println(r.closed)            // output: false
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(sts.Path != "")    // output: true
+	fmt.Println(sts.Size)          // output: 20
+	fmt.Println(sts.Created != "") // output: true
+	fmt.Println(r.f != nil)        // output: true
+	fmt.Println(r.rBuf != nil)     // output: true
+	fmt.Println(r.rGzip != nil)    // output: true
+	fmt.Println(r.rHshr != nil)    // output: true
+	fmt.Println(r.closed)          // output: false
 
 	// cleanup
 	os.Remove(pth)
@@ -422,3 +423,12 @@ func TestListFiles(t *testing.T) {
 	os.Remove("./test/dir/")
 	os.Remove("./test")
 }
+
+/*
+func TestReadLines(t *testing.T) {
+	r, _ := NewReader("../../internal/test/nop.sql")
+	for l := range r.Lines() {
+		fmt.Println(string(l))
+	}
+}
+*/
