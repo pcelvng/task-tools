@@ -199,8 +199,6 @@ github.com/googleapis/gax-go/v2 v2.12.0/go.mod h1:y+aIqrI5eb1YGMVJfuV3185Ts/D7qK
 github.com/gopherjs/gopherjs v1.17.2 h1:fQnZVsXk8uxXIStYb0N4bGk7jeyTalG/wsZjQ25dO0g=
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
-github.com/hydronica/go-config v0.2.7-0.20250103214219-f4e5f2c60aae h1:CFg9LLPNrOxKiqwOScBpXxlXGkKzw6WGafA7HbMK0MQ=
-github.com/hydronica/go-config v0.2.7-0.20250103214219-f4e5f2c60aae/go.mod h1:F9bsaa0358L5lgnVGnl6W1TpFBOrswCJVRrY/t+mSDs=
 github.com/hydronica/go-config v0.3.0 h1:P4bcbwz/huSKq1UpetRdwu4Wicnr25A17vPgG/oZCTE=
 github.com/hydronica/go-config v0.3.0/go.mod h1:iWyi29RPvHUlXH+aGFj7ijBpH1O10/KH+oBk/PdcQAE=
 github.com/hydronica/toml v0.5.0 h1:T/hYdVy/nS8qiNAR5J4Of7cnEi0hyXouxfa4E5ygcKk=
@@ -286,6 +284,8 @@ github.com/pcelvng/task v0.7.0 h1:tDmHH4eraOVnXYzZSYZ+UEgsHDHCd/YM7KtcSOfBCvA=
 github.com/pcelvng/task v0.7.0/go.mod h1:REM+jcZWlxD0b6nSlCow4d51FRLt0y164Ik3sR0Ahag=
 github.com/pcelvng/task-tools v0.28.0 h1:4na68OyDx+VaeYWI6qiVCqgNnES7rS38Ou7YBo/SkeA=
 github.com/pcelvng/task-tools v0.28.0/go.mod h1:UYvI+Z5ujo8V2AZLWwo7WsLsKT8YmxXwXjPj/YEQkFc=
+github.com/pcelvng/task-tools v0.29.0 h1:Wc7qRCnt3lys/1HGCj1Kp4CcDeGiIk7Jp592yNguFGk=
+github.com/pcelvng/task-tools v0.29.0/go.mod h1:v9MDZum0FZr3bhU0HzEUJlCLofUCD5Xio9+OpKMGUHc=
 github.com/pelletier/go-toml v1.9.0 h1:NOd0BRdOKpPf0SxkL3HxSQOG7rNh+4kl6PHcBPFs7Q0=
 github.com/pelletier/go-toml v1.9.0/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/pierrec/lz4/v4 v4.1.15 h1:MO0/ucJhngq7299dKLwIMtgTfbkoSPF6AoMYDd8Q4q0=

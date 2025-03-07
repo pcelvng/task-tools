@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/davecgh/go-spew/spew"
@@ -44,8 +45,8 @@ func NewTaskMaster(appName string, initFn NewRunner, options Validator) *Starter
 
 	tm := &Starter{
 		Utility: Utility{
-			options: options,
-			name:    appName,
+			Validator: options,
+			name:      appName,
 		},
 		bType:     "master",
 		newRunner: initFn,
@@ -71,13 +72,13 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Sta
 
 	tm := &Starter{
 		Utility: Utility{
-			name:    tskType,
-			options: options,
+			name:      tskType,
+			Validator: options,
 		},
 		bType:  "worker",
 		newWkr: newWkr,
 
-		BusOpt: &bus.Options{
+		BusOpt: bus.Options{
 			Bus:       "stdio",
 			InTopic:   tskType,
 			InChannel: tskType,
@@ -94,16 +95,36 @@ func NewWorkerApp(tskType string, newWkr task.NewWorker, options Validator) *Sta
 	return tm
 }
 
-func (tm *Starter) AppOpt() interface{} {
-	return tm.options
+func getFlagConfigPath() string {
+	for i, arg := range os.Args {
+		// Check for -c or -config flags
+		if arg == "-c" || arg == "-config" {
+			// Make sure there's a next argument
+			if i+1 < len(os.Args) {
+				return os.Args[i+1]
+			}
+		}
+		// Check for -c= or -config= style flags
+		if strings.HasPrefix(arg, "-c=") {
+			return arg[3:]
+		}
+		if strings.HasPrefix(arg, "-config=") {
+			return arg[8:]
+		}
+	}
+	return ""
+}
+
+func (tm *Starter) AppOpt() any {
+	return tm.Validator
 }
 
 type Starter struct {
-	Utility
+	Utility    `toml:"-"`
 	StatusPort int `toml:"status_port" comment:"http service port for request health status"`
 
 	// options
-	BusOpt      *bus.Options          `toml:"bus"`
+	BusOpt      bus.Options           `toml:"bus"`
 	LauncherOpt *task.LauncherOptions `toml:"launcher"`
 
 	// Type of bootstrap: worker or Starter
@@ -136,9 +157,17 @@ func (tm *Starter) Initialize() *Starter {
 	flag.BoolVar(&genConf, "g", false, "generate options file")
 	flag.BoolVar(&showConf, "show", false, "show current options values")
 	config.New(tm).
-		Version(tm.version).Disable(config.OptGenConf | config.OptShow).
+		Version(tm.version).Disable(config.OptGenConf | config.OptShow | config.OptFlag | config.OptEnv).
 		Description(tm.description).
 		LoadOrDie()
+
+	// Load the app options like a flat file
+	p := getFlagConfigPath()
+	if p != "" {
+		if err := config.LoadFile(p, tm.Validator); err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	if genConf {
 		tm.genConfig()
@@ -146,7 +175,7 @@ func (tm *Starter) Initialize() *Starter {
 	}
 	if showConf {
 		spew.Dump(tm.StatusPort)
-		spew.Dump(tm.options)
+		spew.Dump(tm.Validator)
 		spew.Dump(tm.BusOpt)
 		spew.Dump(tm.LauncherOpt)
 		os.Exit(0)
@@ -154,7 +183,7 @@ func (tm *Starter) Initialize() *Starter {
 	switch tm.bType {
 	case "worker":
 		var err error
-		tm.launcher, err = task.NewLauncher(tm.newWkr, tm.LauncherOpt, tm.BusOpt)
+		tm.launcher, err = task.NewLauncher(tm.newWkr, tm.LauncherOpt, &tm.BusOpt)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -168,7 +197,7 @@ func (tm *Starter) genConfig() {
 	writer := os.Stdout
 	writer.WriteString("status_port = 0\n\n")
 	enc := toml.NewEncoder(writer)
-	if err := enc.Encode(tm.options); err != nil {
+	if err := enc.Encode(tm.Validator); err != nil {
 		log.Fatal(err)
 	}
 	writer.Write([]byte("\n"))
@@ -204,25 +233,7 @@ func (tm *Starter) SetHandler(fn func(http.ResponseWriter, *http.Request)) {
 func (tm *Starter) Run() {
 	// Start the http health status service
 	tm.start()
-	var ctx context.Context
-	var cancel context.CancelFunc
-
-	log.Printf("starting %v", tm.name)
-	switch tm.bType {
-	case "worker":
-		// do tasks
-		ctx, cancel = tm.launcher.DoTasks()
-		log.Printf("listening for %s tasks on '%s'", tm.BusOpt.InBus, tm.BusOpt.InTopic)
-	case "master":
-		ctx, cancel = context.WithCancel(context.Background())
-		if err := tm.runner.Run(ctx); err != nil {
-			log.Fatal(err)
-		}
-	default:
-		log.Fatalf("unknown bootstrap type %q", tm.bType)
-	}
-
-	// do tasks
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		select {
 		case <-sigChan:
@@ -230,6 +241,19 @@ func (tm *Starter) Run() {
 		}
 	}()
 
+	log.Printf("starting %v", tm.name)
+	switch tm.bType {
+	case "worker":
+		// do tasks
+		log.Printf("listening for %s tasks on '%s'", tm.BusOpt.InBus, tm.BusOpt.InTopic)
+		tm.launcher.Start(ctx)
+	case "master":
+		if err := tm.runner.Run(ctx); err != nil {
+			log.Fatal(err)
+		}
+	default:
+		log.Fatalf("unknown bootstrap type %q", tm.bType)
+	}
 	os.Exit(0)
 }
 
@@ -291,19 +315,11 @@ func (tm *Starter) Description(description string) *Starter {
 // instance. Can optionally provide a topic and channel
 // on which to consume. All other bus options are the same.
 func (tm *Starter) NewConsumer() bus.Consumer {
-	var busOpt bus.Options
-	if tm != nil {
-		busOpt = *tm.BusOpt
-	}
-	return newConsumer(busOpt, busOpt.InTopic, busOpt.InChannel)
+	return newConsumer(tm.BusOpt, tm.BusOpt.InTopic, tm.BusOpt.InChannel)
 }
 
 // NewProducer will use the bus options information
 // to create a new producer instance.
 func (tm *Starter) NewProducer() bus.Producer {
-	var busOpt bus.Options
-	if tm != nil {
-		busOpt = *tm.BusOpt
-	}
-	return newProducer(busOpt)
+	return newProducer(tm.BusOpt)
 }

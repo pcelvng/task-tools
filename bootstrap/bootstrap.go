@@ -73,7 +73,7 @@ func newProducer(bOpt bus.Options) bus.Producer {
 }
 
 // genBusOptions will generate a helpful options output
-func genBusOptions(b *bus.Options) string {
+func genBusOptions(b bus.Options) string {
 	s := `# task message bus (nsq, pubsub, file, stdio)
 # if in_bus and out_bus are blank they will default to the main bus. 
 [bus]
@@ -97,6 +97,9 @@ func genBusOptions(b *bus.Options) string {
 
 // genBusOptions will generate a helpful options output
 func genLauncherOptions(b *task.LauncherOptions) string {
+	if b == nil {
+		return ""
+	}
 	s := `# optional options for how launcher works. 
 # max_in_progress is concurrent number of tasks allowed 
 # lifetime_workers number of tasks to complete before terminating app 

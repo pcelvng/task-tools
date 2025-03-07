@@ -17,13 +17,13 @@ type Utility struct {
 	name        string
 	description string
 	version     string
-	options     Validator `options:"-"`
+	Validator
 }
 
 func NewUtility(name string, config Validator) *Utility {
 	return &Utility{
-		name:    name,
-		options: config,
+		name:      name,
+		Validator: config,
 	}
 }
 
@@ -32,20 +32,20 @@ func (u *Utility) Initialize() *Utility {
 	var showConf bool
 	flag.BoolVar(&genConf, "g", false, "generate options file")
 	flag.BoolVar(&showConf, "show", false, "show current options values")
-	config.New(u).
+	config.New(u.Validator).
 		Version(u.version).Disable(config.OptGenConf | config.OptShow).
 		Description(u.description).
 		LoadOrDie()
 
 	if genConf {
 		enc := toml.NewEncoder(os.Stdout)
-		if err := enc.Encode(u.options); err != nil {
+		if err := enc.Encode(u.Validator); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
 	}
 	if showConf {
-		spew.Dump(u.options)
+		spew.Dump(u.Validator)
 		os.Exit(0)
 	}
 
