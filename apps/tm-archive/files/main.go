@@ -51,6 +51,9 @@ func (o options) Validate() error {
 
 func (appOpt *options) new(app *bootstrap.Starter) bootstrap.Runner {
 	doneCtx, doneCncl := context.WithCancel(context.Background())
+	if app == nil {
+		app = &bootstrap.Starter{}
+	}
 	tm := &tskMaster{
 		initTime: time.Now(),
 		producer: app.NewProducer(),
