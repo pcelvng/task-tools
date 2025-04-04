@@ -18,19 +18,19 @@ type Safe struct {
 	Size int64 `json:"size"`
 
 	// Checksum returns the base64 encoded string of the file md5 hash.
-	checksum *atomic.Value `json:"-"`
+	checksum atomic.Value `json:"-"`
 	//Checksum string        `json:"checksum,omitempty"`
 
 	// Path returns the full absolute path of the file.
-	path *atomic.Value `json:"-"`
+	path atomic.Value `json:"-"`
 	//Path string        `json:"path" uri:"origin"`
 
 	// Created returns the date the file was created or last updated;
 	// whichever is more recent.
-	created *atomic.Value `json:"-"`
+	created atomic.Value `json:"-"`
 	//Created string        `json:"created"`
 
-	isDir *atomic.Value `json:"-"`
+	isDir atomic.Value `json:"-"`
 	//IsDir bool          `json:"isDir,omitempty"`
 
 	Files int64 `json:"files,omitempty"`

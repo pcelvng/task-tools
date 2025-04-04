@@ -63,8 +63,8 @@ type Stats struct {
 	Files int64 `json:"files,omitempty"`
 }
 
-func (s Stats) ToSafe() Safe {
-	c := Safe{
+func (s Stats) ToSafe() *Safe {
+	c := &Safe{
 		LineCnt: atomic.LoadInt64(&s.LineCnt),
 		ByteCnt: atomic.LoadInt64(&s.ByteCnt),
 		Size:    atomic.LoadInt64(&s.Size),

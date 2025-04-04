@@ -59,7 +59,7 @@ type Reader struct {
 	rBuf   *bufio.Reader
 	rGzip  *gzip.Reader
 	rHshr  *hashReader
-	sts    stat.Safe // Thread safe stats
+	sts    *stat.Safe // Thread safe stats
 	closed bool
 }
 

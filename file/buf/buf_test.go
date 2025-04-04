@@ -31,15 +31,15 @@ func ExampleNewBuffer() {
 		return
 	}
 
-	fmt.Println(err)                   // output: <nil>
-	fmt.Println(bfr.sts.Created != "") // output: true
-	fmt.Println(bfr.w != nil)          // output true
-	fmt.Println(bfr.wGzip)             // output <nil>
-	fmt.Println(bfr.wSize != nil)      // output true
-	fmt.Println(bfr.bBuf != nil)       // output: true
-	fmt.Println(bfr.fBuf)              // output <nil>
-	fmt.Println(bfr.r != nil)          // output true
-	fmt.Println(bfr.hshr != nil)       // output true
+	fmt.Println(err)                     // output: <nil>
+	fmt.Println(bfr.sts.Created() != "") // output: true
+	fmt.Println(bfr.w != nil)            // output true
+	fmt.Println(bfr.wGzip)               // output <nil>
+	fmt.Println(bfr.wSize != nil)        // output true
+	fmt.Println(bfr.bBuf != nil)         // output: true
+	fmt.Println(bfr.fBuf)                // output <nil>
+	fmt.Println(bfr.r != nil)            // output true
+	fmt.Println(bfr.hshr != nil)         // output true
 
 	// Output:
 	// <nil>
@@ -64,19 +64,19 @@ func ExampleNewBuffer_TmpFile() {
 		return
 	}
 
-	fmt.Println(err)                                               // output: <nil>
-	fmt.Println(bfr.sts.Created != "")                             // output: true
-	fmt.Println(strings.Contains(bfr.sts.Path, "/tmp/tmpprefix_")) // output: true
-	fmt.Println(bfr.w != nil)                                      // output true
-	fmt.Println(bfr.wGzip)                                         // output <nil>
-	fmt.Println(bfr.wSize != nil)                                  // output true
-	fmt.Println(bfr.bBuf)                                          // output: <nil>
-	fmt.Println(bfr.fBuf != nil)                                   // output true
-	fmt.Println(bfr.r != nil)                                      // output true
-	fmt.Println(bfr.hshr != nil)                                   // output true
+	fmt.Println(err)                                                 // output: <nil>
+	fmt.Println(bfr.sts.Created() != "")                             // output: true
+	fmt.Println(strings.Contains(bfr.sts.Path(), "/tmp/tmpprefix_")) // output: true
+	fmt.Println(bfr.w != nil)                                        // output true
+	fmt.Println(bfr.wGzip)                                           // output <nil>
+	fmt.Println(bfr.wSize != nil)                                    // output true
+	fmt.Println(bfr.bBuf)                                            // output: <nil>
+	fmt.Println(bfr.fBuf != nil)                                     // output true
+	fmt.Println(bfr.r != nil)                                        // output true
+	fmt.Println(bfr.hshr != nil)                                     // output true
 
-	os.Remove(bfr.sts.Path) // cleanup tmp file
-	os.Remove("./tmp")      // remove dir
+	os.Remove(bfr.sts.Path()) // cleanup tmp file
+	os.Remove("./tmp")        // remove dir
 
 	// Output:
 	// <nil>
@@ -120,15 +120,15 @@ func ExampleNewBuffer_Compression() {
 		return
 	}
 
-	fmt.Println(err)                   // output: <nil>
-	fmt.Println(bfr.sts.Created != "") // output: true
-	fmt.Println(bfr.w != nil)          // output true
-	fmt.Println(bfr.wGzip != nil)      // output true
-	fmt.Println(bfr.wSize != nil)      // output true
-	fmt.Println(bfr.bBuf != nil)       // output: true
-	fmt.Println(bfr.fBuf)              // output <nil>
-	fmt.Println(bfr.r != nil)          // output true
-	fmt.Println(bfr.hshr != nil)       // output true
+	fmt.Println(err)                     // output: <nil>
+	fmt.Println(bfr.sts.Created() != "") // output: true
+	fmt.Println(bfr.w != nil)            // output true
+	fmt.Println(bfr.wGzip != nil)        // output true
+	fmt.Println(bfr.wSize != nil)        // output true
+	fmt.Println(bfr.bBuf != nil)         // output: true
+	fmt.Println(bfr.fBuf)                // output <nil>
+	fmt.Println(bfr.r != nil)            // output true
+	fmt.Println(bfr.hshr != nil)         // output true
 
 	// Output:
 	// <nil>
@@ -210,8 +210,8 @@ func ExampleBuffer_ReadTmpFile() {
 
 	fmt.Print(string(b)) // output: test line, test line
 
-	os.Remove(bfr.sts.Path) // cleanup tmp file
-	os.Remove("./tmp")      // remove dir
+	os.Remove(bfr.sts.Path()) // cleanup tmp file
+	os.Remove("./tmp")        // remove dir
 
 	// Output:
 	// test line
@@ -242,8 +242,8 @@ func ExampleBuffer_ReadTmpFileCompressed() {
 
 	fmt.Print(string(b)) // output: test line, test line
 
-	os.Remove(bfr.sts.Path) // cleanup tmp file
-	os.Remove("./tmp")      // remove dir
+	os.Remove(bfr.sts.Path()) // cleanup tmp file
+	os.Remove("./tmp")        // remove dir
 
 	// Output:
 	// test line
@@ -458,7 +458,7 @@ func ExampleBuffer_CleanupTmpFile() {
 	err := bfr.Cleanup()
 
 	// check if tmp file exists
-	f, oErr := os.Open(bfr.sts.Path)
+	f, oErr := os.Open(bfr.sts.Path())
 	if oErr == nil {
 		return
 	}
@@ -487,21 +487,21 @@ func ExampleBuffer_Close() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.WriteLine([]byte("test line"))
 
-	fmt.Println(bfr.sts.Checksum == "") // output: true
-	fmt.Println(bfr.sts.Size)           // output: 0
+	fmt.Println(bfr.sts.Checksum() == "") // output: true
+	fmt.Println(bfr.sts.Size)             // output: 0
 
 	err := bfr.Close()
 
-	fmt.Println(err)                    // output: <nil>
-	fmt.Println(bfr.sts.Checksum != "") // output: true
-	fmt.Println(bfr.sts.Size)           // output: 20
+	fmt.Println(err)                      // output: <nil>
+	fmt.Println(bfr.sts.Checksum() != "") // output: true
+	fmt.Println(bfr.sts.Size)             // output: 20
 
 	// closing again has no effect
 	err = bfr.Close()
 
-	fmt.Println(err)                    // output: <nil>
-	fmt.Println(bfr.sts.Checksum != "") // output: true
-	fmt.Println(bfr.sts.Size)           // output: 20
+	fmt.Println(err)                      // output: <nil>
+	fmt.Println(bfr.sts.Checksum() != "") // output: true
+	fmt.Println(bfr.sts.Size)             // output: 20
 
 	// Output:
 	// true
@@ -558,8 +558,8 @@ func ExampleBuffer_CloseTmpFileSizeCompressed() {
 	fmt.Println(bfr.sts.ByteCnt) // output: 20
 	fmt.Println(bfr.sts.Size)    // output: 48
 
-	os.Remove(bfr.sts.Path) // cleanup tmp file
-	os.Remove("./tmp")      // remove dir
+	os.Remove(bfr.sts.Path()) // cleanup tmp file
+	os.Remove("./tmp")        // remove dir
 
 	// Output:
 	// 20
@@ -621,8 +621,8 @@ func ExampleBuffer_CloseChecksumTmpFile() {
 
 	fmt.Println(bfr.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
 
-	os.Remove(bfr.sts.Path) // cleanup tmp file
-	os.Remove("./tmp")      // remove dir
+	os.Remove(bfr.sts.Path()) // cleanup tmp file
+	os.Remove("./tmp")        // remove dir
 
 	// Output:
 	// 54f30d75cf7374c7e524a4530dbc93c2
@@ -647,8 +647,8 @@ func ExampleBuffer_CloseChecksumTmpFileCompressed() {
 
 	fmt.Println(bfr.sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
 
-	os.Remove(bfr.sts.Path) // cleanup tmp file
-	os.Remove("./tmp")      // remove dir
+	os.Remove(bfr.sts.Path()) // cleanup tmp file
+	os.Remove("./tmp")        // remove dir
 
 	// Output:
 	// 42e649f9834028184ec21940d13a300f

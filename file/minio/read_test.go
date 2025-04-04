@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	minio "github.com/minio/minio-go/v7"
+
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
@@ -19,9 +20,9 @@ func ExampleNewReader() {
 		return
 	}
 
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(r.sts.Path) // output: mcs://task-tools-test/read/test.txt
-	fmt.Println(r.sts.Size) // output: 20
+	fmt.Println(err)          // output: <nil>
+	fmt.Println(r.sts.Path()) // output: mcs://task-tools-test/read/test.txt
+	fmt.Println(r.sts.Size)   // output: 20
 
 	// Output:
 	// <nil>

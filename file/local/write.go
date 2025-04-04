@@ -72,7 +72,7 @@ func NewWriter(pth string, opt *buf.Options) (*Writer, error) {
 
 type Writer struct {
 	bfr    *buf.Buffer
-	sts    stat.Safe
+	sts    *stat.Safe
 	tmpPth string
 }
 
