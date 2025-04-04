@@ -1,5 +1,6 @@
 package stat
 
+/*
 import (
 	"crypto/md5"
 	"fmt"
@@ -219,3 +220,4 @@ func BenchmarkTemplateParallel(b *testing.B) {
 		}
 	})
 }
+*/

@@ -7,9 +7,10 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus/nop"
+
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/workflow"
-	"github.com/pcelvng/task/bus/nop"
 )
 
 func TestUnmarshalStat(t *testing.T) {
@@ -95,7 +96,7 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 
 		tm.producer, _ = nop.NewProducer("")
 		mock := tm.producer.(*nop.Producer)
-		err := tm.matchFile(i.Clone())
+		err := tm.matchFile(i)
 		msg := make([]task.Task, 0)
 		for _, v := range mock.Messages {
 			for _, s := range v {

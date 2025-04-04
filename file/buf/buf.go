@@ -64,8 +64,9 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 	}
 
 	// stats
-	sts := stat.New()
-	sts.SetCreated(time.Now())
+	sts := stat.Stats{
+		Created: time.Now().Format(time.RFC3339),
+	}
 
 	// tmp file
 	if opt.UseFileBuf {
@@ -115,7 +116,7 @@ func NewBuffer(opt *Options) (b *Buffer, err error) {
 		fBuf:  fBuf,
 		r:     r,
 		hshr:  hshr,
-		sts:   sts,
+		sts:   sts.ToSafe(),
 	}, nil
 }
 
@@ -142,7 +143,7 @@ type Buffer struct {
 	r     io.Reader     // underlying buffer (for reading)
 	hshr  hash.Hash
 
-	sts stat.Stats
+	sts *stat.Safe
 	mu  sync.Mutex // safe concurrent writing
 
 }
@@ -197,7 +198,7 @@ func (bfr *Buffer) WriteLine(ln []byte) (err error) {
 }
 
 func (bfr *Buffer) Stats() stat.Stats {
-	return bfr.sts.Clone()
+	return bfr.sts.Stats()
 }
 
 // Abort will clear the buffer (remove tmp file if exists)
@@ -241,7 +242,7 @@ func (bfr *Buffer) Cleanup() (err error) {
 	// cleanup file buffer (if used)
 	if bfr.fBuf != nil {
 		// rm tmp file
-		err = util.RmTmp(bfr.sts.Path)
+		err = util.RmTmp(bfr.sts.Path())
 	}
 	return err
 }
