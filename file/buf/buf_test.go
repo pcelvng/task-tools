@@ -577,7 +577,7 @@ func ExampleBuffer_CloseChecksum() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(bfr.sts.Checksum()) // output: 54f30d75cf7374c7e524a4530dbc93c2
 
 	// Output:
 	// 54f30d75cf7374c7e524a4530dbc93c2
@@ -597,7 +597,7 @@ func ExampleBuffer_CloseChecksumCompressed() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(bfr.sts.Checksum()) // output: 42e649f9834028184ec21940d13a300f
 
 	// Output:
 	// 42e649f9834028184ec21940d13a300f
@@ -619,7 +619,7 @@ func ExampleBuffer_CloseChecksumTmpFile() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(bfr.sts.Checksum()) // output: 54f30d75cf7374c7e524a4530dbc93c2
 
 	os.Remove(bfr.sts.Path()) // cleanup tmp file
 	os.Remove("./tmp")        // remove dir
@@ -645,7 +645,7 @@ func ExampleBuffer_CloseChecksumTmpFileCompressed() {
 	bfr.WriteLine([]byte("test line"))
 	bfr.Close()
 
-	fmt.Println(bfr.sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(bfr.sts.Checksum()) // output: 42e649f9834028184ec21940d13a300f
 
 	os.Remove(bfr.sts.Path()) // cleanup tmp file
 	os.Remove("./tmp")        // remove dir

@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"sync/atomic"
+	"time"
+
+	"github.com/jbsmith7741/uri"
 )
 
 /*
@@ -20,24 +23,21 @@ func New() Safe {
 	s.isDir.Store(false)
 	return s
 }
+*/
 
 // NewFromBytes creates Stats from
 // json bytes.
-func NewFromBytes(b []byte) Safe {
-	sts := New()
+func NewFromBytes(b []byte) (sts Stats) {
 	json.Unmarshal(b, &sts)
 	return sts
 }
 
 // NewFromInfo creates Stats from a
 // uri formatted info string.
-func NewFromInfo(info string) Safe {
-	sts := New()
+func NewFromInfo(info string) (sts Stats) {
 	uri.Unmarshal(info, &sts)
-
 	return sts
 }
-*/
 
 type Stats struct {
 	LineCnt int64 `json:"linecnt,omitempty"`
@@ -84,6 +84,22 @@ func (s Stats) JSONBytes() []byte {
 
 func (s Stats) JSONString() string {
 	return string(s.JSONBytes())
+}
+
+// Deprecated: reference Stats directly stat.Stats{}
+func New() Stats {
+	return Stats{}
+}
+
+// Deprecated: remove function Clone()
+func (s Stats) Clone() Stats {
+	return s
+}
+
+// ParseCreated: TODO is this actually needed?
+func (s Stats) ParseCreated() time.Time {
+	t, _ := time.Parse(time.RFC3339, s.Created)
+	return t
 }
 
 // CalcCheckSum creates a md5 hash based on the bytes passed in.
