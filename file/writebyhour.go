@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buger/jsonparser"
@@ -43,8 +44,8 @@ type WriteByHour struct {
 
 	// writers map key is the destination file path (parsed destTmpl)
 	writers map[string]Writer
-	lineCnt stat.Stats // just for keeping track of total line count.
-	done    bool       // set to true if either Close or Abort are called. Prevents subsequent writes.
+	lineCnt int64 // just for keeping track of total line count.
+	done    bool  // set to true if either Close or Abort are called. Prevents subsequent writes.
 	mu      sync.RWMutex
 	wg      sync.WaitGroup
 }
@@ -79,7 +80,7 @@ func (w *WriteByHour) WriteLine(ln []byte, t time.Time) (err error) {
 
 	err = writer.WriteLine(ln)
 	if err == nil {
-		w.lineCnt.AddLine()
+		atomic.AddInt64(&w.lineCnt, 1)
 	}
 	return err
 }
@@ -87,9 +88,7 @@ func (w *WriteByHour) WriteLine(ln []byte, t time.Time) (err error) {
 // LineCnt will provide the totals number of
 // lines written across all files.
 func (w *WriteByHour) LineCnt() int64 {
-	sts := w.lineCnt
-
-	return sts.LineCnt
+	return atomic.LoadInt64(&w.lineCnt)
 }
 
 // Stats provides stats for all files.

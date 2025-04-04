@@ -65,11 +65,12 @@ var MockLine = []byte("mock line\n")
 var MockCreatedDate = time.Time{}*/
 
 func NewReader(pth string) (*Reader, error) {
-	sts := stat.New()
-	sts.SetPath(pth)
-	sts.SetCreated(time.Now())
+	sts := stat.Stats{
+		Path:    pth,
+		Created: time.Now().Format(time.RFC3339),
+	}
 
-	r := &Reader{sts: sts}
+	r := &Reader{sts: sts.ToSafe()}
 	// set MockReader
 	mockReadMode, _ := url.Parse(pth)
 	if mockReadMode != nil {
@@ -84,7 +85,7 @@ func NewReader(pth string) (*Reader, error) {
 }
 
 type Reader struct {
-	sts          stat.Stats
+	sts          *stat.Safe
 	MockReadMode string
 }
 
@@ -149,7 +150,7 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 }
 
 func (r *Reader) Stats() stat.Stats {
-	return r.sts.Clone()
+	return r.sts.Stats()
 }
 
 func (r *Reader) Close() (err error) {
@@ -168,7 +169,6 @@ func (r *Reader) Close() (err error) {
 // then no stats will be returned along with an
 // instance of error.
 func ListFiles(pth string) ([]stat.Stats, error) {
-	sts := stat.New()
 
 	// determine to return err
 	errMode, _ := url.Parse(pth)
@@ -178,7 +178,6 @@ func ListFiles(pth string) ([]stat.Stats, error) {
 	if pth[len(pth)-1] == '/' {
 		pth += "file.txt"
 	}
-	sts.SetPath(pth)
 
-	return []stat.Stats{sts}, nil
+	return []stat.Stats{{Path: pth}}, nil
 }

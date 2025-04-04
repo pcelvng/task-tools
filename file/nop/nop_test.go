@@ -48,8 +48,8 @@ func ExampleNewReader() {
 	if r == nil {
 		return
 	}
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(r.sts.Path) // output: nop://file.txt
+	fmt.Println(err)          // output: <nil>
+	fmt.Println(r.sts.Path()) // output: nop://file.txt
 
 	// Output:
 	// <nil>
@@ -269,37 +269,6 @@ func ExampleReader_ReadLineUsingEOFChan() {
 	// 1
 }
 
-func ExampleReader_Stats() {
-	// showing:
-	// - Reader.Stats() happy path
-
-	r, _ := NewReader("nop://file.txt")
-	if r == nil {
-		return
-	}
-	r.sts.LineCnt = 10
-	r.sts.ByteCnt = 100
-	r.sts.Created = "created date"
-	r.sts.Size = 200
-	r.sts.Checksum = "checksum"
-
-	sts := r.Stats()
-	fmt.Println(sts.Path)     // output: nop://file.txt
-	fmt.Println(sts.LineCnt)  // output: 10
-	fmt.Println(sts.ByteCnt)  // output: 100
-	fmt.Println(sts.Created)  // output: created date
-	fmt.Println(sts.Size)     // output: 200
-	fmt.Println(sts.Checksum) // output: checksum
-
-	// Output:
-	// nop://file.txt
-	// 10
-	// 100
-	// created date
-	// 200
-	// checksum
-}
-
 func ExampleReader_Close() {
 	// showing:
 	// - Reader.ReadLine() returning an error
@@ -363,9 +332,7 @@ func ExampleReader_MockReadMode() {
 	// - reader uses MockReadMode set
 	// directly on global variable.
 
-	r := &Reader{
-		MockReadMode: "err",
-	}
+	r, _ := NewReader("err://err")
 
 	_, readErr := r.Read([]byte{})
 	_, readlineErr := r.ReadLine()
@@ -389,8 +356,8 @@ func ExampleNewWriter() {
 	if w == nil {
 		return
 	}
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(w.sts.Path) // output: nop://file.txt
+	fmt.Println(err)          // output: <nil>
+	fmt.Println(w.sts.Path()) // output: nop://file.txt
 
 	// Output:
 	// <nil>
@@ -553,10 +520,10 @@ func ExampleWriter_Close() {
 	}
 	w.sts.ByteCnt = 10 // Size is set from final byte count
 	err := w.Close()
-	isCreated := w.sts.Created != "" // close sets sts.Created
-	fmt.Println(err)                 // output: <nil>
-	fmt.Println(w.sts.Size)          // output: 10
-	fmt.Println(isCreated)           // output: true
+	isCreated := w.sts.Created() != "" // close sets sts.Created
+	fmt.Println(err)                   // output: <nil>
+	fmt.Println(w.sts.Size)            // output: 10
+	fmt.Println(isCreated)             // output: true
 
 	// Output:
 	// <nil>
@@ -574,10 +541,10 @@ func ExampleWriter_CloseErr() {
 	}
 	w.sts.ByteCnt = 10 // Size is set from final byte count
 	err := w.Close()
-	isCreated := w.sts.Created != "" // close sets sts.Created
-	fmt.Println(err)                 // output: <nil>
-	fmt.Println(w.sts.Size)          // output: 0
-	fmt.Println(isCreated)           // output: false
+	isCreated := w.sts.Created() != "" // close sets sts.Created
+	fmt.Println(err)                   // output: <nil>
+	fmt.Println(w.sts.Size)            // output: 0
+	fmt.Println(isCreated)             // output: false
 
 	// Output:
 	// close_err

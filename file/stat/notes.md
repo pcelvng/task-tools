@@ -7,5 +7,5 @@
 
 file/buf -> no changes 
 file/local -> completed, needs testing
-file/minio -> 
+file/minio -> completed, needs testing
 file/nop -> y

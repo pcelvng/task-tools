@@ -31,11 +31,10 @@ import (
 //var MockWriteMode string
 
 func NewWriter(pth string) (*Writer, error) {
-	sts := stat.New()
-	sts.SetPath(pth)
+	sts := stat.Stats{Path: pth}
 
 	w := &Writer{
-		sts: sts,
+		sts: sts.ToSafe(),
 	}
 	// set mock write mode
 	// Note: the parsed write mode value
@@ -59,7 +58,7 @@ func NewWriter(pth string) (*Writer, error) {
 
 // Writer is a no-operation writer useful for testing.
 type Writer struct {
-	sts           stat.Stats
+	sts           *stat.Safe
 	MockWriteMode string
 }
 
@@ -83,7 +82,7 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 }
 
 func (w *Writer) Stats() stat.Stats {
-	return w.sts.Clone()
+	return w.sts.Stats()
 }
 
 func (w *Writer) Abort() error {
