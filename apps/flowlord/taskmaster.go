@@ -373,6 +373,10 @@ func (tm *taskMaster) Process(t *task.Task) error {
 		}
 		return nil
 	}
+	if t.Result == task.WarnResult {
+		// do nothing
+		return nil
+	}
 	return fmt.Errorf("unknown result %q %s", t.Result, t.JSONString())
 }
 
