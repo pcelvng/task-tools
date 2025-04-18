@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -248,13 +247,10 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	var pth string
+	pth := tm.path
 	// support directory and single file for workflow path lookup.
-	if _, f := path.Split(tm.path); f == "" {
-		pth = tm.path + "/" + fName
-	} else {
-		// for single file show the file regardless of the file param
-		pth = tm.path
+	if tm.Cache.IsDir() {
+		pth += "/" + fName
 	}
 
 	sts, err := file.Stat(pth, tm.fOpts)
@@ -264,12 +260,12 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	if sts.IsDir {
+		w.WriteHeader(http.StatusOK)
 		files, _ := file.List(pth, tm.fOpts)
 		for _, f := range files {
 			b, a, _ := strings.Cut(f.Path, tm.path)
 			w.Write([]byte(b + a + "\n"))
 		}
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 	reader, err := file.NewReader(pth, tm.fOpts)
@@ -287,8 +283,8 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	case "yaml", "yml":
 		w.Header().Set("Context-Type", "text/x-yaml")
 	}
-	b, _ := io.ReadAll(reader)
 	w.WriteHeader(http.StatusOK)
+	b, _ := io.ReadAll(reader)
 	w.Write(b)
 }
 

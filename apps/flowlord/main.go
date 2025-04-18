@@ -46,6 +46,7 @@ type options struct {
 
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
+
 	opts := &options{
 		Refresh:     time.Minute * 15,
 		TaskTTL:     4 * time.Hour,

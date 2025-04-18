@@ -9,7 +9,7 @@ import (
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
-	"modernc.org/sqlite"
+	_ "modernc.org/sqlite"
 )
 
 //go:embed schema.sql
@@ -24,9 +24,6 @@ func NewSQLite(ttl time.Duration, dbPath string) (*SQLite, error) {
 	if ttl < time.Hour {
 		ttl = time.Hour
 	}
-
-	// Register the SQLite driver
-	sql.Register("sqlite", &sqlite.Driver{})
 
 	// Open the database
 	db, err := sql.Open("sqlite", dbPath)
