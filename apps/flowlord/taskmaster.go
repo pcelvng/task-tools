@@ -39,7 +39,7 @@ type taskMaster struct {
 	fOpts         *file.Options
 	doneTopic     string
 	failedTopic   string
-	taskCache     *cache.Memory
+	taskCache     *cache.SQLite
 	*workflow.Cache
 	port  int
 	cron  *cron.Cron
@@ -96,11 +96,15 @@ func New(opts *options) *taskMaster {
 	if opts.Slack.MaxFrequency <= opts.Slack.MinFrequency {
 		opts.Slack.MaxFrequency = 16 * opts.Slack.MinFrequency
 	}
+	db, err := cache.NewSQLite(opts.TaskTTL, "./tasks.db")
+	if err != nil {
+		log.Fatal("db init", err)
+	}
 
 	opts.Slack.file = opts.File
 	tm := &taskMaster{
 		initTime:     time.Now(),
-		taskCache:    cache.NewMemory(opts.TaskTTL),
+		taskCache:    db,
 		path:         opts.Workflow,
 		doneTopic:    opts.DoneTopic,
 		failedTopic:  opts.FailedTopic,
