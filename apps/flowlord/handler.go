@@ -1,14 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/jbsmith7741/uri"
 
+	"github.com/pcelvng/task-tools/apps/flowlord/handler"
 	"github.com/pcelvng/task-tools/slack"
 
 	"github.com/go-chi/chi/v5"
@@ -53,6 +55,7 @@ func (tm *taskMaster) StartHandler() {
 	})
 	router.Get("/task/{id}", tm.taskHandler)
 	router.Get("/recap", tm.recapHandler)
+	router.Get("/web/alert/{name}", tm.htmlAlert)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -245,13 +248,10 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	var pth string
+	pth := tm.path
 	// support directory and single file for workflow path lookup.
-	if _, f := path.Split(tm.path); f == "" {
-		pth = tm.path + "/" + fName
-	} else {
-		// for single file show the file regardless of the file param
-		pth = tm.path
+	if tm.Cache.IsDir() {
+		pth += "/" + fName
 	}
 
 	sts, err := file.Stat(pth, tm.fOpts)
@@ -261,12 +261,12 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	if sts.IsDir {
+		w.WriteHeader(http.StatusOK)
 		files, _ := file.List(pth, tm.fOpts)
 		for _, f := range files {
 			b, a, _ := strings.Cut(f.Path, tm.path)
 			w.Write([]byte(b + a + "\n"))
 		}
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 	reader, err := file.NewReader(pth, tm.fOpts)
@@ -284,9 +284,53 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	case "yaml", "yml":
 		w.Header().Set("Context-Type", "text/x-yaml")
 	}
-	b, _ := io.ReadAll(reader)
 	w.WriteHeader(http.StatusOK)
+	b, _ := io.ReadAll(reader)
 	w.Write(b)
+}
+
+func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		http.Error(w, "name parameter required", http.StatusBadRequest)
+		return
+	}
+	t := tmpl.InfoTime(name)
+	reportPath := tmpl.Parse(tm.slack.ReportPath+name, t)
+	fmt.Println(reportPath)
+	reader, err := file.NewReader(reportPath, tm.slack.file)
+	if err != nil {
+		http.Error(w, reportPath, http.StatusNotFound)
+		return
+	}
+
+	scanner := file.NewScanner(reader)
+	tasks := make([]task.Task, 0, 20)
+	for scanner.Scan() {
+		var tsk task.Task
+		if err := json.Unmarshal(scanner.Bytes(), &tsk); err != nil {
+			http.Error(w, fmt.Sprintf("unmarshal error: %d %v", scanner.Stats().LineCnt, err.Error()), http.StatusInternalServerError)
+		}
+		tasks = append(tasks, tsk)
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(alertHTML(tasks))
+}
+
+// alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
+func alertHTML(tasks []task.Task) []byte {
+
+	tmpl, err := template.New("alert").Parse(handler.AlertTemplate)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, tasks); err != nil {
+		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
 }
 
 type request struct {

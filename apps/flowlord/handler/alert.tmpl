@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h2>Task Status Report</h2>
+    <table>
+        <tr>
+            <th>Task Type</th>
+            <th>Info</th>
+            <th>Status</th>
+            <th>Message</th>
+            <th>Started</th>
+            <th>Ended</th>
+        </tr>
+        {{range .}}
+        <tr>
+            <td>{{.Type}}</td>
+            <td>{{.Info}}</td>
+            <td>{{.Result}}</td>
+            <td>{{.Msg}}</td>
+            <td>{{.Started}}</td>
+            <td>{{.Ended}}</td>
+        </tr>
+        {{end}}
+    </table>
+</body>
+</html>
