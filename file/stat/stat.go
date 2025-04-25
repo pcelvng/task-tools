@@ -10,21 +10,6 @@ import (
 	"github.com/jbsmith7741/uri"
 )
 
-/*
-func New() Safe {
-	s := Safe{
-		checksum: &atomic.Value{},
-		path:     &atomic.Value{},
-		created:  &atomic.Value{},
-	}
-	s.checksum.Store("")
-	s.path.Store("")
-	s.created.Store("")
-	s.isDir.Store(false)
-	return s
-}
-*/
-
 // NewFromBytes creates Stats from
 // json bytes.
 func NewFromBytes(b []byte) (sts Stats) {
@@ -91,12 +76,7 @@ func New() Stats {
 	return Stats{}
 }
 
-// Deprecated: remove function Clone()
-func (s Stats) Clone() Stats {
-	return s
-}
-
-// ParseCreated: TODO is this actually needed?
+// ParseCreated converts the store string timestamp to a time.Time value
 func (s Stats) ParseCreated() time.Time {
 	t, _ := time.Parse(time.RFC3339, s.Created)
 	return t
@@ -107,22 +87,3 @@ func (s Stats) ParseCreated() time.Time {
 func CalcCheckSum(b []byte) string {
 	return hex.EncodeToString(md5.New().Sum(b))
 }
-
-/*
-// Clone will create a copy of stat that won't trigger
-// race conditions. Use Clone if you are updating and
-// reading from stats at the same time. Read from the
-// clone.
-func (s *Safe) Clone() Safe {
-	c := Safe{
-		LineCnt: atomic.LoadInt64(&s.LineCnt),
-		ByteCnt: atomic.LoadInt64(&s.ByteCnt),
-		Size:    atomic.LoadInt64(&s.Size),
-		Files:   atomic.LoadInt64(&s.Files),
-	}
-	c.checksum.Store(s.checksum.Load())
-	c.path.Store(s.checksum.Load())
-	c.created.Store(s.checksum.Load())
-	c.isDir.Store(s.checksum.Load())
-	return c
-} */

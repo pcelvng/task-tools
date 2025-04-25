@@ -84,25 +84,6 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 	return ln, err
 }
 
-/*
-	func (r *Reader) Lines() iter.Seq[[]byte] {
-		return func(yield func([]byte) bool) {
-			var ln []byte
-			var err error
-			for ln, err = r.ReadLine(); err == nil; ln, err = r.ReadLine() {
-				if !yield(ln) {
-					// todo: Should we close reader?
-
-					return
-				}
-			}
-			if err == io.EOF {
-				yield(ln)
-			}
-		}
-	}
-*/
-
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.rBuf.Read(p)
 	r.sts.AddBytes(int64(n))

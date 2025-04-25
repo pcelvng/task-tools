@@ -423,12 +423,3 @@ func TestListFiles(t *testing.T) {
 	os.Remove("./test/dir/")
 	os.Remove("./test")
 }
-
-/*
-func TestReadLines(t *testing.T) {
-	r, _ := NewReader("../../internal/test/nop.sql")
-	for l := range r.Lines() {
-		fmt.Println(string(l))
-	}
-}
-*/

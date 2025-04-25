@@ -76,7 +76,6 @@ type Writer struct {
 	client *minio.Client
 	bfr    *buf.Buffer
 	sts    *stat.Safe
-	//objSts stat.Stats // stats as reported by s3
 
 	tmpPth string
 	bucket string // destination s3 bucket
@@ -99,7 +98,6 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 func (w *Writer) Stats() stat.Stats {
 	sts := w.bfr.Stats()
 	sts.Path = w.sts.Path()
-	//sts.Created = w.sts.Created()
 
 	return sts
 }
@@ -157,9 +155,6 @@ func (w *Writer) Close() error {
 		return err
 	}
 
-	// set object stats
-	//w.setObjSts()
-
 	// set created
 	w.sts.SetCreated(time.Now())
 
@@ -202,28 +197,3 @@ func (w *Writer) copy() (n int64, err error) {
 	)
 	return info.Size, err
 }
-
-/*
-// createdAt will retrieve the created date
-// of the object. If the object, doesn't
-// exist then will return the time.Time
-// zero value.
-func (w *Writer) setObjSts() error {
-	// created date
-	objInfo, err := w.client.StatObject(
-		context.Background(),
-		w.bucket,
-		w.objPth,
-		minio.StatObjectOptions{},
-	)
-	if err != nil {
-		return err
-	}
-
-	w.objSts.SetCreated(objInfo.LastModified)
-	w.objSts.Checksum = objInfo.ETag
-	w.objSts.SetPath(objInfo.Key)
-	w.objSts.SetSize(objInfo.Size)
-
-	return nil
-} */

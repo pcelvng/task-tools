@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Safe is thread safe without using mutex by using atomic values for all fields
 type Safe struct {
 	// LineCnt returns the file line count.
 	LineCnt int64 `json:"linecnt,omitempty"`
