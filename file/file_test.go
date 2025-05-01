@@ -182,6 +182,42 @@ func TestReadFile(t *testing.T) {
 	fmt.Println(data)
 }
 
+func TestIterStruct(t *testing.T) {
+	fn := func(path string) (stat.Stats, error) {
+		it := Iterator(path, nil)
+		for _ = range it.Range() {
+		}
+		return it.Stats(), it.Error()
+	}
+	cases := trial.Cases[string, stat.Stats]{
+		"full file": {
+			Input: "../internal/test/nop.sql",
+			Expected: stat.Stats{
+				LineCnt: 1,
+				ByteCnt: 25,
+				Size:    25,
+			},
+		},
+		"init_err": {
+			Input:       "nop://init_err",
+			ExpectedErr: errors.New("init_err"),
+		},
+		"read_err": {
+			Input:       "nop://readline_err",
+			ExpectedErr: errors.New("readline_err"),
+		},
+		"close_err": {
+			Input:       "nop://close_err",
+			ExpectedErr: errors.New("close_err"),
+		},
+	}
+
+	trial.New(fn, cases).
+		Timeout(time.Second).
+		Comparer(trial.EqualOpt(trial.IgnoreFields("Checksum", "Created", "Path"))).
+		SubTest(t)
+}
+
 func TestIterator(t *testing.T) {
 	fn := func(path string) (*stat.Stats, error) {
 		it, sts := LineErr(path, nil)

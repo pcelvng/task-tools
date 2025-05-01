@@ -217,27 +217,58 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 }
 
 type Iter struct {
-	err    error
-	reader Reader
+	err     error
+	isValid bool
+	reader  Reader
 }
 
-func Iterator(path string, opts *Options) Iter {
+func Iterator(path string, opts *Options) *Iter {
 	r, err := NewReader(path, opts)
-	return Iter{
-		err:    err,
-		reader: r,
+	return &Iter{
+		err:     err,
+		isValid: err == nil,
+		reader:  r,
 	}
 }
 
-func (i Iter) Range() iter.Seq[[]byte] {
-	return ReadAll(i.reader, nil)
+func (i *Iter) Range() iter.Seq[[]byte] {
+	// only iterator if the reader is properly set.
+	if i.isValid {
+		return func(yield func([]byte) bool) {
+			var err error
+			// close reader and properly record error
+			defer func() {
+				i.err = err
+				closeErr := i.reader.Close()
+				if closeErr != nil && i.err != nil {
+					i.err = fmt.Errorf("%w + close-err:%v", err, closeErr)
+				} else if closeErr != nil {
+					i.err = closeErr
+				}
+			}()
+			var ln []byte
+			for ln, err = i.reader.ReadLine(); err == nil; ln, err = i.reader.ReadLine() {
+				if !yield(ln) {
+					return
+				}
+			}
+			if err == io.EOF {
+				err = nil
+				yield(ln)
+			}
+		}
+	}
+	return func(yield func([]byte) bool) {}
 }
 
-func (i Iter) Stats() stat.Stats {
-	return i.reader.Stats()
+func (i *Iter) Stats() stat.Stats {
+	if i.isValid {
+		return i.reader.Stats()
+	}
+	return stat.Stats{}
 }
 
-func (i Iter) Error() error {
+func (i *Iter) Error() error {
 	return i.err
 }
 

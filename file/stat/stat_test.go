@@ -77,7 +77,7 @@ func ExampleSafe_SetChecksum() {
 	hsh.Write([]byte("test message"))
 	sts.SetChecksum(hsh)
 
-	fmt.Println(sts.Checksum) // output: c72b9698fa1927e1dd12d3cf26ed84b2
+	fmt.Println(sts.Checksum()) // output: c72b9698fa1927e1dd12d3cf26ed84b2
 	// Output:
 	// c72b9698fa1927e1dd12d3cf26ed84b2
 }
@@ -96,7 +96,7 @@ func ExampleSafe_SetPath() {
 	sts := Safe{}
 
 	sts.SetPath("path/to/file.txt")
-	fmt.Println(sts.Path) // output: path/to/file.txt
+	fmt.Println(sts.Path()) // output: path/to/file.txt
 
 	// Output:
 	// path/to/file.txt
@@ -109,7 +109,7 @@ func ExampleSafe_SetCreated() {
 	t, _ := time.Parse(time.RFC3339, created)
 
 	sts.SetCreated(t)
-	fmt.Println(sts.Created) // output: 2017-01-02T03:04:05Z
+	fmt.Println(sts.Created()) // output: 2017-01-02T03:04:05Z
 
 	// Output:
 	// 2017-01-02T03:04:05Z
@@ -141,9 +141,9 @@ func ExampleStats_ToSafe() {
 	fmt.Println(cln.LineCnt)
 	fmt.Println(cln.ByteCnt)
 	fmt.Println(cln.Size)
-	fmt.Println(cln.Checksum)
-	fmt.Println(cln.Path)
-	fmt.Println(cln.Created)
+	fmt.Println(cln.Checksum())
+	fmt.Println(cln.Path())
+	fmt.Println(cln.Created())
 
 	// Output:
 	// 1

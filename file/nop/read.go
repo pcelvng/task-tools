@@ -2,7 +2,6 @@ package nop
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"net/url"
@@ -140,7 +139,6 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 	// use MsgChan if MockLine has
 	// no value.
 	if len(MockLine) == 0 {
-		fmt.Println("wait")
 		msg := <-MsgChan
 		r.sts.AddBytes(int64(len(msg)))
 
