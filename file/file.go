@@ -216,32 +216,75 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	return w, err
 }
 
+type Iter struct {
+	err    error
+	reader Reader
+}
+
+func Iterator(path string, opts *Options) Iter {
+	r, err := NewReader(path, opts)
+	return Iter{
+		err:    err,
+		reader: r,
+	}
+}
+
+func (i Iter) Range() iter.Seq[[]byte] {
+	return ReadAll(i.reader, nil)
+}
+
+func (i Iter) Stats() stat.Stats {
+	return i.reader.Stats()
+}
+
+func (i Iter) Error() error {
+	return i.err
+}
+
+func LineErr(path string, opts *Options) (iter.Seq[[]byte], *stat.Stats) {
+	s := &stat.Stats{}
+	return Lines(path, opts, s), s
+}
+
 // Lines opens a file and returns an iterator to read through all the lines.
 // the file is closed after reading through all lines
-func Lines(path string, opts *Options) iter.Seq[[]byte] {
+func Lines(path string, opts *Options, sts *stat.Stats) iter.Seq[[]byte] {
 	r, err := NewReader(path, opts)
 	if err != nil {
-		fmt.Println(err)
+		sts.Error = err
 		return func(yield func([]byte) bool) {}
 	}
-	return ReadAll(r)
+	return ReadAll(r, sts)
 }
 
 // ReadAll the lines in a file and close it.
-func ReadAll(r Reader) iter.Seq[[]byte] {
+func ReadAll(r Reader, sts *stat.Stats) iter.Seq[[]byte] {
 	return func(yield func([]byte) bool) {
-		var ln []byte
 		var err error
+		if sts != nil {
+			defer func() {
+				s2 := r.Stats()
+				s2.Error = err
+				if err := r.Close(); err != nil {
+					if s2.Error != nil {
+						s2.Error = fmt.Errorf("%w + close-err:%v", s2.Error, err)
+					} else {
+						s2.Error = err
+					}
+				}
+				*sts = s2
+			}()
+		}
+		var ln []byte
 		for ln, err = r.ReadLine(); err == nil; ln, err = r.ReadLine() {
 			if !yield(ln) {
-				r.Close()
 				return
 			}
 		}
 		if err == io.EOF {
+			err = nil
 			yield(ln)
 		}
-		r.Close()
 	}
 }
 

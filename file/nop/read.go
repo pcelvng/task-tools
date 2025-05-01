@@ -2,6 +2,7 @@ package nop
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/url"
@@ -80,7 +81,12 @@ func NewReader(pth string) (*Reader, error) {
 	if r.MockReadMode == "init_err" {
 		return nil, errors.New(r.MockReadMode)
 	}
-
+	if r.MockReadMode == "close_err" {
+		// send non-blocking signal to close reader
+		go func() {
+			EOFChan <- struct{}{}
+		}()
+	}
 	return r, nil
 }
 
@@ -134,6 +140,7 @@ func (r *Reader) ReadLine() (ln []byte, err error) {
 	// use MsgChan if MockLine has
 	// no value.
 	if len(MockLine) == 0 {
+		fmt.Println("wait")
 		msg := <-MsgChan
 		r.sts.AddBytes(int64(len(msg)))
 
