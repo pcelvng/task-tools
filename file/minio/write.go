@@ -5,8 +5,10 @@ import (
 	"mime"
 	"path/filepath"
 	"sync"
+	"time"
 
 	minio "github.com/minio/minio-go/v7"
+
 	"github.com/pcelvng/task-tools/file/buf"
 	"github.com/pcelvng/task-tools/file/stat"
 )
@@ -31,8 +33,7 @@ func newWriterFromClient(pth string, s3Client *minio.Client, opt *buf.Options) (
 	}
 
 	// stats
-	sts := stat.New()
-	sts.SetPath(pth)
+	sts := stat.Stats{Path: pth}
 
 	// compression
 	if ext := filepath.Ext(pth); ext == ".gz" {
@@ -55,7 +56,7 @@ func newWriterFromClient(pth string, s3Client *minio.Client, opt *buf.Options) (
 		bucket:     bucket,
 		objPth:     objPth,
 		tmpPth:     tmpPth,
-		sts:        sts,
+		sts:        sts.ToSafe(),
 		keepFailed: opt.KeepFailed,
 	}, nil
 }
@@ -74,8 +75,7 @@ func newWriterFromClient(pth string, s3Client *minio.Client, opt *buf.Options) (
 type Writer struct {
 	client *minio.Client
 	bfr    *buf.Buffer
-	sts    stat.Stats
-	objSts stat.Stats // stats as reported by s3
+	sts    *stat.Safe
 
 	tmpPth string
 	bucket string // destination s3 bucket
@@ -97,8 +97,7 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 
 func (w *Writer) Stats() stat.Stats {
 	sts := w.bfr.Stats()
-	sts.Path = w.sts.Path
-	sts.Created = w.sts.Created
+	sts.Path = w.sts.Path()
 
 	return sts
 }
@@ -156,11 +155,8 @@ func (w *Writer) Close() error {
 		return err
 	}
 
-	// set object stats
-	w.setObjSts()
-
 	// set created
-	w.sts.Created = w.objSts.Created
+	w.sts.SetCreated(time.Now())
 
 	return w.bfr.Cleanup()
 }
@@ -200,28 +196,4 @@ func (w *Writer) copy() (n int64, err error) {
 		opts,
 	)
 	return info.Size, err
-}
-
-// createdAt will retrieve the created date
-// of the object. If the object, doesn't
-// exist then will return the time.Time
-// zero value.
-func (w *Writer) setObjSts() error {
-	// created date
-	objInfo, err := w.client.StatObject(
-		context.Background(),
-		w.bucket,
-		w.objPth,
-		minio.StatObjectOptions{},
-	)
-	if err != nil {
-		return err
-	}
-
-	w.objSts.SetCreated(objInfo.LastModified)
-	w.objSts.Checksum = objInfo.ETag
-	w.objSts.SetPath(objInfo.Key)
-	w.objSts.SetSize(objInfo.Size)
-
-	return nil
 }

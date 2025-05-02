@@ -426,7 +426,7 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 			return
 		}
 		s := unmarshalStat(b)
-		if err := tm.matchFile(s.Clone()); err != nil {
+		if err := tm.matchFile(s); err != nil {
 			log.Println("files: ", err)
 		}
 	}

@@ -39,9 +39,10 @@ func NewWriter(pth string, opt *buf.Options) (*Writer, error) {
 	pth = rmLocalPrefix(pth)
 
 	// stats
-	sts := stat.New()
 	pth, _ = filepath.Abs(pth)
-	sts.SetPath(pth)
+	sts := stat.Stats{
+		Path: pth,
+	}.ToSafe()
 
 	// compression
 	if ext := filepath.Ext(pth); ext == ".gz" {
@@ -71,7 +72,7 @@ func NewWriter(pth string, opt *buf.Options) (*Writer, error) {
 
 type Writer struct {
 	bfr    *buf.Buffer
-	sts    stat.Stats
+	sts    *stat.Safe
 	tmpPth string
 }
 
@@ -85,8 +86,8 @@ func (w *Writer) WriteLine(ln []byte) (err error) {
 
 func (w *Writer) Stats() stat.Stats {
 	sts := w.bfr.Stats()
-	sts.Path = w.sts.Path
-	sts.Created = w.sts.Created
+	sts.Path = w.sts.Path()
+	sts.Created = w.sts.Created()
 
 	return sts
 }
@@ -128,9 +129,9 @@ func (w *Writer) Close() error {
 	}
 
 	// set created date
-	s, err := Stat(w.sts.Path)
-	w.sts = s
+	s, err := Stat(w.sts.Path())
 
+	w.sts = s.ToSafe()
 	return err
 }
 
@@ -139,7 +140,7 @@ func (w *Writer) Close() error {
 //
 // Returns num of bytes copied and error.
 func (w *Writer) copyAndClean() (n int64, err error) {
-	isDev := strings.HasPrefix(w.sts.Path, "/dev/")
+	isDev := strings.HasPrefix(w.sts.Path(), "/dev/")
 
 	// mv if using tmp file buffer.
 	// can't use rename for dev files.
@@ -149,8 +150,8 @@ func (w *Writer) copyAndClean() (n int64, err error) {
 		// rename will move via hard link if
 		// on the same file system (same partition).
 		// otherwise it will do a system copy.
-		errMv := os.Rename(w.tmpPth, w.sts.Path)
-		fInfo, err := os.Stat(w.sts.Path)
+		errMv := os.Rename(w.tmpPth, w.sts.Path())
+		fInfo, err := os.Stat(w.sts.Path())
 
 		// destination file size
 		if fInfo != nil {
@@ -167,9 +168,9 @@ func (w *Writer) copyAndClean() (n int64, err error) {
 	}
 
 	// byte by byte copy
-	_, f, _ := openF(w.sts.Path, false)
+	_, f, _ := openF(w.sts.Path(), false)
 	n, err = io.Copy(f, w.bfr)
-	closeF(w.sts.Path, f) // assure disk sync
+	closeF(w.sts.Path(), f) // assure disk sync
 	w.bfr.Cleanup()
 
 	return n, err
