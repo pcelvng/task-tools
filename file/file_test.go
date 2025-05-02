@@ -174,18 +174,10 @@ func TestGlob_Minio(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
-func TestReadFile(t *testing.T) {
-	var data string
-	for l := range Lines("../internal/test/nop.sql", nil, nil) {
-		data += string(l)
-	}
-	fmt.Println(data)
-}
-
 func TestIterStruct(t *testing.T) {
 	fn := func(path string) (stat.Stats, error) {
-		it := Iterator(path, nil)
-		for _ = range it.Range() {
+		it := NewIterator(path, nil)
+		for _ = range it.Lines() {
 		}
 		return it.Stats(), it.Error()
 	}
@@ -193,42 +185,6 @@ func TestIterStruct(t *testing.T) {
 		"full file": {
 			Input: "../internal/test/nop.sql",
 			Expected: stat.Stats{
-				LineCnt: 1,
-				ByteCnt: 25,
-				Size:    25,
-			},
-		},
-		"init_err": {
-			Input:       "nop://init_err",
-			ExpectedErr: errors.New("init_err"),
-		},
-		"read_err": {
-			Input:       "nop://readline_err",
-			ExpectedErr: errors.New("readline_err"),
-		},
-		"close_err": {
-			Input:       "nop://close_err",
-			ExpectedErr: errors.New("close_err"),
-		},
-	}
-
-	trial.New(fn, cases).
-		Timeout(time.Second).
-		Comparer(trial.EqualOpt(trial.IgnoreFields("Checksum", "Created", "Path"))).
-		SubTest(t)
-}
-
-func TestIterator(t *testing.T) {
-	fn := func(path string) (*stat.Stats, error) {
-		it, sts := LineErr(path, nil)
-		for _ = range it {
-		}
-		return sts, sts.Error
-	}
-	cases := trial.Cases[string, *stat.Stats]{
-		"full file": {
-			Input: "../internal/test/nop.sql",
-			Expected: &stat.Stats{
 				LineCnt: 1,
 				ByteCnt: 25,
 				Size:    25,

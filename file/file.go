@@ -216,22 +216,22 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	return w, err
 }
 
-type Iter struct {
+type Iterator struct {
 	err     error
 	isValid bool
 	reader  Reader
 }
 
-func Iterator(path string, opts *Options) *Iter {
+func NewIterator(path string, opts *Options) *Iterator {
 	r, err := NewReader(path, opts)
-	return &Iter{
+	return &Iterator{
 		err:     err,
 		isValid: err == nil,
 		reader:  r,
 	}
 }
 
-func (i *Iter) Range() iter.Seq[[]byte] {
+func (i *Iterator) Lines() iter.Seq[[]byte] {
 	// only iterator if the reader is properly set.
 	if i.isValid {
 		return func(yield func([]byte) bool) {
@@ -261,62 +261,15 @@ func (i *Iter) Range() iter.Seq[[]byte] {
 	return func(yield func([]byte) bool) {}
 }
 
-func (i *Iter) Stats() stat.Stats {
+func (i *Iterator) Stats() stat.Stats {
 	if i.isValid {
 		return i.reader.Stats()
 	}
 	return stat.Stats{}
 }
 
-func (i *Iter) Error() error {
+func (i *Iterator) Error() error {
 	return i.err
-}
-
-func LineErr(path string, opts *Options) (iter.Seq[[]byte], *stat.Stats) {
-	s := &stat.Stats{}
-	return Lines(path, opts, s), s
-}
-
-// Lines opens a file and returns an iterator to read through all the lines.
-// the file is closed after reading through all lines
-func Lines(path string, opts *Options, sts *stat.Stats) iter.Seq[[]byte] {
-	r, err := NewReader(path, opts)
-	if err != nil {
-		sts.Error = err
-		return func(yield func([]byte) bool) {}
-	}
-	return ReadAll(r, sts)
-}
-
-// ReadAll the lines in a file and close it.
-func ReadAll(r Reader, sts *stat.Stats) iter.Seq[[]byte] {
-	return func(yield func([]byte) bool) {
-		var err error
-		if sts != nil {
-			defer func() {
-				s2 := r.Stats()
-				s2.Error = err
-				if err := r.Close(); err != nil {
-					if s2.Error != nil {
-						s2.Error = fmt.Errorf("%w + close-err:%v", s2.Error, err)
-					} else {
-						s2.Error = err
-					}
-				}
-				*sts = s2
-			}()
-		}
-		var ln []byte
-		for ln, err = r.ReadLine(); err == nil; ln, err = r.ReadLine() {
-			if !yield(ln) {
-				return
-			}
-		}
-		if err == io.EOF {
-			err = nil
-			yield(ln)
-		}
-	}
 }
 
 // List is a generic List function that will call the
