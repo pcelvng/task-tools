@@ -156,12 +156,6 @@ func (tm *Starter) Initialize() *Starter {
 	var showConf bool
 	flag.BoolVar(&genConf, "g", false, "generate options file")
 	flag.BoolVar(&showConf, "show", false, "show current options values")
-	config.New(tm).
-		Version(tm.version).Disable(config.OptGenConf | config.OptShow | config.OptFlag | config.OptEnv).
-		Description(tm.description).
-		LoadOrDie()
-
-	// Load the app options like a flat file
 	p := getFlagConfigPath()
 	if p != "" {
 		if err := config.LoadFile(p, tm.Validator); err != nil {
@@ -169,16 +163,26 @@ func (tm *Starter) Initialize() *Starter {
 		}
 	}
 
+	validateErr := config.New(tm).
+		Version(tm.version).Disable(config.OptGenConf | config.OptShow | config.OptFlag | config.OptEnv).
+		Description(tm.description).
+		Load()
+
+	// Load the app options like a flat file
+
 	if genConf {
 		tm.genConfig()
 		os.Exit(0)
 	}
 	if showConf {
-		spew.Dump(tm.StatusPort)
+		spew.Printf("StatusPort: %v\n", tm.StatusPort)
 		spew.Dump(tm.Validator)
 		spew.Dump(tm.BusOpt)
 		spew.Dump(tm.LauncherOpt)
 		os.Exit(0)
+	}
+	if validateErr != nil {
+		log.Fatal(validateErr)
 	}
 	switch tm.bType {
 	case "worker":
@@ -195,7 +199,7 @@ func (tm *Starter) Initialize() *Starter {
 
 func (tm *Starter) genConfig() {
 	writer := os.Stdout
-	writer.WriteString("status_port = 0\n\n")
+	writer.WriteString("status_port = " + strconv.Itoa(tm.StatusPort) + "\n\n")
 	enc := toml.NewEncoder(writer)
 	if err := enc.Encode(tm.Validator); err != nil {
 		log.Fatal(err)
