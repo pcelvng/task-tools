@@ -62,6 +62,11 @@ type Cache struct {
 	Workflows map[string]Workflow // the key is the filename for the workflow
 }
 
+// IsDir returns true if the original workflow path is a folder rather than a file
+func (c *Cache) IsDir() bool {
+	return c.isDir
+}
+
 // New returns a Cache used to manage auto updating a workflow
 func New(path string, opts *file.Options) (*Cache, error) {
 	c := &Cache{
