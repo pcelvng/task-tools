@@ -24,6 +24,8 @@ func NewFromInfo(info string) (sts Stats) {
 	return sts
 }
 
+// Stats is an immutable struct describe file details
+// [Safe] should be used for any needed changes
 type Stats struct {
 	LineCnt int64 `json:"linecnt,omitempty"`
 

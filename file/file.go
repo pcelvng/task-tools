@@ -231,6 +231,8 @@ func NewIterator(path string, opts *Options) *Iterator {
 	}
 }
 
+// Lines allow ranges through file return a []byte for each line in the file
+// range will stop for any error conditions include on opening the file.
 func (i *Iterator) Lines() iter.Seq[[]byte] {
 	// only iterator if the reader is properly set.
 	if i.isValid {
@@ -261,6 +263,7 @@ func (i *Iterator) Lines() iter.Seq[[]byte] {
 	return func(yield func([]byte) bool) {}
 }
 
+// Stats of the file that was read
 func (i *Iterator) Stats() stat.Stats {
 	if i.isValid {
 		return i.reader.Stats()
@@ -268,6 +271,10 @@ func (i *Iterator) Stats() stat.Stats {
 	return stat.Stats{}
 }
 
+// Error caused by reading the file. This could be from
+// 1. Open the file
+// 2. Reading/Retrieving a line
+// 3. Closing the file
 func (i *Iterator) Error() error {
 	return i.err
 }
