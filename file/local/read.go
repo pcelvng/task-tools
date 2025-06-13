@@ -50,17 +50,16 @@ func NewReader(pth string) (*Reader, error) {
 		rHshr: rHshr,
 		rBuf:  rBuf,
 		rGzip: rGzip,
-		sts:   sts,
+		sts:   sts.ToSafe(),
 	}, nil
 }
 
-// Reader
 type Reader struct {
 	f      *os.File
 	rBuf   *bufio.Reader
 	rGzip  *gzip.Reader
 	rHshr  *hashReader
-	sts    stat.Stats
+	sts    *stat.Safe // Thread safe stats
 	closed bool
 }
 
@@ -92,7 +91,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 }
 
 func (r *Reader) Stats() stat.Stats {
-	return r.sts.Clone()
+	return r.sts.Stats()
 }
 
 func (r *Reader) Close() (err error) {
