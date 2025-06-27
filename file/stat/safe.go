@@ -20,20 +20,16 @@ type Safe struct {
 	Size int64 `json:"size"`
 
 	// Checksum returns the base64 encoded string of the file md5 hash.
-	checksum atomic.Value `json:"-"`
-	//Checksum string        `json:"checksum,omitempty"`
+	checksum atomic.Value //string
 
 	// Path returns the full absolute path of the file.
-	path atomic.Value `json:"-"`
-	//Path string        `json:"path" uri:"origin"`
+	path atomic.Value // string
 
 	// Created returns the date the file was created or last updated;
 	// whichever is more recent.
-	created atomic.Value `json:"-"`
-	//Created string        `json:"created"`
+	created atomic.Value
 
-	isDir atomic.Value `json:"-"`
-	//IsDir bool          `json:"isDir,omitempty"`
+	isDir atomic.Bool //bool
 
 	Files int64 `json:"files,omitempty"`
 }
@@ -57,7 +53,8 @@ func (s *Safe) SetChecksum(hsh hash.Hash) {
 }
 
 func (s *Safe) Checksum() string {
-	return s.checksum.Load().(string)
+	v, _ := s.checksum.Load().(string)
+	return v
 }
 
 func (s *Safe) SetSize(size int64) {
@@ -70,7 +67,8 @@ func (s *Safe) SetPath(pth string) {
 }
 
 func (s *Safe) Path() string {
-	return s.path.Load().(string)
+	v, _ := s.path.Load().(string)
+	return v
 }
 
 // SetCreated will set the Created field in the
@@ -88,7 +86,7 @@ func (s *Safe) SetDir(isDir bool) {
 }
 
 func (s *Safe) IsDir() bool {
-	return s.isDir.Load().(bool)
+	return s.isDir.Load()
 }
 
 // ParseCreated will attempt to parse the Created
@@ -117,9 +115,9 @@ func (s *Safe) Stats() Stats {
 		ByteCnt:  atomic.LoadInt64(&s.ByteCnt),
 		Size:     atomic.LoadInt64(&s.Size),
 		Files:    atomic.LoadInt64(&s.Files),
-		Checksum: s.checksum.Load().(string),
-		Path:     s.path.Load().(string),
-		Created:  s.created.Load().(string),
-		IsDir:    s.isDir.Load().(bool),
+		Checksum: s.Checksum(),
+		Path:     s.Path(),
+		Created:  s.Created(),
+		IsDir:    s.IsDir(),
 	}
 }

@@ -65,8 +65,15 @@ func ListFiles(pth string) ([]stat.Stats, error) {
 
 	allSts := make([]stat.Stats, 0)
 	for _, d := range dirInfo {
-		fInfo, _ := d.Info()
-		sts := stat.Stats{
+		fInfo, err := d.Info()
+		var sts stat.Stats
+		if err != nil {
+			// put error message in checksum
+			sts.Checksum = err.Error()
+			allSts = append(allSts, sts)
+			continue
+		}
+		sts = stat.Stats{
 			Created: fInfo.ModTime().Format(time.RFC3339),
 			Path:    path.Join(pth, fInfo.Name()),
 			Size:    fInfo.Size(),

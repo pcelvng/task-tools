@@ -48,9 +48,6 @@ type Stats struct {
 	IsDir bool `json:"isDir,omitempty"`
 
 	Files int64 `json:"files,omitempty"`
-
-	// used to track iterator error messages
-	Error error `json:"-"`
 }
 
 func (s Stats) ToSafe() *Safe {
