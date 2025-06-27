@@ -133,6 +133,27 @@ for _, f := range file.List("s3://bucket/folder/", opts) {
   }
 ```
 
+#### iterator through a file 
+
+``` go 
+// basic case 
+for l := range NewIterator("../internal/test/nop.sql", nil).Lines() {
+  //TODO: do something with the line
+  data += string(l)
+}
+
+// handle errors and get stats 
+it := NewIterator("../internal/test/nop.sql", nil)
+for l := range it.Lines() {
+  //TODO: do something with the line
+  data += string(l)
+}
+if it.Error() != nil {
+  return it.Error() 
+}
+fmt.Println(it.Stats().JSONString())
+```
+
 #### write to a file
 
 ``` go

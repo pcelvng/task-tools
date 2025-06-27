@@ -1,39 +1,32 @@
 package stat
 
 import (
+	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"hash"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/jbsmith7741/uri"
 )
 
-func New() Stats {
-	return Stats{}
-}
-
 // NewFromBytes creates Stats from
 // json bytes.
-func NewFromBytes(b []byte) Stats {
-	sts := New()
+func NewFromBytes(b []byte) (sts Stats) {
 	json.Unmarshal(b, &sts)
 	return sts
 }
 
 // NewFromInfo creates Stats from a
 // uri formatted info string.
-func NewFromInfo(info string) Stats {
-	sts := Stats{}
+func NewFromInfo(info string) (sts Stats) {
 	uri.Unmarshal(info, &sts)
-
 	return sts
 }
 
+// Stats is an immutable struct describe file details
+// [Safe] should be used for any needed changes
 type Stats struct {
-	// LineCnt returns the file line count.
 	LineCnt int64 `json:"linecnt,omitempty"`
 
 	// ByteCount returns uncompressed raw file byte count.
@@ -42,74 +35,33 @@ type Stats struct {
 	// Size holds the actual file size.
 	Size int64 `json:"size"`
 
-	// Checksum returns the base64 encoded string of the file md5 hash.
+	// Checksum base64 encoded string of the file md5 hash
 	Checksum string `json:"checksum,omitempty"`
 
 	// Path returns the full absolute path of the file.
 	Path string `json:"path" uri:"origin"`
 
-	// Created returns the date the file was created or last updated;
+	// Created date the file was created or last updated Format(time.RFC3339)
 	// whichever is more recent.
 	Created string `json:"created"`
 
 	IsDir bool `json:"isDir,omitempty"`
 
 	Files int64 `json:"files,omitempty"`
-
-	mu sync.Mutex
 }
 
-// AddLine will atomically and safely increment
-// LineCnt by one.
-func (s *Stats) AddLine() {
-	atomic.AddInt64(&s.LineCnt, 1)
-}
-
-// AddBytes will atomically and safely increment
-// ByteCnt by 'cnt'.
-func (s *Stats) AddBytes(cnt int64) {
-	atomic.AddInt64(&s.ByteCnt, cnt)
-}
-
-// SetChecksum will correctly calculate and set the
-// base64 encoded checksum.
-func (s *Stats) SetChecksum(hsh hash.Hash) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.Checksum = hex.EncodeToString(hsh.Sum(nil))
-}
-
-func (s *Stats) SetSize(size int64) {
-	curSize := atomic.LoadInt64(&s.Size)
-	atomic.CompareAndSwapInt64(&s.Size, curSize, size)
-}
-
-func (s *Stats) SetPath(pth string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.Path = pth
-}
-
-// SetCreated will set the Created field in the
-// format time.RFC3339 in UTC.
-func (s *Stats) SetCreated(t time.Time) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.Created = t.In(time.UTC).Format(time.RFC3339)
-}
-
-// ParseCreated will attempt to parse the Created
-// field to a time.Time object.
-// ParseCreated expects the Created time string is in
-// time.RFC3339. If there is a parse error
-// then the time.Time zero value is returned.
-//
-// The returned time will always be in UTC.
-func (s *Stats) ParseCreated() time.Time {
-	t, _ := time.Parse(time.RFC3339, s.Created)
-	return t.In(time.UTC)
+func (s Stats) ToSafe() *Safe {
+	c := &Safe{
+		LineCnt: atomic.LoadInt64(&s.LineCnt),
+		ByteCnt: atomic.LoadInt64(&s.ByteCnt),
+		Size:    atomic.LoadInt64(&s.Size),
+		Files:   atomic.LoadInt64(&s.Files),
+	}
+	c.checksum.Store(s.Checksum)
+	c.path.Store(s.Path)
+	c.created.Store(s.Created)
+	c.isDir.Store(s.IsDir)
+	return c
 }
 
 func (s Stats) JSONBytes() []byte {
@@ -121,21 +73,19 @@ func (s Stats) JSONString() string {
 	return string(s.JSONBytes())
 }
 
-// Clone will create a copy of stat that won't trigger
-// race conditions. Use Clone if you are updating and
-// reading from stats at the same time. Read from the
-// clone.
-func (s Stats) Clone() Stats {
-	clone := New()
+// Deprecated: reference Stats directly stat.Stats{}
+func New() Stats {
+	return Stats{}
+}
 
-	s.mu.Lock()
-	clone.Checksum = s.Checksum
-	clone.Path = s.Path
-	clone.Created = s.Created
-	s.mu.Unlock()
+// ParseCreated converts the store string timestamp to a time.Time value
+func (s Stats) ParseCreated() time.Time {
+	t, _ := time.Parse(time.RFC3339, s.Created)
+	return t
+}
 
-	clone.LineCnt = atomic.LoadInt64(&s.LineCnt)
-	clone.ByteCnt = atomic.LoadInt64(&s.ByteCnt)
-	clone.Size = atomic.LoadInt64(&s.Size)
-	return clone
+// CalcCheckSum creates a md5 hash based on the bytes passed in.
+// This is a common method to get a checksum of a file.
+func CalcCheckSum(b []byte) string {
+	return hex.EncodeToString(md5.New().Sum(b))
 }

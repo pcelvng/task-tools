@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jbsmith7741/go-tools/appenderr"
 	minio "github.com/minio/minio-go/v7"
+
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/file/util"
 )
@@ -26,8 +28,6 @@ func NewReader(pth string, opt Option) (*Reader, error) {
 }
 
 func newReaderFromClient(pth string, client *minio.Client) (*Reader, error) {
-	sts := stat.New()
-	sts.SetPath(pth)
 
 	// get bucket, objPth and validate
 	_, bucket, objPth := parsePth(pth)
@@ -43,8 +43,12 @@ func newReaderFromClient(pth string, client *minio.Client) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	sts.SetCreated(objInfo.LastModified)
-	sts.SetSize(objInfo.Size)
+
+	sts := stat.Stats{
+		Path:    pth,
+		Size:    objInfo.Size,
+		Created: objInfo.LastModified.Format(time.RFC3339),
+	}
 
 	// hash reader
 	rHshr := util.NewHashReader(md5.New(), obj)
@@ -67,7 +71,7 @@ func newReaderFromClient(pth string, client *minio.Client) (*Reader, error) {
 		rBuf:  rBuf,
 		rGzip: rGzip,
 		rHshr: rHshr,
-		sts:   sts,
+		sts:   sts.ToSafe(),
 	}, nil
 }
 
@@ -78,7 +82,7 @@ type Reader struct {
 	rGzip *gzip.Reader
 	rHshr *util.HashReader
 
-	sts    stat.Stats
+	sts    *stat.Safe
 	closed bool
 }
 
@@ -111,7 +115,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 }
 
 func (r *Reader) Stats() stat.Stats {
-	return r.sts.Clone()
+	return r.sts.Stats()
 }
 
 func (r *Reader) Close() (err error) {
@@ -165,17 +169,17 @@ func ListFiles(pth string, opt Option) ([]stat.Stats, error) {
 			continue
 		}
 
-		sts := stat.New()
-		sts.IsDir = strings.HasSuffix(objInfo.Key, "/")
-		sts.SetCreated(objInfo.LastModified)
-		sts.Checksum = strings.Trim(objInfo.ETag, `"`) // returns checksum with '"'
+		sts := stat.Stats{
+			IsDir:    strings.HasSuffix(objInfo.Key, "/"),
+			Created:  objInfo.LastModified.Format(time.RFC3339),
+			Checksum: strings.Trim(objInfo.ETag, `"`),
+			Path:     fmt.Sprintf("%s://%s/%s", scheme, bucket, objInfo.Key),
+			Size:     objInfo.Size,
+		}
 
 		if isMinioHost {
-			sts.SetPath(fmt.Sprintf("%s://%s/%s/%s", scheme, opt.Host, bucket, objInfo.Key))
-		} else {
-			sts.SetPath(fmt.Sprintf("%s://%s/%s", scheme, bucket, objInfo.Key))
+			sts.Path = fmt.Sprintf("%s://%s/%s/%s", scheme, opt.Host, bucket, objInfo.Key)
 		}
-		sts.SetSize(objInfo.Size)
 
 		allSts = append(allSts, sts)
 	}
