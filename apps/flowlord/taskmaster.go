@@ -325,9 +325,12 @@ func (tm *taskMaster) Process(t *task.Task) error {
 					return err
 				}
 			}
-			if tm.slack != nil {
-				tm.alerts <- *t
+
+			// don't alert if slack isn't enabled or disable in phase
+			if tm.slack == nil || rules.Get("no_alert") != "" {
+				return nil
 			}
+			tm.alerts <- *t
 		}
 
 		if t.Result == task.AlertResult && tm.slack != nil {
