@@ -300,6 +300,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if s := rules.Get("retry_delay"); s != "" {
 				delay, _ = time.ParseDuration(s)
 				delay = delay + jitterPercent(delay, 40)
+
 				meta.Set("delayed", gtools.PrintDuration(delay))
 			}
 			t = task.NewWithID(t.Type, t.Info, t.ID)
@@ -309,6 +310,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			t.Meta = meta.Encode()
 			go func() {
 				time.Sleep(delay)
+				// Potential loss of task if app stopped or restarted
 				tm.taskCache.Add(*t)
 				if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
 					log.Println(err)
@@ -326,32 +328,30 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				}
 			}
 
-			// don't alert if slack isn't enabled or disable in phase
+			// don't alert if slack isn't enabled or disabled in phase
 			if tm.slack == nil || rules.Get("no_alert") != "" {
 				return nil
 			}
 			tm.alerts <- *t
 		}
 
-		if t.Result == task.AlertResult && tm.slack != nil {
-			if tm.slack != nil {
-				tm.alerts <- *t
-			}
-		}
-
 		return nil
+	}
+
+	if t.Result == task.AlertResult && tm.slack != nil {
+		if tm.slack != nil {
+			tm.alerts <- *t
+		}
 	}
 
 	// start off any children tasks
 	if t.Result == task.CompleteResult {
+		taskTime := tmpl.TaskTime(*t)
 		for _, p := range tm.Children(*t) {
 			if !isReady(p.Rule, t.Meta) {
 				continue
 			}
 			info, _ := tmpl.Meta(p.Template, meta)
-
-			taskTime := tmpl.TaskTime(*t)
-
 			info = tmpl.Parse(info, taskTime)
 
 			child := task.NewWithID(p.Topic(), info, t.ID)

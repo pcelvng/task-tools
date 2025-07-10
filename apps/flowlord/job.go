@@ -76,6 +76,12 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 		return nil, err
 	}
 
+	if fields := strings.Fields(bJob.Schedule); len(fields) == 5 {
+		bJob.Schedule = "0 " + bJob.Schedule
+	} else if len(fields) > 6 || len(fields) < 5 {
+		return nil, errors.New("invalid schedule must be of pattern [second] minute day_of_month month day_of_week")
+	}
+
 	// return Cronjob if not batch params
 	if bJob.For == 0 && bJob.FilePath == "" && len(bJob.Meta) == 0 {
 		return &bJob.Cronjob, nil
@@ -103,6 +109,7 @@ func (b *batchJob) Run() {
 	tasks, err := b.Batch(t)
 	if err != nil {
 		log.Println(err)
+		// TODO: Should this be different than a failed task?
 		tsk := *task.New(b.Topic, b.Template)
 		tsk.Job = b.Name
 		tsk.Result = task.ErrResult
@@ -150,6 +157,11 @@ func (b *batchJob) Batch(t time.Time) ([]task.Task, error) {
 			}
 			data = append(data, row)
 		}
+	}
+	// No (meta or meta-file) and no for range
+	// Then create no tasks
+	if len(data) == 0 && b.For == 0 {
+		return nil, nil
 	}
 	// handle `by` iterator
 	var byIter func(time.Time) time.Time

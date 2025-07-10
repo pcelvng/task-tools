@@ -29,8 +29,8 @@ func TestTaskMaster_Process(t *testing.T) {
 	if err != nil {
 		t.Fatal("doneConsumer", err)
 	}
-	tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic"}
 	fn := func(tsk task.Task) ([]task.Task, error) {
+		tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
 		producer, err := nop.NewProducer("")
 		if err != nil {
 			return nil, err
@@ -305,7 +305,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 					{
 						Workflow: "f3.toml",
 						Topic:    "task1",
-						Schedule: "0 0 * * *",
+						Schedule: "15 35 13 * * *",
 						Template: "?date={yyyy}-{mm}-{dd}",
 					},
 				},
@@ -327,6 +327,143 @@ func TestTaskMaster_Schedule(t *testing.T) {
 	trial.New(fn, cases).Comparer(trial.EqualOpt(trial.IgnoreAllUnexported)).SubTest(t)
 }
 
+func Test_NewJob(t *testing.T) {
+	tm := &taskMaster{}
+	fn := func(ph workflow.Phase) (cron.Job, error) {
+		return tm.NewJob(ph, "")
+	}
+	cases := trial.Cases[workflow.Phase, cron.Job]{
+		"simple cronjob": {
+			Input: workflow.Phase{
+				Task:     "task1",
+				Rule:     "cron=15 35 13 * * *&offset=-24h",
+				Template: "?date={yyyy}-{mm}-{dd}",
+			},
+			Expected: &Cronjob{
+				Topic:    "task1",
+				Schedule: "15 35 13 * * *",
+				Offset:   -24 * time.Hour,
+				Template: "?date={yyyy}-{mm}-{dd}",
+			},
+		},
+		"invalid schedule": {
+			Input: workflow.Phase{
+				Task:     "invalid",
+				Rule:     "cron=badcron",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			ShouldErr: true,
+		},
+		"5 digit schedule": {
+			Input: workflow.Phase{
+				Task:     "task5",
+				Rule:     "cron=35 13 * * *",
+				Template: "?date={yyyy}-{mm}-{dd}",
+			},
+			Expected: &Cronjob{
+				Topic:    "task5",
+				Schedule: "0 35 13 * * *",
+				Template: "?date={yyyy}-{mm}-{dd}",
+			},
+		},
+		"batch by meta": {
+			Input: workflow.Phase{
+				Task:     "meta-batch",
+				Rule:     "cron=15 35 13 * * *&meta=name:a,b,c|value:1,2,3",
+				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "meta-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+				},
+				Meta: map[string][]string{"name": {"a", "b", "c"}, "value": {"1", "2", "3"}},
+			},
+		},
+		"batch by meta-file": {
+			Input: workflow.Phase{
+				Task:     "file-batch",
+				Rule:     "cron=15 35 13 * * *&meta-file=test.json",
+				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "file-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+				},
+				FilePath: "test.json",
+			},
+		},
+		"batch by duration + meta": {
+			Input: workflow.Phase{
+				Task:     "combo-batch",
+				Rule:     "cron=15 35 13 * * *&for=-48h&meta=name:a,b",
+				Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "combo-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+				},
+				For:  -48 * time.Hour,
+				Meta: map[string][]string{"name": {"a", "b"}},
+			},
+		},
+		"batch by duration + meta-file": {
+			Input: workflow.Phase{
+				Task:     "combo-batch",
+				Rule:     "cron=15 35 13 * * *&for=-48h&meta-file=test.json",
+				Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "combo-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+				},
+				For:      -48 * time.Hour,
+				FilePath: "test.json",
+			},
+		},
+		"error: both meta and meta-file": {
+			Input: workflow.Phase{
+				Task:     "bad-batch",
+				Rule:     "cron=15 35 13 * * *&meta=name:a,b&meta-file=test.json",
+				Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+			},
+			ExpectedErr: errors.New("meta_file and meta can not be used at the same time"),
+		},
+		"batch by duration + by": {
+			Input: workflow.Phase{
+				Task:     "by-batch",
+				Rule:     "cron=15 35 13 * * *&for=-48h&by=hour",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "by-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?day={yyyy}-{mm}-{dd}",
+				},
+				For: -48 * time.Hour,
+				By:  "hour",
+			},
+		},
+		"invalid rule": {
+			Input: workflow.Phase{
+				Task:     "invalid",
+				Rule:     "%notvalid=%%%",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			ShouldErr: true,
+		},
+	}
+	trial.New(fn, cases).Comparer(
+		trial.EqualOpt(trial.IgnoreAllUnexported, trial.EquateEmpty)).SubTest(t)
+}
 func TestTaskMaster_Batch(t *testing.T) {
 	today := "2024-01-15"
 	toHour := "2024-01-15T00"
@@ -405,9 +542,25 @@ func TestTaskMaster_Batch(t *testing.T) {
 				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817", Meta: "cron=" + toHour + "&end=1817&name=james madison&start=1809&workflow=batch.toml"},
 			},
 		},
+		"empty-file": {
+			Input: workflow.Phase{
+				Task:     "batch",
+				Rule:     "meta-file=test/empty.json",
+				Template: "?key={meta:key}",
+			},
+			Expected: []task.Task{},
+		},
+		"invalid-file": {
+			Input: workflow.Phase{
+				Task:     "batch",
+				Rule:     "meta-file=test/invalid.json",
+				Template: "?key={meta:key}",
+			},
+			ShouldErr: true,
+		},
 	}
 	trial.New(fn, cases).Comparer(
-		trial.EqualOpt(trial.IgnoreAllUnexported, trial.IgnoreFields("ID", "Created"))).SubTest(t)
+		trial.EqualOpt(trial.IgnoreAllUnexported, trial.EquateEmpty, trial.IgnoreFields("ID", "Created"))).SubTest(t)
 }
 
 func TestIsReady(t *testing.T) {
