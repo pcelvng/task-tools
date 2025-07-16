@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/url"
 	"strings"
@@ -128,120 +126,27 @@ func (b *batchJob) Run() {
 
 // Batch will create a range of jobs either by date or per line in a reference file
 func (b *batchJob) Batch(t time.Time) ([]task.Task, error) {
-	var err error
 	start := t
 	if start.IsZero() {
 		start = time.Now().Truncate(time.Hour)
 	}
-
 	end := start.Add(b.For)
-
-	var data []tmpl.GetMap
-	if len(b.Meta) != 0 {
-		if data, err = createMeta(b.Meta); err != nil {
-			return nil, err
-		}
+	meta := b.Meta
+	metafile := b.FilePath
+	by := b.By
+	if by == "" {
+		by = "day"
 	}
-
-	if b.FilePath != "" {
-		reader, err := file.NewGlobReader(b.FilePath, &b.fOpts)
-		if err != nil {
-			return nil, fmt.Errorf("file %q error %w", b.FilePath, err)
-		}
-		scanner := file.NewScanner(reader)
-
-		for scanner.Scan() {
-			row := make(tmpl.GetMap)
-			if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
-				return nil, err
-			}
-			data = append(data, row)
-		}
+	batch := Batch{
+		Template: b.Template,
+		Topic:    b.Topic,
+		Job:      b.Name,
+		Workflow: b.Workflow,
+		Start:    start,
+		End:      end,
+		By:       by,
+		Meta:     meta,
+		Metafile: metafile,
 	}
-	// No (meta or meta-file) and no for range
-	// Then create no tasks
-	if len(data) == 0 && b.For == 0 {
-		return nil, nil
-	}
-	// handle `by` iterator
-	var byIter func(time.Time) time.Time
-	switch strings.ToLower(b.By) {
-	case "hour", "hourly":
-		byIter = func(t time.Time) time.Time { return t.Add(time.Hour) }
-	case "month", "monthly":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 1, 0) }
-	default:
-		fallthrough
-	case "day", "daily":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
-	}
-
-	var reverseTasks bool
-	if end.Before(start) {
-		reverseTasks = true
-		t := end
-		end = start
-		start = t
-	}
-	// create the batch tasks
-	tasks := make([]task.Task, 0)
-	for t := start; end.Sub(t) >= 0; t = byIter(t) {
-		info := tmpl.Parse(b.Template, t)
-		tskMeta := make(url.Values)
-		tskMeta.Set("workflow", b.Workflow)
-		tskMeta.Set("cron", t.Format(DateHour))
-		job := b.Name
-		if job != "" {
-			tskMeta.Set("job", job)
-		}
-		for _, d := range data { // meta data tasks
-			i, keys := tmpl.Meta(info, d)
-			tsk := *task.New(b.Topic, i)
-			tsk.Job = job
-
-			// add matching keys as meta data
-			for _, k := range keys {
-				tskMeta.Set(k, d.Get(k))
-			}
-			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
-			tasks = append(tasks, tsk)
-		}
-		if len(data) == 0 { // time only tasks
-			tsk := *task.New(b.Topic, info)
-			tsk.Job = job
-			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
-			tasks = append(tasks, tsk)
-		}
-	}
-	if reverseTasks {
-		tmp := make([]task.Task, len(tasks))
-		for i := 0; i < len(tasks); i++ {
-			tmp[i] = tasks[len(tasks)-i-1]
-		}
-		tasks = tmp
-	}
-
-	return tasks, nil
-}
-
-func createMeta(data map[string][]string) ([]tmpl.GetMap, error) {
-	var result []tmpl.GetMap
-	for k, vals := range data {
-
-		if result == nil {
-			result = make([]tmpl.GetMap, len(vals))
-		}
-
-		if len(vals) != len(result) {
-			log.Println("inconsistent lengths")
-			return nil, fmt.Errorf("inconsistent lengths in meta %d != %d", len(vals), len(result))
-		}
-		for i, v := range vals {
-			if result[i] == nil {
-				result[i] = make(tmpl.GetMap)
-			}
-			result[i][k] = v
-		}
-	}
-	return result, nil
+	return batch.Batch(t, &b.fOpts)
 }
