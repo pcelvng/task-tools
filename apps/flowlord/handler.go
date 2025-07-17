@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -25,7 +24,6 @@ import (
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -376,22 +374,6 @@ func (tm *taskMaster) backload(req request) response {
 		end = at
 	}
 
-	// handle `by` iterator
-	var byIter func(time.Time) time.Time
-	switch req.By {
-	case "hour":
-		byIter = func(t time.Time) time.Time { return t.Add(time.Hour) }
-	case "week":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 7) }
-	case "month":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 1, 0) }
-	default:
-		msg = append(msg, "using default day iterator")
-		fallthrough
-	case "day":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
-	}
-
 	workflowPath, phase := tm.Cache.Search(req.Task, req.Job)
 	if workflowPath != "" {
 		msg = append(msg, "phase found in "+workflowPath)
@@ -424,76 +406,29 @@ func (tm *taskMaster) backload(req request) response {
 		return response{Status: "Unsupported: meta and meta-file both used, use one only", code: http.StatusBadRequest}
 	}
 
-	data, err := createMeta(req.Meta)
+	// Set default by value if not provided
+	by := req.By
+	if by == "" {
+		by = "day"
+		msg = append(msg, "using default day iterator")
+	}
+
+	// Create Batch struct and use ExpandTasks
+	batch := Batch{
+		Template: req.Template,
+		Topic:    req.Task,
+		Job:      req.Job,
+		Workflow: workflowPath,
+		Start:    start,
+		End:      end,
+		By:       by,
+		Meta:     req.Meta,
+		Metafile: req.Metafile,
+	}
+
+	tasks, err := batch.Batch(time.Time{}, nil)
 	if err != nil {
 		return response{Status: err.Error(), code: http.StatusBadRequest}
-	}
-	if req.Metafile != "" {
-		reader, err := file.NewGlobReader(req.Metafile, tm.fOpts)
-		if err != nil {
-			return response{Status: fmt.Sprintf("file %q error %v", req.Metafile, err), code: http.StatusInternalServerError}
-		}
-		scanner := file.NewScanner(reader)
-
-		for scanner.Scan() {
-			row := make(tmpl.GetMap)
-			if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
-				return response{Status: fmt.Sprintf("issue processing file %v %v", req.Metafile, err), code: http.StatusInternalServerError}
-			}
-			data = append(data, row)
-		}
-	}
-
-	tasks := make([]task.Task, 0)
-
-	// reverse task order when end time comes before start
-	var reverseTasks bool
-	if end.Before(start) {
-		reverseTasks = true
-		t := end
-		end = start
-		start = t
-	}
-
-	for t := start; end.Sub(t) >= 0; t = byIter(t) {
-		info := tmpl.Parse(req.Template, t)
-		tskMeta := make(url.Values)
-		tskMeta.Set("cron", t.Format(DateHour))
-		if workflowPath != "" {
-			tskMeta.Set("workflow", workflowPath)
-		}
-		job := req.Job
-		if job != "" {
-			tskMeta.Set("job", job)
-		}
-
-		for _, d := range data { // meta data tasks
-			i, keys := tmpl.Meta(info, d)
-			tsk := *task.New(req.Task, i)
-			tsk.Job = job
-
-			// add matching keys as meta data
-			for _, k := range keys {
-				tskMeta.Set(k, d.Get(k))
-			}
-			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
-			tasks = append(tasks, tsk)
-		}
-		if len(data) == 0 { // time only tasks
-
-			tsk := *task.New(req.Task, info)
-			tsk.Job = job
-			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
-			tasks = append(tasks, tsk)
-		}
-	}
-
-	if reverseTasks {
-		tmp := make([]task.Task, len(tasks))
-		for i := 0; i < len(tasks); i++ {
-			tmp[i] = tasks[len(tasks)-i-1]
-		}
-		tasks = tmp
 	}
 
 	return response{Tasks: tasks, Count: len(tasks), Status: strings.Join(msg, ", ")}

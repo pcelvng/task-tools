@@ -26,7 +26,7 @@ type Batch struct {
 }
 
 // Batch generates a batch of tasks by expanding over time and meta combinations.
-func (b *Batch) Batch(t time.Time, fOpts *file.Options) ([]task.Task, error) {
+func (b *Batch) Batch(_ time.Time, fOpts *file.Options) ([]task.Task, error) {
 	var data []tmpl.GetMap
 	var err error
 	if len(b.Meta) != 0 {
@@ -109,11 +109,6 @@ func (b *Batch) Batch(t time.Time, fOpts *file.Options) ([]task.Task, error) {
 		tasks = tmp
 	}
 	return tasks, nil
-}
-
-// ExpandTasks generates a batch of tasks by expanding over time and meta combinations.
-func ExpandTasks(batch Batch) ([]task.Task, error) {
-	return batch.Batch(time.Time{}, nil)
 }
 
 // createMeta expands a map of meta values into a slice of GetMap for templating.

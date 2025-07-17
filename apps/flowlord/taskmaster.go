@@ -351,23 +351,67 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if !isReady(p.Rule, t.Meta) {
 				continue
 			}
-			info, _ := tmpl.Meta(p.Template, meta)
-			info = tmpl.Parse(info, taskTime)
 
-			child := task.NewWithID(p.Topic(), info, t.ID)
-			child.Job = p.Job()
+			// Parse the phase rule to extract batch parameters
+			rules, _ := url.ParseQuery(p.Rule)
 
-			child.Meta = "workflow=" + meta.Get("workflow")
-			if v := meta.Get("cron"); v != "" {
-				child.Meta += "&cron=" + v
+			// Create Batch struct for potential expansion
+			batch := Batch{
+				Template: p.Template,
+				Topic:    p.Topic(),
+				Job:      p.Job(),
+				Workflow: meta.Get("workflow"),
+				Start:    taskTime,
+				End:      taskTime,
+				By:       rules.Get("by"),
+				Meta:     nil, // Will be populated from rules if present
+				Metafile: rules.Get("meta-file"),
 			}
-			if child.Job != "" {
-				child.Meta += "&job=" + child.Job
+
+			// Check if we have meta parameters in the rule
+			if metaStr := rules.Get("meta"); metaStr != "" {
+				// Parse meta string into map[string][]string
+				metaMap := make(map[string][]string)
+				metaValues, _ := url.ParseQuery(metaStr)
+				for k, v := range metaValues {
+					metaMap[k] = v
+				}
+				batch.Meta = metaMap
 			}
 
-			tm.taskCache.Add(*child)
-			if err := tm.producer.Send(p.Topic(), child.JSONBytes()); err != nil {
-				return err
+			// Check if we have a time range (for parameter)
+			if forStr := rules.Get("for"); forStr != "" {
+				if duration, err := time.ParseDuration(forStr); err == nil {
+					batch.End = batch.Start.Add(duration)
+				}
+			}
+
+			// Use Batch method to generate tasks (handles single or multiple tasks)
+			childTasks, err := batch.Batch(taskTime, tm.fOpts)
+			if err != nil {
+				log.Printf("error creating child tasks for %s: %v", p.Topic(), err)
+				continue
+			}
+
+			// Send all generated child tasks
+			for _, child := range childTasks {
+				// Ensure child has the correct parent ID and meta
+				child.ID = t.ID
+
+				// Add parent meta information
+				childMeta := "workflow=" + meta.Get("workflow")
+				if v := meta.Get("cron"); v != "" {
+					childMeta += "&cron=" + v
+				}
+				if child.Job != "" {
+					childMeta += "&job=" + child.Job
+				}
+				child.Meta = childMeta
+
+				tm.taskCache.Add(child)
+				if err := tm.producer.Send(child.Type, child.JSONBytes()); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
