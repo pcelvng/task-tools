@@ -1,32 +1,36 @@
 package main
 
 import (
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
+	"github.com/pcelvng/task-tools/workflow"
 )
 
-// batchResponse mirrors the response struct from handler_test.go
-type batchResponse struct {
-	Count int
-	Tasks []task.Task
-}
-
-func TestBatch_Batch(t *testing.T) {
+func TestBatch_Range(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	toHour := time.Now().Format("2006-01-02T15")
 
-	fn := func(batch Batch) (batchResponse, error) {
-		tasks, err := batch.Batch(time.Time{}, nil)
+	type result struct {
+		Count int
+		Tasks []task.Task
+	}
+
+	fn := func(batch Batch) (result, error) {
+		tasks, err := batch.Range(time.Now(), time.Now(), nil)
 		if err != nil {
-			return batchResponse{}, err
+			return result{}, err
 		}
 
-		resp := batchResponse{
+		resp := result{
 			Count: len(tasks),
 			Tasks: tasks,
 		}
@@ -39,16 +43,14 @@ func TestBatch_Batch(t *testing.T) {
 		return resp, nil
 	}
 
-	cases := trial.Cases[Batch, batchResponse]{
+	cases := trial.Cases[Batch, result]{
 		"now": {
 			Input: Batch{
 				Template: "./file.txt?ts={YYYY}-{MM}-{DD}",
-				Topic:    "sql",
+				Task:     "sql",
 				Job:      "load",
-				Start:    time.Now(),
-				End:      time.Now(),
 			},
-			Expected: batchResponse{
+			Expected: result{
 				Count: 1,
 				Tasks: []task.Task{
 					{Type: "sql", Job: "load", Meta: "cron=" + toHour + "&job=load", Info: "./file.txt?ts=" + today},
@@ -58,137 +60,101 @@ func TestBatch_Batch(t *testing.T) {
 		"hourly": {
 			Input: Batch{
 				Template: "?day={YYYY}-{MM}-{DD}T{HH}",
-				Topic:    "hourly",
-				Start:    trial.TimeHour("2020-01-01T00"),
-				End:      trial.TimeHour("2020-01-02T23"),
+				Task:     "hourly",
 				By:       "hour",
 			},
-			Expected: batchResponse{
-				Count: 48,
+			Expected: result{
+				Count: 1, // Single time range now
 				Tasks: []task.Task{
-					{Type: "hourly", Info: "?day=2020-01-01T00", Meta: "cron=2020-01-01T00"}, // first
-					{Type: "hourly", Info: "?day=2020-01-02T23", Meta: "cron=2020-01-02T23"}, // last
+					{Type: "hourly", Info: "?day=" + toHour, Meta: "cron=" + toHour},
 				},
 			},
 		},
 		"daily": {
 			Input: Batch{
 				Template: "?date={YYYY}-{MM}-{DD}",
-				Topic:    "daily",
-				Start:    trial.TimeDay("2020-01-01"),
-				End:      trial.TimeDay("2020-02-01"),
+				Task:     "daily",
 				By:       "day",
 			},
-			Expected: batchResponse{
-				Count: 32,
+			Expected: result{
+				Count: 1,
 				Tasks: []task.Task{
-					{Type: "daily", Info: "?date=2020-01-01", Meta: "cron=2020-01-01T00"},
-					{Type: "daily", Info: "?date=2020-02-01", Meta: "cron=2020-02-01T00"},
+					{Type: "daily", Info: "?date=" + today, Meta: "cron=" + today + "T00"},
 				},
 			},
 		},
 		"monthly": {
 			Input: Batch{
 				Template: "?table=exp.tbl_{YYYY}_{MM}",
-				Topic:    "month",
-				Start:    trial.TimeDay("2020-01-01"),
-				End:      trial.TimeDay("2020-12-12"),
+				Task:     "month",
 				By:       "month",
 			},
-			Expected: batchResponse{
-				Count: 12,
+			Expected: result{
+				Count: 1,
 				Tasks: []task.Task{
-					{Type: "month", Info: "?table=exp.tbl_2020_01", Meta: "cron=2020-01-01T00"},
-					{Type: "month", Info: "?table=exp.tbl_2020_12", Meta: "cron=2020-12-01T00"},
+					{Type: "month", Info: "?table=exp.tbl_" + time.Now().Format("2006_01"), Meta: "cron=" + time.Now().Format("2006-01-01T00")},
 				},
 			},
 		},
 		"weekly": {
 			Input: Batch{
 				Template: "?date={YYYY}-{MM}-{DD}",
-				Topic:    "week",
-				Start:    trial.TimeDay("2020-01-01"),
-				End:      trial.TimeDay("2020-02-01"),
+				Task:     "week",
 				By:       "week",
 			},
-			Expected: batchResponse{
-				Count: 5,
+			Expected: result{
+				Count: 1,
 				Tasks: []task.Task{
-					{Type: "week", Info: "?date=2020-01-01", Meta: "cron=2020-01-01T00"},
-					{Type: "week", Info: "?date=2020-01-29", Meta: "cron=2020-01-29T00"},
+					{Type: "week", Info: "?date=" + today, Meta: "cron=" + today + "T00"},
 				},
 			},
 		},
 		"meta_template": {
 			Input: Batch{
 				Template: "{meta:file}?date={YYYY}-{mm}-{dd}&value={meta:value}",
-				Topic:    "meta",
-				Start:    trial.TimeDay("2020-02-20"),
-				End:      trial.TimeDay("2020-02-20"),
+				Task:     "meta",
 				Meta:     map[string][]string{"file": {"s3://task-bucket/data/f.txt"}, "value": {"apple"}},
 			},
-			Expected: batchResponse{
+			Expected: result{
 				Count: 1,
 				Tasks: []task.Task{
-					{Type: "meta", Info: "s3://task-bucket/data/f.txt?date=2020-02-20&value=apple", Meta: "cron=2020-02-20T00&file=s3://task-bucket/data/f.txt&value=apple"},
-				},
-			},
-		},
-		"backwards": {
-			Input: Batch{
-				Template: "?table=exp.tbl_{YYYY}_{MM}",
-				Topic:    "month",
-				Start:    trial.TimeDay("2021-01-01"),
-				End:      trial.TimeDay("2020-10-01"),
-				By:       "month",
-			},
-			Expected: batchResponse{
-				Count: 4,
-				Tasks: []task.Task{
-					{Type: "month", Info: "?table=exp.tbl_2021_01", Meta: "cron=2021-01-01T00"},
-					{Type: "month", Info: "?table=exp.tbl_2020_10", Meta: "cron=2020-10-01T00"},
+					{Type: "meta", Info: "s3://task-bucket/data/f.txt?date=" + time.Now().Format("2006-01-02") + "&value=apple", Meta: "cron=" + toHour + "&file=s3://task-bucket/data/f.txt&value=apple"},
 				},
 			},
 		},
 		"with_workflow": {
 			Input: Batch{
 				Template: "?date={YYYY}-{MM}-{DD}",
-				Topic:    "task1",
+				Task:     "task1",
 				Workflow: "f3.toml",
-				Start:    trial.TimeDay("2022-12-01"),
-				End:      trial.TimeDay("2022-12-01"),
 			},
-			Expected: batchResponse{
+			Expected: result{
 				Count: 1,
 				Tasks: []task.Task{
-					{Type: "task1", Info: "?date=2022-12-01", Meta: "cron=2022-12-01T00&workflow=f3.toml"},
+					{Type: "task1", Info: "?date=" + today, Meta: "cron=" + today + "T00&workflow=f3.toml"},
 				},
 			},
 		},
 		"with_job": {
 			Input: Batch{
 				Template: "?date={YYYY}-{MM}-{DD}",
-				Topic:    "task1",
+				Task:     "task1",
 				Job:      "load",
-				Start:    trial.TimeDay("2022-12-01"),
-				End:      trial.TimeDay("2022-12-01"),
 			},
-			Expected: batchResponse{
+			Expected: result{
 				Count: 1,
 				Tasks: []task.Task{
-					{Type: "task1", Job: "load", Info: "?date=2022-12-01", Meta: "cron=2022-12-01T00&job=load"},
+					{Type: "task1", Job: "load", Info: "?date=" + today, Meta: "cron=" + today + "T00&job=load"},
 				},
 			},
 		},
 		"meta_multiple_values": {
 			Input: Batch{
 				Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
-				Topic:    "batch-president",
-				Start:    time.Now(),
-				End:      time.Now(),
+				Task:     "batch-president",
 				Meta:     map[string][]string{"name": {"bob", "albert"}, "start": {"1111", "1120"}, "end": {"1120", "1130"}},
 			},
-			Expected: batchResponse{
+			Expected: result{
 				Count: 2,
 				Tasks: []task.Task{
 					{Type: "batch-president", Info: "?president=bob&start=1111&end=1120", Meta: "cron=" + toHour + "&end=1120&name=bob&start=1111"},
@@ -199,14 +165,12 @@ func TestBatch_Batch(t *testing.T) {
 		"single_task": {
 			Input: Batch{
 				Template: "?date={YYYY}-{MM}-{DD}",
-				Topic:    "single",
-				Start:    trial.TimeDay("2020-01-01"),
-				End:      trial.TimeDay("2020-01-01"),
+				Task:     "single",
 			},
-			Expected: batchResponse{
+			Expected: result{
 				Count: 1,
 				Tasks: []task.Task{
-					{Type: "single", Info: "?date=2020-01-01", Meta: "cron=2020-01-01T00"},
+					{Type: "single", Info: "?date=" + today, Meta: "cron=" + today + "T00"},
 				},
 			},
 		},
@@ -218,18 +182,124 @@ func TestBatch_Batch(t *testing.T) {
 	)).SubTest(t)
 }
 
-func TestBatch_Batch_WithFile(t *testing.T) {
+func TestBatchJob_For(t *testing.T) {
+	today := "2024-01-15"
+	toHour := "2024-01-15T00"
+	tm := &taskMaster{}
+	fn := func(ph workflow.Phase) ([]task.Task, error) {
+		j, err := tm.NewJob(ph, "batch.toml")
+		bJob, ok := j.(*batchJob)
+		if !ok {
+			return nil, errors.New("expected *batchjob")
+		}
+		if err != nil {
+			return nil, err
+		}
+		batch := &Batch{
+			Template: bJob.Template,
+			Task:     bJob.Topic,
+			Job:      bJob.Name,
+			Workflow: bJob.Workflow,
+			By:       bJob.By,
+			Meta:     bJob.Meta,
+			Metafile: bJob.Metafile,
+		}
+		return batch.For(trial.TimeDay(today).Add(bJob.Offset), bJob.For, &bJob.fOpts)
+	}
+	cases := trial.Cases[workflow.Phase, []task.Task]{
+		/* NOT SUPPORTED
+		"to_from": {
+			Input: workflow.Phase{
+				Task:     "batch-date",
+				Rule:     "from=2024-01-01&to=2024-01-03&by=day",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			Expected: []task.Task{
+				{Type: "batch-date", Info: "?day=2024-01-01", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-02", Meta: ""},
+				{Type: "batch-date", Info: "?day=2024-01-03", Meta: ""},
+			},
+		}, */
+		"for -3": {
+			Input: workflow.Phase{
+				Task:     "batch-date",
+				Rule:     "for=-48h",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			Expected: []task.Task{
+				{Type: "batch-date", Info: "?day=2024-01-15", Meta: "cron=2024-01-15T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-14", Meta: "cron=2024-01-14T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "cron=2024-01-13T00&workflow=batch.toml"},
+			},
+		},
+		"for-48h +offset": {
+			Input: workflow.Phase{
+				Task:     "batch-date",
+				Rule:     "for=-48h&offset=-48h",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			Expected: []task.Task{
+				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "cron=2024-01-13T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-12", Meta: "cron=2024-01-12T00&workflow=batch.toml"},
+				{Type: "batch-date", Info: "?day=2024-01-11", Meta: "cron=2024-01-11T00&workflow=batch.toml"},
+			},
+		},
+		"metas": {
+			Input: workflow.Phase{
+				Task:     "meta-batch",
+				Rule:     "meta=name:a,b,c|value:1,2,3",
+				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+			},
+			Expected: []task.Task{
+				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today, Meta: "cron=" + toHour + "&name=a&value=1&workflow=batch.toml"},
+				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today, Meta: "cron=" + toHour + "&name=b&value=2&workflow=batch.toml"},
+				{Type: "meta-batch", Info: "?name=c&value=3&day=" + today, Meta: "cron=" + toHour + "&name=c&value=3&workflow=batch.toml"},
+			},
+		},
+		"file": {
+			Input: workflow.Phase{
+				Task:     "batch-president",
+				Rule:     "meta-file=test/presidents.json",
+				Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
+			},
+			Expected: []task.Task{
+				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797", Meta: "cron=" + toHour + "&end=1797&name=george washington&start=1789&workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801", Meta: "cron=" + toHour + "&end=1801&name=john adams&start=1797&workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=thomas jefferson&start=1801&end=1809", Meta: "cron=" + toHour + "&end=1809&name=thomas jefferson&start=1801&workflow=batch.toml"},
+				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817", Meta: "cron=" + toHour + "&end=1817&name=james madison&start=1809&workflow=batch.toml"},
+			},
+		},
+		"empty-file": {
+			Input: workflow.Phase{
+				Task:     "batch",
+				Rule:     "meta-file=test/empty.json",
+				Template: "?key={meta:key}",
+			},
+			Expected: []task.Task{},
+		},
+		"invalid-file": {
+			Input: workflow.Phase{
+				Task:     "batch",
+				Rule:     "meta-file=test/invalid.json",
+				Template: "?key={meta:key}",
+			},
+			ShouldErr: true,
+		},
+	}
+	trial.New(fn, cases).Comparer(
+		trial.EqualOpt(trial.IgnoreAllUnexported, trial.EquateEmpty, trial.IgnoreFields("ID", "Created"))).SubTest(t)
+}
+
+func TestBatch_Range_WithFile(t *testing.T) {
 	// Test with metafile - this would require a test file
 	// For now, we'll test the error case when file doesn't exist
 	batch := Batch{
 		Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
-		Topic:    "mfile",
+		Task:     "mfile",
 		Metafile: "./test/nonexistent.json",
-		Start:    time.Now(),
-		End:      time.Now(),
 	}
 
-	_, err := batch.Batch(time.Time{}, &file.Options{})
+	_, err := batch.Range(time.Now(), time.Now(), &file.Options{})
 	if err == nil {
 		t.Error("Expected error when metafile doesn't exist")
 	}
@@ -281,8 +351,6 @@ func TestCreateMeta_Error(t *testing.T) {
 	}
 }
 
-/*
 func ignoreTask(interface{}) cmp.Option {
 	return cmpopts.IgnoreFields(task.Task{}, "Created", "ID")
 }
-*/

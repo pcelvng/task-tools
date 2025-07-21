@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gtools "github.com/jbsmith7741/go-tools"
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	"github.com/robfig/cron/v3"
@@ -358,36 +359,20 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			// Create Batch struct for potential expansion
 			batch := Batch{
 				Template: p.Template,
-				Topic:    p.Topic(),
+				Task:     p.Topic(),
 				Job:      p.Job(),
 				Workflow: meta.Get("workflow"),
-				Start:    taskTime,
-				End:      taskTime,
 				By:       rules.Get("by"),
 				Meta:     nil, // Will be populated from rules if present
 				Metafile: rules.Get("meta-file"),
 			}
 
-			// Check if we have meta parameters in the rule
-			if metaStr := rules.Get("meta"); metaStr != "" {
-				// Parse meta string into map[string][]string
-				metaMap := make(map[string][]string)
-				metaValues, _ := url.ParseQuery(metaStr)
-				for k, v := range metaValues {
-					metaMap[k] = v
-				}
-				batch.Meta = metaMap
-			}
-
-			// Check if we have a time range (for parameter)
-			if forStr := rules.Get("for"); forStr != "" {
-				if duration, err := time.ParseDuration(forStr); err == nil {
-					batch.End = batch.Start.Add(duration)
-				}
+			if err := uri.UnmarshalQuery(rules.Get("meta"), &batch.Meta); err != nil {
+				log.Println(err)
 			}
 
 			// Use Batch method to generate tasks (handles single or multiple tasks)
-			childTasks, err := batch.Batch(taskTime, tm.fOpts)
+			childTasks, err := batch.At(taskTime, tm.fOpts)
 			if err != nil {
 				log.Printf("error creating child tasks for %s: %v", p.Topic(), err)
 				continue

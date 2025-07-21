@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -288,22 +287,20 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 type request struct {
-	Task string
-	Job  string
 	From string // start
 	To   string // end
 	At   string // single time
-	By   string // month | day | hour // default by day,
 
-	Meta     Meta
-	Metafile string `json:"meta-file"`
-	Template string // should pull from workflow if possible
-	Execute  bool
+	Batch
+
+	Execute bool
 }
 
 func (tm *taskMaster) Backloader(w http.ResponseWriter, r *http.Request) {
 	req := request{
-		Meta: make(Meta),
+		Batch: Batch{
+			Meta: make(Meta),
+		},
 	}
 	b, _ := io.ReadAll(r.Body)
 	if err := json.Unmarshal(b, &req); err != nil {
@@ -378,6 +375,7 @@ func (tm *taskMaster) backload(req request) response {
 	if workflowPath != "" {
 		msg = append(msg, "phase found in "+workflowPath)
 		req.Template = phase.Template
+		req.Workflow = workflowPath
 	}
 	if req.Template == "" {
 		name := req.Task
@@ -391,8 +389,7 @@ func (tm *taskMaster) backload(req request) response {
 		Meta     map[string][]string `uri:"meta"`
 	}{}
 
-	// todo: replace with uri.UnmarshalQuery when released
-	if err := uri.Unmarshal((&url.URL{RawQuery: phase.Rule}).String(), &rules); err != nil {
+	if err := uri.UnmarshalQuery(phase.Rule, &rules); err != nil {
 		return response{Status: "invalid rule found for " + req.Task, code: http.StatusBadRequest}
 	}
 
@@ -407,26 +404,14 @@ func (tm *taskMaster) backload(req request) response {
 	}
 
 	// Set default by value if not provided
-	by := req.By
-	if by == "" {
-		by = "day"
+	if req.By == "" {
+		req.By = "day"
 		msg = append(msg, "using default day iterator")
 	}
 
 	// Create Batch struct and use ExpandTasks
-	batch := Batch{
-		Template: req.Template,
-		Topic:    req.Task,
-		Job:      req.Job,
-		Workflow: workflowPath,
-		Start:    start,
-		End:      end,
-		By:       by,
-		Meta:     req.Meta,
-		Metafile: req.Metafile,
-	}
 
-	tasks, err := batch.Batch(time.Time{}, nil)
+	tasks, err := req.Batch.Range(start, end, tm.fOpts)
 	if err != nil {
 		return response{Status: err.Error(), code: http.StatusBadRequest}
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -15,18 +16,28 @@ import (
 // Batch defines the parameters for batch task expansion.
 type Batch struct {
 	Template string
-	Topic    string
+	Task     string
 	Job      string
 	Workflow string
-	Start    time.Time
-	End      time.Time
-	By       string
-	Meta     map[string][]string
-	Metafile string
+	//	Start    time.Time
+	//	End      time.Time
+	By       string `uri:"by"` // month | day | hour // default by day,
+	Meta     Meta   `json:"meta"`
+	Metafile string `json:"meta-file"`
 }
 
-// Batch generates a batch of tasks by expanding over time and meta combinations.
-func (b *Batch) Batch(_ time.Time, fOpts *file.Options) ([]task.Task, error) {
+// For creates a number of tasks based on the start time and ranges through the specified duration.
+func (b *Batch) For(start time.Time, For time.Duration, fOpts *file.Options) ([]task.Task, error) {
+	return nil, nil
+}
+
+// At creates tasks for the specified time only
+func (b *Batch) At(t time.Time, fOpts *file.Options) ([]task.Task, error) {
+	return b.Range(t, t, fOpts)
+}
+
+// Range creates a number of tasks based on the start and end dates and meta combinations.
+func (b *Batch) Range(start, end time.Time, fOpts *file.Options) ([]task.Task, error) {
 	var data []tmpl.GetMap
 	var err error
 	if len(b.Meta) != 0 {
@@ -49,7 +60,6 @@ func (b *Batch) Batch(_ time.Time, fOpts *file.Options) ([]task.Task, error) {
 			data = append(data, row)
 		}
 	}
-	start, end := b.Start, b.End
 	if len(data) == 0 && start.Equal(end) {
 		// If no meta and no range, create a single task
 		end = start
@@ -86,7 +96,7 @@ func (b *Batch) Batch(_ time.Time, fOpts *file.Options) ([]task.Task, error) {
 		}
 		for _, d := range data { // meta data tasks
 			i, keys := tmpl.Meta(info, d)
-			tsk := *task.New(b.Topic, i)
+			tsk := *task.New(b.Task, i)
 			tsk.Job = b.Job
 			for _, k := range keys {
 				tskMeta.Set(k, d.Get(k))
@@ -95,7 +105,7 @@ func (b *Batch) Batch(_ time.Time, fOpts *file.Options) ([]task.Task, error) {
 			tasks = append(tasks, tsk)
 		}
 		if len(data) == 0 { // time only tasks
-			tsk := *task.New(b.Topic, info)
+			tsk := *task.New(b.Task, info)
 			tsk.Job = b.Job
 			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
 			tasks = append(tasks, tsk)

@@ -81,11 +81,11 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 	}
 
 	// return Cronjob if not batch params
-	if bJob.For == 0 && bJob.FilePath == "" && len(bJob.Meta) == 0 {
+	if bJob.For == 0 && bJob.Metafile == "" && len(bJob.Meta) == 0 {
 		return &bJob.Cronjob, nil
 	}
 
-	if bJob.FilePath != "" && len(bJob.Meta) > 0 {
+	if bJob.Metafile != "" && len(bJob.Meta) > 0 {
 		return nil, errors.New("meta_file and meta can not be used at the same time")
 	}
 
@@ -97,14 +97,22 @@ type batchJob struct {
 	For      time.Duration       `uri:"for"`
 	By       string              `uri:"by"`
 	Meta     map[string][]string `uri:"meta"`
-	FilePath string              `uri:"meta-file"`
+	Metafile string              `uri:"meta-file"`
 	fOpts    file.Options
 }
 
 // Run a batchJob
 func (b *batchJob) Run() {
 	t := time.Now().Add(b.Offset).Truncate(time.Hour)
-	tasks, err := b.Batch(t)
+	tasks, err := (&Batch{
+		Template: b.Template,
+		Task:     b.Topic,
+		Job:      b.Name,
+		Workflow: b.Workflow,
+		By:       b.By,
+		Meta:     b.Meta,
+		Metafile: b.Metafile,
+	}).For(t, b.For, &b.fOpts)
 	if err != nil {
 		log.Println(err)
 		// TODO: Should this be different than a failed task?
@@ -122,31 +130,4 @@ func (b *batchJob) Run() {
 			b.alerts <- t //notify flowlord of issues
 		}
 	}
-}
-
-// Batch will create a range of jobs either by date or per line in a reference file
-func (b *batchJob) Batch(t time.Time) ([]task.Task, error) {
-	start := t
-	if start.IsZero() {
-		start = time.Now().Truncate(time.Hour)
-	}
-	end := start.Add(b.For)
-	meta := b.Meta
-	metafile := b.FilePath
-	by := b.By
-	if by == "" {
-		by = "day"
-	}
-	batch := Batch{
-		Template: b.Template,
-		Topic:    b.Topic,
-		Job:      b.Name,
-		Workflow: b.Workflow,
-		Start:    start,
-		End:      end,
-		By:       by,
-		Meta:     meta,
-		Metafile: metafile,
-	}
-	return batch.Batch(t, &b.fOpts)
 }

@@ -15,6 +15,7 @@ require (
 	github.com/hydronica/trial v0.7.2
 	github.com/jarcoal/httpmock v1.3.1
 	github.com/jbsmith7741/go-tools v0.4.1
+	github.com/jbsmith7741/uri v0.6.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/lib/pq v1.10.9
 	github.com/minio/minio-go/v7 v7.0.26
@@ -41,7 +42,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/iancoleman/strcase v0.3.0 // indirect
-	github.com/jbsmith7741/uri v0.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
