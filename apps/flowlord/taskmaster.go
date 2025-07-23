@@ -353,24 +353,20 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				continue
 			}
 
-			// Parse the phase rule to extract batch parameters
-			rules, _ := url.ParseQuery(p.Rule)
-
 			// Create Batch struct for potential expansion
 			batch := Batch{
 				Template: p.Template,
 				Task:     p.Topic(),
 				Job:      p.Job(),
 				Workflow: meta.Get("workflow"),
-				By:       rules.Get("by"),
-				Meta:     nil, // Will be populated from rules if present
-				Metafile: rules.Get("meta-file"),
+				// By:       rules.Get("by"),
+				Meta: Meta(meta), // will be replaced with meta from rules?
+				// Metafile: rules.Get("meta-file"),
 			}
 
-			if err := uri.UnmarshalQuery(rules.Get("meta"), &batch.Meta); err != nil {
-				log.Println(err)
+			if err := uri.UnmarshalQuery(p.Rule, &batch); err != nil {
+				log.Printf("error parsing rule %q for %s: %v", p.Rule, p.Topic(), err)
 			}
-
 			// Use Batch method to generate tasks (handles single or multiple tasks)
 			childTasks, err := batch.At(taskTime, tm.fOpts)
 			if err != nil {

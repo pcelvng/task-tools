@@ -243,6 +243,8 @@ github.com/jbsmith7741/trial v0.3.1/go.mod h1:M4FQWUgVpPY2+i53L2nSB0AyPc86kSTIig
 github.com/jbsmith7741/uri v0.4.1/go.mod h1:Ctt8YJ5gCFx5BX/FMFg5VkwuI9buBcvsITIiSMH+TeA=
 github.com/jbsmith7741/uri v0.6.0 h1:CXpHG6LnzqvaoKZNTZCDuvrZ1hAx1hg5dtcnsKTsjwE=
 github.com/jbsmith7741/uri v0.6.0/go.mod h1:Ctt8YJ5gCFx5BX/FMFg5VkwuI9buBcvsITIiSMH+TeA=
+github.com/jbsmith7741/uri v0.6.1 h1:RloJXpTe1lXMBSMbyGn+YCBR//aO+OTDUgJ2wH5bQEU=
+github.com/jbsmith7741/uri v0.6.1/go.mod h1:Ctt8YJ5gCFx5BX/FMFg5VkwuI9buBcvsITIiSMH+TeA=
 github.com/jmoiron/sqlx v1.3.5 h1:vFFPA71p1o5gAeqtEAwLU4dnX2napprKtHr7PYIcN3g=
 github.com/jmoiron/sqlx v1.3.5/go.mod h1:nRVWtLre0KfCLJvgxzCsLVMogSvQ1zNJtpYr2Ccp0mQ=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=

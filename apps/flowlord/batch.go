@@ -19,8 +19,7 @@ type Batch struct {
 	Task     string
 	Job      string
 	Workflow string
-	//	Start    time.Time
-	//	End      time.Time
+
 	By       string `uri:"by"` // month | day | hour // default by day,
 	Meta     Meta   `json:"meta"`
 	Metafile string `json:"meta-file"`
@@ -28,7 +27,8 @@ type Batch struct {
 
 // For creates a number of tasks based on the start time and ranges through the specified duration.
 func (b *Batch) For(start time.Time, For time.Duration, fOpts *file.Options) ([]task.Task, error) {
-	return nil, nil
+	end := start.Add(For)
+	return b.Range(start, end, fOpts)
 }
 
 // At creates tasks for the specified time only
@@ -59,11 +59,12 @@ func (b *Batch) Range(start, end time.Time, fOpts *file.Options) ([]task.Task, e
 			}
 			data = append(data, row)
 		}
+		// empty file with no date range when file is expected
+		if len(data) == 0 && start.Equal(end) {
+			return nil, nil
+		}
 	}
-	if len(data) == 0 && start.Equal(end) {
-		// If no meta and no range, create a single task
-		end = start
-	}
+
 	// handle `by` iterator
 	var byIter func(time.Time) time.Time
 	switch strings.ToLower(b.By) {

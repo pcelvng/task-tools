@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,25 +22,33 @@ const base_test_path string = "../../internal/test/"
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-	cache, err := workflow.New(base_test_path+"workflow", nil)
-	if err != nil {
-		t.Fatal("cache init", err)
+	cache, fatalErr := workflow.New(base_test_path+"workflow", nil)
+	if fatalErr != nil {
+		t.Fatal("cache init", fatalErr)
 	}
-	consumer, err := nop.NewConsumer("")
-	if err != nil {
-		t.Fatal("doneConsumer", err)
+	consumer, fatalErr := nop.NewConsumer("")
+	if fatalErr != nil {
+		t.Fatal("doneConsumer", fatalErr)
 	}
 	fn := func(tsk task.Task) ([]task.Task, error) {
+		var alerts int64
 		tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
-		producer, err := nop.NewProducer("")
-		if err != nil {
-			return nil, err
-		}
+		producer, _ := nop.NewProducer("")
 		tm.producer = producer
 		nop.FakeMsg = tsk.JSONBytes()
-		err = tm.Process(&tsk)
+		// handle alert messages
+		go func() {
+			for range tm.alerts {
+				atomic.AddInt64(&alerts, 1)
+			}
+		}()
+		if err := tm.Process(&tsk); err != nil {
+			return nil, err
+		}
+
 		time.Sleep(100 * time.Millisecond)
 		tm.producer.Stop()
+		close(tm.alerts)
 		result := make([]task.Task, 0)
 		for _, msgs := range producer.Messages {
 			for _, msg := range msgs {
@@ -60,7 +69,11 @@ func TestTaskMaster_Process(t *testing.T) {
 			}
 			return result[i].Type < result[j].Type
 		})
-		return result, err
+		/* TODO: test alerts are sent
+		if alerts > 0 {
+			return result, fmt.Errorf("%d alerts", alerts)
+		} */
+		return result, nil
 	}
 	cases := trial.Cases[task.Task, []task.Task]{
 		"task1 attempt 0": {
@@ -248,7 +261,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			},
 		},
 	}
-	trial.New(fn, cases).SubTest(t)
+	trial.New(fn, cases).Timeout(time.Second).SubTest(t)
 }
 
 func TestTaskMaster_Schedule(t *testing.T) {
@@ -283,7 +296,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t2",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 * * * *",
+						Schedule: "0 0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -291,7 +304,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t4",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 * * * *",
+						Schedule: "0 0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -305,7 +318,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 					{
 						Workflow: "f3.toml",
 						Topic:    "task1",
-						Schedule: "15 35 13 * * *",
+						Schedule: "0 0 0 * * *",
 						Template: "?date={yyyy}-{mm}-{dd}",
 					},
 				},

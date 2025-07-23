@@ -21,7 +21,7 @@ require (
 	github.com/itchyny/gojq v0.12.14
 	github.com/jarcoal/httpmock v1.3.1
 	github.com/jbsmith7741/go-tools v0.4.1
-	github.com/jbsmith7741/uri v0.6.0
+	github.com/jbsmith7741/uri v0.6.1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.9
