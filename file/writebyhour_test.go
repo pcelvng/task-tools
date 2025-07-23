@@ -65,9 +65,9 @@ func ExampleWriteByHour_WriteLine() {
 	b := make([]byte, 32)
 	f.Read(b)
 
-	fmt.Println(err)                 // output: <nil>
-	fmt.Print(string(b))             // output: 2007-02-03T16:05:06Z,test field
-	fmt.Println(wBy.lineCnt.LineCnt) // output: 1
+	fmt.Println(err)         // output: <nil>
+	fmt.Print(string(b))     // output: 2007-02-03T16:05:06Z,test field
+	fmt.Println(wBy.lineCnt) // output: 1
 
 	// cleanup
 	os.Remove(pth)
@@ -128,9 +128,9 @@ func ExampleWriteByHour_WriteLineMulti() {
 	b2 := make([]byte, 32)
 	f2.Read(b2)
 
-	fmt.Print(string(b1))            // output: 2007-03-04T16:05:06Z,test field\n2007-03-04T16:05:06Z,test field\n
-	fmt.Print(string(b2))            // output: 2007-04-05T17:05:06Z,test field\n
-	fmt.Println(wBy.lineCnt.LineCnt) // output: 3
+	fmt.Print(string(b1))    // output: 2007-03-04T16:05:06Z,test field\n2007-03-04T16:05:06Z,test field\n
+	fmt.Print(string(b2))    // output: 2007-04-05T17:05:06Z,test field\n
+	fmt.Println(wBy.lineCnt) // output: 3
 
 	// cleanup
 	os.Remove(pth1)

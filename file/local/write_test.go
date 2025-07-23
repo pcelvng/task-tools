@@ -14,8 +14,8 @@ func ExampleNewWriter() {
 		return
 	}
 
-	fmt.Println(strings.HasSuffix(w.sts.Path, "/test/test.txt")) // output: true
-	fmt.Println(err)                                             // output: <nil>
+	fmt.Println(strings.HasSuffix(w.sts.Path(), "/test/test.txt")) // output: true
+	fmt.Println(err)                                               // output: <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -30,9 +30,9 @@ func ExampleNewWriterCompression() {
 		return
 	}
 
-	fmt.Println(strings.HasSuffix(w.sts.Path, "/test/test.gz")) // output: true
-	fmt.Println(w.tmpPth)                                       // output:
-	fmt.Println(err)                                            // output: <nil>
+	fmt.Println(strings.HasSuffix(w.sts.Path(), "/test/test.gz")) // output: true
+	fmt.Println(w.tmpPth)                                         // output:
+	fmt.Println(err)                                              // output: <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -53,7 +53,7 @@ func ExampleNewWriterWTmpFile() {
 		return
 	}
 
-	hasPath := strings.HasSuffix(w.sts.Path, "/test/test.txt")
+	hasPath := strings.HasSuffix(w.sts.Path(), "/test/test.txt")
 	hasTmp := strings.Contains(w.tmpPth, "/test/tmp/prefix_")
 
 	fmt.Println(hasPath) // output: true
@@ -136,25 +136,6 @@ func ExampleWriter_WriteLine() {
 
 	// Output:
 	// <nil>
-}
-
-func ExampleWriter_Stats() {
-	w, _ := NewWriter("./test/test.txt", nil)
-	if w == nil {
-		return
-	}
-	w.sts.Path = "test path"
-	w.sts.Created = "test created"
-
-	sts := w.Stats()
-	fmt.Println(sts.Path)    // output: test path
-	fmt.Println(sts.Created) // output: test created
-
-	os.Remove("./test") // cleanup test dir
-
-	// Output:
-	// test path
-	// test created
 }
 
 func ExampleWriter_Abort() {
@@ -256,7 +237,7 @@ func ExampleWriter_copyAndClean() {
 	n, err := w.copyAndClean()
 
 	// read file
-	f, _ := os.Open(w.sts.Path)
+	f, _ := os.Open(w.sts.Path())
 	if f == nil {
 		return
 	}
@@ -264,7 +245,7 @@ func ExampleWriter_copyAndClean() {
 	rn, _ := f.Read(b)
 
 	// check actual size
-	fInfo, _ := os.Stat(w.sts.Path)
+	fInfo, _ := os.Stat(w.sts.Path())
 	if fInfo == nil {
 		return
 	}
@@ -299,7 +280,7 @@ func ExampleWriter_copyAndCleanTmpFile() {
 	n, err := w.copyAndClean()
 
 	// read file
-	f, _ := os.Open(w.sts.Path)
+	f, _ := os.Open(w.sts.Path())
 	if f == nil {
 		return
 	}
@@ -307,7 +288,7 @@ func ExampleWriter_copyAndCleanTmpFile() {
 	rn, _ := f.Read(b)
 
 	// check actual size
-	fInfo, _ := os.Stat(w.sts.Path)
+	fInfo, _ := os.Stat(w.sts.Path())
 	if fInfo == nil {
 		return
 	}
@@ -350,7 +331,7 @@ func ExampleWriter_copyAndCleanTmpFileErr() {
 	}
 	w.WriteLine([]byte("test line"))
 	w.WriteLine([]byte("test line"))
-	w.sts.Path = "/bad/file.txt"
+	w.sts.SetPath("/bad/file.txt")
 	n, err := w.copyAndClean()
 	if err == nil {
 		return

@@ -21,7 +21,7 @@ import (
 func writeToFile(ctx context.Context, j *bigquery.Job, w file.Writer, format string) (sts stat.Stats, err error) {
 	rows, err := j.Read(ctx)
 	if err != nil {
-		return sts.Clone(), fmt.Errorf("row: %w", err)
+		return sts, fmt.Errorf("row: %w", err)
 	}
 
 	loader := &bqValueLoader{}
@@ -38,7 +38,7 @@ func writeToFile(ctx context.Context, j *bigquery.Job, w file.Writer, format str
 		// Write header row
 		err = w.WriteLine([]byte(strings.Join(header, ",")))
 		if err != nil {
-			return sts.Clone(), fmt.Errorf("write header: %w", err)
+			return sts, fmt.Errorf("write header: %w", err)
 		}
 	}
 
@@ -52,11 +52,11 @@ func writeToFile(ctx context.Context, j *bigquery.Job, w file.Writer, format str
 
 		err = w.WriteLine(line)
 		if err != nil {
-			return sts.Clone(), fmt.Errorf("write: %w", err)
+			return sts, fmt.Errorf("write: %w", err)
 		}
 	}
 	if !errors.Is(err, iterator.Done) {
-		return sts.Clone(), fmt.Errorf("row iterator: %T %w", err, err)
+		return sts, fmt.Errorf("row iterator: %T %w", err, err)
 	}
 
 	return w.Stats(), w.Close()

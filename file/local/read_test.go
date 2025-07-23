@@ -23,16 +23,16 @@ func ExampleNewReader() {
 	if r == nil {
 		return
 	}
-
-	fmt.Println(err)                 // output: <nil>
-	fmt.Println(r.sts.Path != "")    // output: true
-	fmt.Println(r.sts.Size)          // output: 20
-	fmt.Println(r.sts.Created != "") // output: true
-	fmt.Println(r.f != nil)          // output: true
-	fmt.Println(r.rBuf != nil)       // output: true
-	fmt.Println(r.rGzip == nil)      // output: true
-	fmt.Println(r.rHshr != nil)      // output: true
-	fmt.Println(r.closed)            // output: false
+	sts := r.Stats()
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(sts.Path != "")    // output: true
+	fmt.Println(sts.Size)          // output: 20
+	fmt.Println(sts.Created != "") // output: true
+	fmt.Println(r.f != nil)        // output: true
+	fmt.Println(r.rBuf != nil)     // output: true
+	fmt.Println(r.rGzip == nil)    // output: true
+	fmt.Println(r.rHshr != nil)    // output: true
+	fmt.Println(r.closed)          // output: false
 
 	// cleanup
 	os.Remove(pth)
@@ -57,16 +57,17 @@ func ExampleNewReaderCompression() {
 	if r == nil {
 		return
 	}
+	sts := r.Stats()
 
-	fmt.Println(err)                 // output: <nil>
-	fmt.Println(r.sts.Path != "")    // output: true
-	fmt.Println(r.sts.Size)          // output: 20
-	fmt.Println(r.sts.Created != "") // output: true
-	fmt.Println(r.f != nil)          // output: true
-	fmt.Println(r.rBuf != nil)       // output: true
-	fmt.Println(r.rGzip != nil)      // output: true
-	fmt.Println(r.rHshr != nil)      // output: true
-	fmt.Println(r.closed)            // output: false
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(sts.Path != "")    // output: true
+	fmt.Println(sts.Size)          // output: 20
+	fmt.Println(sts.Created != "") // output: true
+	fmt.Println(r.f != nil)        // output: true
+	fmt.Println(r.rBuf != nil)     // output: true
+	fmt.Println(r.rGzip != nil)    // output: true
+	fmt.Println(r.rHshr != nil)    // output: true
+	fmt.Println(r.closed)          // output: false
 
 	// cleanup
 	os.Remove(pth)
@@ -302,9 +303,9 @@ func ExampleReader_Close() {
 	r.ReadLine()
 	err := r.Close()
 
-	fmt.Println(err)            // output: <nil>
-	fmt.Println(r.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(r.closed)       // output: true
+	fmt.Println(err)              // output: <nil>
+	fmt.Println(r.sts.Checksum()) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(r.closed)         // output: true
 
 	// cleanup
 	os.Remove(pth)
@@ -328,9 +329,9 @@ func ExampleReader_CloseGzip() {
 	r.ReadLine()
 	err := r.Close()
 
-	fmt.Println(err)            // output: <nil>
-	fmt.Println(r.sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
-	fmt.Println(r.closed)       // output: true
+	fmt.Println(err)              // output: <nil>
+	fmt.Println(r.sts.Checksum()) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(r.closed)         // output: true
 
 	// cleanup
 	os.Remove(pth)
@@ -355,9 +356,9 @@ func ExampleReader_CloseAndClose() {
 	r.Close()
 	err := r.Close()
 
-	fmt.Println(err)            // output: <nil>
-	fmt.Println(r.sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(r.closed)       // output: true
+	fmt.Println(err)              // output: <nil>
+	fmt.Println(r.sts.Checksum()) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(r.closed)         // output: true
 
 	// cleanup
 	os.Remove(pth)

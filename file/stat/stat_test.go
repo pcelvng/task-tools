@@ -43,8 +43,8 @@ func ExampleNewFromBytes() {
 	// test created
 }
 
-func ExampleStat_AddLine() {
-	sts := New()
+func ExampleSafe_AddLine() {
+	sts := Safe{}
 
 	sts.AddLine()
 	sts.AddLine()
@@ -56,8 +56,8 @@ func ExampleStat_AddLine() {
 	// 3
 }
 
-func ExampleStat_AddBytes() {
-	sts := New()
+func ExampleSafe_AddBytes() {
+	sts := Safe{}
 
 	sts.AddBytes(1)
 	sts.AddBytes(10)
@@ -69,21 +69,21 @@ func ExampleStat_AddBytes() {
 	// 1111
 }
 
-func ExampleStat_SetChecksum() {
-	sts := New()
+func ExampleSafe_SetChecksum() {
+	sts := Safe{}
 
 	// checksum
 	hsh := md5.New()
 	hsh.Write([]byte("test message"))
 	sts.SetChecksum(hsh)
 
-	fmt.Println(sts.Checksum) // output: c72b9698fa1927e1dd12d3cf26ed84b2
+	fmt.Println(sts.Checksum()) // output: c72b9698fa1927e1dd12d3cf26ed84b2
 	// Output:
 	// c72b9698fa1927e1dd12d3cf26ed84b2
 }
 
-func ExampleStat_SetSize() {
-	sts := New()
+func ExampleSafe_SetSize() {
+	sts := Safe{}
 
 	sts.SetSize(15)
 	fmt.Println(sts.Size) // output: 15
@@ -92,30 +92,30 @@ func ExampleStat_SetSize() {
 	// 15
 }
 
-func ExampleStat_SetPath() {
-	sts := New()
+func ExampleSafe_SetPath() {
+	sts := Safe{}
 
 	sts.SetPath("path/to/file.txt")
-	fmt.Println(sts.Path) // output: path/to/file.txt
+	fmt.Println(sts.Path()) // output: path/to/file.txt
 
 	// Output:
 	// path/to/file.txt
 }
 
-func ExampleStat_SetCreated() {
-	sts := New()
+func ExampleSafe_SetCreated() {
+	sts := Safe{}
 
 	created := "2017-01-02T03:04:05Z"
 	t, _ := time.Parse(time.RFC3339, created)
 
 	sts.SetCreated(t)
-	fmt.Println(sts.Created) // output: 2017-01-02T03:04:05Z
+	fmt.Println(sts.Created()) // output: 2017-01-02T03:04:05Z
 
 	// Output:
 	// 2017-01-02T03:04:05Z
 }
 
-func ExampleStat_ParseCreated() {
+func ExampleStats_ParseCreated() {
 	sts := New()
 
 	sts.Created = "2017-01-02T03:04:05Z"
@@ -127,22 +127,23 @@ func ExampleStat_ParseCreated() {
 	// 2017-01-02T03:04:05Z
 }
 
-func ExampleStat_Clone() {
-	sts := New()
-	sts.LineCnt = 1
-	sts.ByteCnt = 2
-	sts.Size = 3
-	sts.Checksum = "4"
-	sts.Path = "5"
-	sts.Created = "6"
+func ExampleStats_ToSafe() {
+	sts := Stats{
+		LineCnt:  1,
+		ByteCnt:  2,
+		Size:     3,
+		Checksum: "4",
+		Path:     "5",
+		Created:  "6",
+	}
 
-	cln := sts.Clone()
+	cln := sts.ToSafe()
 	fmt.Println(cln.LineCnt)
 	fmt.Println(cln.ByteCnt)
 	fmt.Println(cln.Size)
-	fmt.Println(cln.Checksum)
-	fmt.Println(cln.Path)
-	fmt.Println(cln.Created)
+	fmt.Println(cln.Checksum())
+	fmt.Println(cln.Path())
+	fmt.Println(cln.Created())
 
 	// Output:
 	// 1
@@ -153,14 +154,15 @@ func ExampleStat_Clone() {
 	// 6
 }
 
-func ExampleStat_JSONBytes() {
-	sts := New()
-	sts.LineCnt = 10
-	sts.ByteCnt = 100
-	sts.Size = 200
-	sts.Checksum = "test checksum"
-	sts.Path = "test path"
-	sts.Created = "test created"
+func ExampleStats_JSONBytes() {
+	sts := Stats{
+		LineCnt:  10,
+		ByteCnt:  100,
+		Size:     200,
+		Checksum: "test checksum",
+		Path:     "test path",
+		Created:  "test created",
+	}
 
 	b := sts.JSONBytes()
 	fmt.Println(string(b)) // output: {"linecnt":10,"bytecnt":100,"size":200,"checksum":"test checksum","path":"test path","created":"test created"}
@@ -169,14 +171,15 @@ func ExampleStat_JSONBytes() {
 	// {"linecnt":10,"bytecnt":100,"size":200,"checksum":"test checksum","path":"test path","created":"test created"}
 }
 
-func ExampleStat_JSONString() {
-	sts := New()
-	sts.LineCnt = 10
-	sts.ByteCnt = 100
-	sts.Size = 200
-	sts.Checksum = "test checksum"
-	sts.Path = "test path"
-	sts.Created = "test created"
+func ExampleStats_JSONString() {
+	sts := Stats{
+		LineCnt:  10,
+		ByteCnt:  100,
+		Size:     200,
+		Checksum: "test checksum",
+		Path:     "test path",
+		Created:  "test created",
+	}
 
 	s := sts.JSONString()
 	fmt.Println(s) // output: {"linecnt":10,"bytecnt":100,"size":200,"checksum":"test checksum","path":"test path","created":"test created"}
@@ -186,7 +189,7 @@ func ExampleStat_JSONString() {
 }
 
 func BenchmarkAddLine(b *testing.B) {
-	sts := New()
+	sts := Safe{}
 
 	for i := 0; i < b.N; i++ {
 		sts.AddLine()
@@ -194,7 +197,7 @@ func BenchmarkAddLine(b *testing.B) {
 }
 
 func BenchmarkAddBytes(b *testing.B) {
-	sts := New()
+	sts := Safe{}
 
 	for i := 0; i < b.N; i++ {
 		sts.AddBytes(200)
@@ -202,7 +205,7 @@ func BenchmarkAddBytes(b *testing.B) {
 }
 
 func BenchmarkTemplateParallel(b *testing.B) {
-	sts := New()
+	sts := Safe{}
 	hsh := md5.New()
 	hsh.Write([]byte("test message"))
 
@@ -215,7 +218,7 @@ func BenchmarkTemplateParallel(b *testing.B) {
 			sts.SetChecksum(hsh)
 			sts.SetPath("./test/path.txt")
 			sts.SetPath("./tests/path.txt")
-			_ = sts.Clone()
+			_ = sts.Stats()
 		}
 	})
 }

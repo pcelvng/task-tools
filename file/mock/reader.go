@@ -15,7 +15,7 @@ import (
 var _ file.Reader = (*reader)(nil)
 
 type reader struct {
-	sts          stat.Stats
+	//sts          *stat.Safe
 	MockReadMode string
 	lines        []string
 	lineCount    int
@@ -52,7 +52,7 @@ func (r *reader) Stats() stat.Stats {
 }
 
 func (r *reader) Close() error {
-	r.sts.SetSize(r.sts.ByteCnt)
+	//r.sts.SetSize(r.sts.ByteCnt)
 
 	if r.MockReadMode == "close_err" || r.MockReadMode == "err" {
 		return errors.New(r.MockReadMode)

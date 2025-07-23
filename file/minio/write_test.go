@@ -16,7 +16,7 @@ func ExampleNewWriter() {
 	}
 
 	fmt.Println(err)             // output: <nil>
-	fmt.Println(w.sts.Path)      // output: mcs://task-tools-test/write/test.txt
+	fmt.Println(w.sts.Path())    // output: mcs://task-tools-test/write/test.txt
 	fmt.Println(w.client != nil) // output: true
 	fmt.Println(w.bfr != nil)    // output: true
 	fmt.Println(w.bucket)        // output: task-tools-test
@@ -45,7 +45,7 @@ func ExampleNewWriterTmpFile() {
 	}
 
 	fmt.Println(err)             // output: <nil>
-	fmt.Println(w.sts.Path)      // output: mcs://task-tools-test/write/test.txt
+	fmt.Println(w.sts.Path())    // output: mcs://task-tools-test/write/test.txt
 	fmt.Println(w.client != nil) // output: true
 	fmt.Println(w.bfr != nil)    // output: true
 	fmt.Println(w.bucket)        // output: task-tools-test
@@ -75,7 +75,7 @@ func ExampleNewWriterCompressed() {
 	}
 
 	fmt.Println(err)             // output: <nil>
-	fmt.Println(w.sts.Path)      // output: mcs://task-tools-test/write/test.gz
+	fmt.Println(w.sts.Path())    // output: mcs://task-tools-test/write/test.gz
 	fmt.Println(w.client != nil) // output: true
 	fmt.Println(w.bfr != nil)    // output: true
 	fmt.Println(w.bucket)        // output: task-tools-test
@@ -160,7 +160,7 @@ func ExampleWriter_Stats() {
 	fmt.Println(sts.LineCnt)       // output: 2
 	fmt.Println(sts.Size)          // output: 0
 	fmt.Println(sts.Checksum)      // output:
-	fmt.Println(sts.Created == "") // output: true
+	fmt.Println(sts.Created != "") // output: true
 
 	// Output:
 	// mcs://task-tools-test/write/test.txt
@@ -253,9 +253,9 @@ func ExampleWriter_Close() {
 	w.WriteLine([]byte("test line"))
 	err := w.Close()
 
-	fmt.Println(err)                     // output: <nil>
-	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.Checksum != "") // output: true
+	fmt.Println(err)                      // output: <nil>
+	fmt.Println(w.done)                   // output: true
+	fmt.Println(w.Stats().Checksum != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -279,9 +279,9 @@ func ExampleWriter_CloseErrCopy() {
 	w.objPth = ""
 	err := w.Close()
 
-	fmt.Println(err)                     // output: Bucket name cannot be empty
-	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.Checksum == "") // output: true
+	fmt.Println(err)                                                      // output: Bucket name cannot be empty
+	fmt.Println(w.done)                                                   // output: true
+	fmt.Println(w.Stats().Checksum == "54f30d75cf7374c7e524a4530dbc93c2") // output: true
 
 	// Output:
 	// Bucket name cannot be empty
@@ -301,9 +301,9 @@ func ExampleWriter_CloseAndClose() {
 	w.Close()
 	err := w.Close()
 
-	fmt.Println(err)                     // output: <nil>
-	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.Checksum != "") // output: true
+	fmt.Println(err)                      // output: <nil>
+	fmt.Println(w.done)                   // output: true
+	fmt.Println(w.Stats().Checksum != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -325,9 +325,9 @@ func ExampleWriter_AbortAndClose() {
 	w.Abort()
 	err := w.Close()
 
-	fmt.Println(err)                     // output: <nil>
-	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.Checksum == "") // output: true
+	fmt.Println(err)                      // output: <nil>
+	fmt.Println(w.done)                   // output: true
+	fmt.Println(w.Stats().Checksum == "") // output: true
 
 	// Output:
 	// <nil>
@@ -347,9 +347,9 @@ func ExampleWriter_CloseAndAbort() {
 	w.Close()
 	err := w.Abort()
 
-	fmt.Println(err)                     // output: <nil>
-	fmt.Println(w.done)                  // output: true
-	fmt.Println(w.objSts.Checksum != "") // output: true
+	fmt.Println(err)                      // output: <nil>
+	fmt.Println(w.done)                   // output: true
+	fmt.Println(w.Stats().Checksum != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -375,15 +375,15 @@ func ExampleWriter_CopyTmpFile() {
 	w.WriteLine([]byte("test line"))
 	w.bfr.Close()
 	n, err := w.copy()
-	w.setObjSts()
+	//w.setObjSts()
 	w.bfr.Cleanup()
-
-	fmt.Println(n)                      // output: 20
-	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(w.objSts.Size)          // output: 20
-	fmt.Println(w.objSts.Path)          // output: write/test.txt
-	fmt.Println(w.objSts.Created != "") // output: true
+	sts := w.Stats()
+	fmt.Println(n)                 // output: 20
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(sts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(sts.Size)          // output: 20
+	fmt.Println(sts.Path)          // output: mcs://task-tools-test/write/test.txt
+	fmt.Println(sts.Created != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -395,7 +395,7 @@ func ExampleWriter_CopyTmpFile() {
 	// <nil>
 	// 54f30d75cf7374c7e524a4530dbc93c2
 	// 20
-	// write/test.txt
+	// mcs://task-tools-test/write/test.txt
 	// true
 }
 
@@ -410,14 +410,15 @@ func ExampleWriter_CopyNoExtension() {
 	w.WriteLine([]byte("test line"))
 	w.bfr.Close()
 	n, err := w.copy()
-	w.setObjSts()
-
-	fmt.Println(n)                      // output: 20
-	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(w.objSts.Size)          // output: 20
-	fmt.Println(w.objSts.Path)          // output: write/test
-	fmt.Println(w.objSts.Created != "") // output: true
+	//w.setObjSts()
+	w.Close()
+	sts := w.Stats()
+	fmt.Println(n)                 // output: 20
+	fmt.Println(err)               // output: <nil>
+	fmt.Println(sts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(sts.Size)          // output: 20
+	fmt.Println(sts.Path)          // output: mcs://task-tools-test/write/test
+	fmt.Println(sts.Created != "") // output: true
 
 	// cleanup
 	rmTestFile(pth)
@@ -427,63 +428,6 @@ func ExampleWriter_CopyNoExtension() {
 	// <nil>
 	// 54f30d75cf7374c7e524a4530dbc93c2
 	// 20
-	// write/test
-	// true
-}
-
-func ExampleWriter_SetObjSts() {
-	pth := fmt.Sprintf("mcs://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testOption, nil)
-	if w == nil {
-		return
-	}
-
-	w.WriteLine([]byte("test line"))
-	w.WriteLine([]byte("test line"))
-	w.bfr.Close()
-	w.copy()
-	err := w.setObjSts()
-
-	fmt.Println(err)                    // output: <nil>
-	fmt.Println(w.objSts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(w.objSts.Size)          // output: 20
-	fmt.Println(w.objSts.Path)          // output: write/test.txt
-	fmt.Println(w.objSts.Created != "") // output: true
-
-	// cleanup
-	rmTestFile(pth)
-
-	// Output:
-	// <nil>
-	// 54f30d75cf7374c7e524a4530dbc93c2
-	// 20
-	// write/test.txt
-	// true
-}
-
-func ExampleWriter_SetObjStsErr() {
-	pth := fmt.Sprintf("mcs://%v/write/test.txt", testBucket)
-	w, _ := NewWriter(pth, testOption, nil)
-	if w == nil {
-		return
-	}
-
-	w.WriteLine([]byte("test line"))
-	w.WriteLine([]byte("test line"))
-	w.bucket = ""
-	w.objPth = ""
-	err := w.setObjSts()
-
-	fmt.Println(err)                    // output: Bucket name cannot be empty
-	fmt.Println(w.objSts.Checksum)      // output:
-	fmt.Println(w.objSts.Size)          // output: 0
-	fmt.Println(w.objSts.Path)          // output:
-	fmt.Println(w.objSts.Created == "") // output: true
-
-	// Output:
-	// Bucket name cannot be empty
-	//
-	// 0
-	//
+	// mcs://task-tools-test/write/test
 	// true
 }

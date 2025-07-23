@@ -2,8 +2,9 @@ package file
 
 import (
 	"compress/gzip"
-	"context"
+	"fmt"
 	"io"
+	"iter"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -35,6 +36,9 @@ type Reader interface {
 	//
 	// A call to ReadLine after Close has undefined behavior.
 	ReadLine() ([]byte, error)
+
+	// Lines iterators through the file and return one line at a time
+	//Lines() iter.Seq[[]byte]
 
 	// Stats returns an instance of Stats.
 	Stats() stat.Stats
@@ -212,6 +216,69 @@ func NewWriter(pth string, opt *Options) (w Writer, err error) {
 	return w, err
 }
 
+type Iterator struct {
+	err     error
+	isValid bool
+	reader  Reader
+}
+
+func NewIterator(path string, opts *Options) *Iterator {
+	r, err := NewReader(path, opts)
+	return &Iterator{
+		err:     err,
+		isValid: err == nil,
+		reader:  r,
+	}
+}
+
+// Lines allow ranges through file return a []byte for each line in the file
+// range will stop for any error conditions include on opening the file.
+func (i *Iterator) Lines() iter.Seq[[]byte] {
+	// only iterator if the reader is properly set.
+	if i.isValid {
+		return func(yield func([]byte) bool) {
+			var err error
+			// close reader and properly record error
+			defer func() {
+				i.err = err
+				closeErr := i.reader.Close()
+				if closeErr != nil && i.err != nil {
+					i.err = fmt.Errorf("%w + close-err:%v", err, closeErr)
+				} else if closeErr != nil {
+					i.err = closeErr
+				}
+			}()
+			var ln []byte
+			for ln, err = i.reader.ReadLine(); err == nil; ln, err = i.reader.ReadLine() {
+				if !yield(ln) {
+					return
+				}
+			}
+			if err == io.EOF {
+				err = nil
+				yield(ln)
+			}
+		}
+	}
+	return func(yield func([]byte) bool) {}
+}
+
+// Stats of the file that was read
+func (i *Iterator) Stats() stat.Stats {
+	if i.isValid {
+		return i.reader.Stats()
+	}
+	return stat.Stats{}
+}
+
+// Error caused by reading the file. This could be from
+// 1. Open the file
+// 2. Reading/Retrieving a line
+// 3. Closing the file
+func (i *Iterator) Error() error {
+	return i.err
+}
+
 // List is a generic List function that will call the
 // correct type of implementation based on the file schema, aka
 // 's3://'. If there is no schema or if the schema is 'local://'
@@ -372,35 +439,4 @@ func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
 	}
 
 	return folders, nil
-}
-
-// ReadLines is a high-level utility that will read all the lines of a reader and call
-// f when the number of bytes is > 0. err will never be EOF and if cncl == true
-// then err will be nil.
-func ReadLines(ctx context.Context, r Reader, f func(ln []byte) error) (err error, cncl bool) {
-	for ctx.Err() == nil {
-		// read
-		ln, err := r.ReadLine()
-		if err != nil && err != io.EOF {
-			return err, false
-		}
-
-		// add record
-		if len(ln) > 0 {
-			if err = f(ln); err != nil {
-				return err, false
-			}
-		}
-
-		if err == io.EOF {
-			break
-		}
-	}
-
-	// check ctx
-	if ctx.Err() != nil {
-		return nil, true
-	}
-
-	return nil, false
 }
