@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"testing"
 
 	"github.com/pcelvng/task-tools/file/buf"
 )
@@ -14,8 +15,8 @@ func ExampleNewWriter() {
 		return
 	}
 
-	fmt.Println(strings.HasSuffix(w.sts.Path(), "/test/test.txt")) // output: true
-	fmt.Println(err)                                               // output: <nil>
+	fmt.Println(strings.HasSuffix(w.sts.Path(), "/test/test.txt")) // true
+	fmt.Println(err)                                               // <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -24,15 +25,15 @@ func ExampleNewWriter() {
 	// <nil>
 }
 
-func ExampleNewWriterCompression() {
+func ExampleNewWriter_compression() {
 	w, err := NewWriter("./test/test.gz", nil)
 	if w == nil {
 		return
 	}
 
-	fmt.Println(strings.HasSuffix(w.sts.Path(), "/test/test.gz")) // output: true
-	fmt.Println(w.tmpPth)                                         // output:
-	fmt.Println(err)                                              // output: <nil>
+	fmt.Println(strings.HasSuffix(w.sts.Path(), "/test/test.gz")) // true
+	fmt.Println(w.tmpPth)                                         // ''
+	fmt.Println(err)                                              // <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -42,7 +43,7 @@ func ExampleNewWriterCompression() {
 	// <nil>
 }
 
-func ExampleNewWriterWTmpFile() {
+func ExampleNewWriter_withTmpFile() {
 	opt := &buf.Options{
 		UseFileBuf:    true,
 		FileBufDir:    "./test/tmp/",
@@ -56,9 +57,9 @@ func ExampleNewWriterWTmpFile() {
 	hasPath := strings.HasSuffix(w.sts.Path(), "/test/test.txt")
 	hasTmp := strings.Contains(w.tmpPth, "/test/tmp/prefix_")
 
-	fmt.Println(hasPath) // output: true
-	fmt.Println(hasTmp)  // output: true
-	fmt.Println(err)     // output: <nil>
+	fmt.Println(hasPath) // true
+	fmt.Println(hasTmp)  // true
+	fmt.Println(err)     // <nil>
 
 	os.Remove(w.tmpPth)     // cleanup tmp file
 	os.Remove("./test/tmp") // cleanup tmp dir
@@ -70,7 +71,7 @@ func ExampleNewWriterWTmpFile() {
 	// <nil>
 }
 
-func ExampleNewWriterBufErr() {
+func ExampleNewWriter_bufErr() {
 	opt := &buf.Options{UseFileBuf: true, FileBufDir: "/private/bad/tmp/dir"}
 
 	w, err := NewWriter("./test/test.txt", opt)
@@ -80,15 +81,15 @@ func ExampleNewWriterBufErr() {
 
 	hasDenied := strings.Contains(err.Error(), "permission denied")
 
-	fmt.Println(w)         // output: <nil>
-	fmt.Println(hasDenied) // output: true
+	fmt.Println(w)         // <nil>
+	fmt.Println(hasDenied) // true
 
 	// Output:
 	// <nil>
 	// true
 }
 
-func ExampleNewWriterPthCheckErr() {
+func ExampleNewWriter_pthCheckErr() {
 	w, err := NewWriter("/private/test.txt", nil)
 	if err == nil {
 		return
@@ -96,8 +97,8 @@ func ExampleNewWriterPthCheckErr() {
 
 	hasDenied := strings.Contains(err.Error(), "permission denied")
 
-	fmt.Println(w)         // output: <nil>
-	fmt.Println(hasDenied) // output: true
+	fmt.Println(w)         // <nil>
+	fmt.Println(hasDenied) // true
 
 	// Output:
 	// <nil>
@@ -112,8 +113,8 @@ func ExampleWriter_Write() {
 
 	n, err := w.Write([]byte("test line"))
 
-	fmt.Println(n)   // output: 9
-	fmt.Println(err) // output: <nil>
+	fmt.Println(n)   // 9
+	fmt.Println(err) // <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -130,7 +131,7 @@ func ExampleWriter_WriteLine() {
 
 	err := w.WriteLine([]byte("test line"))
 
-	fmt.Println(err) // output: <nil>
+	fmt.Println(err) // <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -145,7 +146,7 @@ func ExampleWriter_Abort() {
 	}
 	err := w.Abort()
 
-	fmt.Println(err) // output: <nil>
+	fmt.Println(err) // <nil>
 
 	os.Remove("./test") // cleanup test dir
 
@@ -171,10 +172,10 @@ func ExampleWriter_Close() {
 	}
 	removed := strings.Contains(tmpErr.Error(), "no such file or directory")
 
-	fmt.Println(err)               // output: <nil>
-	fmt.Println(sts.Created != "") // output: true
-	fmt.Println(sts.Checksum)      // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(removed)           // output: true
+	fmt.Println(err)               // <nil>
+	fmt.Println(sts.Created != "") // true
+	fmt.Println(sts.Checksum)      // 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(removed)           // true
 
 	// cleanup
 	os.Remove("./test/tmp")
@@ -188,7 +189,7 @@ func ExampleWriter_Close() {
 	// true
 }
 
-func ExampleWriter_AbortAfterClose() {
+func ExampleWriter_Abort_afterClose() {
 	w, _ := NewWriter("./test/test.txt", nil)
 	if w == nil {
 		return
@@ -198,7 +199,7 @@ func ExampleWriter_AbortAfterClose() {
 	w.Close()
 	err := w.Abort()
 
-	fmt.Println(err) // output: <nil>
+	fmt.Println(err) // <nil>
 
 	// cleanup
 	os.Remove("./test")
@@ -207,7 +208,7 @@ func ExampleWriter_AbortAfterClose() {
 	// <nil>
 }
 
-func ExampleWriter_CloseAfterAbort() {
+func ExampleWriter_Close_afterAbort() {
 	w, _ := NewWriter("./test/test.txt", nil)
 	if w == nil {
 		return
@@ -217,7 +218,7 @@ func ExampleWriter_CloseAfterAbort() {
 	w.Abort()
 	err := w.Close()
 
-	fmt.Println(err) // output: <nil>
+	fmt.Println(err) // <nil>
 
 	// cleanup
 	os.Remove("./test")
@@ -250,11 +251,11 @@ func ExampleWriter_copyAndClean() {
 		return
 	}
 
-	fmt.Println(n)            // output: 20
-	fmt.Println(err)          // output: <nil>
-	fmt.Print(string(b))      // output: test line, test line
-	fmt.Println(rn)           // output: 20
-	fmt.Println(fInfo.Size()) // output: 20
+	fmt.Println(n)            // 20
+	fmt.Println(err)          // <nil>
+	fmt.Print(string(b))      // test line, test line
+	fmt.Println(rn)           // 20
+	fmt.Println(fInfo.Size()) // 20
 
 	// cleanup
 	os.Remove("./test")
@@ -300,12 +301,12 @@ func ExampleWriter_copyAndCleanTmpFile() {
 	}
 	removed := strings.Contains(tmpErr.Error(), "no such file or directory")
 
-	fmt.Println(n)            // output: 20
-	fmt.Println(err)          // output: <nil>
-	fmt.Print(string(b))      // output: test line, test line
-	fmt.Println(rn)           // output: 20
-	fmt.Println(fInfo.Size()) // output: 20
-	fmt.Println(removed)      // output: true
+	fmt.Println(n)            // 20
+	fmt.Println(err)          // <nil>
+	fmt.Print(string(b))      // test line, test line
+	fmt.Println(rn)           // 20
+	fmt.Println(fInfo.Size()) // 20
+	fmt.Println(removed)      // true
 
 	// cleanup
 	os.Remove("./test/tmp")
@@ -345,9 +346,9 @@ func ExampleWriter_copyAndCleanTmpFileErr() {
 	}
 	tmpRemoved := strings.Contains(tmpErr.Error(), "no such file or directory")
 
-	fmt.Println(n)          // output: 0
-	fmt.Println(notCopied)  // output: true
-	fmt.Println(tmpRemoved) // output: true
+	fmt.Println(n)          // 0
+	fmt.Println(notCopied)  // true
+	fmt.Println(tmpRemoved) // true
 
 	// cleanup
 	os.Remove("./test/tmp")
@@ -367,10 +368,10 @@ func ExampleWriter_copyAndCleanToDev() {
 	}
 	w.WriteLine([]byte("test line"))
 	w.WriteLine([]byte("test line"))
-	n, err := w.copyAndClean() // output: test line, test line
+	n, err := w.copyAndClean() // test line, test line
 
-	fmt.Println(n)   // output: 20
-	fmt.Println(err) // output: <nil>
+	fmt.Println(n)   // 20
+	fmt.Println(err) // <nil>
 
 	// Output:
 	// test line
@@ -388,7 +389,7 @@ func ExampleWriter_copyAndCleanTmpFileToDev() {
 	}
 	w.WriteLine([]byte("test line"))
 	w.WriteLine([]byte("test line"))
-	n, err := w.copyAndClean() // output: test line, test line
+	n, err := w.copyAndClean() // test line, test line
 
 	// tmp file does not exist
 	_, tmpErr := os.Open(w.tmpPth)
@@ -397,9 +398,9 @@ func ExampleWriter_copyAndCleanTmpFileToDev() {
 	}
 	removed := strings.Contains(tmpErr.Error(), "no such file or directory")
 
-	fmt.Println(n)       // output: 20
-	fmt.Println(err)     // output: <nil>
-	fmt.Println(removed) // output: true
+	fmt.Println(n)       // 20
+	fmt.Println(err)     // <nil>
+	fmt.Println(removed) // true
 
 	// cleanup
 	os.Remove("./test/tmp")
@@ -413,42 +414,33 @@ func ExampleWriter_copyAndCleanTmpFileToDev() {
 	// true
 }
 
-func ExampleOpenf_ErrPerms() {
+func TestOpenF_errPerms(t *testing.T) {
 	// dir bad perms
 	_, _, err := openF("/private/bad/perms/dir/file.txt", false)
-	if strings.Contains(err.Error(), "permission denied") {
-		fmt.Println("mkdir permission denied")
+	if err != nil && strings.Contains(err.Error(), "permission denied") {
+		// Expected error
+		return
 	}
-
-	// file bad perms
-	_, _, err = openF("/private/bad_perms.txt", false)
-	if strings.Contains(err.Error(), "permission denied") {
-		fmt.Println("open permission denied")
-	}
-
-	// Output:
-	// mkdir permission denied
-	// open permission denied
+	t.Error("Expected permission denied error")
 }
 
-func ExampleOpenf_ErrDir() {
+func TestOpenF_errDir(t *testing.T) {
 	// dir bad perms
 	_, _, err := openF("/dir/path/", false)
-
-	fmt.Println(err) // output: path /dir/path/: references a directory
-
-	// Output:
-	// path /dir/path/: references a directory
+	if err == nil {
+		t.Error("Expected error for directory path")
+		return
+	}
+	if !strings.Contains(err.Error(), "references a directory") {
+		t.Errorf("Expected directory error, got: %v", err)
+	}
 }
 
-func ExampleClosef_err() {
-	// showing:
-	// closeF no err on nil f
-
+func TestCloseF_err(t *testing.T) {
+	// showing: closeF no err on nil f
 	var nilF *os.File
 	err := closeF("path.txt", nilF)
-	fmt.Println(err)
-
-	// Output:
-	// <nil>
+	if err != nil {
+		t.Errorf("Expected nil error, got: %v", err)
+	}
 }

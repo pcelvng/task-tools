@@ -13,9 +13,9 @@ func ExampleNewWriteByHour() {
 		return
 	}
 
-	fmt.Println(wBy.opt != nil)     // output: true
-	fmt.Println(wBy.destTmpl)       // output: ./test/{HH}.csv
-	fmt.Println(wBy.writers != nil) // output: true
+	fmt.Println(wBy.opt != nil)     // true
+	fmt.Println(wBy.destTmpl)       // ./test/{HH}.csv
+	fmt.Println(wBy.writers != nil) // true
 
 	// Output:
 	// true
@@ -30,9 +30,9 @@ func ExampleNewWriteByHourJSON() {
 		return
 	}
 
-	fmt.Println(wBy.opt != nil)     // output: true
-	fmt.Println(wBy.destTmpl)       // output: ./test/{HH}.json
-	fmt.Println(wBy.writers != nil) // output: true
+	fmt.Println(wBy.opt != nil)     // true
+	fmt.Println(wBy.destTmpl)       // ./test/{HH}.json
+	fmt.Println(wBy.writers != nil) // true
 
 	// Output:
 	// true
@@ -65,9 +65,9 @@ func ExampleWriteByHour_WriteLine() {
 	b := make([]byte, 32)
 	f.Read(b)
 
-	fmt.Println(err)         // output: <nil>
-	fmt.Print(string(b))     // output: 2007-02-03T16:05:06Z,test field
-	fmt.Println(wBy.lineCnt) // output: 1
+	fmt.Println(err)         // <nil>
+	fmt.Print(string(b))     // 2007-02-03T16:05:06Z,test field
+	fmt.Println(wBy.lineCnt) // 1
 
 	// cleanup
 	os.Remove(pth)
@@ -128,9 +128,9 @@ func ExampleWriteByHour_WriteLineMulti() {
 	b2 := make([]byte, 32)
 	f2.Read(b2)
 
-	fmt.Print(string(b1))    // output: 2007-03-04T16:05:06Z,test field\n2007-03-04T16:05:06Z,test field\n
-	fmt.Print(string(b2))    // output: 2007-04-05T17:05:06Z,test field\n
-	fmt.Println(wBy.lineCnt) // output: 3
+	fmt.Print(string(b1))    // 2007-03-04T16:05:06Z,test field\n2007-03-04T16:05:06Z,test field\n
+	fmt.Print(string(b2))    // 2007-04-05T17:05:06Z,test field\n
+	fmt.Println(wBy.lineCnt) // 3
 
 	// cleanup
 	os.Remove(pth1)
@@ -160,7 +160,7 @@ func ExampleWriteByHour_WriteLineErrNewWriter() {
 
 	err := wBy.WriteLine(ln1, t)
 
-	fmt.Println(err) // output: init_err
+	fmt.Println(err) // init_err
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -184,7 +184,7 @@ func ExampleWriteByHour_WriteLineErrWriteLine() {
 
 	err := wBy.WriteLine(ln1, t)
 
-	fmt.Println(err) // output: writeline_err
+	fmt.Println(err) // writeline_err
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -208,7 +208,7 @@ func ExampleWriteByHour_LineCnt() {
 
 	wBy.WriteLine(ln, t)
 
-	fmt.Println(wBy.LineCnt()) // output: 1
+	fmt.Println(wBy.LineCnt()) // 1
 
 	// cleanup
 	os.Remove("./test")
@@ -241,10 +241,10 @@ func ExampleWriteByHour_Stats() {
 	allSts := wBy.Stats()
 
 	for _, sts := range allSts {
-		fmt.Println(sts.LineCnt) // output: 1
-		fmt.Println(sts.ByteCnt) // output: 32
+		fmt.Println(sts.LineCnt) // 1
+		fmt.Println(sts.ByteCnt) // 32
 	}
-	fmt.Println(len(allSts)) // output: 3
+	fmt.Println(len(allSts)) // 3
 
 	// cleanup
 	os.Remove("./test")
@@ -282,7 +282,7 @@ func ExampleWriteByHour_Abort() {
 	wBy.WriteLine(ln3, t3)
 	err := wBy.Abort()
 
-	fmt.Println(err) // output: <nil>
+	fmt.Println(err) // <nil>
 
 	// cleanup
 	os.Remove("./test")
@@ -314,7 +314,7 @@ func ExampleWriteByHour_AbortErr() {
 	wBy.WriteLine(ln3, t3)
 	err := wBy.Abort()
 
-	fmt.Println(err) // output: abort_err
+	fmt.Println(err) // abort_err
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -345,7 +345,7 @@ func ExampleWriteByHour_CloseErr() {
 	wBy.WriteLine(ln3, t3)
 	err := wBy.Close()
 
-	fmt.Println(err) // output: close_err
+	fmt.Println(err) // close_err
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -361,8 +361,8 @@ func ExampleCSVDateExtractor() {
 
 	t, err := csvExtract([]byte("test field,2007-02-03T16:05:06Z"))
 
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(err)        // output: <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(err)        // <nil>
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -379,8 +379,8 @@ func ExampleCSVDateExtractorNegativeIndex() {
 
 	t, err := csvExtract([]byte("2007-02-03T16:05:06Z,test field"))
 
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(err)        // output: <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(err)        // <nil>
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -397,8 +397,8 @@ func ExampleCSVDateExtractorIndexOutOfRange() {
 
 	t, err := csvExtract([]byte("test field,2007-02-03T16:05:06Z"))
 
-	fmt.Println(t.IsZero()) // output: true
-	fmt.Println(err)        // output: index 2 not in 'test field,2007-02-03T16:05:06Z'
+	fmt.Println(t.IsZero()) // true
+	fmt.Println(err)        // index 2 not in 'test field,2007-02-03T16:05:06Z'
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -415,8 +415,8 @@ func ExampleCSVDateExtractorIndexOutOfRange2() {
 
 	t, err := csvExtract([]byte("test field,2007-02-03T16:05:06Z"))
 
-	fmt.Println(t.IsZero()) // output: true
-	fmt.Println(err)        // output: index 3 not in 'test field,2007-02-03T16:05:06Z'
+	fmt.Println(t.IsZero()) // true
+	fmt.Println(err)        // index 3 not in 'test field,2007-02-03T16:05:06Z'
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -434,8 +434,8 @@ func ExampleCSVDateExtractorTabSeparated() {
 	// line contains \t literal
 	t, err := csvExtract([]byte("test field	2007-02-03T16:05:06Z"))
 
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(err)        // output: <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(err)        // <nil>
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -451,8 +451,8 @@ func ExampleCSVDateExtractorTabSeparated2() {
 	csvExtract := CSVDateExtractor("\t", "", 1)
 	t, err := csvExtract([]byte("test field\t2007-02-03T16:05:06Z"))
 
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(err)        // output: <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(err)        // <nil>
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -469,8 +469,8 @@ func ExampleCSVDateExtractorTabSeparated3() {
 	csvExtract := CSVDateExtractor("	", "", 1)
 	t, err := csvExtract([]byte("test field\t2007-02-03T16:05:06Z"))
 
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(err)        // output: <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(err)        // <nil>
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -488,14 +488,14 @@ func ExampleCSVDateExtractorCustomFormat() {
 	csvExtract := CSVDateExtractor("", format, 1)
 	t, err := csvExtract([]byte("test field,20070203T160506Z"))
 
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(t.Year())   // output: 2007
-	fmt.Println(t.Month())  // output: February
-	fmt.Println(t.Day())    // output: 3
-	fmt.Println(t.Hour())   // output: 16
-	fmt.Println(t.Minute()) // output: 5
-	fmt.Println(t.Second()) // output: 6
+	fmt.Println(err)        // <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(t.Year())   // 2007
+	fmt.Println(t.Month())  // February
+	fmt.Println(t.Day())    // 3
+	fmt.Println(t.Hour())   // 16
+	fmt.Println(t.Minute()) // 5
+	fmt.Println(t.Second()) // 6
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -518,8 +518,8 @@ func ExampleCSVDateExtractorEmptyField() {
 
 	t, err := csvExtract([]byte(",,2007-02-03T16:05:06Z"))
 
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(err)        // output: <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(err)        // <nil>
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -536,14 +536,14 @@ func ExampleJSONDateExtractor() {
 
 	t, err := jsonExtract([]byte(`{"date-field":"2007-02-03T16:05:06Z","other-field":"other-value"}`))
 
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(t.Year())   // output: 2007
-	fmt.Println(t.Month())  // output: February
-	fmt.Println(t.Day())    // output: 3
-	fmt.Println(t.Hour())   // output: 16
-	fmt.Println(t.Minute()) // output: 5
-	fmt.Println(t.Second()) // output: 6
+	fmt.Println(err)        // <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(t.Year())   // 2007
+	fmt.Println(t.Month())  // February
+	fmt.Println(t.Day())    // 3
+	fmt.Println(t.Hour())   // 16
+	fmt.Println(t.Minute()) // 5
+	fmt.Println(t.Second()) // 6
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -566,8 +566,8 @@ func ExampleJSONDateExtractorDateFieldNotFound() {
 
 	t, err := jsonExtract([]byte(`{"other-field":"other-value"}`))
 
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(t.IsZero()) // output: true
+	fmt.Println(err)        // <nil>
+	fmt.Println(t.IsZero()) // true
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -584,14 +584,14 @@ func ExampleJSONDateExtractorDateFieldTwice() {
 
 	t, err := jsonExtract([]byte(`{"date-field":"2007-02-03T16:05:06Z","date-field":"2007-02-03T16:05:06Z"}`))
 
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(t.Year())   // output: 2007
-	fmt.Println(t.Month())  // output: February
-	fmt.Println(t.Day())    // output: 3
-	fmt.Println(t.Hour())   // output: 16
-	fmt.Println(t.Minute()) // output: 5
-	fmt.Println(t.Second()) // output: 6
+	fmt.Println(err)        // <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(t.Year())   // 2007
+	fmt.Println(t.Month())  // February
+	fmt.Println(t.Day())    // 3
+	fmt.Println(t.Hour())   // 16
+	fmt.Println(t.Minute()) // 5
+	fmt.Println(t.Second()) // 6
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -615,14 +615,14 @@ func ExampleJSONDateExtractorCustomFormat() {
 
 	t, err := jsonExtract([]byte(`{"date-field":"20070203T160506Z"}`))
 
-	fmt.Println(err)        // output: <nil>
-	fmt.Println(t.IsZero()) // output: false
-	fmt.Println(t.Year())   // output: 2007
-	fmt.Println(t.Month())  // output: February
-	fmt.Println(t.Day())    // output: 3
-	fmt.Println(t.Hour())   // output: 16
-	fmt.Println(t.Minute()) // output: 5
-	fmt.Println(t.Second()) // output: 6
+	fmt.Println(err)        // <nil>
+	fmt.Println(t.IsZero()) // false
+	fmt.Println(t.Year())   // 2007
+	fmt.Println(t.Month())  // February
+	fmt.Println(t.Day())    // 3
+	fmt.Println(t.Hour())   // 16
+	fmt.Println(t.Minute()) // 5
+	fmt.Println(t.Second()) // 6
 
 	// cleanup
 	os.Unsetenv("TZ")
@@ -645,8 +645,8 @@ func ExampleJSONDateExtractorEmptyDateField() {
 
 	t, err := jsonExtract([]byte(`{"date-field":"2007-02-03T16:05:06Z","date-field":"2007-02-03T16:05:06Z"}`))
 
-	fmt.Println(err)        // output: field "" not in '{"date-field":"2007-02-03T16:05:06Z","date-field":"2007-02-03T16:05:06Z"}'
-	fmt.Println(t.IsZero()) // output: true
+	fmt.Println(err)        // field "" not in '{"date-field":"2007-02-03T16:05:06Z","date-field":"2007-02-03T16:05:06Z"}'
+	fmt.Println(t.IsZero()) // true
 
 	// cleanup
 	os.Unsetenv("TZ")
