@@ -13,7 +13,6 @@ import (
 	"github.com/pcelvng/task-tools/workflow"
 )
 
-/* TODO: Fix after iterator merge
 func TestUnmarshalStat(t *testing.T) {
 	fn := func(i string) (stat.Stats, error) {
 		return unmarshalStat([]byte(i)), nil
@@ -71,7 +70,7 @@ func TestUnmarshalStat(t *testing.T) {
 	}
 	trial.New(fn, cases).Test(t)
 }
-*/
+
 func TestTaskMaster_MatchFile(t *testing.T) {
 	tm := taskMaster{
 		files: []fileRule{
