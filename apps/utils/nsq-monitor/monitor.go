@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/pcelvng/task-tools/slack"
 )
 
@@ -38,9 +37,10 @@ type DepthMetric struct {
 	Topic   string // The topic value
 	Channel string // The channel value
 	//	SendNotify bool     // Used to keep sending notifications, even if config criteria is not met
-	Address string   // the broadcast address
-	Alerted bool     //
-	Last    [3]Depth // The last 3 depth values from 2 (very last) back up to 0
+	Address    string   // the broadcast address
+	DepthAlert bool     // Alert state for depth threshold
+	RateAlert  bool     // Alert state for rate threshold
+	Last       [3]Depth // The last 3 depth values from 2 (very last) back up to 0
 }
 
 func (t DepthMetric) Derivative() float64 {
@@ -215,9 +215,9 @@ func (tm DepthRegistry) AggDepths(pm ProducerMap) {
 func (a *AppConfig) CheckTopics() {
 	// loop though all topics and channels, check against config
 	var alerts, cleared []string
-	for _, v := range a.depthRegistry {
+	for k, v := range a.depthRegistry {
 		rate := v.Derivative() / a.PollPeriod.Seconds()
-		depth := v.Last[D3].Value
+		depth := v.Depth()
 
 		// Find matching topic config in slice, or use default
 		config := a.DefaultLimit // Start with default
@@ -228,33 +228,39 @@ func (a *AppConfig) CheckTopics() {
 			}
 		}
 
-		if v.Alerted {
-			if rate < config.Rate {
-				v.Alerted = false
-				cleared = append(cleared, fmt.Sprintf("[%s/%s] rate exceeded: %.2f > %.2f", v.Topic, v.Channel, rate, config.Rate))
-			}
-			if depth < config.Depth {
-				v.Alerted = false
-				cleared = append(cleared, fmt.Sprintf("[%s/%s] depth exceeded: %d > %d", v.Topic, v.Channel, depth, config.Depth))
-			}
-			log.Printf(color.GreenString("[%s/%s] depth: %d rate:%.2f/sec"), v.Topic, v.Channel, depth, rate)
-			continue
-		}
-		if config.Rate > 0 && rate > config.Rate {
-			v.Alerted = true
+		// Determine current alert states
+		currentDepthAlert := config.Depth > 0 && depth > config.Depth
+		currentRateAlert := config.Rate > 0 && rate > config.Rate
+
+		// Check for rate alert changes
+		if v.RateAlert && !currentRateAlert {
+			// Rate alert cleared
+			cleared = append(cleared, fmt.Sprintf("[%s/%s] rate cleared: %.2f <= %.2f", v.Topic, v.Channel, rate, config.Rate))
+		} else if !v.RateAlert && currentRateAlert {
+			// New rate alert
 			alerts = append(alerts, fmt.Sprintf("[%s/%s] rate exceeded: %.2f > %.2f", v.Topic, v.Channel, rate, config.Rate))
 		}
-		if config.Depth > 0 && depth > config.Depth {
-			v.Alerted = true
+
+		// Check for depth alert changes
+		if v.DepthAlert && !currentDepthAlert {
+			// Depth alert cleared
+			cleared = append(cleared, fmt.Sprintf("[%s/%s] depth cleared: %d <= %d", v.Topic, v.Channel, depth, config.Depth))
+		} else if !v.DepthAlert && currentDepthAlert {
+			// New depth alert
 			alerts = append(alerts, fmt.Sprintf("[%s/%s] depth exceeded: %d > %d", v.Topic, v.Channel, depth, config.Depth))
 		}
-		if v.Alerted {
-			log.Printf(color.RedString("[%s/%s] depth: %d rate:%.2f/sec"), v.Topic, v.Channel, depth, rate)
-		} else if depth > 0 || rate > 0 {
-			log.Printf("[%s/%s] depth: %d rate:%.2f/sec", v.Topic, v.Channel, depth, rate)
-		}
 
+		// Update alert states
+		v.DepthAlert = currentDepthAlert
+		v.RateAlert = currentRateAlert
+		a.depthRegistry[k] = v // Update the registry with new alert states
+
+		// Log current status
+		if v.DepthAlert || v.RateAlert {
+			log.Printf("[%s/%s] depth: %d rate:%.2f/sec (ALERTED)", v.Topic, v.Channel, depth, rate)
+		}
 	}
+
 	slices.Sort(alerts)
 	slices.Sort(cleared)
 	if len(alerts) > 0 {
@@ -274,7 +280,6 @@ func getNodes(host string) (producers []Producer, err error) {
 		return nil, err
 	}
 
-	json := jsoniter.ConfigFastest
 	var lookupNodes LookupNodes
 	err = json.Unmarshal(body, &lookupNodes)
 	if err != nil {
@@ -314,7 +319,6 @@ func getStats(host string) (stats NsqdStats, err error) {
 		return stats, err
 	}
 
-	json := jsoniter.ConfigFastest
 	err = json.Unmarshal(body, &stats)
 	if err != nil {
 		err = fmt.Errorf("json unmarshal error: %v", err)
@@ -340,8 +344,49 @@ func makeRequest(request string) ([]byte, error) {
 	var body []byte
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("err reading lookupd resp: %v", err))
+		return nil, fmt.Errorf("err reading lookupd resp: %w", err)
 	}
 
 	return body, err
+}
+
+// InfoResponse represents the JSON response for the /info endpoint
+type InfoResponse struct {
+	Service    ServiceInfo           `json:"service"`
+	NSQCluster NSQClusterInfo        `json:"nsq_cluster"`
+	Topics     map[string]TopicGroup `json:"topics"`
+	Alerts     AlertInfo             `json:"alerts"`
+}
+
+type ServiceInfo struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Uptime    string `json:"uptime"`
+	StartedAt string `json:"started_at"`
+}
+
+type NSQClusterInfo struct {
+	LookupdHost    string   `json:"lookupd_host"`
+	ConnectedNodes []string `json:"connected_nodes"`
+	PollPeriod     string   `json:"poll_period"`
+}
+
+type ConfigInfo struct {
+	DefaultLimit Limit   `json:"default_limit"`
+	TopicLimits  []Limit `json:"topic_limits"`
+}
+
+type TopicGroup struct {
+	Status     string        `json:"status"` // "ok" or "alerted"
+	DepthLimit int           `json:"depth_limit"`
+	RateLimit  float64       `json:"rate_limit"`
+	Channels   []ChannelInfo `json:"channels"`
+}
+
+type ChannelInfo struct {
+	Channel     string    `json:"channel"`
+	Depth       int       `json:"depth"`
+	Rate        float64   `json:"rate"`
+	LastUpdated time.Time `json:"last_updated"`
+	Status      string    `json:"status"` // "ok", "depth_exceeded", "rate_exceeded", or "both_exceeded"
 }
