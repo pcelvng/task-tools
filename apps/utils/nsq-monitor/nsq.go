@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -98,58 +97,36 @@ type Topic struct {
 }
 
 // removes any topics that have not been updated
-func removeTopics(topics DepthRegistry) string {
-	// remove any topics that no longer exist
-	for k, v := range topics {
-		if v.Last[D3].TimeStamp.IsZero() {
-			delete(topics, k)
-			return fmt.Sprintf("topic/channel not updated, removing: [%s] - {%s/%s} %s",
-				k, v.Topic, v.Channel, v.Address)
-		}
-	}
-	return ""
-}
 
 // creates a map of all current topics and the depth values
 // for the current Producer
-func (p Producer) getTopics() (topics DepthRegistry) {
+func (p Producer) getTopics() (channels map[string]*ChannelMetric) {
 	// set all new topic check values from request
-	topics = make(DepthRegistry)
+	channels = make(map[string]*ChannelMetric)
 	for _, t := range p.stats.Topics {
 		// there are no channels for the given topic
 		if len(t.Channels) == 0 {
-			tc := DepthMetric{
+			tc := &ChannelMetric{
 				Topic:   t.TopicName,
 				Channel: "(none)",
 				Address: p.BroadcastAddress,
 			}
 
 			tc.Last[D3] = Depth{Value: t.Depth, TimeStamp: time.Now()}
-			topics[tc.Topic+"/"+tc.Channel] = tc
+			channels[tc.Topic+"/"+tc.Channel] = tc
 		}
 
 		// loop though all channels
 		for _, c := range t.Channels {
-			tc := DepthMetric{
+			tc := &ChannelMetric{
 				Topic:   t.TopicName,
 				Channel: c.ChannelName,
 				Address: p.BroadcastAddress,
 			}
 
 			tc.Last[D3] = Depth{Value: c.Depth, TimeStamp: time.Now()}
-			topics[tc.Topic+"/"+tc.Channel] = tc
+			channels[tc.Topic+"/"+tc.Channel] = tc
 		}
 	}
-	return topics
-}
-
-func rotateDepth(topics DepthRegistry) {
-	// rotate the last five Depth Values
-	for k, t := range topics {
-		t.Last[D1] = t.Last[D2]
-		t.Last[D2] = t.Last[D3]
-		t.Last[D3] = Depth{}
-
-		topics[k] = t
-	}
+	return channels
 }

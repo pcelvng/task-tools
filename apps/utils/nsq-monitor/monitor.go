@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/pcelvng/task-tools/slack"
 )
 
@@ -30,20 +32,30 @@ const (
 	D3
 )
 
-type DepthRegistry map[string]DepthMetric
-type ProducerMap map[string]DepthRegistry
+type TopicRegistry map[string]*TopicData
+type ProducerMap map[string]map[string]*ChannelMetric
 
-type DepthMetric struct {
-	Topic   string // The topic value
-	Channel string // The channel value
-	//	SendNotify bool     // Used to keep sending notifications, even if config criteria is not met
-	Address    string   // the broadcast address
-	DepthAlert bool     // Alert state for depth threshold
-	RateAlert  bool     // Alert state for rate threshold
-	Last       [3]Depth // The last 3 depth values from 2 (very last) back up to 0
+type TopicData struct {
+	Status     string                    `json:"status"` // "ok" or "alerted"
+	DepthLimit int                       `json:"depth_limit"`
+	RateLimit  float64                   `json:"rate_limit"`
+	Channels   map[string]*ChannelMetric `json:"channels"`
 }
 
-func (t DepthMetric) Derivative() float64 {
+type ChannelMetric struct {
+	Topic       string    `json:"topic"`
+	Channel     string    `json:"channel"`
+	Address     string    // the broadcast address
+	Depth       int       `json:"depth"`
+	Rate        float64   `json:"rate"`
+	LastUpdated time.Time `json:"last_updated"`
+	Status      string    `json:"status"` // "ok", "depth_exceeded", "rate_exceeded", or "both_exceeded"
+	DepthAlert  bool      // Alert state for depth threshold
+	RateAlert   bool      // Alert state for rate threshold
+	Last        [3]Depth  // The last 3 depth values from 2 (very last) back up to 0
+}
+
+func (t ChannelMetric) Derivative() float64 {
 	v1, v2, v3 := t.Last[D1], t.Last[D2], t.Last[D3]
 
 	if v1.TimeStamp.IsZero() || v2.TimeStamp.IsZero() || v3.TimeStamp.IsZero() {
@@ -71,8 +83,8 @@ func (t DepthMetric) Derivative() float64 {
 	return num / denom
 }
 
-// Depth return the last value
-func (t DepthMetric) Depth() int {
+// GetDepth return the last value
+func (t ChannelMetric) GetDepth() int {
 	return t.Last[D3].Value
 }
 
@@ -86,7 +98,7 @@ func (app *AppConfig) Monitor(ctx context.Context) {
 	app.Slack.Notify("starting nsq monitor with poll period of"+app.PollPeriod.String(), slack.OK)
 
 	app.nsqdNodes = make(map[string]struct{})
-	app.depthRegistry = make(DepthRegistry)
+	app.topicRegistry = make(TopicRegistry)
 
 	fmt.Println("configs loaded:")
 	fmt.Printf("\tdefault - %+v\n", app.DefaultLimit)
@@ -173,91 +185,155 @@ func (app *AppConfig) Run() error {
 		}
 	}
 
-	app.depthRegistry.AggDepths(producerMap)
+	app.aggregateAndUpdateTopics(producerMap)
 	app.CheckTopics()
-	if msg := removeTopics(app.depthRegistry); len(msg) > 0 {
+	if msg := app.removeInactiveTopics(); len(msg) > 0 {
 		app.Notify(msg, Warning)
 	}
 	return nil
 }
 
-// AggDepths aggregates NSQ topic depth values across all producers in the cluster.
-// It rotates historical depth data and sums current depth values from each producer
-// to calculate the total queue depth for each topic/channel combination.
-func (tm DepthRegistry) AggDepths(pm ProducerMap) {
-	// Rotate historical depth values to make room for new measurements
-	// This shifts D1 ← D2 ← D3 ← (new value), preserving trend data for derivative calculations
-	rotateDepth(tm)
+// aggregateAndUpdateTopics processes producer data and updates the topic registry
+// with current metrics and configurations
+func (app *AppConfig) aggregateAndUpdateTopics(pm ProducerMap) {
+	// Rotate historical depth values for all existing channels
+	app.rotateDepthValues()
 
 	// Iterate through each NSQ producer in the cluster
-	for _, pv := range pm {
+	for _, producerChannels := range pm {
 		// Process each topic/channel combination from the current producer
-		for tk, tc := range pv {
-			// Check if this topic/channel already exists in our aggregated registry
-			atv, ok := tm[tk]
-			// If exists, add this producer's depth to the running total
-			if ok {
-				atv.Last[D3].Value += tc.Last[D3].Value
-				atv.Last[D3].TimeStamp = time.Now()
-				// Update the aggregated value
-				tm[tk] = atv
+		for channelKey, newChannel := range producerChannels {
+			// Get or create topic in registry
+			topicData, exists := app.topicRegistry[newChannel.Topic]
+			if !exists {
+				// Find matching topic config or use default
+				config := app.DefaultLimit
+				for _, topicLimit := range app.Topics {
+					if topicLimit.Name == newChannel.Topic {
+						config = topicLimit
+						break
+					}
+				}
+
+				topicData = &TopicData{
+					Status:     "ok",
+					DepthLimit: config.Depth,
+					RateLimit:  config.Rate,
+					Channels:   make(map[string]*ChannelMetric),
+				}
+				app.topicRegistry[newChannel.Topic] = topicData
+			}
+
+			// Get or create channel in topic
+			existingChannel, channelExists := topicData.Channels[channelKey]
+			if channelExists {
+				// Add this producer's depth to the running total
+				existingChannel.Last[D3].Value += newChannel.Last[D3].Value
+				existingChannel.Last[D3].TimeStamp = time.Now()
 			} else {
-				// New topic/channel - initialize with this producer's values
-				tm[tk] = pv[tk]
+				// New channel - initialize with this producer's values
+				topicData.Channels[channelKey] = newChannel
 			}
 		}
 	}
 
+	// Update derived values (depth, rate, status) for all channels
+	app.updateChannelMetrics()
+}
+
+// rotateDepthValues rotates historical depth data for all channels
+func (app *AppConfig) rotateDepthValues() {
+	for _, topicData := range app.topicRegistry {
+		for _, channel := range topicData.Channels {
+			channel.Last[D1] = channel.Last[D2]
+			channel.Last[D2] = channel.Last[D3]
+			channel.Last[D3] = Depth{Value: 0, TimeStamp: time.Now()}
+		}
+	}
+}
+
+// updateChannelMetrics calculates current depth, rate, and status for all channels
+func (app *AppConfig) updateChannelMetrics() {
+	for _, topicData := range app.topicRegistry {
+		for _, channel := range topicData.Channels {
+			// Update depth and rate
+			channel.Depth = channel.GetDepth()
+			channel.Rate = channel.Derivative() / app.PollPeriod.Seconds()
+			channel.LastUpdated = channel.Last[D3].TimeStamp
+
+			// Update status based on current alert states
+			if channel.DepthAlert && channel.RateAlert {
+				channel.Status = "both_exceeded"
+			} else if channel.DepthAlert {
+				channel.Status = "depth_exceeded"
+			} else if channel.RateAlert {
+				channel.Status = "rate_exceeded"
+			} else {
+				channel.Status = "ok"
+			}
+		}
+	}
 }
 
 // CheckTopics goes through each topic and alerts if the depth is above the threshold
 // or if the derivative (rate of change) is above the threshold.
 func (a *AppConfig) CheckTopics() {
-	// loop though all topics and channels, check against config
 	var alerts, cleared []string
-	for k, v := range a.depthRegistry {
-		rate := v.Derivative() / a.PollPeriod.Seconds()
-		depth := v.Depth()
 
-		// Find matching topic config in slice, or use default
-		config := a.DefaultLimit // Start with default
-		for _, topicLimit := range a.Topics {
-			if topicLimit.Name == v.Topic {
-				config = topicLimit
-				break
+	// Loop through all topics and their channels
+	for _, topicData := range a.topicRegistry {
+		topicHasAlert := false
+
+		for _, channel := range topicData.Channels {
+			// Determine current alert states using topic's configured limits
+			currentDepthAlert := topicData.DepthLimit > 0 && channel.Depth > topicData.DepthLimit
+			currentRateAlert := topicData.RateLimit > 0 && channel.Rate > topicData.RateLimit
+
+			// Check for rate alert changes
+			if channel.RateAlert && !currentRateAlert {
+				// Rate alert cleared
+				cleared = append(cleared, fmt.Sprintf("[%s/%s] rate cleared: %.2f <= %.2f", channel.Topic, channel.Channel, channel.Rate, topicData.RateLimit))
+			} else if !channel.RateAlert && currentRateAlert {
+				// New rate alert
+				alerts = append(alerts, fmt.Sprintf("[%s/%s] rate exceeded: %.2f > %.2f", channel.Topic, channel.Channel, channel.Rate, topicData.RateLimit))
+			}
+
+			// Check for depth alert changes
+			if channel.DepthAlert && !currentDepthAlert {
+				// Depth alert cleared
+				cleared = append(cleared, fmt.Sprintf("[%s/%s] depth cleared: %d <= %d", channel.Topic, channel.Channel, channel.Depth, topicData.DepthLimit))
+			} else if !channel.DepthAlert && currentDepthAlert {
+				// New depth alert
+				alerts = append(alerts, fmt.Sprintf("[%s/%s] depth exceeded: %d > %d", channel.Topic, channel.Channel, channel.Depth, topicData.DepthLimit))
+			}
+
+			// Update alert states
+			channel.DepthAlert = currentDepthAlert
+			channel.RateAlert = currentRateAlert
+
+			// Update channel status
+			if channel.DepthAlert && channel.RateAlert {
+				channel.Status = "both_exceeded"
+			} else if channel.DepthAlert {
+				channel.Status = "depth_exceeded"
+			} else if channel.RateAlert {
+				channel.Status = "rate_exceeded"
+			} else {
+				channel.Status = "ok"
+			}
+
+			// Track if this topic has any alerts
+			if channel.DepthAlert || channel.RateAlert {
+				topicHasAlert = true
+				log.Printf("[%s/%s] depth: %d rate:%.2f/sec (ALERTED)", channel.Topic, channel.Channel, channel.Depth, channel.Rate)
 			}
 		}
 
-		// Determine current alert states
-		currentDepthAlert := config.Depth > 0 && depth > config.Depth
-		currentRateAlert := config.Rate > 0 && rate > config.Rate
-
-		// Check for rate alert changes
-		if v.RateAlert && !currentRateAlert {
-			// Rate alert cleared
-			cleared = append(cleared, fmt.Sprintf("[%s/%s] rate cleared: %.2f <= %.2f", v.Topic, v.Channel, rate, config.Rate))
-		} else if !v.RateAlert && currentRateAlert {
-			// New rate alert
-			alerts = append(alerts, fmt.Sprintf("[%s/%s] rate exceeded: %.2f > %.2f", v.Topic, v.Channel, rate, config.Rate))
-		}
-
-		// Check for depth alert changes
-		if v.DepthAlert && !currentDepthAlert {
-			// Depth alert cleared
-			cleared = append(cleared, fmt.Sprintf("[%s/%s] depth cleared: %d <= %d", v.Topic, v.Channel, depth, config.Depth))
-		} else if !v.DepthAlert && currentDepthAlert {
-			// New depth alert
-			alerts = append(alerts, fmt.Sprintf("[%s/%s] depth exceeded: %d > %d", v.Topic, v.Channel, depth, config.Depth))
-		}
-
-		// Update alert states
-		v.DepthAlert = currentDepthAlert
-		v.RateAlert = currentRateAlert
-		a.depthRegistry[k] = v // Update the registry with new alert states
-
-		// Log current status
-		if v.DepthAlert || v.RateAlert {
-			log.Printf("[%s/%s] depth: %d rate:%.2f/sec (ALERTED)", v.Topic, v.Channel, depth, rate)
+		// Update topic-level status
+		if topicHasAlert {
+			topicData.Status = "alerted"
+		} else {
+			topicData.Status = "ok"
 		}
 	}
 
@@ -269,6 +345,24 @@ func (a *AppConfig) CheckTopics() {
 	if len(cleared) > 0 {
 		a.Notify(strings.Join(cleared, "\n"), slack.OK)
 	}
+}
+
+// removeInactiveTopics removes topics/channels that haven't been updated
+func (a *AppConfig) removeInactiveTopics() string {
+	for topicName, topicData := range a.topicRegistry {
+		for channelKey, channel := range topicData.Channels {
+			if channel.Last[D3].TimeStamp.IsZero() {
+				delete(topicData.Channels, channelKey)
+				// If topic has no channels left, remove the topic
+				if len(topicData.Channels) == 0 {
+					delete(a.topicRegistry, topicName)
+				}
+				return fmt.Sprintf("topic/channel not updated, removing: [%s] - {%s/%s} %s",
+					channelKey, channel.Topic, channel.Channel, channel.Address)
+			}
+		}
+	}
+	return ""
 }
 
 // getNodes will Unmarshal the lookup nodes from the request body
@@ -389,4 +483,103 @@ type ChannelInfo struct {
 	Rate        float64   `json:"rate"`
 	LastUpdated time.Time `json:"last_updated"`
 	Status      string    `json:"status"` // "ok", "depth_exceeded", "rate_exceeded", or "both_exceeded"
+}
+
+type AlertInfo struct {
+	ActiveCount   int        `json:"active_count"`
+	LastAlertTime *time.Time `json:"last_alert_time"`
+}
+
+// SetupRouter creates and configures the chi router
+func (a *AppConfig) SetupRouter() *chi.Mux {
+	r := chi.NewRouter()
+
+	// Add some basic middleware
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.RealIP)
+
+	// Add the /info endpoint
+	r.Get("/info", a.infoHandler)
+
+	return r
+}
+
+// infoHandler handles the /info endpoint
+func (a *AppConfig) infoHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Calculate uptime
+	uptime := time.Since(a.startTime)
+
+	// Get connected nodes
+	var connectedNodes []string
+	for node := range a.nsqdNodes {
+		connectedNodes = append(connectedNodes, node)
+	}
+	slices.Sort(connectedNodes)
+
+	// Build grouped topics info directly from the unified structure
+	topicGroups := make(map[string]TopicGroup)
+	var activeAlerts int
+	var lastAlert *time.Time
+
+	for topicName, topicData := range a.topicRegistry {
+		var channels []ChannelInfo
+
+		for _, channel := range topicData.Channels {
+			channels = append(channels, ChannelInfo{
+				Channel:     channel.Channel,
+				Depth:       channel.Depth,
+				Rate:        channel.Rate,
+				LastUpdated: channel.LastUpdated,
+				Status:      channel.Status,
+			})
+
+			// Count active alerts
+			if channel.DepthAlert || channel.RateAlert {
+				activeAlerts++
+				if lastAlert == nil || channel.LastUpdated.After(*lastAlert) {
+					lastAlert = &channel.LastUpdated
+				}
+			}
+		}
+
+		// Sort channels for consistent output
+		slices.SortFunc(channels, func(a, b ChannelInfo) int {
+			return strings.Compare(a.Channel, b.Channel)
+		})
+
+		topicGroups[topicName] = TopicGroup{
+			Status:     topicData.Status,
+			DepthLimit: topicData.DepthLimit,
+			RateLimit:  topicData.RateLimit,
+			Channels:   channels,
+		}
+	}
+
+	response := InfoResponse{
+		Service: ServiceInfo{
+			Name:      "nsq-monitor",
+			Version:   "1.0.0", // Could be imported from version package
+			Uptime:    uptime.String(),
+			StartedAt: a.startTime.Format(time.RFC3339),
+		},
+		NSQCluster: NSQClusterInfo{
+			LookupdHost:    a.LookupdHost,
+			ConnectedNodes: connectedNodes,
+			PollPeriod:     a.PollPeriod.String(),
+		},
+		Topics: topicGroups,
+		Alerts: AlertInfo{
+			ActiveCount:   activeAlerts,
+			LastAlertTime: lastAlert,
+		},
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		log.Printf("Error encoding /info response: %v", err)
+		return
+	}
 }
