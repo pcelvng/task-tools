@@ -20,12 +20,13 @@ const description = `monitor nsq topic depth, and notify on build up of messages
 type AppConfig struct {
 	slack.Slack `toml:"slack" comment:"slack notification options"`
 
-	//Bus          string                 `toml:"bus" comment:"the bus type ie:nsq, kafka"`
-	LookupdHost  string        `toml:"lookupd_hosts" comment:"host names of nsq lookupd servers"`
-	DefaultLimit Limit         `toml:"default_limit" comment:"default topic limit, used when no topic is specified in the config"`
-	Topics       []Limit       `toml:"topics" comment:"topics limits, this overrides the default limit"`
-	PollPeriod   time.Duration `toml:"poll_period" comment:"the time between refresh on the topic list default is '5m'"`
-	Port         int           `toml:"port" comment:"HTTP server port (0 = disabled)"`
+	//Bus              string                 `toml:"bus" comment:"the bus type ie:nsq, kafka"`
+	LookupdHost       string        `toml:"lookupd_hosts" comment:"host names of nsq lookupd servers"`
+	DefaultLimit      Limit         `toml:"default_limit" comment:"default topic limit, used when no topic is specified in the config"`
+	Topics            []Limit       `toml:"topics" comment:"topics limits, this overrides the default limit"`
+	PollPeriod        time.Duration `toml:"poll_period" comment:"the time between refresh on the topic list default is '5m'"`
+	Port              int           `toml:"port" comment:"HTTP server port (0 = disabled)"`
+	RepeatAlertPeriod time.Duration `toml:"repeat_alert_period" comment:"how often to repeat alerts for ongoing issues (default: 12h, minimum: 2h)"`
 
 	topicRegistry TopicRegistry       // a map of all topics
 	nsqdNodes     map[string]struct{} // a map of nodes (producers)
@@ -40,10 +41,11 @@ type Limit struct {
 
 func main() {
 	app := &AppConfig{
-		LookupdHost:  "127.0.0.1:4161",
-		PollPeriod:   5 * time.Minute,
-		DefaultLimit: Limit{Depth: 500, Rate: 3, Name: "all"},
-		Topics:       []Limit{},
+		LookupdHost:       "127.0.0.1:4161",
+		PollPeriod:        5 * time.Minute,
+		DefaultLimit:      Limit{Depth: 500, Rate: 3, Name: "all"},
+		Topics:            []Limit{},
+		RepeatAlertPeriod: 12 * time.Hour,
 		Slack: slack.Slack{
 			Prefix: "nsq-monitor",
 		},
@@ -109,5 +111,9 @@ func main() {
 }
 
 func (a *AppConfig) Validate() (err error) {
+	// Validate repeat alert period minimum
+	if a.RepeatAlertPeriod < 2*time.Hour {
+		return fmt.Errorf("repeat_alert_period must be at least 2h, got %s", a.RepeatAlertPeriod)
+	}
 	return nil
 }

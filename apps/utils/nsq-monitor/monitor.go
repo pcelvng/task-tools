@@ -43,16 +43,18 @@ type TopicData struct {
 }
 
 type ChannelMetric struct {
-	Topic       string    `json:"topic"`
-	Channel     string    `json:"channel"`
-	Address     string    // the broadcast address
-	Depth       int       `json:"depth"`
-	Rate        float64   `json:"rate"`
-	LastUpdated time.Time `json:"last_updated"`
-	Status      string    `json:"status"` // "ok", "depth_exceeded", "rate_exceeded", or "both_exceeded"
-	DepthAlert  bool      // Alert state for depth threshold
-	RateAlert   bool      // Alert state for rate threshold
-	Last        [3]Depth  // The last 3 depth values from 2 (very last) back up to 0
+	Topic                string    `json:"topic"`
+	Channel              string    `json:"channel"`
+	Address              string    // the broadcast address
+	Depth                int       `json:"depth"`
+	Rate                 float64   `json:"rate"`
+	LastUpdated          time.Time `json:"last_updated"`
+	Status               string    `json:"status"` // "ok", "depth_exceeded", "rate_exceeded", or "both_exceeded"
+	DepthAlert           bool      // Alert state for depth threshold
+	RateAlert            bool      // Alert state for rate threshold
+	FirstAlertTime       time.Time // When the first alert was triggered
+	LastNotificationTime time.Time // When we last sent a notification for this alert
+	Last                 [3]Depth  // The last 3 depth values from 2 (very last) back up to 0
 }
 
 func (t ChannelMetric) Derivative() float64 {
@@ -104,6 +106,11 @@ func (app *AppConfig) Monitor(ctx context.Context) {
 	fmt.Printf("\tdefault - %+v\n", app.DefaultLimit)
 	for _, c := range app.Topics {
 		fmt.Printf("\t%s - %+v\n", c.Name, c)
+	}
+	if app.RepeatAlertPeriod > 0 {
+		fmt.Printf("\trepeat alerts: every %s\n", app.RepeatAlertPeriod)
+	} else {
+		fmt.Println("\trepeat alerts: disabled (period = 0)")
 	}
 	ticker := time.NewTicker(app.PollPeriod)
 	defer ticker.Stop()
@@ -187,6 +194,7 @@ func (app *AppConfig) Run() error {
 
 	app.aggregateAndUpdateTopics(producerMap)
 	app.CheckTopics()
+	app.CheckRepeatAlerts()
 	if msg := app.removeInactiveTopics(); len(msg) > 0 {
 		app.Notify(msg, Warning)
 	}
@@ -289,27 +297,51 @@ func (a *AppConfig) CheckTopics() {
 			currentDepthAlert := topicData.DepthLimit > 0 && channel.Depth > topicData.DepthLimit
 			currentRateAlert := topicData.RateLimit > 0 && channel.Rate > topicData.RateLimit
 
+			now := time.Now()
+			alertChanged := false
+
 			// Check for rate alert changes
 			if channel.RateAlert && !currentRateAlert {
 				// Rate alert cleared
 				cleared = append(cleared, fmt.Sprintf("[%s/%s] rate cleared: %.2f <= %.2f", channel.Topic, channel.Channel, channel.Rate, topicData.RateLimit))
+				alertChanged = true
 			} else if !channel.RateAlert && currentRateAlert {
 				// New rate alert
 				alerts = append(alerts, fmt.Sprintf("[%s/%s] rate exceeded: %.2f > %.2f", channel.Topic, channel.Channel, channel.Rate, topicData.RateLimit))
+				alertChanged = true
 			}
 
 			// Check for depth alert changes
 			if channel.DepthAlert && !currentDepthAlert {
 				// Depth alert cleared
 				cleared = append(cleared, fmt.Sprintf("[%s/%s] depth cleared: %d <= %d", channel.Topic, channel.Channel, channel.Depth, topicData.DepthLimit))
+				alertChanged = true
 			} else if !channel.DepthAlert && currentDepthAlert {
 				// New depth alert
 				alerts = append(alerts, fmt.Sprintf("[%s/%s] depth exceeded: %d > %d", channel.Topic, channel.Channel, channel.Depth, topicData.DepthLimit))
+				alertChanged = true
 			}
 
-			// Update alert states
+			// Update alert states and timestamps
+			wasAlerted := channel.DepthAlert || channel.RateAlert
+			isAlerted := currentDepthAlert || currentRateAlert
+
 			channel.DepthAlert = currentDepthAlert
 			channel.RateAlert = currentRateAlert
+
+			// Update timestamps for alert tracking
+			if !wasAlerted && isAlerted {
+				// First time alert triggered
+				channel.FirstAlertTime = now
+				channel.LastNotificationTime = now
+			} else if wasAlerted && !isAlerted {
+				// Alert cleared, reset timestamps
+				channel.FirstAlertTime = time.Time{}
+				channel.LastNotificationTime = time.Time{}
+			} else if alertChanged && isAlerted {
+				// Alert type changed but still alerted, update notification time
+				channel.LastNotificationTime = now
+			}
 
 			// Update channel status
 			if channel.DepthAlert && channel.RateAlert {
@@ -340,10 +372,86 @@ func (a *AppConfig) CheckTopics() {
 	slices.Sort(alerts)
 	slices.Sort(cleared)
 	if len(alerts) > 0 {
-		a.Notify(strings.Join(alerts, "\n"), slack.Critical)
+		err := a.Notify(strings.Join(alerts, "\n"), slack.Critical)
+		log.Printf("alerts, %s", err)
 	}
 	if len(cleared) > 0 {
-		a.Notify(strings.Join(cleared, "\n"), slack.OK)
+		err := a.Notify(strings.Join(cleared, "\n"), slack.OK)
+		log.Printf("cleared %s", err)
+	}
+}
+
+// CheckRepeatAlerts checks for ongoing alerts that need to be re-notified
+func (a *AppConfig) CheckRepeatAlerts() {
+	if a.RepeatAlertPeriod <= 0 {
+		return
+	}
+
+	now := time.Now()
+	var repeatAlerts []string
+
+	for _, topicData := range a.topicRegistry {
+		for _, channel := range topicData.Channels {
+			// Check if channel is currently alerted and enough time has passed since last notification
+			if (channel.DepthAlert || channel.RateAlert) &&
+				!channel.FirstAlertTime.IsZero() &&
+				!channel.LastNotificationTime.IsZero() &&
+				now.Sub(channel.LastNotificationTime) >= a.RepeatAlertPeriod {
+
+				// Calculate how long the alert has been active
+				duration := now.Sub(channel.FirstAlertTime)
+				durationStr := formatDuration(duration)
+
+				// Build repeat alert message
+				var alertTypes []string
+				if channel.DepthAlert {
+					alertTypes = append(alertTypes, fmt.Sprintf("depth: %d > %d", channel.Depth, topicData.DepthLimit))
+				}
+				if channel.RateAlert {
+					alertTypes = append(alertTypes, fmt.Sprintf("rate: %.2f > %.2f", channel.Rate, topicData.RateLimit))
+				}
+
+				alertMsg := fmt.Sprintf("[%s/%s] ONGOING ALERT (%s): %s",
+					channel.Topic, channel.Channel, durationStr, strings.Join(alertTypes, ", "))
+
+				repeatAlerts = append(repeatAlerts, alertMsg)
+
+				// Update last notification time
+				channel.LastNotificationTime = now
+
+				// Log the repeat alert
+				log.Printf("REPEAT ALERT: %s", alertMsg)
+			}
+		}
+	}
+
+	// Send consolidated repeat alert notification
+	if len(repeatAlerts) > 0 {
+		slices.Sort(repeatAlerts)
+		message := fmt.Sprintf("ONGOING ALERTS (%d active):\n%s",
+			len(repeatAlerts), strings.Join(repeatAlerts, "\n"))
+		a.Notify(message, slack.Warning)
+	}
+}
+
+// formatDuration formats a duration into a human-readable string
+func formatDuration(d time.Duration) string {
+	if d < time.Hour {
+		return fmt.Sprintf("%.0fm", d.Minutes())
+	} else if d < 24*time.Hour {
+		hours := int(d.Hours())
+		minutes := int(d.Minutes()) % 60
+		if minutes == 0 {
+			return fmt.Sprintf("%dh", hours)
+		}
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	} else {
+		days := int(d.Hours()) / 24
+		hours := int(d.Hours()) % 24
+		if hours == 0 {
+			return fmt.Sprintf("%dd", days)
+		}
+		return fmt.Sprintf("%dd%dh", days, hours)
 	}
 }
 
