@@ -2,7 +2,7 @@ PREFIX=/usr/local
 DESTDIR=
 GOFLAGS=-ldflags "-s -w -X github.com/pcelvng/task-tools.Version=${version} -X github.com/pcelvng/task-tools.BuildTimeUTC=`date -u '+%Y-%m-%d_%I:%M:%S%p'`"
 BINDIR=${PREFIX}/bin
-BLDDIR = ../build
+BLDDIR = build
 
 ifeq ("${version}", "")
   version=$(shell git describe --tags --always)
@@ -13,17 +13,20 @@ ifeq (${GOOS},windows)
     EXT=.exe
 endif
 
-APPS = filewatcher sort2file deduper recap filecopy logger json2csv csv2json sql-load sql-readx bigquery transform db-check
+APPS = sort2file deduper filecopy json2csv csv2json sql-load sql-readx bigquery transform db-check 
+TOOLS = filewatcher logger nsq-monitor recap
 
-all: $(APPS) flowlord
+all: 
+	rm -rf ${BLDDIR}
+	go build ${GOFLAGS} -o ${BLDDIR}/ $(addprefix ./apps/utils/, $(TOOLS)) $(addprefix ./apps/workers/, $(APPS)) ./apps/flowlord 
 
 $(APPS): %: $(BLDDIR)/%
+$(TOOLS): %: $(BLDDIR)/%
 
 $(BLDDIR)/%: clean
 	@mkdir -p $(dir $@)
-	cd apps; \
-	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./*/$* ; \
-	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./*/$*
+	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./apps/*/$* ; \
+	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./apps/*/$*
 
 flowlord:
 	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o build/linux/flowlord ./apps/flowlord/ ; \
