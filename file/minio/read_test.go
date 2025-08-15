@@ -20,9 +20,9 @@ func ExampleNewReader() {
 		return
 	}
 
-	fmt.Println(err)          // output: <nil>
-	fmt.Println(r.sts.Path()) // output: mcs://task-tools-test/read/test.txt
-	fmt.Println(r.sts.Size)   // output: 20
+	fmt.Println(err)          // <nil>
+	fmt.Println(r.sts.Path()) // mcs://task-tools-test/read/test.txt
+	fmt.Println(r.sts.Size)   // 20
 
 	// Output:
 	// <nil>
@@ -33,8 +33,8 @@ func ExampleNewReader() {
 func ExampleNewReaderErrBadObject() {
 	r, err := NewReader("", testOption)
 
-	fmt.Println(r)   // output: <nil>
-	fmt.Println(err) // output: Bucket name cannot be empty
+	fmt.Println(r)   // <nil>
+	fmt.Println(err) // Bucket name cannot be empty
 
 	// Output:
 	// <nil>
@@ -45,8 +45,8 @@ func ExampleNewReaderErrObjStat() {
 	pth := "mcs://does-not/exist.txt"
 	r, err := NewReader(pth, testOption)
 
-	fmt.Println(r)   // output: <nil>
-	fmt.Println(err) // output: The specified bucket does not exist.
+	fmt.Println(r)   // <nil>
+	fmt.Println(err) // The specified bucket does not exist.
 
 	// Output:
 	// <nil>
@@ -82,8 +82,8 @@ func ExampleNewReaderErrGzip() {
 	pth := fmt.Sprintf("mcs://%v/bad.gz", testBucket)
 	r, err := NewReader(pth, testOption)
 
-	fmt.Println(r)   // output: <nil>
-	fmt.Println(err) // output: gzip: invalid header
+	fmt.Println(r)   // <nil>
+	fmt.Println(err) // gzip: invalid header
 
 	// cleanup file
 	rmTestFile(pth)
@@ -103,11 +103,11 @@ func ExampleReader_Read() {
 	b := make([]byte, 20)
 	n, err := r.Read(b)
 
-	fmt.Println(n)             // output: 20
-	fmt.Println(err)           // output: <nil>
-	fmt.Print(string(b))       // output: test line, test line
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 0
+	fmt.Println(n)             // 20
+	fmt.Println(err)           // <nil>
+	fmt.Print(string(b))       // test line, test line
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 0
 
 	// Output:
 	// 20
@@ -128,11 +128,11 @@ func ExampleReader_ReadCompressed() {
 	b := make([]byte, 20)
 	n, err := r.Read(b)
 
-	fmt.Println(n)             // output: 20
-	fmt.Println(err)           // output: <nil>
-	fmt.Print(string(b))       // output: test line, test line
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 0
+	fmt.Println(n)             // 20
+	fmt.Println(err)           // <nil>
+	fmt.Print(string(b))       // test line, test line
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 0
 
 	// Output:
 	// 20
@@ -153,12 +153,12 @@ func ExampleReader_ReadLine() {
 	ln1, err1 := r.ReadLine()
 	ln2, err2 := r.ReadLine()
 
-	fmt.Println(string(ln1))   // output: test line
-	fmt.Println(err1)          // output: <nil>
-	fmt.Println(string(ln2))   // output: test line
-	fmt.Println(err2)          // output: <nil>
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 2
+	fmt.Println(string(ln1))   // test line
+	fmt.Println(err1)          // <nil>
+	fmt.Println(string(ln2))   // test line
+	fmt.Println(err2)          // <nil>
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 2
 
 	// Output:
 	// test line
@@ -180,14 +180,14 @@ func ExampleReader_ReadLineCompressed() {
 	ln2, err2 := r.ReadLine()
 	ln3, err3 := r.ReadLine() // EOF
 
-	fmt.Println(string(ln1))   // output: test line
-	fmt.Println(err1)          // output: <nil>
-	fmt.Println(string(ln2))   // output: test line
-	fmt.Println(err2)          // output: <nil>
-	fmt.Println(string(ln3))   // output:
-	fmt.Println(err3)          // output: EOF
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 2
+	fmt.Println(string(ln1))   // test line
+	fmt.Println(err1)          // <nil>
+	fmt.Println(string(ln2))   // test line
+	fmt.Println(err2)          // <nil>
+	fmt.Println(string(ln3))   //
+	fmt.Println(err3)          // EOF
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 2
 
 	// Output:
 	// test line
@@ -209,8 +209,8 @@ func ExampleReader_Stats() {
 
 	r.ReadLine()
 	sts := r.Stats()
-	fmt.Println(sts.ByteCnt) // output: 10
-	fmt.Println(sts.LineCnt) // output: 1
+	fmt.Println(sts.ByteCnt) // 10
+	fmt.Println(sts.LineCnt) // 1
 
 	// Output:
 	// 10
@@ -230,10 +230,10 @@ func ExampleReader_Close() {
 	err := r.Close()
 	sts := r.Stats()
 
-	fmt.Println(err)          // output: <nil>
-	fmt.Println(sts.ByteCnt)  // output: 20
-	fmt.Println(sts.LineCnt)  // output: 2
-	fmt.Println(sts.Checksum) // output: 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(err)          // <nil>
+	fmt.Println(sts.ByteCnt)  // 20
+	fmt.Println(sts.LineCnt)  // 2
+	fmt.Println(sts.Checksum) // 54f30d75cf7374c7e524a4530dbc93c2
 
 	// Output:
 	// <nil>
@@ -255,10 +255,10 @@ func ExampleReader_CloseCompressed() {
 	err := r.Close()
 	sts := r.Stats()
 
-	fmt.Println(err)          // output: <nil>
-	fmt.Println(sts.ByteCnt)  // output: 20
-	fmt.Println(sts.LineCnt)  // output: 2
-	fmt.Println(sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(err)          // <nil>
+	fmt.Println(sts.ByteCnt)  // 20
+	fmt.Println(sts.LineCnt)  // 2
+	fmt.Println(sts.Checksum) // 42e649f9834028184ec21940d13a300f
 
 	// Output:
 	// <nil>
@@ -281,11 +281,11 @@ func ExampleReader_CloseandClose() {
 	err2 := r.Close()
 	sts := r.Stats()
 
-	fmt.Println(err1)         // output: <nil>
-	fmt.Println(err2)         // output: <nil>
-	fmt.Println(sts.ByteCnt)  // output: 20
-	fmt.Println(sts.LineCnt)  // output: 2
-	fmt.Println(sts.Checksum) // output: 42e649f9834028184ec21940d13a300f
+	fmt.Println(err1)         // <nil>
+	fmt.Println(err2)         // <nil>
+	fmt.Println(sts.ByteCnt)  // 20
+	fmt.Println(sts.LineCnt)  // 2
+	fmt.Println(sts.Checksum) // 42e649f9834028184ec21940d13a300f
 
 	// Output:
 	// <nil>

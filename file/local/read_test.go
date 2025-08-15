@@ -24,15 +24,15 @@ func ExampleNewReader() {
 		return
 	}
 	sts := r.Stats()
-	fmt.Println(err)               // output: <nil>
-	fmt.Println(sts.Path != "")    // output: true
-	fmt.Println(sts.Size)          // output: 20
-	fmt.Println(sts.Created != "") // output: true
-	fmt.Println(r.f != nil)        // output: true
-	fmt.Println(r.rBuf != nil)     // output: true
-	fmt.Println(r.rGzip == nil)    // output: true
-	fmt.Println(r.rHshr != nil)    // output: true
-	fmt.Println(r.closed)          // output: false
+	fmt.Println(err)               // <nil>
+	fmt.Println(sts.Path != "")    // true
+	fmt.Println(sts.Size)          // 20
+	fmt.Println(sts.Created != "") // true
+	fmt.Println(r.f != nil)        // true
+	fmt.Println(r.rBuf != nil)     // true
+	fmt.Println(r.rGzip == nil)    // true
+	fmt.Println(r.rHshr != nil)    // true
+	fmt.Println(r.closed)          // false
 
 	// cleanup
 	os.Remove(pth)
@@ -50,7 +50,7 @@ func ExampleNewReader() {
 	// false
 }
 
-func ExampleNewReaderCompression() {
+func ExampleNewReader_compression() {
 	pth := "./test/test.gz"
 	createFile(pth)
 	r, err := NewReader(pth)
@@ -59,15 +59,15 @@ func ExampleNewReaderCompression() {
 	}
 	sts := r.Stats()
 
-	fmt.Println(err)               // output: <nil>
-	fmt.Println(sts.Path != "")    // output: true
-	fmt.Println(sts.Size)          // output: 20
-	fmt.Println(sts.Created != "") // output: true
-	fmt.Println(r.f != nil)        // output: true
-	fmt.Println(r.rBuf != nil)     // output: true
-	fmt.Println(r.rGzip != nil)    // output: true
-	fmt.Println(r.rHshr != nil)    // output: true
-	fmt.Println(r.closed)          // output: false
+	fmt.Println(err)               // <nil>
+	fmt.Println(sts.Path != "")    // true
+	fmt.Println(sts.Size)          // 20
+	fmt.Println(sts.Created != "") // true
+	fmt.Println(r.f != nil)        // true
+	fmt.Println(r.rBuf != nil)     // true
+	fmt.Println(r.rGzip != nil)    // true
+	fmt.Println(r.rHshr != nil)    // true
+	fmt.Println(r.closed)          // false
 
 	// cleanup
 	os.Remove(pth)
@@ -85,7 +85,7 @@ func ExampleNewReaderCompression() {
 	// false
 }
 
-func ExampleNewReaderErr() {
+func ExampleNewReader_err() {
 	pth := "./does/not/exist.txt"
 	r, err := NewReader(pth)
 	if err == nil {
@@ -93,15 +93,15 @@ func ExampleNewReaderErr() {
 	}
 
 	notExists := os.IsNotExist(err)
-	fmt.Println(r)         // output: <nil>
-	fmt.Println(notExists) // output: true
+	fmt.Println(r)         // <nil>
+	fmt.Println(notExists) // true
 
 	// Output:
 	// <nil>
 	// true
 }
 
-func ExampleNewReaderErrGzip() {
+func ExampleNewReader_errGzip() {
 	oldPth := "./test/test.txt"
 	pth := "./test/test.gz"
 	createFile(oldPth)
@@ -112,8 +112,8 @@ func ExampleNewReaderErrGzip() {
 		return
 	}
 
-	fmt.Println(r)   // output: <nil>
-	fmt.Println(err) // output: gzip: invalid header
+	fmt.Println(r)   // <nil>
+	fmt.Println(err) // gzip: invalid header
 
 	os.Remove(pth)
 	os.Remove("./test")
@@ -136,13 +136,13 @@ func ExampleReader_Read() {
 	n1, err1 := r.Read(b1)
 	n2, err2 := r.Read(b2)
 
-	fmt.Print(string(b1))      // output: test line, test line
-	fmt.Println(n1)            // output: 20
-	fmt.Println(err1)          // output: <nil>
-	fmt.Println(n2)            // output: 0
-	fmt.Println(err2)          // output: EOF
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 0
+	fmt.Print(string(b1))      // test line, test line
+	fmt.Println(n1)            // 20
+	fmt.Println(err1)          // <nil>
+	fmt.Println(n2)            // 0
+	fmt.Println(err2)          // EOF
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 0
 
 	// cleanup
 	os.Remove(pth)
@@ -159,7 +159,7 @@ func ExampleReader_Read() {
 	// 0
 }
 
-func ExampleReader_ReadGzip() {
+func ExampleReader_Read_gzip() {
 	pth := "./test/test.gz"
 	createFile(pth)
 	r, _ := NewReader(pth)
@@ -172,13 +172,13 @@ func ExampleReader_ReadGzip() {
 	n1, err1 := r.Read(b1)
 	n2, err2 := r.Read(b2)
 
-	fmt.Print(string(b1))      // output: test line, test line
-	fmt.Println(n1)            // output: 20
-	fmt.Println(err1)          // output: <nil>
-	fmt.Println(n2)            // output: 0
-	fmt.Println(err2)          // output: EOF
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 0
+	fmt.Print(string(b1))      // test line, test line
+	fmt.Println(n1)            // 20
+	fmt.Println(err1)          // <nil>
+	fmt.Println(n2)            // 0
+	fmt.Println(err2)          // EOF
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 0
 
 	// cleanup
 	os.Remove(pth)
@@ -207,14 +207,14 @@ func ExampleReader_ReadLine() {
 	ln2, err2 := r.ReadLine()
 	ln3, err3 := r.ReadLine()
 
-	fmt.Println(string(ln1))   // output: test line
-	fmt.Println(string(ln2))   // output: test line
-	fmt.Println(string(ln3))   // output:
-	fmt.Println(err1)          // output: <nil>
-	fmt.Println(err2)          // output: <nil>
-	fmt.Println(err3)          // output: EOF
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 2
+	fmt.Println(string(ln1))   // test line
+	fmt.Println(string(ln2))   // test line
+	fmt.Println(string(ln3))   //
+	fmt.Println(err1)          // <nil>
+	fmt.Println(err2)          // <nil>
+	fmt.Println(err3)          // EOF
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 2
 
 	// cleanup
 	os.Remove(pth)
@@ -231,7 +231,7 @@ func ExampleReader_ReadLine() {
 	// 2
 }
 
-func ExampleReader_ReadLineGzip() {
+func ExampleReader_ReadLine_gzip() {
 	pth := "./test/test.gz"
 	createFile(pth)
 	r, _ := NewReader(pth)
@@ -243,14 +243,14 @@ func ExampleReader_ReadLineGzip() {
 	ln2, err2 := r.ReadLine()
 	ln3, err3 := r.ReadLine()
 
-	fmt.Println(string(ln1))   // output: test line
-	fmt.Println(string(ln2))   // output: test line
-	fmt.Println(string(ln3))   // output:
-	fmt.Println(err1)          // output: <nil>
-	fmt.Println(err2)          // output: <nil>
-	fmt.Println(err3)          // output: EOF
-	fmt.Println(r.sts.ByteCnt) // output: 20
-	fmt.Println(r.sts.LineCnt) // output: 2
+	fmt.Println(string(ln1))   // test line
+	fmt.Println(string(ln2))   // test line
+	fmt.Println(string(ln3))   //
+	fmt.Println(err1)          // <nil>
+	fmt.Println(err2)          // <nil>
+	fmt.Println(err3)          // EOF
+	fmt.Println(r.sts.ByteCnt) // 20
+	fmt.Println(r.sts.LineCnt) // 2
 
 	// cleanup
 	os.Remove(pth)
@@ -279,8 +279,8 @@ func ExampleReader_Stats() {
 	r.ReadLine()
 	sts := r.Stats()
 
-	fmt.Println(sts.ByteCnt) // output: 20
-	fmt.Println(sts.LineCnt) // output: 2
+	fmt.Println(sts.ByteCnt) // 20
+	fmt.Println(sts.LineCnt) // 2
 
 	// cleanup
 	os.Remove(pth)
@@ -303,9 +303,9 @@ func ExampleReader_Close() {
 	r.ReadLine()
 	err := r.Close()
 
-	fmt.Println(err)              // output: <nil>
-	fmt.Println(r.sts.Checksum()) // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(r.closed)         // output: true
+	fmt.Println(err)              // <nil>
+	fmt.Println(r.sts.Checksum()) // 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(r.closed)         // true
 
 	// cleanup
 	os.Remove(pth)
@@ -317,7 +317,7 @@ func ExampleReader_Close() {
 	// true
 }
 
-func ExampleReader_CloseGzip() {
+func ExampleReader_Close_gzip() {
 	pth := "./test/test.gz"
 	createFile(pth)
 	r, _ := NewReader(pth)
@@ -329,9 +329,9 @@ func ExampleReader_CloseGzip() {
 	r.ReadLine()
 	err := r.Close()
 
-	fmt.Println(err)              // output: <nil>
-	fmt.Println(r.sts.Checksum()) // output: 42e649f9834028184ec21940d13a300f
-	fmt.Println(r.closed)         // output: true
+	fmt.Println(err)              // <nil>
+	fmt.Println(r.sts.Checksum()) // 42e649f9834028184ec21940d13a300f
+	fmt.Println(r.closed)         // true
 
 	// cleanup
 	os.Remove(pth)
@@ -343,7 +343,7 @@ func ExampleReader_CloseGzip() {
 	// true
 }
 
-func ExampleReader_CloseAndClose() {
+func ExampleReader_Close_afterClose() {
 	pth := "./test/test.txt"
 	createFile(pth)
 	r, _ := NewReader(pth)
@@ -356,9 +356,9 @@ func ExampleReader_CloseAndClose() {
 	r.Close()
 	err := r.Close()
 
-	fmt.Println(err)              // output: <nil>
-	fmt.Println(r.sts.Checksum()) // output: 54f30d75cf7374c7e524a4530dbc93c2
-	fmt.Println(r.closed)         // output: true
+	fmt.Println(err)              // <nil>
+	fmt.Println(r.sts.Checksum()) // 54f30d75cf7374c7e524a4530dbc93c2
+	fmt.Println(r.closed)         // true
 
 	// cleanup
 	os.Remove(pth)
@@ -382,7 +382,7 @@ func TestListFiles(t *testing.T) {
 		createFile(pth)
 	}
 
-	// test returns only files - no directories
+	// test returns all files and directories in the directory (non-recursive)
 	dirPth := "./test/"
 	allSts, err := ListFiles(dirPth)
 	if err != nil {
@@ -390,7 +390,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	if len(allSts) != 3 {
-		t.Fatalf("expected 3 files but got %v instead\n", len(allSts))
+		t.Fatalf("expected 3 items (1 directory + 2 files) but got %v instead\n", len(allSts))
 	}
 	m := make(map[string]stat.Stats)
 	for _, f := range allSts {
@@ -406,6 +406,7 @@ func TestListFiles(t *testing.T) {
 			if f.Checksum == "" {
 				t.Errorf("%s should have checksum", f.Path)
 			}
+
 		}
 	}
 	f, ok := m["dir"]

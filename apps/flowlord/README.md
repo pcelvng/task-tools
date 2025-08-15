@@ -43,7 +43,7 @@ template = "?hour={yyyy}-{mm}-{dd}T{hh}"
      - _for_: create a number of jobs starting with current time + offset to end of for statement 
      - _by_: iterator when creating tasks. day (default), hour, month
      - _meta_: create a task for each item in the array passed in as meta. 
-     - _meta_file_: path to a file (json,csv) use to meta data template, each row will create a task.  
+     - _meta-file_: path to a file (json,csv) use to meta data template, each row will create a task.  
  - **retry**: the number of times a task is retried before being sent to failed_tasks
  - **template**: a URL string that is parsed and put into the task's info string when created
 
@@ -113,7 +113,7 @@ batching is a way to create multiple tasks when the phase is run. This can be do
   * for: a duration for the job to be run from. Ex: -60h 
   * by: time iterator Ex: hour, day, month 
   * meta: comma separated data associate with a key. Each item will generate a new task Ex: meta=key:a,b,c|key2=1,2,3 
-  * meta_file: a line deliminated data file. each row (line) will generate a new task. 
+  * meta-file: a line deliminated data file. each row (line) will generate a new task. 
 
 ``` toml 
 # run every day at 2:01:00 for multiple items
@@ -128,7 +128,7 @@ template="?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}"
 # generates a task for every line in the file
 [[Phase]]
 task="worker:job-file"
-rule="cron=0 5 5 * * *&meta_file=data.json" 
+rule="cron=0 5 5 * * *&meta-file=data.json" 
 template="?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}"
 
 # run every day for the last week 

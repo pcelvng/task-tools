@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 
@@ -43,9 +40,11 @@ func TestBackloader(t *testing.T) {
 	cases := trial.Cases[request, response]{
 		"now": {
 			Input: request{
-				Task:     "sql",
-				Job:      "load",
-				Template: "./file.txt?ts={YYYY}-{MM}-{DD}",
+				Batch: Batch{
+					Task:     "sql",
+					Job:      "load",
+					Template: "./file.txt?ts={YYYY}-{MM}-{DD}",
+				},
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -56,8 +55,10 @@ func TestBackloader(t *testing.T) {
 		},
 		"from_cache": {
 			Input: request{
-				Task: "task1",
-				At:   "2022-06-12",
+				Batch: Batch{
+					Task: "task1",
+				},
+				At: "2022-06-12",
 				// Template: "?date={yyyy}-{mm}-{dd}" // from f3.toml file
 			},
 			Expected: response{
@@ -67,11 +68,13 @@ func TestBackloader(t *testing.T) {
 		},
 		"hourly": {
 			Input: request{
-				Task:     "hourly",
-				Template: "?day={YYYY}-{MM}-{DD}T{HH}",
-				From:     "2020-01-01T00",
-				To:       "2020-01-02T23",
-				By:       "hour",
+				Batch: Batch{
+					Task:     "hourly",
+					Template: "?day={YYYY}-{MM}-{DD}T{HH}",
+					By:       "hour",
+				},
+				From: "2020-01-01T00",
+				To:   "2020-01-02T23",
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -83,11 +86,13 @@ func TestBackloader(t *testing.T) {
 		},
 		"daily": {
 			Input: request{
-				Task:     "daily",
-				Template: "?date={YYYY}-{MM}-{DD}",
-				From:     "2020-01-01",
-				To:       "2020-02-01",
-				By:       "day",
+				Batch: Batch{
+					Task:     "daily",
+					Template: "?date={YYYY}-{MM}-{DD}",
+					By:       "day",
+				},
+				From: "2020-01-01",
+				To:   "2020-02-01",
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -99,11 +104,13 @@ func TestBackloader(t *testing.T) {
 		},
 		"monthly": {
 			Input: request{
-				Task:     "month",
-				Template: "?table=exp.tbl_{YYYY}_{MM}",
-				From:     "2020-01-01",
-				To:       "2020-12-12",
-				By:       "month",
+				Batch: Batch{
+					Task:     "month",
+					Template: "?table=exp.tbl_{YYYY}_{MM}",
+					By:       "month",
+				},
+				From: "2020-01-01",
+				To:   "2020-12-12",
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -115,11 +122,13 @@ func TestBackloader(t *testing.T) {
 		},
 		"weekly": {
 			Input: request{
-				Task:     "week",
-				Template: "?date={YYYY}-{MM}-{DD}",
-				From:     "2020-01-01",
-				To:       "2020-02-01",
-				By:       "week",
+				Batch: Batch{
+					Task:     "week",
+					Template: "?date={YYYY}-{MM}-{DD}",
+					By:       "week",
+				},
+				From: "2020-01-01",
+				To:   "2020-02-01",
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -131,10 +140,12 @@ func TestBackloader(t *testing.T) {
 		},
 		"meta_template": {
 			Input: request{
-				Task:     "meta",
-				Template: "{meta:file}?date={YYYY}-{mm}-{dd}&value={meta:value}",
-				At:       "2020-02-20",
-				Meta:     Meta{"file": {"s3://task-bucket/data/f.txt"}, "value": {"apple"}},
+				Batch: Batch{
+					Task:     "meta",
+					Template: "{meta:file}?date={YYYY}-{mm}-{dd}&value={meta:value}",
+					Meta:     Meta{"file": {"s3://task-bucket/data/f.txt"}, "value": {"apple"}},
+				},
+				At: "2020-02-20",
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -145,12 +156,19 @@ func TestBackloader(t *testing.T) {
 		},
 		"phase_not_found": {
 			Input: request{
-				Task: "unknown",
+				Batch: Batch{
+					Task: "unknown",
+				},
 			},
 			ShouldErr: true,
 		},
 		"invalid_time": {
-			Input: request{Task: "task1", At: "2022-120-01"},
+			Input: request{
+				Batch: Batch{
+					Task: "task1",
+				},
+				At: "2022-120-01",
+			},
 			Expected: response{
 				Count: 1,
 				Tasks: []task.Task{
@@ -158,7 +176,12 @@ func TestBackloader(t *testing.T) {
 				}},
 		},
 		"to only": {
-			Input: request{Task: "task1", To: "2022-12-01"},
+			Input: request{
+				Batch: Batch{
+					Task: "task1",
+				},
+				To: "2022-12-01",
+			},
 			Expected: response{
 				Count: 1,
 				Tasks: []task.Task{
@@ -166,7 +189,12 @@ func TestBackloader(t *testing.T) {
 				}},
 		},
 		"from only": {
-			Input: request{Task: "task1", From: "2022-12-01"},
+			Input: request{
+				Batch: Batch{
+					Task: "task1",
+				},
+				From: "2022-12-01",
+			},
 			Expected: response{
 				Count: 1,
 				Tasks: []task.Task{
@@ -176,11 +204,13 @@ func TestBackloader(t *testing.T) {
 		},
 		"backwards": {
 			Input: request{
-				Task:     "month",
-				Template: "?table=exp.tbl_{YYYY}_{MM}",
-				From:     "2021-01-01",
-				To:       "2020-10-01",
-				By:       "month",
+				Batch: Batch{
+					Task:     "month",
+					Template: "?table=exp.tbl_{YYYY}_{MM}",
+					By:       "month",
+				},
+				From: "2021-01-01",
+				To:   "2020-10-01",
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -192,9 +222,11 @@ func TestBackloader(t *testing.T) {
 		},
 		"meta-file": {
 			Input: request{
-				Task:     "mfile",
-				Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
-				Metafile: "./test/presidents.json",
+				Batch: Batch{
+					Task:     "mfile",
+					Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
+					Metafile: "./test/presidents.json",
+				},
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -212,7 +244,9 @@ func TestBackloader(t *testing.T) {
 		},
 		"meta-default": {
 			Input: request{
-				Task: "batch-president",
+				Batch: Batch{
+					Task: "batch-president",
+				},
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -230,8 +264,10 @@ func TestBackloader(t *testing.T) {
 		},
 		"override-file": {
 			Input: request{
-				Task:     "b-meta",
-				Metafile: "test/kv.json",
+				Batch: Batch{
+					Task:     "b-meta",
+					Metafile: "test/kv.json",
+				},
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -243,8 +279,10 @@ func TestBackloader(t *testing.T) {
 		},
 		"override-meta": {
 			Input: request{
-				Task: "batch-president",
-				Meta: Meta{"name": {"bob", "albert"}, "start": {"1111", "1120"}, "end": {"1120", "1130"}},
+				Batch: Batch{
+					Task: "batch-president",
+					Meta: Meta{"name": {"bob", "albert"}, "start": {"1111", "1120"}, "end": {"1120", "1130"}},
+				},
 			},
 			Expected: response{
 				Tasks: []task.Task{
@@ -291,8 +329,4 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
-}
-
-func ignoreTask(interface{}) cmp.Option {
-	return cmpopts.IgnoreFields(task.Task{}, "Created", "ID")
 }

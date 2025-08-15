@@ -277,7 +277,7 @@ func (m GetMap) Get(k string) string {
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64)
 	case nil:
-		return "null"
+		return ""
 	}
 	return fmt.Sprintf("i~%T", m[k])
 }

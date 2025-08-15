@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gtools "github.com/jbsmith7741/go-tools"
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	"github.com/robfig/cron/v3"
@@ -300,6 +301,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if s := rules.Get("retry_delay"); s != "" {
 				delay, _ = time.ParseDuration(s)
 				delay = delay + jitterPercent(delay, 40)
+
 				meta.Set("delayed", gtools.PrintDuration(delay))
 			}
 			t = task.NewWithID(t.Type, t.Info, t.ID)
@@ -309,6 +311,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			t.Meta = meta.Encode()
 			go func() {
 				time.Sleep(delay)
+				// Potential loss of task if app stopped or restarted
 				tm.taskCache.Add(*t)
 				if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
 					log.Println(err)
@@ -325,46 +328,71 @@ func (tm *taskMaster) Process(t *task.Task) error {
 					return err
 				}
 			}
-			if tm.slack != nil {
-				tm.alerts <- *t
-			}
-		}
 
-		if t.Result == task.AlertResult && tm.slack != nil {
-			if tm.slack != nil {
-				tm.alerts <- *t
+			// don't alert if slack isn't enabled or disabled in phase
+			if tm.slack == nil || rules.Get("no_alert") != "" {
+				return nil
 			}
+			tm.alerts <- *t
 		}
 
 		return nil
 	}
 
+	if t.Result == task.AlertResult && tm.slack != nil {
+		if tm.slack != nil {
+			tm.alerts <- *t
+		}
+	}
+
 	// start off any children tasks
 	if t.Result == task.CompleteResult {
+		taskTime := tmpl.TaskTime(*t)
 		for _, p := range tm.Children(*t) {
 			if !isReady(p.Rule, t.Meta) {
 				continue
 			}
-			info, _ := tmpl.Meta(p.Template, meta)
 
-			taskTime := tmpl.TaskTime(*t)
-
-			info = tmpl.Parse(info, taskTime)
-
-			child := task.NewWithID(p.Topic(), info, t.ID)
-			child.Job = p.Job()
-
-			child.Meta = "workflow=" + meta.Get("workflow")
-			if v := meta.Get("cron"); v != "" {
-				child.Meta += "&cron=" + v
-			}
-			if child.Job != "" {
-				child.Meta += "&job=" + child.Job
+			// Create Batch struct for potential expansion
+			batch := Batch{
+				Template: p.Template,
+				Task:     p.Topic(),
+				Job:      p.Job(),
+				Workflow: meta.Get("workflow"),
+				// By:       rules.Get("by"),
+				Meta: Meta(meta), // will be replaced with meta from rules?
+				// Metafile: rules.Get("meta-file"),
 			}
 
-			tm.taskCache.Add(*child)
-			if err := tm.producer.Send(p.Topic(), child.JSONBytes()); err != nil {
-				return err
+			if err := uri.UnmarshalQuery(p.Rule, &batch); err != nil {
+				log.Printf("error parsing rule %q for %s: %v", p.Rule, p.Topic(), err)
+			}
+			// Use Batch method to generate tasks (handles single or multiple tasks)
+			childTasks, err := batch.At(taskTime, tm.fOpts)
+			if err != nil {
+				log.Printf("error creating child tasks for %s: %v", p.Topic(), err)
+				continue
+			}
+
+			// Send all generated child tasks
+			for _, child := range childTasks {
+				// Ensure child has the correct parent ID and meta
+				child.ID = t.ID
+
+				// Add parent meta information
+				childMeta := "workflow=" + meta.Get("workflow")
+				if v := meta.Get("cron"); v != "" {
+					childMeta += "&cron=" + v
+				}
+				if child.Job != "" {
+					childMeta += "&job=" + child.Job
+				}
+				child.Meta = childMeta
+
+				tm.taskCache.Add(child)
+				if err := tm.producer.Send(child.Type, child.JSONBytes()); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

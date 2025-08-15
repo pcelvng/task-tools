@@ -3,11 +3,9 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -25,7 +23,6 @@ import (
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -290,22 +287,20 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 type request struct {
-	Task string
-	Job  string
 	From string // start
 	To   string // end
 	At   string // single time
-	By   string // month | day | hour // default by day,
 
-	Meta     Meta
-	Metafile string `json:"meta-file"`
-	Template string // should pull from workflow if possible
-	Execute  bool
+	Batch
+
+	Execute bool
 }
 
 func (tm *taskMaster) Backloader(w http.ResponseWriter, r *http.Request) {
 	req := request{
-		Meta: make(Meta),
+		Batch: Batch{
+			Meta: make(Meta),
+		},
 	}
 	b, _ := io.ReadAll(r.Body)
 	if err := json.Unmarshal(b, &req); err != nil {
@@ -376,26 +371,11 @@ func (tm *taskMaster) backload(req request) response {
 		end = at
 	}
 
-	// handle `by` iterator
-	var byIter func(time.Time) time.Time
-	switch req.By {
-	case "hour":
-		byIter = func(t time.Time) time.Time { return t.Add(time.Hour) }
-	case "week":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 7) }
-	case "month":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 1, 0) }
-	default:
-		msg = append(msg, "using default day iterator")
-		fallthrough
-	case "day":
-		byIter = func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
-	}
-
 	workflowPath, phase := tm.Cache.Search(req.Task, req.Job)
 	if workflowPath != "" {
 		msg = append(msg, "phase found in "+workflowPath)
 		req.Template = phase.Template
+		req.Workflow = workflowPath
 	}
 	if req.Template == "" {
 		name := req.Task
@@ -409,8 +389,7 @@ func (tm *taskMaster) backload(req request) response {
 		Meta     map[string][]string `uri:"meta"`
 	}{}
 
-	// todo: replace with uri.UnmarshalQuery when released
-	if err := uri.Unmarshal((&url.URL{RawQuery: phase.Rule}).String(), &rules); err != nil {
+	if err := uri.UnmarshalQuery(phase.Rule, &rules); err != nil {
 		return response{Status: "invalid rule found for " + req.Task, code: http.StatusBadRequest}
 	}
 
@@ -424,76 +403,17 @@ func (tm *taskMaster) backload(req request) response {
 		return response{Status: "Unsupported: meta and meta-file both used, use one only", code: http.StatusBadRequest}
 	}
 
-	data, err := createMeta(req.Meta)
+	// Set default by value if not provided
+	if req.By == "" {
+		req.By = "day"
+		msg = append(msg, "using default day iterator")
+	}
+
+	// Create Batch struct and use ExpandTasks
+
+	tasks, err := req.Batch.Range(start, end, tm.fOpts)
 	if err != nil {
 		return response{Status: err.Error(), code: http.StatusBadRequest}
-	}
-	if req.Metafile != "" {
-		reader, err := file.NewGlobReader(req.Metafile, tm.fOpts)
-		if err != nil {
-			return response{Status: fmt.Sprintf("file %q error %v", req.Metafile, err), code: http.StatusInternalServerError}
-		}
-		scanner := file.NewScanner(reader)
-
-		for scanner.Scan() {
-			row := make(tmpl.GetMap)
-			if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
-				return response{Status: fmt.Sprintf("issue processing file %v %v", req.Metafile, err), code: http.StatusInternalServerError}
-			}
-			data = append(data, row)
-		}
-	}
-
-	tasks := make([]task.Task, 0)
-
-	// reverse task order when end time comes before start
-	var reverseTasks bool
-	if end.Before(start) {
-		reverseTasks = true
-		t := end
-		end = start
-		start = t
-	}
-
-	for t := start; end.Sub(t) >= 0; t = byIter(t) {
-		info := tmpl.Parse(req.Template, t)
-		tskMeta := make(url.Values)
-		tskMeta.Set("cron", t.Format(DateHour))
-		if workflowPath != "" {
-			tskMeta.Set("workflow", workflowPath)
-		}
-		job := req.Job
-		if job != "" {
-			tskMeta.Set("job", job)
-		}
-
-		for _, d := range data { // meta data tasks
-			i, keys := tmpl.Meta(info, d)
-			tsk := *task.New(req.Task, i)
-			tsk.Job = job
-
-			// add matching keys as meta data
-			for _, k := range keys {
-				tskMeta.Set(k, d.Get(k))
-			}
-			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
-			tasks = append(tasks, tsk)
-		}
-		if len(data) == 0 { // time only tasks
-
-			tsk := *task.New(req.Task, info)
-			tsk.Job = job
-			tsk.Meta, _ = url.QueryUnescape(tskMeta.Encode())
-			tasks = append(tasks, tsk)
-		}
-	}
-
-	if reverseTasks {
-		tmp := make([]task.Task, len(tasks))
-		for i := 0; i < len(tasks); i++ {
-			tmp[i] = tasks[len(tasks)-i-1]
-		}
-		tasks = tmp
 	}
 
 	return response{Tasks: tasks, Count: len(tasks), Status: strings.Join(msg, ", ")}

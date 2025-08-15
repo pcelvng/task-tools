@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,25 +22,33 @@ const base_test_path string = "../../internal/test/"
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-	cache, err := workflow.New(base_test_path+"workflow", nil)
-	if err != nil {
-		t.Fatal("cache init", err)
+	cache, fatalErr := workflow.New(base_test_path+"workflow", nil)
+	if fatalErr != nil {
+		t.Fatal("cache init", fatalErr)
 	}
-	consumer, err := nop.NewConsumer("")
-	if err != nil {
-		t.Fatal("doneConsumer", err)
+	consumer, fatalErr := nop.NewConsumer("")
+	if fatalErr != nil {
+		t.Fatal("doneConsumer", fatalErr)
 	}
-	tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic"}
 	fn := func(tsk task.Task) ([]task.Task, error) {
-		producer, err := nop.NewProducer("")
-		if err != nil {
-			return nil, err
-		}
+		var alerts int64
+		tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
+		producer, _ := nop.NewProducer("")
 		tm.producer = producer
 		nop.FakeMsg = tsk.JSONBytes()
-		err = tm.Process(&tsk)
+		// handle alert messages
+		go func() {
+			for range tm.alerts {
+				atomic.AddInt64(&alerts, 1)
+			}
+		}()
+		if err := tm.Process(&tsk); err != nil {
+			return nil, err
+		}
+
 		time.Sleep(100 * time.Millisecond)
 		tm.producer.Stop()
+		close(tm.alerts)
 		result := make([]task.Task, 0)
 		for _, msgs := range producer.Messages {
 			for _, msg := range msgs {
@@ -60,7 +69,11 @@ func TestTaskMaster_Process(t *testing.T) {
 			}
 			return result[i].Type < result[j].Type
 		})
-		return result, err
+		/* TODO: test alerts are sent
+		if alerts > 0 {
+			return result, fmt.Errorf("%d alerts", alerts)
+		} */
+		return result, nil
 	}
 	cases := trial.Cases[task.Task, []task.Task]{
 		"task1 attempt 0": {
@@ -248,7 +261,7 @@ func TestTaskMaster_Process(t *testing.T) {
 			},
 		},
 	}
-	trial.New(fn, cases).SubTest(t)
+	trial.New(fn, cases).Timeout(time.Second).SubTest(t)
 }
 
 func TestTaskMaster_Schedule(t *testing.T) {
@@ -283,7 +296,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t2",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 * * * *",
+						Schedule: "0 0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -291,7 +304,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t4",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 * * * *",
+						Schedule: "0 0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -305,7 +318,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 					{
 						Workflow: "f3.toml",
 						Topic:    "task1",
-						Schedule: "0 0 * * *",
+						Schedule: "0 0 0 * * *",
 						Template: "?date={yyyy}-{mm}-{dd}",
 					},
 				},
@@ -327,87 +340,142 @@ func TestTaskMaster_Schedule(t *testing.T) {
 	trial.New(fn, cases).Comparer(trial.EqualOpt(trial.IgnoreAllUnexported)).SubTest(t)
 }
 
-func TestTaskMaster_Batch(t *testing.T) {
-	today := "2024-01-15"
-	toHour := "2024-01-15T00"
+func Test_NewJob(t *testing.T) {
 	tm := &taskMaster{}
-	fn := func(ph workflow.Phase) ([]task.Task, error) {
-		j, err := tm.NewJob(ph, "batch.toml")
-		bJob, ok := j.(*batchJob)
-		if !ok {
-			return nil, errors.New("expected *batchjob")
-		}
-		if err != nil {
-			return nil, err
-		}
-		return bJob.Batch(trial.TimeDay(today).Add(bJob.Offset))
+	fn := func(ph workflow.Phase) (cron.Job, error) {
+		return tm.NewJob(ph, "")
 	}
-	cases := trial.Cases[workflow.Phase, []task.Task]{
-		/* NOT SUPPORTED
-		"to_from": {
+	cases := trial.Cases[workflow.Phase, cron.Job]{
+		"simple cronjob": {
 			Input: workflow.Phase{
-				Task:     "batch-date",
-				Rule:     "from=2024-01-01&to=2024-01-03&by=day",
-				Template: "?day={yyyy}-{mm}-{dd}",
+				Task:     "task1",
+				Rule:     "cron=15 35 13 * * *&offset=-24h",
+				Template: "?date={yyyy}-{mm}-{dd}",
 			},
-			Expected: []task.Task{
-				{Type: "batch-date", Info: "?day=2024-01-01", Meta: ""},
-				{Type: "batch-date", Info: "?day=2024-01-02", Meta: ""},
-				{Type: "batch-date", Info: "?day=2024-01-03", Meta: ""},
-			},
-		}, */
-		"for -3": {
-			Input: workflow.Phase{
-				Task:     "batch-date",
-				Rule:     "for=-48h",
-				Template: "?day={yyyy}-{mm}-{dd}",
-			},
-			Expected: []task.Task{
-				{Type: "batch-date", Info: "?day=2024-01-15", Meta: "cron=2024-01-15T00&workflow=batch.toml"},
-				{Type: "batch-date", Info: "?day=2024-01-14", Meta: "cron=2024-01-14T00&workflow=batch.toml"},
-				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "cron=2024-01-13T00&workflow=batch.toml"},
+			Expected: &Cronjob{
+				Topic:    "task1",
+				Schedule: "15 35 13 * * *",
+				Offset:   -24 * time.Hour,
+				Template: "?date={yyyy}-{mm}-{dd}",
 			},
 		},
-		"for-48h +offset": {
+		"invalid schedule": {
 			Input: workflow.Phase{
-				Task:     "batch-date",
-				Rule:     "for=-48h&offset=-48h",
+				Task:     "invalid",
+				Rule:     "cron=badcron",
 				Template: "?day={yyyy}-{mm}-{dd}",
 			},
-			Expected: []task.Task{
-				{Type: "batch-date", Info: "?day=2024-01-13", Meta: "cron=2024-01-13T00&workflow=batch.toml"},
-				{Type: "batch-date", Info: "?day=2024-01-12", Meta: "cron=2024-01-12T00&workflow=batch.toml"},
-				{Type: "batch-date", Info: "?day=2024-01-11", Meta: "cron=2024-01-11T00&workflow=batch.toml"},
+			ShouldErr: true,
+		},
+		"5 digit schedule": {
+			Input: workflow.Phase{
+				Task:     "task5",
+				Rule:     "cron=35 13 * * *",
+				Template: "?date={yyyy}-{mm}-{dd}",
+			},
+			Expected: &Cronjob{
+				Topic:    "task5",
+				Schedule: "0 35 13 * * *",
+				Template: "?date={yyyy}-{mm}-{dd}",
 			},
 		},
-		"metas": {
+		"batch by meta": {
 			Input: workflow.Phase{
 				Task:     "meta-batch",
-				Rule:     "meta=name:a,b,c|value:1,2,3",
+				Rule:     "cron=15 35 13 * * *&meta=name:a,b,c|value:1,2,3",
 				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
 			},
-			Expected: []task.Task{
-				{Type: "meta-batch", Info: "?name=a&value=1&day=" + today, Meta: "cron=" + toHour + "&name=a&value=1&workflow=batch.toml"},
-				{Type: "meta-batch", Info: "?name=b&value=2&day=" + today, Meta: "cron=" + toHour + "&name=b&value=2&workflow=batch.toml"},
-				{Type: "meta-batch", Info: "?name=c&value=3&day=" + today, Meta: "cron=" + toHour + "&name=c&value=3&workflow=batch.toml"},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "meta-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+				},
+				Meta: map[string][]string{"name": {"a", "b", "c"}, "value": {"1", "2", "3"}},
 			},
 		},
-		"file": {
+		"batch by meta-file": {
 			Input: workflow.Phase{
-				Task:     "batch-president",
-				Rule:     "meta-file=test/presidents.json",
-				Template: "?president={meta:name}&start={meta:start}&end={meta:end}",
+				Task:     "file-batch",
+				Rule:     "cron=15 35 13 * * *&meta-file=test.json",
+				Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
 			},
-			Expected: []task.Task{
-				{Type: "batch-president", Info: "?president=george washington&start=1789&end=1797", Meta: "cron=" + toHour + "&end=1797&name=george washington&start=1789&workflow=batch.toml"},
-				{Type: "batch-president", Info: "?president=john adams&start=1797&end=1801", Meta: "cron=" + toHour + "&end=1801&name=john adams&start=1797&workflow=batch.toml"},
-				{Type: "batch-president", Info: "?president=thomas jefferson&start=1801&end=1809", Meta: "cron=" + toHour + "&end=1809&name=thomas jefferson&start=1801&workflow=batch.toml"},
-				{Type: "batch-president", Info: "?president=james madison&start=1809&end=1817", Meta: "cron=" + toHour + "&end=1817&name=james madison&start=1809&workflow=batch.toml"},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "file-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&value={meta:value}&day={yyyy}-{mm}-{dd}",
+				},
+				Metafile: "test.json",
 			},
+		},
+		"batch by duration + meta": {
+			Input: workflow.Phase{
+				Task:     "combo-batch",
+				Rule:     "cron=15 35 13 * * *&for=-48h&meta=name:a,b",
+				Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "combo-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+				},
+				For:  -48 * time.Hour,
+				Meta: map[string][]string{"name": {"a", "b"}},
+			},
+		},
+		"batch by duration + meta-file": {
+			Input: workflow.Phase{
+				Task:     "combo-batch",
+				Rule:     "cron=15 35 13 * * *&for=-48h&meta-file=test.json",
+				Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "combo-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+				},
+				For:      -48 * time.Hour,
+				Metafile: "test.json",
+			},
+		},
+		"error: both meta and meta-file": {
+			Input: workflow.Phase{
+				Task:     "bad-batch",
+				Rule:     "cron=15 35 13 * * *&meta=name:a,b&meta-file=test.json",
+				Template: "?name={meta:name}&day={yyyy}-{mm}-{dd}",
+			},
+			ExpectedErr: errors.New("meta_file and meta can not be used at the same time"),
+		},
+		"batch by duration + by": {
+			Input: workflow.Phase{
+				Task:     "by-batch",
+				Rule:     "cron=15 35 13 * * *&for=-48h&by=hour",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			Expected: &batchJob{
+				Cronjob: Cronjob{
+					Topic:    "by-batch",
+					Schedule: "15 35 13 * * *",
+					Template: "?day={yyyy}-{mm}-{dd}",
+				},
+				For: -48 * time.Hour,
+				By:  "hour",
+			},
+		},
+		"invalid rule": {
+			Input: workflow.Phase{
+				Task:     "invalid",
+				Rule:     "%notvalid=%%%",
+				Template: "?day={yyyy}-{mm}-{dd}",
+			},
+			ShouldErr: true,
 		},
 	}
 	trial.New(fn, cases).Comparer(
-		trial.EqualOpt(trial.IgnoreAllUnexported, trial.IgnoreFields("ID", "Created"))).SubTest(t)
+		trial.EqualOpt(trial.IgnoreAllUnexported, trial.EquateEmpty)).SubTest(t)
 }
 
 func TestIsReady(t *testing.T) {
