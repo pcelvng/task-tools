@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/pcelvng/task-tools/slack"
 )
 
@@ -97,7 +98,7 @@ type Depth struct {
 
 func (app *AppConfig) Monitor(ctx context.Context) {
 	fmt.Println("starting nsq Monitor")
-	app.Slack.Notify("starting nsq monitor with poll period of"+app.PollPeriod.String(), slack.OK)
+	app.Slack.Notify("starting nsq monitor with poll period of "+app.PollPeriod.String(), slack.OK)
 
 	app.nsqdNodes = make(map[string]struct{})
 	app.topicRegistry = make(TopicRegistry)
@@ -266,12 +267,12 @@ func (app *AppConfig) updateChannelMetrics() {
 		for _, channel := range topicData.Channels {
 			// Update depth and rate
 			channel.Depth = channel.GetDepth()
-			channel.Rate = channel.Derivative() / app.PollPeriod.Seconds()
+			channel.Rate = channel.Derivative() // messages per second based on depth changes
 			channel.LastUpdated = channel.Last[D3].TimeStamp
 
 			// Update status based on current alert states
 			if channel.DepthAlert && channel.RateAlert {
-				channel.Status = "both_exceeded"
+				channel.Status = "depth+rate_exceeded"
 			} else if channel.DepthAlert {
 				channel.Status = "depth_exceeded"
 			} else if channel.RateAlert {
