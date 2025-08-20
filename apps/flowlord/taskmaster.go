@@ -260,7 +260,7 @@ func (tm *taskMaster) schedule() (err error) {
 			}
 
 			if cronSchedule == "" {
-				log.Printf("skip: task:%s, rule:%s", w.Task, w.Rule)
+				log.Printf("no cron: task:%s, rule:%s", w.Task, w.Rule)
 				continue
 			}
 
@@ -348,7 +348,9 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	// start off any children tasks
 	if t.Result == task.CompleteResult {
 		taskTime := tmpl.TaskTime(*t)
-		for _, p := range tm.Children(*t) {
+		phases := tm.Children(*t)
+		for _, p := range phases {
+
 			if !isReady(p.Rule, t.Meta) {
 				continue
 			}
@@ -394,6 +396,9 @@ func (tm *taskMaster) Process(t *task.Task) error {
 					return err
 				}
 			}
+		}
+		if len(phases) == 0 {
+			log.Printf("no matches found for %v:%v", t.Type, t.Job)
 		}
 		return nil
 	}

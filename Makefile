@@ -15,9 +15,12 @@ endif
 
 APPS = sort2file deduper filecopy json2csv csv2json sql-load sql-readx bigquery transform db-check 
 TOOLS = filewatcher logger nsq-monitor recap
+ALL = $(APPS) $(TOOLS) flowlord
 
 all: 
 	rm -rf ${BLDDIR}
+	@mkdir -p ${BLDDIR}
+	CGO_ENABLED=0 go build ${GOFLAGS} -o ${BLDDIR} $(addprefix ./apps/utils/, $(TOOLS)) $(addprefix ./apps/workers/, $(APPS)) ./apps/flowlord
 
 linux_build:
 	@mkdir -p ${BLDDIR}/linux
@@ -31,6 +34,9 @@ $(BLDDIR)/%: clean
 	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/$(@F) ./apps/*/$* ; \
 	go build ${GOFLAGS} -o ${BLDDIR}/$(@F) ./apps/*/$*
 
+install/%:
+	go install ${GOFLAGS} ./apps/*/$*
+
 flowlord:
 	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o build/linux/flowlord ./apps/flowlord/ ; \
 	go build ${GOFLAGS} -o build/flowlord ./apps/flowlord
@@ -38,10 +44,8 @@ flowlord:
 clean:
 	rm -rf $(BLDDIR)
 
-install: $(APPS)
-	install -m 755 -d ${DESTDIR}${BINDIR}
-	for APP in $^ ; do install -m 755 ${BLDDIR}/$$APP ${DESTDIR}${BINDIR}/$$APP${EXT} ; done
-	rm -rf build
+install:
+	go install ${GOFLAGS} $(addprefix ./apps/utils/, $(TOOLS)) $(addprefix ./apps/workers/, $(APPS)) ./apps/flowlord
 
 docker: linux_build
 	docker build -t hydronica/task-tools:${version} .
@@ -53,6 +57,6 @@ test:
 	go test -cover ./apps/...
 
 .PHONY: install clean docker all flowlord
-.PHONY: $(APPS)
+.PHONY: $(APPS) $(TOOLS)
 
 
