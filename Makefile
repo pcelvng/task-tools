@@ -18,7 +18,10 @@ TOOLS = filewatcher logger nsq-monitor recap
 
 all: 
 	rm -rf ${BLDDIR}
-	go build ${GOFLAGS} -o ${BLDDIR}/ $(addprefix ./apps/utils/, $(TOOLS)) $(addprefix ./apps/workers/, $(APPS)) ./apps/flowlord 
+
+linux_build:
+	@mkdir -p ${BLDDIR}/linux
+	CGO_ENABLED=0 GOOS=linux go build ${GOFLAGS} -o ${BLDDIR}/linux/ $(addprefix ./apps/utils/, $(TOOLS)) $(addprefix ./apps/workers/, $(APPS)) ./apps/flowlord
 
 $(APPS): %: $(BLDDIR)/%
 $(TOOLS): %: $(BLDDIR)/%
@@ -40,7 +43,7 @@ install: $(APPS)
 	for APP in $^ ; do install -m 755 ${BLDDIR}/$$APP ${DESTDIR}${BINDIR}/$$APP${EXT} ; done
 	rm -rf build
 
-docker: all
+docker: linux_build
 	docker build -t hydronica/task-tools:${version} .
 	docker push hydronica/task-tools:${version}
 
