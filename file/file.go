@@ -447,15 +447,11 @@ func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
 				continue
 			}
 			_, fName := path.Split(strings.TrimRight(f.Path, "/"))
-			isMatch := false
+			isMatch := (fName == segment)
 			if strings.ContainsAny(segment, "[]*?") {
-				if m, err := filepath.Match(segment, fName); err != nil {
+				if isMatch, err = filepath.Match(segment, fName); err != nil {
 					return nil, err
-				} else if m {
-					isMatch = true
 				}
-			} else {
-				isMatch = (fName == segment)
 			}
 			if isMatch {
 				folders = append(folders, f)
