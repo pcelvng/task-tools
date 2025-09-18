@@ -574,11 +574,6 @@ type NSQClusterInfo struct {
 	PollPeriod     string   `json:"poll_period"`
 }
 
-type ConfigInfo struct {
-	DefaultLimit Limit   `json:"default_limit"`
-	TopicLimits  []Limit `json:"topic_limits"`
-}
-
 type TopicGroup struct {
 	Status     string        `json:"status"` // "ok" or "alerted"
 	DepthLimit int           `json:"depth_limit"`

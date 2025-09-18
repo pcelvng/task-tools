@@ -39,6 +39,7 @@ template = "?hour={yyyy}-{mm}-{dd}T{hh}"
    - _files_: used in conjection with a filewatcher to start tasks after a file is written
    - _require_: used in a child task saying to only start task if value is present
    - _retry_delay_: duration to wait before retrying the task
+   - _no_alert_: disable alerting on failed tasks
    - batching to create multiple jobs
      - _for_: create a number of jobs starting with current time + offset to end of for statement 
      - _by_: iterator when creating tasks. day (default), hour, month

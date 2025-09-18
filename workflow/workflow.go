@@ -148,7 +148,7 @@ func (c *Cache) Get(t task.Task) Phase {
 
 // Children of the given task t, a child phase is one that dependsOn another task
 // Empty slice will be returned if no children are found.
-// A task without a type or meta data containing the workflow info
+// A task without a type or metadata containing the workflow info
 // will result in an error
 func (c *Cache) Children(t task.Task) []Phase {
 	c.mutex.RLock()

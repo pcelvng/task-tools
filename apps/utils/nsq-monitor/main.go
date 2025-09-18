@@ -44,7 +44,7 @@ func main() {
 	app := &AppConfig{
 		LookupdHost:       "127.0.0.1:4161",
 		PollPeriod:        5 * time.Minute,
-		DefaultLimit:      Limit{Depth: 500, Rate: 3, Name: "all"},
+		DefaultLimit:      Limit{Depth: 500, Rate: 0, Name: "all"},
 		Topics:            []Limit{},
 		RepeatAlertPeriod: 12 * time.Hour,
 		Slack: slack.Slack{
