@@ -422,12 +422,12 @@ func Glob(pth string, opt *Options) ([]stat.Stats, error) {
 // ensuring trailing directory segments are preserved and matched correctly.
 func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
 	// Resolve patterns in the parent directory first, then match the final segment
-	parentDir, segment := path.Split(strings.TrimRight(pth, "/"))
+	pthDir, segment := path.Split(strings.TrimRight(pth, "/"))
 
 	// Expand any patterns in the parent directory by recursion
-	parentPaths := []string{parentDir}
-	if strings.ContainsAny(parentDir, "[]*?") {
-		sts, err := matchFolder(strings.TrimRight(parentDir, "/"), opt)
+	parentPaths := []string{pthDir}
+	if strings.ContainsAny(pthDir, "[]*?") {
+		sts, err := matchFolder(strings.TrimRight(pthDir, "/"), opt)
 		if err != nil {
 			return nil, err
 		}
