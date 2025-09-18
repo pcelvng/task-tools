@@ -66,10 +66,13 @@ func TestMain(m *testing.M) {
 		"test/f1/file4.gz",
 		"test/f3/file5.txt",
 		"test/f5/file-6.txt",
+		"test/other/name/z1/file1.txt",
 	}
 	os.MkdirAll("./test/f1", 0750)
 	os.MkdirAll("./test/f3", 0750)
 	os.MkdirAll("./test/f5", 0750)
+	os.MkdirAll("./test/other/name/z1", 0750)
+	os.MkdirAll("./test/other/name/z2", 0750)
 	for _, pth := range pths {
 		if err := createFile("./"+pth, &opts); err != nil {
 			log.Fatal(err)
@@ -98,6 +101,10 @@ func TestGlob_Local(t *testing.T) {
 		return files, err
 	}
 	cases := trial.Cases[string, []string]{
+		"folder_file_pattern": { // this is the bug where the last folder name is dropped
+			Input:    "./test/other/*/z1/f*.txt",
+			Expected: []string{"./test/other/name/z1/file1.txt"},
+		},
 		"star.txt": {
 			Input:    "./test/*.txt",
 			Expected: []string{"./test/file-1.txt", "./test/file2.txt"},
@@ -177,7 +184,7 @@ func TestGlob_Minio(t *testing.T) {
 func TestIterStruct(t *testing.T) {
 	fn := func(path string) (stat.Stats, error) {
 		it := NewIterator(path, nil)
-		for _ = range it.Lines() {
+		for range it.Lines() {
 		}
 		return it.Stats(), it.Error()
 	}

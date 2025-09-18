@@ -404,23 +404,40 @@ func Glob(pth string, opt *Options) ([]stat.Stats, error) {
 	return glbSts, nil
 }
 
+// matchFolder resolves and returns directories that match a globbed path prefix.
+//
+// Behavior:
+//   - Splits the provided path into a parent directory and a final segment.
+//   - Recursively expands any glob/meta characters ([], *, ?) that appear in the
+//     parent directory portion, producing a concrete list of parent directories.
+//   - For each resolved parent, lists its entries and matches only subdirectories
+//     against the final segment. The final segment can be a literal or a pattern;
+//     literal is compared by equality, patterns use filepath.Match.
+//   - Returns the directories that match the final segment as stat.Stats entries.
+//
+// This function is used by Glob to support nested directory globs such as:
+//
+//	"./a/*/b[1-3]/*/file.txt"
+//
+// ensuring trailing directory segments are preserved and matched correctly.
 func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
-	pthDir, pattern := path.Split(strings.TrimRight(pth, "/"))
-	paths := []string{pthDir}
+	// Resolve patterns in the parent directory first, then match the final segment
+	pthDir, segment := path.Split(strings.TrimRight(pth, "/"))
 
-	// check pthDir for pattern matches
+	// Expand any patterns in the parent directory by recursion
+	parentPaths := []string{pthDir}
 	if strings.ContainsAny(pthDir, "[]*?") {
-		pthDir, pattern = path.Split(strings.TrimRight(pthDir, "/"))
-		sts, err := matchFolder(pthDir, opt)
+		sts, err := matchFolder(strings.TrimRight(pthDir, "/"), opt)
 		if err != nil {
 			return nil, err
 		}
-		paths = make([]string, 0)
+		parentPaths = make([]string, 0, len(sts))
 		for _, f := range sts {
-			paths = append(paths, f.Path)
+			parentPaths = append(parentPaths, f.Path)
 		}
 	}
-	for _, p := range paths {
+
+	for _, p := range parentPaths {
 		sts, err := List(p, opt)
 		if err != nil {
 			return nil, err
@@ -430,9 +447,13 @@ func matchFolder(pth string, opt *Options) (folders []stat.Stats, err error) {
 				continue
 			}
 			_, fName := path.Split(strings.TrimRight(f.Path, "/"))
-			if isMatch, err := filepath.Match(pattern, fName); err != nil {
-				return nil, err
-			} else if isMatch {
+			isMatch := (fName == segment)
+			if strings.ContainsAny(segment, "[]*?") {
+				if isMatch, err = filepath.Match(segment, fName); err != nil {
+					return nil, err
+				}
+			}
+			if isMatch {
 				folders = append(folders, f)
 			}
 		}
