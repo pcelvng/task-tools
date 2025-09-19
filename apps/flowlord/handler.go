@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -26,7 +25,6 @@ import (
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -54,7 +52,7 @@ func (tm *taskMaster) StartHandler() {
 	})
 	router.Get("/task/{id}", tm.taskHandler)
 	router.Get("/recap", tm.recapHandler)
-	router.Get("/web/alert/{name}", tm.htmlAlert)
+//	router.Get("/web/alert/{name}", tm.htmlAlert)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -288,6 +286,7 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
+/*
 func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
@@ -314,7 +313,7 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(alertHTML(tasks))
-}
+} */
 
 // alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
 func alertHTML(tasks []task.Task) []byte {

@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	_ "embed"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
 	_ "modernc.org/sqlite"
 )
@@ -295,6 +297,139 @@ func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
 
 func (s *SQLite) Close() error {
 	return s.db.Close()
+}
+
+
+// AddAlert stores an alert record in the database
+func (s *SQLite) AddAlert(t task.Task, message string) error {
+	// Allow empty task ID for job send failures - store as "unknown"
+	taskID := t.ID
+	if taskID == "" {
+		taskID = "unknown"
+	}
+
+	// Store task created time as string (no need to parse to time.Time for insert)
+	taskCreated := t.Created
+
+	// Extract job using helper function
+	job := extractJobFromTask(t)
+
+	_, err := s.db.Exec(`
+		INSERT INTO alert_records (task_id, task_type, job, msg, task_created)
+		VALUES (?, ?, ?, ?, ?)
+	`, taskID, t.Type, job, message, taskCreated)
+
+	return err
+}
+
+// extractJobFromTask is a helper function to get job from task
+func extractJobFromTask(t task.Task) string {
+	job := t.Job
+	if job == "" {
+		if meta, err := url.ParseQuery(t.Meta); err == nil {
+			job = meta.Get("job")
+		}
+	}
+	return job
+}
+
+// GetAlertsByDate retrieves all alerts for a specific date
+func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
+	dateStr := date.Format("2006-01-02")
+	
+	query := `SELECT id, task_id, task_type, job, msg, created_at, task_created
+			FROM alert_records 
+			WHERE date(created_at) = ?
+			ORDER BY created_at DESC`
+
+	rows, err := s.db.Query(query, dateStr)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var alerts []AlertRecord
+	for rows.Next() {
+		var alert AlertRecord
+		err := rows.Scan(
+			&alert.ID, &alert.TaskID, &alert.TaskType,
+			&alert.Job, &alert.Msg, &alert.CreatedAt, &alert.TaskCreated,
+		)
+		if err != nil {
+			continue
+		}
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+
+// BuildCompactSummary processes alerts in memory to create compact summary
+// Groups by TaskType:Job and collects task times for proper date formatting
+func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
+	groups := make(map[string]*summaryGroup)
+	
+	for _, alert := range alerts {
+		key := alert.TaskType
+		if alert.Job != "" {
+			key += ":" + alert.Job
+		}
+		
+		// Extract TaskTime from alert meta (not TaskCreated)
+		taskTime := extractTaskTimeFromAlert(alert)
+		
+		if summary, exists := groups[key]; exists {
+			summary.Count++
+			summary.TaskTimes = append(summary.TaskTimes, taskTime)
+		} else {
+			groups[key] = &summaryGroup{
+				Key:       key,
+				Count:     1,
+				TaskTimes: []time.Time{taskTime},
+			}
+		}
+	}
+	
+	// Convert map to slice and format time ranges using tmpl.PrintDates
+	var result []SummaryLine
+	for _, summary := range groups {
+		// Use tmpl.PrintDates for consistent formatting with existing Slack notifications
+		timeRange := tmpl.PrintDates(summary.TaskTimes)
+		
+		result = append(result, SummaryLine{
+			Key:       summary.Key,
+			Count:     summary.Count,
+			FirstTime: time.Time{}, // Not used anymore
+			LastTime:  time.Time{}, // Not used anymore
+			TimeRange: timeRange,
+		})
+	}
+	
+	// Use proper sorting (can be replaced with slices.Sort in Go 1.21+)
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Count != result[j].Count {
+			return result[i].Count > result[j].Count // Sort by count descending
+		}
+		return result[i].Key < result[j].Key // Then by key ascending
+	})
+	
+	return result
+}
+
+// summaryGroup is used internally for building compact summaries
+type summaryGroup struct {
+	Key       string
+	Count     int
+	TaskTimes []time.Time
+}
+
+// extractTaskTimeFromAlert extracts the task time from alert meta
+// This uses the same logic as tmpl.TaskTime to get the proper task execution time
+func extractTaskTimeFromAlert(alert AlertRecord) time.Time {
+	// For now, fallback to TaskCreated time since we don't store meta in alert_records
+	// TODO: Consider adding meta field to alert_records if TaskTime is critical for proper grouping
+	return alert.TaskCreated
 }
 
 /*

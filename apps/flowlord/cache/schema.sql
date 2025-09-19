@@ -57,4 +57,17 @@ SELECT
     task_log.created,
     task_log.started,
     task_log.ended
-FROM task_log; 
+FROM task_log;
+
+-- Alert records table for storing alert events
+CREATE TABLE IF NOT EXISTS alert_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT,             -- task ID (can be empty for job send failures)
+    task_type TEXT NOT NULL,  -- task type for quick filtering
+    job TEXT,                 -- task job for quick filtering
+    msg TEXT NOT NULL,        -- alert message (contains alert context)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    task_created TIMESTAMP    -- keep for alert timeline context
+);
+
+CREATE INDEX IF NOT EXISTS idx_alert_records_created_at ON alert_records (created_at);

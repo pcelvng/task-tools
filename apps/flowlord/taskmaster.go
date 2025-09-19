@@ -52,7 +52,7 @@ type taskMaster struct {
 
 type Notification struct {
 	slack.Slack
-	ReportPath   string
+	//ReportPath   string
 	MinFrequency time.Duration
 	MaxFrequency time.Duration
 
@@ -188,7 +188,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 		return fmt.Errorf("workflow setup %w", err)
 	}
 
-	// refresh the workflow if the file(s) have been changed
+	// check for alerts from today on startup	// refresh the workflow if the file(s) have been changed
 	_, err = tm.refreshCache()
 	if err != nil {
 		log.Fatal(err)
@@ -210,7 +210,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	go tm.readFiles(ctx)
 
 	go tm.StartHandler()
-	go tm.slack.handleNotifications(tm.alerts, ctx)
+	go tm.handleNotifications(tm.alerts, ctx)
 	<-ctx.Done()
 	log.Println("shutting down")
 	return nil
@@ -337,16 +337,13 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			if tm.slack == nil || rules.Get("no_alert") != "" {
 				return nil
 			}
+		}
+		
+		if t.Result == task.AlertResult && tm.slack != nil {
 			tm.alerts <- *t
 		}
 
 		return nil
-	}
-
-	if t.Result == task.AlertResult && tm.slack != nil {
-		if tm.slack != nil {
-			tm.alerts <- *t
-		}
 	}
 
 	// start off any children tasks
@@ -478,20 +475,21 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 // It uses an exponential backoff to limit the number of messages
 // ie, (min) 5 -> 10 -> 20 -> 40 -> 80 -> 160 (max)
 // The backoff is cleared after no failed tasks occur within the window
-func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.Context) {
+func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.Context) {
 	sendChan := make(chan struct{})
-	tasks := make([]task.Task, 0)
+	var alerts []cache.AlertRecord
 	go func() {
-		dur := n.MinFrequency
+		dur := tm.slack.MinFrequency
 		for {
-			if len(tasks) > 0 {
+			alerts, _ = tm.taskCache.GetAlertsByDate(time.Now())
+			if len(alerts) > 0 {
 				sendChan <- struct{}{}
-				if dur *= 2; dur > n.MaxFrequency {
-					dur = n.MaxFrequency
+				if dur *= 2; dur > tm.slack.MaxFrequency {
+					dur = tm.slack.MaxFrequency
 				}
 				log.Println("wait time ", dur)
-			} else if dur != n.MinFrequency {
-				dur = n.MinFrequency
+			} else if dur != tm.slack.MinFrequency {
+				dur = tm.slack.MinFrequency
 				log.Println("Reset ", dur)
 			}
 			time.Sleep(dur)
@@ -503,47 +501,17 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 			// if the task result is an alert result, send a slack notification now
 			if tsk.Result == task.AlertResult {
 				b, _ := json.MarshalIndent(tsk, "", " ")
-				if err := n.Slack.Notify(string(b), slack.Critical); err != nil {
+				if err := tm.slack.Slack.Notify(string(b), slack.Critical); err != nil {
 					log.Println(err)
 				}
 			} else { // if the task result is not an alert result add to the tasks list summary
-				tasks = append(tasks, tsk)
+				if err := tm.taskCache.AddAlert(tsk, tsk.Msg); err != nil {
+					log.Printf("failed to store alert: %v", err)
+				}
 			}
 		case <-sendChan:
 			// prepare message
-			m := make(map[string]*alertStat) // [task:job]message
-			fPath := tmpl.Parse(n.ReportPath, time.Now())
-			writer, err := file.NewWriter(fPath, n.file)
-			if err != nil {
-				log.Println(err)
-			}
-			for _, tsk := range tasks {
-				writer.WriteLine(tsk.JSONBytes())
-
-				meta, _ := url.ParseQuery(tsk.Meta)
-				key := tsk.Type + ":" + meta.Get("job")
-				v, found := m[key]
-				if !found {
-					v = &alertStat{key: key, times: make([]time.Time, 0)}
-					m[key] = v
-				}
-				v.count++
-				v.times = append(v.times, tmpl.TaskTime(tsk))
-			}
-
-			var s string
-			for k, v := range m {
-				s += fmt.Sprintf("%-35s%5d  %v\n", k, v.count, tmpl.PrintDates(v.times))
-			}
-			if err := writer.Close(); err == nil && fPath != "" {
-				s += "see report at " + fPath
-			}
-			fmt.Println(s)
-			if err := n.Slack.Notify(s, slack.Critical); err != nil {
-				log.Println(err)
-			}
-
-			tasks = tasks[0:0] // reset slice
+			tm.sendAlertSummary(alerts)
 		case <-ctx.Done():
 			return
 		}
@@ -551,10 +519,35 @@ func (n *Notification) handleNotifications(taskChan chan task.Task, ctx context.
 
 }
 
-type alertStat struct {
-	key   string
-	count int
-	times []time.Time
+// sendAlertSummary sends a formatted alert summary to Slack
+// This can be reused by backup alert system and other components
+func (tm *taskMaster) sendAlertSummary(alerts []cache.AlertRecord) error {
+	if len(alerts) == 0 {
+		return nil
+	}
+
+	// build compact summary using existing logic
+	summary := cache.BuildCompactSummary(alerts)
+	
+	// format message similar to current Slack format  
+	var message strings.Builder
+	
+	for _, line := range summary {
+		message.WriteString(fmt.Sprintf("%-35s%5d  %s\n", 
+			line.Key+":", line.Count, line.TimeRange))
+	}
+	
+	// TODO: Add host configuration to options and use full URL like "https://flowlord.example.com/alerts"
+	message.WriteString("\nSee dashboard at /alerts")
+
+	// send to Slack if configured
+	if tm.slack != nil {
+		if err := tm.slack.Notify(message.String(), slack.Critical); err != nil {
+			return fmt.Errorf("failed to send alert summary to Slack: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // jitterPercent will return a time.Duration representing extra
