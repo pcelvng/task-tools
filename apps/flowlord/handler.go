@@ -289,7 +289,7 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 
 func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 
-	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("dt"))
+	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
 	if dt.IsZero() {
 		dt = time.Now()
 	}
@@ -305,8 +305,22 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	w.Write(alertHTML(alerts))
 }
 
+// AlertData holds both the alerts and summary data for the template
+type AlertData struct {
+	Alerts  []cache.AlertRecord
+	Summary []cache.SummaryLine
+}
+
 // alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
 func alertHTML(tasks []cache.AlertRecord) []byte {
+	// Generate summary data using BuildCompactSummary
+	summary := cache.BuildCompactSummary(tasks)
+	
+	// Create data structure for template
+	data := AlertData{
+		Alerts:  tasks,
+		Summary: summary,
+	}
 
 	tmpl, err := template.New("alert").Parse(handler.AlertTemplate)
 	if err != nil {
@@ -314,10 +328,9 @@ func alertHTML(tasks []cache.AlertRecord) []byte {
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, tasks); err != nil {
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return []byte(err.Error())
 	}
-
 	return buf.Bytes()
 }
 

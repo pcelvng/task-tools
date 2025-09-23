@@ -2,12 +2,14 @@ package main
 
 import (
 	"errors"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -330,3 +332,75 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 	}
 	trial.New(fn, cases).SubTest(t)
 }
+
+// TestWebAlertPreview generates an HTML preview of the alert template for visual inspection
+func TestWebAlertPreview(t *testing.T) {
+	// Create sample alert data to showcase the templating
+	sampleAlerts := []cache.AlertRecord{
+		{
+			ID:          1,
+			TaskID:      "task-001",
+			Type:        "data-processing",
+			Job:         "etl-pipeline",
+			Msg:         "Task completed successfully",
+			CreatedAt:   trial.Time(time.RFC3339, "2024-01-15T10:30:00Z"),
+			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T10:00:00Z"),
+		},
+		{
+			ID:          2,
+			TaskID:      "task-002",
+			Type:        "data-validation",
+			Job:         "quality-check",
+			Msg:         "Validation failed: missing required field 'email'",
+			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T11:15:00Z"),
+			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T11:00:00Z"),
+		},
+		{
+			ID:          3,
+			TaskID:      "task-003",
+			Type:        "file-transfer",
+			Job:         "backup",
+			Msg:         "File transfer completed: 1.2GB transferred",
+			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T12:00:00Z"),
+			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T11:45:00Z"),
+		},
+		{
+			ID:          4,
+			TaskID:      "task-004",
+			Type:        "database-sync",
+			Job:         "replication",
+			Msg:         "Database sync failed: connection timeout",
+			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T13:30:00Z"),
+			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T13:00:00Z"),
+		},
+		{
+			ID:          5,
+			TaskID:      "task-005",
+			Type:        "notification",
+			Job:         "email-alert",
+			Msg:         "Email notification sent to 150 users",
+			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T14:00:00Z"),
+			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T13:50:00Z"),
+		},
+	}
+
+	// Generate HTML using the alertHTML function
+	htmlContent := alertHTML(sampleAlerts)
+
+	// Write HTML to a file for easy viewing
+	outputFile := "alert_preview.html"
+	err := os.WriteFile(outputFile, htmlContent, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Alert preview generated and saved to: ./%s", outputFile)
+
+	// Basic validation that HTML was generated
+	if len(htmlContent) == 0 {
+		t.Error("Generated HTML content is empty")
+	}
+
+
+}
+

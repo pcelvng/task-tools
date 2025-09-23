@@ -1,54 +1,418 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <title>Task Status Report</title>
     <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0 0 15px 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .date-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .date-selector label {
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .date-selector input[type="date"] {
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .date-selector input[type="date"]:focus {
+            border-color: rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .date-selector input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+        .date-selector button {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .date-selector button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        .summary-section {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        .summary-section h3 {
+            margin: 0 0 16px 0;
+            color: #495057;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+        .summary-card {
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: box-shadow 0.2s ease;
+        }
+        .summary-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .summary-key {
+            font-weight: 600;
+            color: #495057;
+            font-size: 16px;
+        }
+        .summary-count {
+            background: #007bff;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .summary-time {
+            color: #6c757d;
+            font-size: 14px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
         table {
             border-collapse: collapse;
             width: 100%;
+            margin: 0;
         }
         th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
+            border: 1px solid #e1e5e9;
+            padding: 12px 16px;
             text-align: left;
+            vertical-align: top;
         }
         th {
-            background-color: #f2f2f2;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            font-weight: 600;
+            color: #495057;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        th:hover {
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        }
+        th.sortable::after {
+            content: ' ↕';
+            opacity: 0.5;
+            font-size: 12px;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+            color: #007bff;
+        }
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+            color: #007bff;
         }
         tr:nth-child(even) {
-            background-color: #f9f9f9;
+            background-color: #f8f9fa;
         }
         tr:hover {
-            background-color: #f5f5f5;
+            background-color: #e3f2fd;
+        }
+        .id-cell {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            color: #6c757d;
+        }
+        .type-cell {
+            font-weight: 500;
+            color: #495057;
+        }
+        .job-cell {
+            color: #6c757d;
+            font-style: italic;
+        }
+        .message-cell {
+            max-width: 300px;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+        .time-cell {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            color: #6c757d;
+            white-space: nowrap;
         }
         .error {
-            color: red;
+            color: #dc3545;
         }
         .success {
-            color: green;
+            color: #28a745;
+        }
+        .stats {
+            padding: 16px 20px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #e1e5e9;
+            font-size: 14px;
+            color: #6c757d;
         }
     </style>
 </head>
 <body>
-    <h2>Task Status Report</h2>
-    <table>
-        <tr>
-            <th>Task Type</th>
-            <th>id</th>
-            <th>Job</th>
-            <th>Message</th>
-            <th>Alert at </th>
-            <th>Task Created At</th>
-        </tr>
-        {{range .}}
-        <tr>
-            <td>{{.Type}}</td>
-            <td>{{.TaskID}}</td>
-            <td>{{.Job}}</td>
-            <td>{{.Msg}}</td>
-            <td>{{.CreatedAt}}</td>
-            <td>{{.TaskCreated}}</td>
-        </tr>
-        {{end}}
-    </table>
+    <div class="container">
+        <div class="header">
+            <h1>Task Status Report</h1>
+            <div class="date-selector">
+                <label for="dateFilter">View Alerts by Date:</label>
+                <input type="date" id="dateFilter" name="dateFilter">
+                <button id="clearFilter" type="button">Clear</button>
+            </div>
+        </div>
+        <div class="summary-section">
+            <h3>Alert Summary</h3>
+            <div class="summary-grid">
+                {{range .Summary}}
+                <div class="summary-card">
+                    <div class="summary-header">
+                        <span class="summary-key">{{.Key}}</span>
+                        <span class="summary-count">{{.Count}} alerts</span>
+                    </div>
+                    <div class="summary-time">{{.TimeRange}}</div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        <div class="table-container">
+            <table id="alertTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="id">ID</th>
+                        <th class="sortable" data-sort="type">Task Type</th>
+                        <th class="sortable" data-sort="job">Job</th>
+                        <th class="sortable" data-sort="message">Message</th>
+                        <th class="sortable" data-sort="alerted">Alerted At</th>
+                        <th class="sortable" data-sort="created">Task Created At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Alerts}}
+                    <tr>
+                        <td class="id-cell">{{.TaskID}}</td>
+                        <td class="type-cell">{{.Type}}</td>
+                        <td class="job-cell">{{.Job}}</td>
+                        <td class="message-cell">{{.Msg}}</td>
+                        <td class="time-cell">{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}</td>
+                        <td class="time-cell">{{.TaskCreated.Format "2006-01-02T15:04:05Z"}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        <div class="stats">
+            Total Alerts: <span id="totalCount">{{len .Alerts}}</span>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.getElementById('alertTable');
+            const tbody = table.querySelector('tbody');
+            const headers = table.querySelectorAll('th.sortable');
+            const dateFilter = document.getElementById('dateFilter');
+            const clearFilter = document.getElementById('clearFilter');
+            
+            let currentSort = { column: null, direction: 'asc' };
+
+            // Get URL parameters
+            function getUrlParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return {
+                    date: urlParams.get('date') || '',
+                    sort: urlParams.get('sort') || '',
+                    direction: urlParams.get('direction') || 'asc'
+                };
+            }
+
+            // Update URL with new parameters
+            function updateUrl(date, sort, direction) {
+                const url = new URL(window.location);
+                
+                if (date) {
+                    url.searchParams.set('date', date);
+                } else {
+                    url.searchParams.delete('date');
+                }
+                
+                if (sort) {
+                    url.searchParams.set('sort', sort);
+                    url.searchParams.set('direction', direction);
+                } else {
+                    url.searchParams.delete('sort');
+                    url.searchParams.delete('direction');
+                }
+                
+                // Reload page with new URL
+                window.location.href = url.toString();
+            }
+
+            // Initialize date filter from URL
+            function initializeDateFilter() {
+                const params = getUrlParams();
+                
+                if (params.date) {
+                    dateFilter.value = params.date;
+                } else {
+                    // Set today's date as default if no date parameter
+                    const today = new Date().toISOString().split('T')[0];
+                    dateFilter.value = today;
+                }
+            }
+
+            // Initialize sorting from URL
+            function initializeSorting() {
+                const params = getUrlParams();
+                
+                if (params.sort) {
+                    currentSort = { column: params.sort, direction: params.direction };
+                    sortTable(params.sort, params.direction);
+                    updateSortIndicators(params.sort, params.direction);
+                }
+            }
+
+            function sortTable(column, direction) {
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const columnIndex = Array.from(headers).findIndex(th => th.dataset.sort === column);
+                
+                rows.sort((a, b) => {
+                    const aVal = a.cells[columnIndex].textContent.trim();
+                    const bVal = b.cells[columnIndex].textContent.trim();
+                    
+                    let comparison = 0;
+                    
+                    // Check if this is a datetime column (alerted or created)
+                    if (column === 'alerted' || column === 'created') {
+                        // Parse as ISO datetime strings
+                        const aDate = new Date(aVal);
+                        const bDate = new Date(bVal);
+                        
+                        if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
+                            comparison = aDate - bDate;
+                        } else {
+                            // Fallback to string comparison if parsing fails
+                            comparison = aVal.localeCompare(bVal);
+                        }
+                    } else {
+                        // Try to parse as numbers first for other columns
+                        const aNum = parseFloat(aVal);
+                        const bNum = parseFloat(bVal);
+                        
+                        if (!isNaN(aNum) && !isNaN(bNum)) {
+                            comparison = aNum - bNum;
+                        } else {
+                            // Compare as strings
+                            comparison = aVal.localeCompare(bVal);
+                        }
+                    }
+                    
+                    return direction === 'asc' ? comparison : -comparison;
+                });
+                
+                // Clear tbody and re-append sorted rows
+                tbody.innerHTML = '';
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            function updateSortIndicators(activeColumn, direction) {
+                headers.forEach(th => {
+                    th.classList.remove('sort-asc', 'sort-desc');
+                    if (th.dataset.sort === activeColumn) {
+                        th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                    }
+                });
+            }
+
+            // Column sorting event listeners
+            headers.forEach(header => {
+                header.addEventListener('click', function() {
+                    const column = this.dataset.sort;
+                    let direction = 'asc';
+                    
+                    if (currentSort.column === column) {
+                        direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    }
+                    
+                    currentSort = { column, direction };
+                    updateUrl(getUrlParams().date, column, direction);
+                });
+            });
+
+            // Date filter event listeners
+            dateFilter.addEventListener('change', function() {
+                const params = getUrlParams();
+                updateUrl(this.value, params.sort, params.direction);
+            });
+
+            clearFilter.addEventListener('click', function() {
+                const params = getUrlParams();
+                updateUrl('', params.sort, params.direction);
+            });
+
+            // Initialize the page
+            initializeDateFilter();
+            initializeSorting();
+        });
+    </script>
 </body>
+</html>
 </html>
