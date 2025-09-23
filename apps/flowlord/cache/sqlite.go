@@ -6,12 +6,14 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task/bus"
 	_ "modernc.org/sqlite"
+
+	"github.com/pcelvng/task-tools/tmpl"
 )
 
 //go:embed schema.sql
@@ -20,6 +22,7 @@ var schema string
 type SQLite struct {
 	db  *sql.DB
 	ttl time.Duration
+	mu  sync.Mutex
 }
 
 func NewSQLite(ttl time.Duration, dbPath string) (*SQLite, error) {
@@ -49,6 +52,9 @@ func (s *SQLite) Add(t task.Task) {
 	if t.ID == "" {
 		return
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	// Start a transaction
 	tx, err := s.db.Begin()
@@ -109,6 +115,9 @@ func (s *SQLite) Add(t task.Task) {
 }
 
 func (s *SQLite) Get(id string) TaskJob {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	var tj TaskJob
 	var completed bool
 	var lastUpdate time.Time
@@ -161,6 +170,9 @@ func (s *SQLite) Get(id string) TaskJob {
 }
 
 func (s *SQLite) Recycle() Stat {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	tasks := make([]task.Task, 0)
 	t := time.Now()
 
@@ -246,6 +258,9 @@ func (s *SQLite) Recycle() Stat {
 }
 
 func (s *SQLite) Recap() map[string]*Stats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	data := make(map[string]*Stats)
 	rows, err := s.db.Query(`
 		SELECT id, type, job, info, result, meta, msg,
@@ -299,9 +314,11 @@ func (s *SQLite) Close() error {
 	return s.db.Close()
 }
 
-
 // AddAlert stores an alert record in the database
 func (s *SQLite) AddAlert(t task.Task, message string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// Allow empty task ID for job send failures - store as "unknown"
 	taskID := t.ID
 	if taskID == "" {
@@ -335,11 +352,14 @@ func extractJobFromTask(t task.Task) string {
 
 // GetAlertsByDate retrieves all alerts for a specific date
 func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	dateStr := date.Format("2006-01-02")
-	
+
 	query := `SELECT id, task_id, task_type, job, msg, created_at, task_created
 			FROM alert_records 
-			WHERE date(created_at) = ?
+			WHERE DATE(created_at) = ?
 			ORDER BY created_at DESC`
 
 	rows, err := s.db.Query(query, dateStr)
@@ -352,7 +372,7 @@ func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
 	for rows.Next() {
 		var alert AlertRecord
 		err := rows.Scan(
-			&alert.ID, &alert.TaskID, &alert.TaskType,
+			&alert.ID, &alert.TaskID, &alert.Type,
 			&alert.Job, &alert.Msg, &alert.CreatedAt, &alert.TaskCreated,
 		)
 		if err != nil {
@@ -364,21 +384,20 @@ func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
 	return alerts, nil
 }
 
-
 // BuildCompactSummary processes alerts in memory to create compact summary
 // Groups by TaskType:Job and collects task times for proper date formatting
 func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
 	groups := make(map[string]*summaryGroup)
-	
+
 	for _, alert := range alerts {
-		key := alert.TaskType
+		key := alert.Type
 		if alert.Job != "" {
 			key += ":" + alert.Job
 		}
-		
+
 		// Extract TaskTime from alert meta (not TaskCreated)
 		taskTime := extractTaskTimeFromAlert(alert)
-		
+
 		if summary, exists := groups[key]; exists {
 			summary.Count++
 			summary.TaskTimes = append(summary.TaskTimes, taskTime)
@@ -390,13 +409,13 @@ func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
 			}
 		}
 	}
-	
+
 	// Convert map to slice and format time ranges using tmpl.PrintDates
 	var result []SummaryLine
 	for _, summary := range groups {
 		// Use tmpl.PrintDates for consistent formatting with existing Slack notifications
 		timeRange := tmpl.PrintDates(summary.TaskTimes)
-		
+
 		result = append(result, SummaryLine{
 			Key:       summary.Key,
 			Count:     summary.Count,
@@ -405,7 +424,7 @@ func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
 			TimeRange: timeRange,
 		})
 	}
-	
+
 	// Use proper sorting (can be replaced with slices.Sort in Go 1.21+)
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].Count != result[j].Count {
@@ -413,7 +432,7 @@ func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
 		}
 		return result[i].Key < result[j].Key // Then by key ascending
 	})
-	
+
 	return result
 }
 

@@ -14,7 +14,7 @@ import (
 type AlertRecord struct {
 	ID          int64     `json:"id"`
 	TaskID      string    `json:"task_id"`
-	TaskType    string    `json:"task_type"`
+	Type        string    `json:"type"`
 	Job         string    `json:"job"`
 	Msg         string    `json:"msg"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -33,7 +33,6 @@ type SummaryLine struct {
 type Cache interface {
 	Add(task.Task)
 	Get(id string) TaskJob
-	
 
 	// todo: listener for cache expiry?
 }
@@ -165,4 +164,3 @@ func (m *Memory) SendFunc(p bus.Producer) func(string, *task.Task) error {
 		return p.Send(topic, tsk.JSONBytes())
 	}
 }
-

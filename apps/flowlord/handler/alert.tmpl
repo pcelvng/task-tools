@@ -33,20 +33,20 @@
     <table>
         <tr>
             <th>Task Type</th>
-            <th>Info</th>
-            <th>Status</th>
+            <th>id</th>
+            <th>Job</th>
             <th>Message</th>
-            <th>Started</th>
-            <th>Ended</th>
+            <th>Alert at </th>
+            <th>Task Created At</th>
         </tr>
         {{range .}}
         <tr>
             <td>{{.Type}}</td>
-            <td>{{.Info}}</td>
-            <td>{{.Result}}</td>
+            <td>{{.TaskID}}</td>
+            <td>{{.Job}}</td>
             <td>{{.Msg}}</td>
-            <td>{{.Started}}</td>
-            <td>{{.Ended}}</td>
+            <td>{{.CreatedAt}}</td>
+            <td>{{.TaskCreated}}</td>
         </tr>
         {{end}}
     </table>

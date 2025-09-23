@@ -42,10 +42,11 @@ type taskMaster struct {
 	failedTopic   string
 	taskCache     *cache.SQLite
 	*workflow.Cache
-	port  int
-	cron  *cron.Cron
-	slack *Notification
-	files []fileRule
+	HostName string
+	port     int
+	cron     *cron.Cron
+	slack    *Notification
+	files    []fileRule
 
 	alerts chan task.Task
 }
@@ -113,6 +114,7 @@ func New(opts *options) *taskMaster {
 		producer:     producer,
 		doneConsumer: consumer,
 		port:         opts.Port,
+		HostName:     opts.Host,
 		cron:         cron.New(cron.WithSeconds()),
 		dur:          opts.Refresh,
 		slack:        opts.Slack,
@@ -290,7 +292,12 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	meta, _ := url.ParseQuery(t.Meta)
 	tm.taskCache.Add(*t)
 	// attempt to retry
-	if t.Result == task.ErrResult {
+	switch t.Result {
+	case task.WarnResult:
+		return nil // do nothing
+	case task.AlertResult:
+		tm.alerts <- *t
+	case task.ErrResult:
 		p := tm.Get(*t)
 		rules, _ := url.ParseQuery(p.Rule)
 
@@ -322,32 +329,28 @@ func (tm *taskMaster) Process(t *task.Task) error {
 				}
 			}()
 			return nil
-		} else { // send to the retry failed topic if retries > p.Retry
-			meta.Set("retry", "failed")
-			meta.Set("retried", strconv.Itoa(p.Retry))
-			t.Meta = meta.Encode()
-			if tm.failedTopic != "-" && tm.failedTopic != "" {
-				tm.taskCache.Add(*t)
-				if err := tm.producer.Send(tm.failedTopic, t.JSONBytes()); err != nil {
-					return err
-				}
+		}
+		// send to the retry failed topic if retries > p.Retry
+		meta.Set("retry", "failed")
+		meta.Set("retried", strconv.Itoa(p.Retry))
+		t.Meta = meta.Encode()
+		if tm.failedTopic != "-" && tm.failedTopic != "" {
+			tm.taskCache.Add(*t)
+			if err := tm.producer.Send(tm.failedTopic, t.JSONBytes()); err != nil {
+				return err
 			}
+		}
 
-			// don't alert if slack isn't enabled or disabled in phase
-			if tm.slack == nil || rules.Get("no_alert") != "" {
-				return nil
-			}
+		// don't alert if slack isn't enabled or disabled in phase
+		if rules.Get("no_alert") != "" {
+			return nil
 		}
-		
-		if t.Result == task.AlertResult && tm.slack != nil {
-			tm.alerts <- *t
-		}
+
+		tm.alerts <- *t
 
 		return nil
-	}
-
-	// start off any children tasks
-	if t.Result == task.CompleteResult {
+	case task.CompleteResult:
+		// start off any children tasks
 		taskTime := tmpl.TaskTime(*t)
 		phases := tm.Children(*t)
 		for _, p := range phases {
@@ -402,10 +405,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 			log.Printf("no matches found for %v:%v", t.Type, t.Job)
 		}
 		return nil
-	}
-	if t.Result == task.WarnResult {
-		// do nothing
-		return nil
+
 	}
 	return fmt.Errorf("unknown result %q %s", t.Result, t.JSONString())
 }
@@ -480,8 +480,14 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 	var alerts []cache.AlertRecord
 	go func() {
 		dur := tm.slack.MinFrequency
-		for {
-			alerts, _ = tm.taskCache.GetAlertsByDate(time.Now())
+		for ; ; time.Sleep(dur) {
+			var err error
+			alerts, err = tm.taskCache.GetAlertsByDate(time.Now())
+			if err != nil {
+				log.Printf("failed to retrieve alerts: %v", err)
+				continue
+			}
+
 			if len(alerts) > 0 {
 				sendChan <- struct{}{}
 				if dur *= 2; dur > tm.slack.MaxFrequency {
@@ -492,7 +498,6 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 				dur = tm.slack.MinFrequency
 				log.Println("Reset ", dur)
 			}
-			time.Sleep(dur)
 		}
 	}()
 	for {
@@ -511,7 +516,9 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 			}
 		case <-sendChan:
 			// prepare message
-			tm.sendAlertSummary(alerts)
+			if err := tm.sendAlertSummary(alerts); err != nil {
+				log.Println(err)
+			}
 		case <-ctx.Done():
 			return
 		}
@@ -528,17 +535,15 @@ func (tm *taskMaster) sendAlertSummary(alerts []cache.AlertRecord) error {
 
 	// build compact summary using existing logic
 	summary := cache.BuildCompactSummary(alerts)
-	
+
 	// format message similar to current Slack format  
 	var message strings.Builder
-	
+	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?dt=%s\n", tm.HostName, tm.port, time.Now().Format("2006-01-02")))
+
 	for _, line := range summary {
-		message.WriteString(fmt.Sprintf("%-35s%5d  %s\n", 
+		message.WriteString(fmt.Sprintf("%-35s%5d  %s\n",
 			line.Key+":", line.Count, line.TimeRange))
 	}
-	
-	// TODO: Add host configuration to options and use full URL like "https://flowlord.example.com/alerts"
-	message.WriteString("\nSee dashboard at /alerts")
 
 	// send to Slack if configured
 	if tm.slack != nil {
