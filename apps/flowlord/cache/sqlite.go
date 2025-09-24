@@ -325,16 +325,16 @@ func (s *SQLite) AddAlert(t task.Task, message string) error {
 		taskID = "unknown"
 	}
 
-	// Store task created time as string (no need to parse to time.Time for insert)
-	taskCreated := t.Created
-
 	// Extract job using helper function
 	job := extractJobFromTask(t)
 
+	// Get task time using tmpl.TaskTime function
+	taskTime := tmpl.TaskTime(t)
+
 	_, err := s.db.Exec(`
-		INSERT INTO alert_records (task_id, task_type, job, msg, task_created)
+		INSERT INTO alert_records (task_id, task_time, task_type, job, msg)
 		VALUES (?, ?, ?, ?, ?)
-	`, taskID, t.Type, job, message, taskCreated)
+	`, taskID, taskTime, t.Type, job, message)
 
 	return err
 }
@@ -357,7 +357,7 @@ func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
 
 	dateStr := date.Format("2006-01-02")
 
-	query := `SELECT id, task_id, task_type, job, msg, created_at, task_created
+	query := `SELECT id, task_id, task_time, task_type, job, msg, created_at
 			FROM alert_records 
 			WHERE DATE(created_at) = ?
 			ORDER BY created_at DESC`
@@ -372,8 +372,8 @@ func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
 	for rows.Next() {
 		var alert AlertRecord
 		err := rows.Scan(
-			&alert.ID, &alert.TaskID, &alert.Type,
-			&alert.Job, &alert.Msg, &alert.CreatedAt, &alert.TaskCreated,
+			&alert.ID, &alert.TaskID, &alert.TaskTime, &alert.Type,
+			&alert.Job, &alert.Msg, &alert.CreatedAt,
 		)
 		if err != nil {
 			continue
@@ -396,16 +396,15 @@ func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
 		}
 
 		// Extract TaskTime from alert meta (not TaskCreated)
-		taskTime := extractTaskTimeFromAlert(alert)
 
 		if summary, exists := groups[key]; exists {
 			summary.Count++
-			summary.TaskTimes = append(summary.TaskTimes, taskTime)
+			summary.TaskTimes = append(summary.TaskTimes, alert.TaskTime)
 		} else {
 			groups[key] = &summaryGroup{
 				Key:       key,
 				Count:     1,
-				TaskTimes: []time.Time{taskTime},
+				TaskTimes: []time.Time{alert.TaskTime},
 			}
 		}
 	}
@@ -419,8 +418,6 @@ func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
 		result = append(result, SummaryLine{
 			Key:       summary.Key,
 			Count:     summary.Count,
-			FirstTime: time.Time{}, // Not used anymore
-			LastTime:  time.Time{}, // Not used anymore
 			TimeRange: timeRange,
 		})
 	}
@@ -441,14 +438,6 @@ type summaryGroup struct {
 	Key       string
 	Count     int
 	TaskTimes []time.Time
-}
-
-// extractTaskTimeFromAlert extracts the task time from alert meta
-// This uses the same logic as tmpl.TaskTime to get the proper task execution time
-func extractTaskTimeFromAlert(alert AlertRecord) time.Time {
-	// For now, fallback to TaskCreated time since we don't store meta in alert_records
-	// TODO: Consider adding meta field to alert_records if TaskTime is critical for proper grouping
-	return alert.TaskCreated
 }
 
 /*

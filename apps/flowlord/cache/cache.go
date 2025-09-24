@@ -12,22 +12,21 @@ import (
 
 // AlertRecord represents an alert stored in the database
 type AlertRecord struct {
-	ID          int64     `json:"id"`
-	TaskID      string    `json:"task_id"`
-	Type        string    `json:"type"`
-	Job         string    `json:"job"`
-	Msg         string    `json:"msg"`
-	CreatedAt   time.Time `json:"created_at"`
-	TaskCreated time.Time `json:"task_created"`
+	ID        int64     `json:"id"`
+	TaskID    string    `json:"task_id"`
+	TaskTime  time.Time `json:"task_time"`
+	Type      string    `json:"type"`
+	Job       string    `json:"job"`
+	Msg       string    `json:"msg"`
+	CreatedAt time.Time `json:"created_at"`
+	//TaskCreated time.Time `json:"task_created"`
 }
 
 // SummaryLine represents a grouped alert summary for dashboard display
 type SummaryLine struct {
-	Key       string    `json:"key"`        // "task.type:job"
-	Count     int       `json:"count"`      // number of alerts
-	FirstTime time.Time `json:"first_time"` // first alert time
-	LastTime  time.Time `json:"last_time"`  // last alert time
-	TimeRange string    `json:"time_range"` // formatted time range
+	Key       string `json:"key"`        // "task.type:job"
+	Count     int    `json:"count"`      // number of alerts
+	TimeRange string `json:"time_range"` // formatted time range
 }
 
 type Cache interface {

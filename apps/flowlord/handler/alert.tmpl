@@ -242,7 +242,7 @@
                         <th class="sortable" data-sort="job">Job</th>
                         <th class="sortable" data-sort="message">Message</th>
                         <th class="sortable" data-sort="alerted">Alerted At</th>
-                        <th class="sortable" data-sort="created">Task Created At</th>
+                        <th class="sortable" data-sort="tasktime">Task Time</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -253,7 +253,7 @@
                         <td class="job-cell">{{.Job}}</td>
                         <td class="message-cell">{{.Msg}}</td>
                         <td class="time-cell">{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}</td>
-                        <td class="time-cell">{{.TaskCreated.Format "2006-01-02T15:04:05Z"}}</td>
+                        <td class="time-cell">{{if .TaskTime.IsZero}}N/A{{else}}{{.TaskTime.Format "2006-01-02T15"}}{{end}}</td>
                     </tr>
                     {{end}}
                 </tbody>

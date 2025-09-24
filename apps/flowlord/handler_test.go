@@ -338,49 +338,44 @@ func TestWebAlertPreview(t *testing.T) {
 	// Create sample alert data to showcase the templating
 	sampleAlerts := []cache.AlertRecord{
 		{
-			ID:          1,
-			TaskID:      "task-001",
-			Type:        "data-processing",
-			Job:         "etl-pipeline",
-			Msg:         "Task completed successfully",
-			CreatedAt:   trial.Time(time.RFC3339, "2024-01-15T10:30:00Z"),
-			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T10:00:00Z"),
+			TaskID:    "task-001",
+			TaskTime:  trial.TimeHour("2024-01-15T11"),
+			Type:      "data-validation",
+			Job:       "quality-check",
+			Msg:       "Validation failed: missing required field 'email'",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T11:15:00Z"),
 		},
 		{
-			ID:          2,
-			TaskID:      "task-002",
-			Type:        "data-validation",
-			Job:         "quality-check",
-			Msg:         "Validation failed: missing required field 'email'",
-			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T11:15:00Z"),
-			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T11:00:00Z"),
+			TaskID:    "task-002",
+			TaskTime:  trial.TimeHour("2024-01-15T12"),
+			Type:      "data-validation",
+			Job:       "quality-check",
+			Msg:       "Validation failed: missing required field 'email'",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T12:15:00Z"),
 		},
 		{
-			ID:          3,
-			TaskID:      "task-003",
-			Type:        "file-transfer",
-			Job:         "backup",
-			Msg:         "File transfer completed: 1.2GB transferred",
-			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T12:00:00Z"),
-			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T11:45:00Z"),
+			TaskID:    "task-003",
+			TaskTime:  trial.TimeHour("2024-01-15T11"),
+			Type:      "file-transfer",
+			Job:       "backup",
+			Msg:       "File transfer completed: 1.2GB transferred",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T12:00:00Z"),
 		},
 		{
-			ID:          4,
-			TaskID:      "task-004",
-			Type:        "database-sync",
-			Job:         "replication",
-			Msg:         "Database sync failed: connection timeout",
-			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T13:30:00Z"),
-			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T13:00:00Z"),
+			TaskID:    "task-004",
+			TaskTime:  trial.TimeHour("2024-01-15T13"),
+			Type:      "database-sync",
+			Job:       "replication",
+			Msg:       "Database sync failed: connection timeout",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T13:30:00Z"),
 		},
 		{
-			ID:          5,
-			TaskID:      "task-005",
-			Type:        "notification",
-			Job:         "email-alert",
-			Msg:         "Email notification sent to 150 users",
-			CreatedAt:   trial.Time(time.RFC3339,"2024-01-15T14:00:00Z"),
-			TaskCreated: trial.Time(time.RFC3339,"2024-01-15T13:50:00Z"),
+			TaskID:    "task-005",
+			TaskTime:  trial.TimeHour("2024-01-15T13"),
+			Type:      "notification",
+			Job:       "email-alert",
+			Msg:       "Email notification sent to 150 users",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T14:00:00Z"),
 		},
 	}
 
@@ -401,6 +396,4 @@ func TestWebAlertPreview(t *testing.T) {
 		t.Error("Generated HTML content is empty")
 	}
 
-
 }
-
