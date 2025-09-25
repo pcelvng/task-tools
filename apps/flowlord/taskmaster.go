@@ -98,7 +98,7 @@ func New(opts *options) *taskMaster {
 	if opts.Slack.MaxFrequency <= opts.Slack.MinFrequency {
 		opts.Slack.MaxFrequency = 16 * opts.Slack.MinFrequency
 	}
-	db, err := cache.NewSQLite(opts.TaskTTL, "./tasks.db")
+	db, err := cache.NewSQLite(opts.TaskTTL, opts.DBPath)
 	if err != nil {
 		log.Fatal("db init", err)
 	}
@@ -546,7 +546,7 @@ func (tm *taskMaster) sendAlertSummary(alerts []cache.AlertRecord) error {
 	}
 
 	// send to Slack if configured
-	log.Println(message.String()) 
+	log.Println(message.String())
 	if tm.slack != nil {
 		if err := tm.slack.Notify(message.String(), slack.Critical); err != nil {
 			return fmt.Errorf("failed to send alert summary to Slack: %w", err)
