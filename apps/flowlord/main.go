@@ -39,6 +39,7 @@ type options struct {
 	FileTopic   string        `toml:"file_topic" comment:"file topic for file watching"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
 	Port        int           `toml:"status_port"`
+	Host        string        `toml:"host" comment:"host address of server "`
 	Slack       *Notification `toml:"slack"`
 	Bus         bus.Options   `toml:"bus"`
 	File        *file.Options `toml:"file"`
@@ -51,6 +52,7 @@ func main() {
 		Refresh:     time.Minute * 15,
 		TaskTTL:     4 * time.Hour,
 		DoneTopic:   "done",
+		Host:        "localhost",
 		FailedTopic: "retry-failed",
 		File:        file.NewOptions(),
 		Slack:       &Notification{},

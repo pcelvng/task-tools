@@ -4,12 +4,16 @@ import (
 	"database/sql"
 	_ "embed"
 	"net/url"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	_ "modernc.org/sqlite"
+
+	"github.com/pcelvng/task-tools/tmpl"
 )
 
 //go:embed schema.sql
@@ -18,6 +22,7 @@ var schema string
 type SQLite struct {
 	db  *sql.DB
 	ttl time.Duration
+	mu  sync.Mutex
 }
 
 func NewSQLite(ttl time.Duration, dbPath string) (*SQLite, error) {
@@ -47,6 +52,9 @@ func (s *SQLite) Add(t task.Task) {
 	if t.ID == "" {
 		return
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	// Start a transaction
 	tx, err := s.db.Begin()
@@ -107,6 +115,9 @@ func (s *SQLite) Add(t task.Task) {
 }
 
 func (s *SQLite) Get(id string) TaskJob {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	var tj TaskJob
 	var completed bool
 	var lastUpdate time.Time
@@ -159,6 +170,9 @@ func (s *SQLite) Get(id string) TaskJob {
 }
 
 func (s *SQLite) Recycle() Stat {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	tasks := make([]task.Task, 0)
 	t := time.Now()
 
@@ -244,6 +258,9 @@ func (s *SQLite) Recycle() Stat {
 }
 
 func (s *SQLite) Recap() map[string]*Stats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	data := make(map[string]*Stats)
 	rows, err := s.db.Query(`
 		SELECT id, type, job, info, result, meta, msg,
@@ -295,6 +312,132 @@ func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
 
 func (s *SQLite) Close() error {
 	return s.db.Close()
+}
+
+// AddAlert stores an alert record in the database
+func (s *SQLite) AddAlert(t task.Task, message string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Allow empty task ID for job send failures - store as "unknown"
+	taskID := t.ID
+	if taskID == "" {
+		taskID = "unknown"
+	}
+
+	// Extract job using helper function
+	job := extractJobFromTask(t)
+
+	// Get task time using tmpl.TaskTime function
+	taskTime := tmpl.TaskTime(t)
+
+	_, err := s.db.Exec(`
+		INSERT INTO alert_records (task_id, task_time, task_type, job, msg)
+		VALUES (?, ?, ?, ?, ?)
+	`, taskID, taskTime, t.Type, job, message)
+
+	return err
+}
+
+// extractJobFromTask is a helper function to get job from task
+func extractJobFromTask(t task.Task) string {
+	job := t.Job
+	if job == "" {
+		if meta, err := url.ParseQuery(t.Meta); err == nil {
+			job = meta.Get("job")
+		}
+	}
+	return job
+}
+
+// GetAlertsByDate retrieves all alerts for a specific date
+func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dateStr := date.Format("2006-01-02")
+
+	query := `SELECT id, task_id, task_time, task_type, job, msg, created_at
+			FROM alert_records 
+			WHERE DATE(created_at) = ?
+			ORDER BY created_at DESC`
+
+	rows, err := s.db.Query(query, dateStr)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var alerts []AlertRecord
+	for rows.Next() {
+		var alert AlertRecord
+		err := rows.Scan(
+			&alert.ID, &alert.TaskID, &alert.TaskTime, &alert.Type,
+			&alert.Job, &alert.Msg, &alert.CreatedAt,
+		)
+		if err != nil {
+			continue
+		}
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// BuildCompactSummary processes alerts in memory to create compact summary
+// Groups by TaskType:Job and collects task times for proper date formatting
+func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
+	groups := make(map[string]*summaryGroup)
+
+	for _, alert := range alerts {
+		key := alert.Type
+		if alert.Job != "" {
+			key += ":" + alert.Job
+		}
+
+		// Extract TaskTime from alert meta (not TaskCreated)
+
+		if summary, exists := groups[key]; exists {
+			summary.Count++
+			summary.TaskTimes = append(summary.TaskTimes, alert.TaskTime)
+		} else {
+			groups[key] = &summaryGroup{
+				Key:       key,
+				Count:     1,
+				TaskTimes: []time.Time{alert.TaskTime},
+			}
+		}
+	}
+
+	// Convert map to slice and format time ranges using tmpl.PrintDates
+	var result []SummaryLine
+	for _, summary := range groups {
+		// Use tmpl.PrintDates for consistent formatting with existing Slack notifications
+		timeRange := tmpl.PrintDates(summary.TaskTimes)
+
+		result = append(result, SummaryLine{
+			Key:       summary.Key,
+			Count:     summary.Count,
+			TimeRange: timeRange,
+		})
+	}
+
+	// Use proper sorting (can be replaced with slices.Sort in Go 1.21+)
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Count != result[j].Count {
+			return result[i].Count > result[j].Count // Sort by count descending
+		}
+		return result[i].Key < result[j].Key // Then by key ascending
+	})
+
+	return result
+}
+
+// summaryGroup is used internally for building compact summaries
+type summaryGroup struct {
+	Key       string
+	Count     int
+	TaskTimes []time.Time
 }
 
 /*

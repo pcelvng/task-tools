@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -16,17 +15,17 @@ import (
 
 	"github.com/jbsmith7741/uri"
 
-	"github.com/pcelvng/task-tools/apps/flowlord/handler"
-	"github.com/pcelvng/task-tools/slack"
-
 	"github.com/go-chi/chi/v5"
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
 
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
+	"github.com/pcelvng/task-tools/apps/flowlord/handler"
+	"github.com/pcelvng/task-tools/slack"
+
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -54,7 +53,7 @@ func (tm *taskMaster) StartHandler() {
 	})
 	router.Get("/task/{id}", tm.taskHandler)
 	router.Get("/recap", tm.recapHandler)
-	router.Get("/web/alert/{name}", tm.htmlAlert)
+	router.Get("/web/alert", tm.htmlAlert)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -289,35 +288,39 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		http.Error(w, "name parameter required", http.StatusBadRequest)
-		return
+
+	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+	if dt.IsZero() {
+		dt = time.Now()
 	}
-	t := tmpl.InfoTime(name)
-	reportPath := tmpl.Parse(tm.slack.ReportPath+name, t)
-	fmt.Println(reportPath)
-	reader, err := file.NewReader(reportPath, tm.slack.file)
+	alerts, err := tm.taskCache.GetAlertsByDate(dt)
 	if err != nil {
-		http.Error(w, reportPath, http.StatusNotFound)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
-	scanner := file.NewScanner(reader)
-	tasks := make([]task.Task, 0, 20)
-	for scanner.Scan() {
-		var tsk task.Task
-		if err := json.Unmarshal(scanner.Bytes(), &tsk); err != nil {
-			http.Error(w, fmt.Sprintf("unmarshal error: %d %v", scanner.Stats().LineCnt, err.Error()), http.StatusInternalServerError)
-		}
-		tasks = append(tasks, tsk)
-	}
 	w.WriteHeader(http.StatusOK)
-	w.Write(alertHTML(tasks))
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(alertHTML(alerts))
+}
+
+// AlertData holds both the alerts and summary data for the template
+type AlertData struct {
+	Alerts  []cache.AlertRecord
+	Summary []cache.SummaryLine
 }
 
 // alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
-func alertHTML(tasks []task.Task) []byte {
+func alertHTML(tasks []cache.AlertRecord) []byte {
+	// Generate summary data using BuildCompactSummary
+	summary := cache.BuildCompactSummary(tasks)
+	
+	// Create data structure for template
+	data := AlertData{
+		Alerts:  tasks,
+		Summary: summary,
+	}
 
 	tmpl, err := template.New("alert").Parse(handler.AlertTemplate)
 	if err != nil {
@@ -325,10 +328,9 @@ func alertHTML(tasks []task.Task) []byte {
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, tasks); err != nil {
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return []byte(err.Error())
 	}
-
 	return buf.Bytes()
 }
 

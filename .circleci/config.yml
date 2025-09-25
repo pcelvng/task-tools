@@ -1,10 +1,14 @@
-version: 2
+version: 2.1 
 
-jobs:
-  build:
+executors:
+  go-executor:
     docker:
       - image: cimg/go:1.23
-    working_directory: ~/task-tools
+    working_directory: ~/task-tools 
+
+jobs:
+  test:
+    executor: go-executor 
     steps:
       - checkout
       - run: go install github.com/jstemmer/go-junit-report/v2@latest
@@ -24,3 +28,35 @@ jobs:
           path: ~/task-tools/junit
       - store_artifacts:
           path: tests.out
+  
+  build:
+    executor: go-executor
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: false
+      - run: 
+          name: "docker login" 
+          command: echo ${DOCKERHUB_TOKEN} | docker login -u ${DOCKERHUB_USERNAME} --password-stdin
+      - run:
+          name: "Push Docker Image"
+          command: make docker
+
+workflows:
+  version: 2
+  test_and_build: 
+    jobs: 
+      - test: 
+          filters: 
+            tags: 
+              only: 
+                - /.*/
+      - build: 
+          requires: 
+            - test
+          context: 
+            - DOCKER
+          filters: 
+            tags: 
+              only: 
+                - /.*/

@@ -2,12 +2,14 @@ package main
 
 import (
 	"errors"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -329,4 +331,69 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
+}
+
+// TestWebAlertPreview generates an HTML preview of the alert template for visual inspection
+func TestWebAlertPreview(t *testing.T) {
+	// Create sample alert data to showcase the templating
+	sampleAlerts := []cache.AlertRecord{
+		{
+			TaskID:    "task-001",
+			TaskTime:  trial.TimeHour("2024-01-15T11"),
+			Type:      "data-validation",
+			Job:       "quality-check",
+			Msg:       "Validation failed: missing required field 'email'",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T11:15:00Z"),
+		},
+		{
+			TaskID:    "task-002",
+			TaskTime:  trial.TimeHour("2024-01-15T12"),
+			Type:      "data-validation",
+			Job:       "quality-check",
+			Msg:       "Validation failed: missing required field 'email'",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T12:15:00Z"),
+		},
+		{
+			TaskID:    "task-003",
+			TaskTime:  trial.TimeHour("2024-01-15T11"),
+			Type:      "file-transfer",
+			Job:       "backup",
+			Msg:       "File transfer completed: 1.2GB transferred",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T12:00:00Z"),
+		},
+		{
+			TaskID:    "task-004",
+			TaskTime:  trial.TimeHour("2024-01-15T13"),
+			Type:      "database-sync",
+			Job:       "replication",
+			Msg:       "Database sync failed: connection timeout",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T13:30:00Z"),
+		},
+		{
+			TaskID:    "task-005",
+			TaskTime:  trial.TimeHour("2024-01-15T13"),
+			Type:      "notification",
+			Job:       "email-alert",
+			Msg:       "Email notification sent to 150 users",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T14:00:00Z"),
+		},
+	}
+
+	// Generate HTML using the alertHTML function
+	htmlContent := alertHTML(sampleAlerts)
+
+	// Write HTML to a file for easy viewing
+	outputFile := "alert_preview.html"
+	err := os.WriteFile(outputFile, htmlContent, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Alert preview generated and saved to: ./%s", outputFile)
+
+	// Basic validation that HTML was generated
+	if len(htmlContent) == 0 {
+		t.Error("Generated HTML content is empty")
+	}
+
 }

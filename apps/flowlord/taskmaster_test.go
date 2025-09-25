@@ -15,6 +15,7 @@ import (
 	"github.com/pcelvng/task/bus/nop"
 	"github.com/robfig/cron/v3"
 
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -22,7 +23,7 @@ const base_test_path string = "../../internal/test/"
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-	cache, fatalErr := workflow.New(base_test_path+"workflow", nil)
+	workflowCache, fatalErr := workflow.New(base_test_path+"workflow", nil)
 	if fatalErr != nil {
 		t.Fatal("cache init", fatalErr)
 	}
@@ -32,7 +33,12 @@ func TestTaskMaster_Process(t *testing.T) {
 	}
 	fn := func(tsk task.Task) ([]task.Task, error) {
 		var alerts int64
-		tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
+		// Initialize taskCache for the test
+		taskCache, err := cache.NewSQLite(time.Hour, ":memory:")
+		if err != nil {
+			return nil, err
+		}
+		tm := taskMaster{doneConsumer: consumer, Cache: workflowCache, taskCache: taskCache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
 		producer, _ := nop.NewProducer("")
 		tm.producer = producer
 		nop.FakeMsg = tsk.JSONBytes()
