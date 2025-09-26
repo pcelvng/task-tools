@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -317,21 +315,19 @@ func alertHTML(tasks []cache.AlertRecord) []byte {
 	summary := cache.BuildCompactSummary(tasks)
 	
 	// Create data structure for template
-	data := AlertData{
-		Alerts:  tasks,
-		Summary: summary,
+	data := map[string]interface{}{
+		"Alerts":  tasks,
+		"Summary": summary,
 	}
 
-	tmpl, err := template.New("alert").Parse(handler.AlertTemplate)
+	// Use the new template registry
+	registry := handler.NewRegistry()
+	html, err := registry.ExecuteTemplate("alert", data)
 	if err != nil {
 		return []byte(err.Error())
 	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return []byte(err.Error())
-	}
-	return buf.Bytes()
+	
+	return html
 }
 
 type request struct {

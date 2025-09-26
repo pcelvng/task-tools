@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
@@ -106,13 +107,13 @@ func (tm *taskMaster) matchFile(sts stat.Stats) error {
 		meta.Set("file", sts.Path)
 		meta.Set("filename", filepath.Base(sts.Path))
 		meta.Set("workflow", f.workflowFile)
-		// todo: add job if provided in task name ex -> task:job
 
 		// populate the info string
 		info := tmpl.Parse(f.Template, t)
 		info, _ = tmpl.Meta(info, meta)
 
 		tsk := task.New(f.Topic(), info)
+		tsk.Job = f.Job()
 		tsk.Meta, _ = url.QueryUnescape(meta.Encode())
 
 		if err := tm.producer.Send(tsk.Type, tsk.JSONBytes()); err != nil {

@@ -93,32 +93,133 @@ Log every message that comes through the files topic with pattern matching resul
 ```sql
 CREATE TABLE file_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_path TEXT NOT NULL,
-    file_size INTEGER,
-    file_modified_at TIMESTAMP,
-    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    bucket_name TEXT,
-    etag TEXT,
-    md5_hash TEXT,
-    match_found BOOLEAN DEFAULT FALSE,
-    processing_time_ms INTEGER
+    path TEXT NOT NULL,                    -- File path (e.g., "gs://bucket/path/file.json")
+    size INTEGER,                          -- File size in bytes
+    last_modified TIMESTAMP,               -- When file was modified (from file system/GCS metadata)
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- When the record was received (time.Now())
+    task_time TIMESTAMP,                   -- Time extracted from path using tmpl.PathTime(sts.Path)
+    task_ids TEXT,                         -- JSON array of task IDs (null if no matches)
+    task_names TEXT                        -- JSON array of task names (type:job format, null if no matches)
 );
 
-CREATE TABLE file_pattern_matches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_message_id INTEGER NOT NULL,
-    workflow_phase_id INTEGER NOT NULL,
-    pattern TEXT NOT NULL,
-    task_sent BOOLEAN DEFAULT FALSE,
-    task_id TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (file_message_id) REFERENCES file_messages(id),
-    FOREIGN KEY (workflow_phase_id) REFERENCES workflow_phases(id)
-);
-
-CREATE INDEX idx_file_messages_path ON file_messages (file_path);
+-- Indexes for efficient querying
+CREATE INDEX idx_file_messages_path ON file_messages (path);
 CREATE INDEX idx_file_messages_received ON file_messages (received_at);
-CREATE INDEX idx_file_pattern_matches_file ON file_pattern_matches (file_message_id);
+
+-- Example queries for file message history
+
+-- Get all files processed in the last 24 hours
+SELECT path, size, last_modified, received_at, task_time, task_ids, task_names
+FROM file_messages 
+WHERE received_at >= datetime('now', '-1 day')
+ORDER BY received_at DESC;
+
+-- Get files that have matching tasks (with task names for quick reference)
+SELECT path, size, task_time, task_ids, task_names
+FROM file_messages 
+WHERE task_ids IS NOT NULL
+ORDER BY received_at DESC;
+
+-- Get files that didn't match any patterns (for debugging)
+SELECT path, size, received_at, task_time
+FROM file_messages 
+WHERE task_ids IS NULL
+ORDER BY received_at DESC;
+
+-- JOIN files with their matching tasks (returns multiple rows per file if multiple tasks)
+-- This is the key query for getting file + task details
+SELECT 
+    fm.id as file_id,
+    fm.path,
+    fm.task_time,
+    fm.received_at,
+    json_extract(t.value, '$') as task_id,
+    tl.type as task_type,
+    tl.job as task_job,
+    tl.result as task_result,
+    tl.created as task_created,
+    tl.started as task_started,
+    tl.ended as task_ended
+FROM file_messages fm,
+     json_each(fm.task_ids) as t
+JOIN task_log tl ON json_extract(t.value, '$') = tl.id
+WHERE fm.task_ids IS NOT NULL
+ORDER BY fm.received_at DESC, fm.id;
+
+-- Get files that created specific task types
+SELECT DISTINCT
+    fm.path,
+    fm.task_time,
+    fm.received_at,
+    COUNT(*) as task_count
+FROM file_messages fm,
+     json_each(fm.task_ids) as t
+JOIN task_log tl ON json_extract(t.value, '$') = tl.id
+WHERE tl.type = 'data-load'
+  AND fm.received_at >= datetime('now', '-1 day')
+GROUP BY fm.id, fm.path, fm.task_time, fm.received_at
+ORDER BY fm.received_at DESC;
+
+-- Get file processing statistics by time period
+SELECT 
+    date(received_at) as date,
+    COUNT(*) as total_files,
+    SUM(CASE WHEN task_ids IS NOT NULL THEN 1 ELSE 0 END) as matched_files,
+    SUM(CASE WHEN task_ids IS NULL THEN 1 ELSE 0 END) as unmatched_files,
+    SUM(CASE 
+        WHEN task_ids IS NOT NULL 
+        THEN json_array_length(task_ids) 
+        ELSE 0 
+    END) as total_tasks_created
+FROM file_messages 
+WHERE received_at >= datetime('now', '-7 days')
+GROUP BY date(received_at)
+ORDER BY date DESC;
+
+-- Find files by specific task time range
+SELECT path, size, task_time, task_ids, task_names
+FROM file_messages 
+WHERE task_time >= datetime('now', '-1 day')
+  AND task_time < datetime('now')
+ORDER BY task_time DESC;
+
+-- Get files with their task names (without joining task_log table)
+-- This is useful for quick overview without needing task details
+SELECT 
+    fm.path,
+    fm.task_time,
+    fm.received_at,
+    json_extract(t.value, '$') as task_id,
+    json_extract(n.value, '$') as task_name
+FROM file_messages fm,
+     json_each(fm.task_ids) as t,
+     json_each(fm.task_names) as n
+WHERE fm.task_ids IS NOT NULL
+  AND json_each.key = json_each.key  -- Ensures same index for both arrays
+ORDER BY fm.received_at DESC;
+
+-- Find files that created specific task types by name pattern
+SELECT DISTINCT
+    fm.path,
+    fm.task_time,
+    fm.received_at,
+    fm.task_names
+FROM file_messages fm
+WHERE fm.task_names IS NOT NULL
+  AND fm.task_names LIKE '%data-load%'
+  AND fm.received_at >= datetime('now', '-1 day')
+ORDER BY fm.received_at DESC;
+
+-- Count files by task type (using task names)
+SELECT 
+    json_extract(n.value, '$') as task_type,
+    COUNT(DISTINCT fm.id) as file_count
+FROM file_messages fm,
+     json_each(fm.task_names) as n
+WHERE fm.task_names IS NOT NULL
+  AND fm.received_at >= datetime('now', '-7 days')
+GROUP BY json_extract(n.value, '$')
+ORDER BY file_count DESC;
 ```
 
 ### Enhanced Task Recording
