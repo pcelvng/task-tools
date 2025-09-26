@@ -94,6 +94,9 @@ func unmarshalStat(b []byte) (sts stat.Stats) {
 // if a match is found it will create a task and send it out
 func (tm *taskMaster) matchFile(sts stat.Stats) error {
 	matches := 0
+	var taskIDs []string
+	var taskNames []string
+
 	for _, f := range tm.files {
 		if isMatch, _ := filepath.Match(f.SrcPattern, sts.Path); !isMatch {
 			continue
@@ -116,10 +119,24 @@ func (tm *taskMaster) matchFile(sts stat.Stats) error {
 		tsk.Job = f.Job()
 		tsk.Meta, _ = url.QueryUnescape(meta.Encode())
 
+		// Collect task information for storage
+		taskIDs = append(taskIDs, tsk.ID)
+		taskName := tsk.Type
+		if tsk.Job != "" {
+			taskName += ":" + tsk.Job
+		}
+		taskNames = append(taskNames, taskName)
+
 		if err := tm.producer.Send(tsk.Type, tsk.JSONBytes()); err != nil {
 			return err
 		}
 	}
+
+	// Store file message in database
+	if tm.taskCache != nil {
+		tm.taskCache.AddFileMessage(sts, taskIDs, taskNames)
+	}
+
 	if matches == 0 {
 		return fmt.Errorf("no match found for %q", sts.Path)
 	}

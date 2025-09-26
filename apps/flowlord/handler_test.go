@@ -334,6 +334,7 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 }
 
 // TestWebAlertPreview generates an HTML preview of the alert template for visual inspection
+// this provides an html file
 func TestWebAlertPreview(t *testing.T) {
 	// Create sample alert data to showcase the templating
 	sampleAlerts := []cache.AlertRecord{
@@ -394,6 +395,52 @@ func TestWebAlertPreview(t *testing.T) {
 	// Basic validation that HTML was generated
 	if len(htmlContent) == 0 {
 		t.Error("Generated HTML content is empty")
+	}
+
+}
+
+
+// TestFilesHTML generate a html file based on the files.tmpl it is used for vision examination of the files
+func TestFilesHTML(t *testing.T) {
+	// Create sample file messages
+	files := []cache.FileMessage{
+		{
+			ID:           1,
+			Path:         "gs://bucket/data/2024-01-15/file1.json",
+			Size:         1024,
+			LastModified: time.Now().Add(-1 * time.Hour),
+			ReceivedAt:   time.Now().Add(-30 * time.Minute),
+			TaskTime:     time.Now().Add(-1 * time.Hour),
+			TaskIDs:      []string{"task-1", "task-2"},
+			TaskNames:    []string{"data-load:import", "transform:clean"},
+		},
+		{
+			ID:           2,
+			Path:         "gs://bucket/data/2024-01-15/file2.csv",
+			Size:         2048,
+			LastModified: time.Now().Add(-2 * time.Hour),
+			ReceivedAt:   time.Now().Add(-15 * time.Minute),
+			TaskTime:     time.Now().Add(-2 * time.Hour),
+			TaskIDs:      []string{},
+			TaskNames:    []string{},
+		},
+	}
+
+	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	html := filesHTML(files, date)
+
+		// Write HTML to a file for easy viewing
+		outputFile := "files_preview.html"
+		err := os.WriteFile(outputFile, html, 0644)
+		if err != nil {
+			t.Fatalf("Failed to write HTML file: %v", err)
+		}
+	
+		t.Logf("Alert preview generated and saved to: ./%s", outputFile)
+		
+	// Basic checks
+	if len(html) == 0 {
+		t.Error("Expected HTML output, got empty")
 	}
 
 }

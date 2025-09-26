@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -52,6 +55,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/task/{id}", tm.taskHandler)
 	router.Get("/recap", tm.recapHandler)
 	router.Get("/web/alert", tm.htmlAlert)
+	router.Get("/web/files", tm.htmlFiles)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -303,6 +307,93 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	w.Write(alertHTML(alerts))
 }
 
+// htmlFiles handles GET /web/files - displays file messages for a specific date
+func (tm *taskMaster) htmlFiles(w http.ResponseWriter, r *http.Request) {
+	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+	if dt.IsZero() {
+		dt = time.Now()
+	}
+
+	files, err := tm.taskCache.GetFileMessagesByDate(dt)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(filesHTML(files, dt))
+}
+
+// filesHTML renders the file messages HTML page
+func filesHTML(files []cache.FileMessage, date time.Time) []byte {
+	// Calculate statistics
+	totalFiles := len(files)
+	matchedFiles := 0
+	totalTasks := 0
+	
+	for _, file := range files {
+		if len(file.TaskNames) > 0 {
+			matchedFiles++
+			totalTasks += len(file.TaskNames)
+		}
+	}
+	
+	unmatchedFiles := totalFiles - matchedFiles
+
+	// Calculate navigation dates
+	prevDate := date.AddDate(0, 0, -1)
+	nextDate := date.AddDate(0, 0, 1)
+
+	data := map[string]interface{}{
+		"Date":           date.Format("Monday, January 2, 2006"),
+		"PrevDate":       prevDate.Format("2006-01-02"),
+		"NextDate":       nextDate.Format("2006-01-02"),
+		"Files":          files,
+		"TotalFiles":     totalFiles,
+		"MatchedFiles":   matchedFiles,
+		"UnmatchedFiles": unmatchedFiles,
+		"TotalTasks":     totalTasks,
+	}
+
+	// Template functions
+	funcMap := template.FuncMap{
+		"formatBytes": func(bytes int64) string {
+			const unit = 1024
+			if bytes < unit {
+				return fmt.Sprintf("%d B", bytes)
+			}
+			div, exp := int64(unit), 0
+			for n := bytes / unit; n >= unit; n /= unit {
+				div *= unit
+				exp++
+			}
+			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+		},
+		"formatReceivedTime": func(t time.Time) string {
+			return t.Format(time.RFC3339)
+		},
+		"formatTaskTime": func(t time.Time) string {
+			return t.Format("2006-01-02T15")
+		},
+	}
+
+	// Parse and execute template using the same pattern as alertHTML
+	tmpl, err := template.New("files").Funcs(funcMap).Parse(handler.FilesTemplate)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
+}
+
+
 // AlertData holds both the alerts and summary data for the template
 type AlertData struct {
 	Alerts  []cache.AlertRecord
@@ -320,14 +411,18 @@ func alertHTML(tasks []cache.AlertRecord) []byte {
 		"Summary": summary,
 	}
 
-	// Use the new template registry
-	registry := handler.NewRegistry()
-	html, err := registry.ExecuteTemplate("alert", data)
+	tmpl, err := template.New("alert").Parse(handler.AlertTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
-	
-	return html
+
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
 }
 
 type request struct {
@@ -494,3 +589,4 @@ func (m Meta) UnmarshalJSON(d []byte) error {
 	m2 := (map[string][]string)(m)
 	return json.Unmarshal(d, &m2)
 }
+

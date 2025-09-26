@@ -71,3 +71,19 @@ CREATE TABLE IF NOT EXISTS alert_records (
 );
 
 CREATE INDEX IF NOT EXISTS idx_alert_records_created_at ON alert_records (created_at);
+
+-- File message history table for tracking file processing
+CREATE TABLE IF NOT EXISTS file_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,                    -- File path (e.g., "gs://bucket/path/file.json")
+    size INTEGER,                          -- File size in bytes
+    last_modified TIMESTAMP,               -- When file was modified (from file system/GCS metadata)
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- When the record was received (time.Now())
+    task_time TIMESTAMP,                   -- Time extracted from path using tmpl.PathTime(sts.Path)
+    task_ids TEXT,                         -- JSON array of task IDs (null if no matches)
+    task_names TEXT                        -- JSON array of task names (type:job format, null if no matches)
+);
+
+-- Indexes for efficient querying
+CREATE INDEX IF NOT EXISTS idx_file_messages_path ON file_messages (path);
+CREATE INDEX IF NOT EXISTS idx_file_messages_received ON file_messages (received_at);
