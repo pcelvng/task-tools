@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"github.com/pcelvng/task-tools/apps/flowlord/handler"
 	"github.com/pcelvng/task-tools/slack"
+	"github.com/pcelvng/task-tools/tmpl"
 
 	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/file"
@@ -56,6 +58,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/recap", tm.recapHandler)
 	router.Get("/web/alert", tm.htmlAlert)
 	router.Get("/web/files", tm.htmlFiles)
+	router.Get("/web/task", tm.htmlTask)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -326,6 +329,31 @@ func (tm *taskMaster) htmlFiles(w http.ResponseWriter, r *http.Request) {
 	w.Write(filesHTML(files, dt))
 }
 
+// htmlTask handles GET /web/task - displays task summary and table for a specific date
+func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
+	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+	if dt.IsZero() {
+		dt = time.Now()
+	}
+
+	// Get filter parameters
+	taskType := r.URL.Query().Get("type")
+	job := r.URL.Query().Get("job")
+	result := r.URL.Query().Get("result")
+
+	// Get tasks with filters
+	tasks, err := tm.taskCache.GetTasksByDate(dt, taskType, job, result)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(taskHTML(tasks, dt, taskType, job, result))
+}
+
 // filesHTML renders the file messages HTML page
 func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 	// Calculate statistics
@@ -393,6 +421,172 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 	return buf.Bytes()
 }
 
+// generateSummaryFromTasks creates a summary of tasks grouped by type:job
+func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
+	summary := make(map[string]*cache.Stats)
+	
+	for _, t := range tasks {
+		// Get job from TaskView.Job or extract from Meta
+		job := t.Job
+		if job == "" {
+			if meta, err := url.ParseQuery(t.Meta); err == nil {
+				job = meta.Get("job")
+			}
+		}
+		
+		// Create key in format "type:job"
+		key := strings.TrimRight(t.Type+":"+job, ":")
+		
+		// Get or create stats for this type:job combination
+		stat, found := summary[key]
+		if !found {
+			stat = &cache.Stats{
+				CompletedTimes: make([]time.Time, 0),
+				ErrorTimes:     make([]time.Time, 0),
+				ExecTimes:      &cache.DurationStats{},
+			}
+			summary[key] = stat
+		}
+		
+		// Convert TaskView to task.Task for processing
+		taskTime := tmpl.TaskTime(task.Task{
+			ID:      t.ID,
+			Type:    t.Type,
+			Job:     t.Job,
+			Info:    t.Info,
+			Result:  task.Result(t.Result),
+			Meta:    t.Meta,
+			Msg:     t.Msg,
+			Created: t.Created,
+			Started: t.Started,
+			Ended:   t.Ended,
+		})
+		
+		// Process based on result type
+		if t.Result == "error" {
+			stat.ErrorCount++
+			stat.ErrorTimes = append(stat.ErrorTimes, taskTime)
+		} else if t.Result == "complete" {
+			stat.CompletedCount++
+			stat.CompletedTimes = append(stat.CompletedTimes, taskTime)
+			
+			// Add execution time for completed tasks
+			if t.Started != "" && t.Ended != "" {
+				startTime, err1 := time.Parse(time.RFC3339, t.Started)
+				endTime, err2 := time.Parse(time.RFC3339, t.Ended)
+				if err1 == nil && err2 == nil {
+					stat.ExecTimes.Add(endTime.Sub(startTime))
+				}
+			}
+		}
+		// Note: warn and alert results don't contribute to execution time stats
+	}
+	
+	return summary
+}
+
+// taskHTML renders the task summary and table HTML page
+func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result string) []byte {
+	// Calculate navigation dates
+	prevDate := date.AddDate(0, 0, -1)
+	nextDate := date.AddDate(0, 0, 1)
+
+	// Generate summary from tasks data
+	summary := generateSummaryFromTasks(tasks)
+
+	// Calculate statistics
+	totalTasks := len(tasks)
+	completedTasks := 0
+	errorTasks := 0
+	alertTasks := 0
+	warnTasks := 0
+	runningTasks := 0
+
+	for _, t := range tasks {
+		switch t.Result {
+		case "complete":
+			completedTasks++
+		case "error":
+			errorTasks++
+		case "alert":
+			alertTasks++
+		case "warn":
+			warnTasks++
+		case "":
+			runningTasks++
+		}
+	}
+
+	data := map[string]interface{}{
+		"Date":           date.Format("Monday, January 2, 2006"),
+		"PrevDate":       prevDate.Format("2006-01-02"),
+		"NextDate":       nextDate.Format("2006-01-02"),
+		"Tasks":          tasks,
+		"Summary":        summary,
+		"TotalTasks":     totalTasks,
+		"CompletedTasks": completedTasks,
+		"ErrorTasks":     errorTasks,
+		"AlertTasks":     alertTasks,
+		"WarnTasks":      warnTasks,
+		"RunningTasks":   runningTasks,
+		"CurrentType":    taskType,
+		"CurrentJob":     job,
+		"CurrentResult":  result,
+	}
+
+	// Template functions
+	funcMap := template.FuncMap{
+		"formatTime": func(t time.Time) string {
+			return t.Format("2006-01-02T15:04:05Z")
+		},
+		"formatDuration": func(start, end string) string {
+			if start == "" || end == "" {
+				return "N/A"
+			}
+			startTime, err1 := time.Parse(time.RFC3339, start)
+			endTime, err2 := time.Parse(time.RFC3339, end)
+			if err1 != nil || err2 != nil {
+				return "N/A"
+			}
+			duration := endTime.Sub(startTime)
+			return duration.String()
+		},
+		"getJobFromMeta": func(meta string) string {
+			if meta == "" {
+				return ""
+			}
+			if v, err := url.ParseQuery(meta); err == nil {
+				return v.Get("job")
+			}
+			return ""
+		},
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"slice": func(s string, start, end int) string {
+			if start >= len(s) {
+				return ""
+			}
+			if end > len(s) {
+				end = len(s)
+			}
+			return s[start:end]
+		},
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("task").Funcs(funcMap).Parse(handler.TaskTemplate)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
+}
 
 // AlertData holds both the alerts and summary data for the template
 type AlertData struct {

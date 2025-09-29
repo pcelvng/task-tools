@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"testing"
@@ -14,6 +15,22 @@ import (
 )
 
 const testPath = "../../internal/test"
+
+// loadTaskViewData loads TaskView data from a JSON file
+func loadTaskViewData(filename string) ([]cache.TaskView, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []cache.TaskView
+	err = json.Unmarshal(data, &tasks)
+	if err != nil {
+		return nil, err
+	}
+
+	return tasks, nil
+}
 
 func TestBackloader(t *testing.T) {
 	cache, err := workflow.New(testPath+"/workflow/f3.toml", nil)
@@ -438,6 +455,36 @@ func TestFilesHTML(t *testing.T) {
 	
 		t.Logf("Alert preview generated and saved to: ./%s", outputFile)
 		
+	// Basic checks
+	if len(html) == 0 {
+		t.Error("Expected HTML output, got empty")
+	}
+
+}
+
+
+func TestTaskHTML(t *testing.T) {
+	// Load TaskView data from JSON file
+	testTasks, err := loadTaskViewData("test/tasks.json")
+	if err != nil {
+		t.Fatalf("Failed to load task data: %v", err)
+	}
+
+	// Set test date
+	date := trial.TimeDay("2024-01-15")
+
+	// Test with no filters - summary will be generated from tasks data
+	html := taskHTML(testTasks, date, "", "", "")
+
+	// Write HTML to a file for easy viewing
+	outputFile := "task_preview.html"
+	err = os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Task preview generated and saved to: ./%s", outputFile)
+
 	// Basic checks
 	if len(html) == 0 {
 		t.Error("Expected HTML output, got empty")

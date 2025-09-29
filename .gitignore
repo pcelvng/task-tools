@@ -19,6 +19,6 @@ apps/utils/file-watcher/file-watcher
 apps/workers/sql-load/sql-load
 build
 tasks.db 
-_preview.html
+*_preview.html
 
 coverage

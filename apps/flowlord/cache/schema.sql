@@ -1,63 +1,57 @@
 -- SQL schema for the task cache
-CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
-    completed BOOLEAN,
-    last_update TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS task_log (
+-- Single table for all task records with composite primary key
+CREATE TABLE IF NOT EXISTS task_records (
     id TEXT,
     type TEXT,
     job TEXT,
     info TEXT,
-    result TEXT,
+    result TEXT,               -- NULL if not completed
     meta TEXT,
-    msg TEXT,
+    msg TEXT,                  -- NULL if not completed
     created TIMESTAMP,
-    started TIMESTAMP,
-    ended TIMESTAMP,
-    event_id TEXT,
-    FOREIGN KEY (event_id) REFERENCES events(id)
+    started TIMESTAMP,         -- NULL if not started
+    ended TIMESTAMP,           -- NULL if not completed
+    PRIMARY KEY (type, job, id, created)
 );
 
-CREATE INDEX IF NOT EXISTS task_log_created ON task_log (created);
-CREATE INDEX IF NOT EXISTS task_log_started ON task_log (started);
-CREATE INDEX IF NOT EXISTS task_log_type ON task_log (type);
-CREATE INDEX IF NOT EXISTS task_log_job ON task_log (job);
-CREATE INDEX IF NOT EXISTS task_log_event_id ON task_log (event_id);
+CREATE INDEX IF NOT EXISTS idx_task_records_type ON task_records (type);
+CREATE INDEX IF NOT EXISTS idx_task_records_job ON task_records (job);
+CREATE INDEX IF NOT EXISTS idx_task_records_created ON task_records (created);
+CREATE INDEX IF NOT EXISTS idx_task_records_type_job ON task_records (type, job);
+CREATE INDEX IF NOT EXISTS idx_task_records_date_range ON task_records (created, ended);
 
 -- Create a view that calculates task and queue times
 CREATE VIEW IF NOT EXISTS tasks AS
 SELECT 
-    task_log.id,
-    task_log.type,
-    task_log.job,
-    task_log.info,
+    task_records.id,
+    task_records.type,
+    task_records.job,
+    task_records.info,
     -- SQLite doesn't have parse_url function, we'll need to handle this in Go
-    task_log.meta,
+    task_records.meta,
     -- SQLite doesn't have parse_param function, we'll need to handle this in Go
-    task_log.msg,
-    task_log.result,
+    task_records.msg,
+    task_records.result,
     -- Calculate task duration in seconds
-    CAST((julianday(task_log.ended) - julianday(task_log.started)) * 24 * 60 * 60 AS INTEGER) as task_seconds,
+    CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) as task_seconds,
     -- Format task duration as HH:MM:SS
     strftime('%H:%M:%S', 
-        CAST((julianday(task_log.ended) - julianday(task_log.started)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
-        CAST((julianday(task_log.ended) - julianday(task_log.started)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
-        CAST((julianday(task_log.ended) - julianday(task_log.started)) * 24 * 60 * 60 AS INTEGER) % 60
+        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
+        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
+        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) % 60
     ) as task_time,
     -- Calculate queue time in seconds
-    CAST((julianday(task_log.started) - julianday(task_log.created)) * 24 * 60 * 60 AS INTEGER) as queue_seconds,
+    CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) as queue_seconds,
     -- Format queue duration as HH:MM:SS
     strftime('%H:%M:%S', 
-        CAST((julianday(task_log.started) - julianday(task_log.created)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
-        CAST((julianday(task_log.started) - julianday(task_log.created)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
-        CAST((julianday(task_log.started) - julianday(task_log.created)) * 24 * 60 * 60 AS INTEGER) % 60
+        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
+        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
+        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) % 60
     ) as queue_time,
-    task_log.created,
-    task_log.started,
-    task_log.ended
-FROM task_log;
+    task_records.created,
+    task_records.started,
+    task_records.ended
+FROM task_records;
 
 -- Alert records table for storing alert events
 CREATE TABLE IF NOT EXISTS alert_records (

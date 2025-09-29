@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"encoding/json"
+	"log"
 	"net/url"
 	"sort"
 	"strings"
@@ -58,62 +59,35 @@ func (s *SQLite) Add(t task.Task) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Start a transaction
-	tx, err := s.db.Begin()
-	if err != nil {
-		return
-	}
-	defer tx.Rollback()
-
-	// Check if event exists
-	var eventExists bool
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM events WHERE id = ?)", t.ID).Scan(&eventExists)
-	if err != nil {
-		return
-	}
-
-	// Determine completion status and last update time
-	completed := t.Result != ""
-	var lastUpdate time.Time
-	if completed {
-		lastUpdate, _ = time.Parse(time.RFC3339, t.Ended)
-	} else {
-		lastUpdate, _ = time.Parse(time.RFC3339, t.Created)
-	}
-
-	// Insert or update event
-	if !eventExists {
-		_, err = tx.Exec(`
-			INSERT INTO events (id, completed, last_update)
-			VALUES (?, ?, ?)
-		`, t.ID, completed, lastUpdate)
-	} else {
-		_, err = tx.Exec(`
-			UPDATE events 
-			SET completed = ?, last_update = ?
-			WHERE id = ?
-		`, completed, lastUpdate, t.ID)
-	}
-	if err != nil {
-		return
-	}
-
-	// Insert task log
-	_, err = tx.Exec(`
-		INSERT INTO task_log (
-			id, type, job, info, result, meta, msg,
-			created, started, ended, event_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	// Use UPSERT to handle both new tasks and updates
+	result, err := s.db.Exec(`
+		INSERT INTO task_records (id, type, job, info, result, meta, msg, created, started, ended)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (type, job, id, created) 
+		DO UPDATE SET
+			result = excluded.result,
+			meta = excluded.meta,
+			msg = excluded.msg,
+			started = excluded.started,
+			ended = excluded.ended
 	`,
 		t.ID, t.Type, t.Job, t.Info, t.Result, t.Meta, t.Msg,
-		t.Created, t.Started, t.Ended, t.ID,
+		t.Created, t.Started, t.Ended,
 	)
+
 	if err != nil {
+		log.Printf("ERROR: Failed to insert task record: %v", err)
 		return
 	}
 
-	// Commit the transaction
-	tx.Commit()
+	// Check if this was an update (conflict) rather than insert
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		// This indicates a conflict occurred and the record was updated
+		// Log this as it's unexpected for new task creation
+		log.Printf("WARNING: Task creation conflict detected - task %s:%s:%s at %s was updated instead of inserted", 
+			t.Type, t.Job, t.ID, t.Created)
+	}
 }
 
 func (s *SQLite) Get(id string) TaskJob {
@@ -121,26 +95,13 @@ func (s *SQLite) Get(id string) TaskJob {
 	defer s.mu.Unlock()
 
 	var tj TaskJob
-	var completed bool
-	var lastUpdate time.Time
 
-	// Get event info
-	err := s.db.QueryRow(`
-		SELECT completed, last_update
-		FROM events
-		WHERE id = ?
-	`, id).Scan(&completed, &lastUpdate)
-
-	if err != nil {
-		return tj
-	}
-
-	// Get all task logs for this event
+	// Get all task records for this ID, ordered by created time
 	rows, err := s.db.Query(`
 		SELECT id, type, job, info, result, meta, msg,
 		       created, started, ended
-		FROM task_log
-		WHERE event_id = ?
+		FROM task_records
+		WHERE id = ?
 		ORDER BY created
 	`, id)
 	if err != nil {
@@ -149,6 +110,9 @@ func (s *SQLite) Get(id string) TaskJob {
 	defer rows.Close()
 
 	var events []task.Task
+	var lastUpdate time.Time
+	var completed bool
+
 	for rows.Next() {
 		var t task.Task
 		err := rows.Scan(
@@ -159,6 +123,22 @@ func (s *SQLite) Get(id string) TaskJob {
 			continue
 		}
 		events = append(events, t)
+
+		// Track completion status and last update time
+		if t.Result != "" {
+			completed = true
+			if ended, err := time.Parse(time.RFC3339, t.Ended); err == nil {
+				if ended.After(lastUpdate) {
+					lastUpdate = ended
+				}
+			}
+		} else {
+			if created, err := time.Parse(time.RFC3339, t.Created); err == nil {
+				if created.After(lastUpdate) {
+					lastUpdate = created
+				}
+			}
+		}
 	}
 
 	tj = TaskJob{
@@ -187,38 +167,27 @@ func (s *SQLite) Recycle() Stat {
 
 	// Get total count before deletion
 	var total int
-	err = tx.QueryRow("SELECT COUNT(*) FROM events").Scan(&total)
+	err = tx.QueryRow("SELECT COUNT(*) FROM task_records").Scan(&total)
 	if err != nil {
 		return Stat{}
 	}
 
-	// Get expired events and their last task log
+	// Get expired task records
 	rows, err := tx.Query(`
-		SELECT e.id, e.completed, tl.id, tl.type, tl.job, tl.info, tl.result,
-		       tl.meta, tl.msg, tl.created, tl.started, tl.ended
-		FROM events e
-		JOIN task_log tl ON e.id = tl.event_id
-		WHERE e.last_update < ?
-		AND tl.created = (
-			SELECT MAX(created)
-			FROM task_log
-			WHERE event_id = e.id
-		)
+		SELECT id, type, job, info, result, meta, msg,
+		       created, started, ended
+		FROM task_records
+		WHERE created < ?
 	`, t.Add(-s.ttl))
 	if err != nil {
 		return Stat{}
 	}
 	defer rows.Close()
 
-	// Process expired events
+	// Process expired records
 	for rows.Next() {
-		var (
-			eventID   string
-			completed bool
-			task      task.Task
-		)
+		var task task.Task
 		err := rows.Scan(
-			&eventID, &completed,
 			&task.ID, &task.Type, &task.Job, &task.Info, &task.Result,
 			&task.Meta, &task.Msg, &task.Created, &task.Started, &task.Ended,
 		)
@@ -226,16 +195,16 @@ func (s *SQLite) Recycle() Stat {
 			continue
 		}
 
-		if !completed {
+		// Check if task is incomplete
+		if task.Result == "" {
 			tasks = append(tasks, task)
 		}
 
-		// Delete the event and its task logs
-		_, err = tx.Exec("DELETE FROM task_log WHERE event_id = ?", eventID)
-		if err != nil {
-			continue
-		}
-		_, err = tx.Exec("DELETE FROM events WHERE id = ?", eventID)
+		// Delete the expired record
+		_, err = tx.Exec(`
+			DELETE FROM task_records 
+			WHERE id = ? AND type = ? AND job = ? AND created = ?
+		`, task.ID, task.Type, task.Job, task.Created)
 		if err != nil {
 			continue
 		}
@@ -243,7 +212,7 @@ func (s *SQLite) Recycle() Stat {
 
 	// Get remaining count
 	var remaining int
-	err = tx.QueryRow("SELECT COUNT(*) FROM events").Scan(&remaining)
+	err = tx.QueryRow("SELECT COUNT(*) FROM task_records").Scan(&remaining)
 	if err != nil {
 		return Stat{}
 	}
@@ -267,7 +236,7 @@ func (s *SQLite) Recap() map[string]*Stats {
 	rows, err := s.db.Query(`
 		SELECT id, type, job, info, result, meta, msg,
 		       created, started, ended
-		FROM task_log
+		FROM task_records
 	`)
 	if err != nil {
 		return data
@@ -743,6 +712,127 @@ func (s *SQLite) GetFileMessagesWithTasks(limit int, offset int) ([]FileMessageW
 	}
 
 	return results, nil
+}
+
+// TaskView represents a task with calculated times from the tasks view
+type TaskView struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Job          string `json:"job"`
+	Info         string `json:"info"`
+	Result       string `json:"result"`
+	Meta         string `json:"meta"`
+	Msg          string `json:"msg"`
+	TaskSeconds  int    `json:"task_seconds"`
+	TaskTime     string `json:"task_time"`
+	QueueSeconds int    `json:"queue_seconds"`
+	QueueTime    string `json:"queue_time"`
+	Created      string `json:"created"`
+	Started      string `json:"started"`
+	Ended        string `json:"ended"`
+}
+
+// GetTasksByDate retrieves tasks for a specific date with optional filtering using the tasks view
+func (s *SQLite) GetTasksByDate(date time.Time, taskType, job, result string) ([]TaskView, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dateStr := date.Format("2006-01-02")
+	
+	// Build query with optional filters using the tasks view
+	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
+		FROM tasks
+		WHERE DATE(created) = ?`
+	args := []interface{}{dateStr}
+	
+	if taskType != "" {
+		query += " AND type = ?"
+		args = append(args, taskType)
+	}
+	
+	if job != "" {
+		query += " AND job = ?"
+		args = append(args, job)
+	}
+	
+	if result != "" {
+		query += " AND result = ?"
+		args = append(args, result)
+	}
+	
+	query += " ORDER BY created DESC"
+	
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []TaskView
+	for rows.Next() {
+		var t TaskView
+		err := rows.Scan(
+			&t.ID, &t.Type, &t.Job, &t.Info, &t.Result, &t.Meta, &t.Msg,
+			&t.TaskSeconds, &t.TaskTime, &t.QueueSeconds, &t.QueueTime,
+			&t.Created, &t.Started, &t.Ended,
+		)
+		if err != nil {
+			continue
+		}
+		tasks = append(tasks, t)
+	}
+
+	return tasks, nil
+}
+
+// GetTaskSummaryByDate creates a summary of tasks for a specific date
+func (s *SQLite) GetTaskSummaryByDate(date time.Time) (map[string]*Stats, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dateStr := date.Format("2006-01-02")
+	
+	query := `SELECT id, type, job, info, result, meta, msg, created, started, ended
+		FROM task_records
+		WHERE DATE(created) = ?
+		ORDER BY created`
+	
+	rows, err := s.db.Query(query, dateStr)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := make(map[string]*Stats)
+	for rows.Next() {
+		var t task.Task
+		err := rows.Scan(
+			&t.ID, &t.Type, &t.Job, &t.Info, &t.Result, &t.Meta, &t.Msg,
+			&t.Created, &t.Started, &t.Ended,
+		)
+		if err != nil {
+			continue
+		}
+
+		job := t.Job
+		if job == "" {
+			v, _ := url.ParseQuery(t.Meta)
+			job = v.Get("job")
+		}
+		key := strings.TrimRight(t.Type+":"+job, ":")
+		stat, found := data[key]
+		if !found {
+			stat = &Stats{
+				CompletedTimes: make([]time.Time, 0),
+				ErrorTimes:     make([]time.Time, 0),
+				ExecTimes:      &DurationStats{},
+			}
+			data[key] = stat
+		}
+		stat.Add(t)
+	}
+
+	return data, nil
 }
 
 // FileMessageWithTasks represents a file message with associated task details
