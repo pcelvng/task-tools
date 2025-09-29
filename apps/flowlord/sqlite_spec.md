@@ -223,42 +223,89 @@ ORDER BY file_count DESC;
 ```
 
 ### Enhanced Task Recording
-Redesign task storage for optimal querying, deduplication, and system tracking.
+Replace dual-table system with single table for simplified task tracking.
 
 ```sql
--- Modify existing events table to include deduplication
-ALTER TABLE events ADD COLUMN task_hash TEXT;
-ALTER TABLE events ADD COLUMN first_seen TIMESTAMP;
-ALTER TABLE events ADD COLUMN last_seen TIMESTAMP;
+-- Remove existing tables
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS task_log;
 
--- Enhanced task_log with better indexing and deduplication support
-CREATE TABLE task_execution_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id TEXT NOT NULL,
-    execution_sequence INTEGER NOT NULL, -- For tracking task progression
-    type TEXT NOT NULL,
+-- Single table for all task records
+CREATE TABLE task_records (
+    id TEXT,
+    type TEXT,
     job TEXT,
     info TEXT,
-    result TEXT,
+    result TEXT,               -- NULL if not completed
     meta TEXT,
-    msg TEXT,
+    msg TEXT,                  -- NULL if not completed
     created TIMESTAMP,
-    started TIMESTAMP,
-    ended TIMESTAMP,
-    workflow_file TEXT,
-    phase_matched BOOLEAN DEFAULT FALSE,
-    children_triggered INTEGER DEFAULT 0,
-    retry_count INTEGER DEFAULT 0,
-    is_duplicate BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (event_id) REFERENCES events(id)
+    started TIMESTAMP,         -- NULL if not started
+    ended TIMESTAMP,           -- NULL if not completed
+    PRIMARY KEY (type, job, id, created)
 );
 
-CREATE INDEX idx_task_execution_type_job ON task_execution_log (type, job);
-CREATE INDEX idx_task_execution_created ON task_execution_log (created);
-CREATE INDEX idx_task_execution_result ON task_execution_log (result);
-CREATE INDEX idx_task_execution_event_id ON task_execution_log (event_id);
-CREATE INDEX idx_task_execution_workflow ON task_execution_log (workflow_file);
+-- Indexes for efficient querying
+CREATE INDEX idx_task_records_type ON task_records (type);
+CREATE INDEX idx_task_records_job ON task_records (job);
+CREATE INDEX idx_task_records_created ON task_records (created);
+CREATE INDEX idx_task_records_type_job ON task_records (type, job);
+CREATE INDEX idx_task_records_date_range ON task_records (created, ended);
+
+-- Create a view that calculates task and queue times
+CREATE VIEW IF NOT EXISTS tasks AS
+SELECT 
+    task_records.id,
+    task_records.type,
+    task_records.job,
+    task_records.info,
+    task_records.meta,
+    task_records.msg,
+    task_records.result,
+    -- Calculate task duration in seconds
+    CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) as task_seconds,
+    -- Format task duration as HH:MM:SS
+    strftime('%H:%M:%S', 
+        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
+        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
+        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) % 60
+    ) as task_time,
+    -- Calculate queue time in seconds
+    CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) as queue_seconds,
+    -- Format queue duration as HH:MM:SS
+    strftime('%H:%M:%S', 
+        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
+        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
+        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) % 60
+    ) as queue_time,
+    task_records.created,
+    task_records.started,
+    task_records.ended
+FROM task_records;
+
+-- Common query patterns
+-- All completed tasks
+SELECT * FROM task_records WHERE result IS NOT NULL;
+
+-- Tasks by type and job
+SELECT * FROM task_records WHERE type = ? AND job = ?;
+
+-- Incomplete tasks
+SELECT * FROM task_records WHERE result IS NULL;
+
+-- Tasks by date range
+SELECT * FROM task_records 
+WHERE created BETWEEN ? AND ?;
 ```
+
+**Implementation Changes:**
+- Replace `events` + `task_log` with single `task_records` table
+- Use composite PRIMARY KEY (type, job, id, created) to handle retries naturally
+- Each retry creates a new record with unique `created` timestamp
+- Track task creation (when first submitted) and completion (when finished)
+- NULL values for `started`, `ended`, `result`, `msg` until completion
+- Log conflicts on task creation (unexpected duplicates) for monitoring
+- Maintain existing Cache interface for backward compatibility
 
 ### Task Relationships and Dependencies
 Track task.Done message processing and child task triggering.
