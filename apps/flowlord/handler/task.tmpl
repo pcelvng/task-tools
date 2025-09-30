@@ -240,6 +240,31 @@
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
             font-size: 13px;
             color: #6c757d;
+            cursor: pointer;
+            position: relative;
+            user-select: text;
+        }
+        .id-cell:hover {
+            background-color: #f8f9fa;
+        }
+        .id-cell.truncated {
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .id-cell.expanded {
+            max-width: none;
+            white-space: normal;
+            word-break: break-all;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 2px;
+        }
+        .id-cell.copyable {
+            position: relative;
         }
         .type-cell {
             font-weight: 500;
@@ -277,22 +302,74 @@
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
             font-size: 13px;
             color: #6c757d;
-            max-width: 200px;
-            word-wrap: break-word;
+            cursor: pointer;
             line-height: 1.4;
+            user-select: text;
+        }
+        .info-cell:hover {
+            background-color: #f8f9fa;
+        }
+        .info-cell.truncated {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .info-cell.expanded {
+            max-width: none;
+            white-space: normal;
+            word-wrap: break-word;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 2px;
+        }
+        .info-cell.copyable {
+            position: relative;
         }
         .meta-cell {
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
             font-size: 12px;
             color: #6c757d;
-            max-width: 200px;
-            word-wrap: break-word;
+            cursor: pointer;
             line-height: 1.4;
+            user-select: text;
+        }
+        .meta-cell:hover {
+            background-color: #f8f9fa;
+        }
+        .meta-cell.truncated {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .meta-cell.expanded {
+            max-width: none;
+            white-space: normal;
+            word-wrap: break-word;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 2px;
+        }
+        .meta-cell.copyable {
+            position: relative;
         }
         .message-cell {
             max-width: 300px;
             word-wrap: break-word;
             line-height: 1.4;
+            cursor: pointer;
+            user-select: text;
+        }
+        .message-cell:hover {
+            background-color: #f8f9fa;
+        }
+        .message-cell.copyable {
+            position: relative;
         }
         .stats {
             padding: 16px 20px;
@@ -310,6 +387,56 @@
             margin: 0 0 10px 0;
             color: #95a5a6;
         }
+        
+        /* Context menu styles */
+        .context-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 120px;
+            padding: 4px 0;
+        }
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .context-menu-item:hover {
+            background-color: #f8f9fa;
+        }
+        .context-menu-item:active {
+            background-color: #e9ecef;
+        }
+        
+        /* Copy feedback styles */
+        .copy-feedback {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1001;
+            pointer-events: none;
+            animation: copyFeedback 2s ease-out forwards;
+        }
+        @keyframes copyFeedback {
+            0% { opacity: 0; transform: translateX(-50%) translateY(0); }
+            20% { opacity: 1; transform: translateX(-50%) translateY(-5px); }
+            80% { opacity: 1; transform: translateX(-50%) translateY(-5px); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        }
     </style>
 </head>
 <body>
@@ -326,7 +453,7 @@
         <div class="filters">
             <h3>Filters</h3>
             <form method="GET" action="/web/task">
-                <input type="hidden" name="date" value="{{.Date}}">
+                <input type="hidden" name="date" value="{{.DateValue}}">
                 <div class="filter-row">
                     <div class="filter-group">
                         <label for="type">Task Type</label>
@@ -418,20 +545,47 @@
                 <tbody>
                     {{range .Tasks}}
                     <tr>
-                        <td class="id-cell" title="{{.ID}}" onclick="copyToClipboard('{{.ID}}')" style="cursor: pointer;">
-                            {{if ge (len .ID) 6}}{{slice .ID 0 6}}...{{else}}{{.ID}}{{end}}
+                        <td class="id-cell truncated copyable" 
+                            data-full-text="{{.ID}}" 
+                            data-truncated-text="{{if ge (len .ID) 8}}{{slice .ID 0 8}}...{{else}}{{.ID}}{{end}}"
+                            onclick="toggleField(this, '{{.ID}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.ID}}')"
+                            ondblclick="copyToClipboard('{{.ID}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{if ge (len .ID) 8}}{{slice .ID 0 8}}...{{else}}{{.ID}}{{end}}
                         </td>
                         <td class="type-cell">{{.Type}}</td>
                         <td class="job-cell">{{if .Job}}{{.Job}}{{else}}{{getJobFromMeta .Meta}}{{end}}</td>
                         <td class="result-cell {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}">
                             {{if .Result}}{{.Result}}{{else}}Running{{end}}
                         </td>
-                        <td class="info-cell">{{.Info}}</td>
-                        <td class="meta-cell">{{.Meta}}</td>
+                        <td class="info-cell truncated copyable" 
+                            data-full-text="{{.Info}}" 
+                            data-truncated-text="{{if ge (len .Info) 80}}{{slice .Info 0 80}}...{{else}}{{.Info}}{{end}}"
+                            onclick="toggleField(this, '{{.Info}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.Info}}')"
+                            ondblclick="copyToClipboard('{{.Info}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{if ge (len .Info) 80}}{{slice .Info 0 80}}...{{else}}{{.Info}}{{end}}
+                        </td>
+                        <td class="meta-cell truncated copyable" 
+                            data-full-text="{{.Meta}}" 
+                            data-truncated-text="{{if ge (len .Meta) 80}}{{slice .Meta 0 80}}...{{else}}{{.Meta}}{{end}}"
+                            onclick="toggleField(this, '{{.Meta}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.Meta}}')"
+                            ondblclick="copyToClipboard('{{.Meta}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{if ge (len .Meta) 80}}{{slice .Meta 0 80}}...{{else}}{{.Meta}}{{end}}
+                        </td>
                         <td class="time-cell">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
                         <td class="time-cell">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
                         <td class="time-cell">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
-                        <td class="message-cell">{{.Msg}}</td>
+                        <td class="message-cell copyable" 
+                            oncontextmenu="showContextMenu(event, '{{.Msg}}')"
+                            ondblclick="copyToClipboard('{{.Msg}}')"
+                            title="Double-click or right-click to copy">
+                            {{.Msg}}
+                        </td>
                     </tr>
                     {{end}}
                 </tbody>
@@ -585,38 +739,121 @@
             initializeSorting();
         });
 
-        // Copy to clipboard functionality
+        // Toggle field expansion/collapse functionality
+        function toggleField(element, fullText) {
+            // Prevent event bubbling to avoid conflicts with sorting
+            event.stopPropagation();
+            
+            if (element.classList.contains('expanded')) {
+                // Collapse the field
+                element.classList.remove('expanded');
+                element.classList.add('truncated');
+                element.textContent = element.dataset.truncatedText;
+            } else {
+                // Expand the field
+                element.classList.remove('truncated');
+                element.classList.add('expanded');
+                element.textContent = fullText;
+            }
+        }
+
+        // Context menu functionality
+        function showContextMenu(event, text) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Remove any existing context menu
+            const existingMenu = document.querySelector('.context-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+            
+            // Create context menu
+            const contextMenu = document.createElement('div');
+            contextMenu.className = 'context-menu';
+            contextMenu.innerHTML = `
+                <div class="context-menu-item" onclick="copyToClipboard('${text.replace(/'/g, "\\'")}')">
+                    📋 Copy
+                </div>
+            `;
+            
+            // Position the context menu
+            contextMenu.style.left = event.pageX + 'px';
+            contextMenu.style.top = event.pageY + 'px';
+            
+            document.body.appendChild(contextMenu);
+            
+            // Close context menu when clicking elsewhere
+            const closeMenu = (e) => {
+                if (!contextMenu.contains(e.target)) {
+                    contextMenu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            
+            setTimeout(() => {
+                document.addEventListener('click', closeMenu);
+            }, 100);
+        }
+
+
+        // Copy to clipboard functionality with enhanced feedback
         function copyToClipboard(text) {
+            const targetElement = event ? event.target : document.activeElement;
+            
             navigator.clipboard.writeText(text).then(function() {
-                // Show a brief success message
-                const originalText = event.target.textContent;
-                event.target.textContent = 'Copied!';
-                event.target.style.color = '#28a745';
-                setTimeout(function() {
-                    event.target.textContent = originalText;
-                    event.target.style.color = '';
-                }, 1000);
+                showCopyFeedback(targetElement, 'Copied!');
             }).catch(function(err) {
                 console.error('Could not copy text: ', err);
                 // Fallback for older browsers
                 const textArea = document.createElement('textarea');
                 textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
                 document.body.appendChild(textArea);
+                textArea.focus();
                 textArea.select();
                 try {
                     document.execCommand('copy');
-                    const originalText = event.target.textContent;
-                    event.target.textContent = 'Copied!';
-                    event.target.style.color = '#28a745';
-                    setTimeout(function() {
-                        event.target.textContent = originalText;
-                        event.target.style.color = '';
-                    }, 1000);
+                    showCopyFeedback(targetElement, 'Copied!');
                 } catch (err) {
                     console.error('Fallback copy failed: ', err);
+                    showCopyFeedback(targetElement, 'Copy failed!', true);
                 }
                 document.body.removeChild(textArea);
             });
+        }
+
+        // Show copy feedback with animation
+        function showCopyFeedback(element, message, isError = false) {
+            // Remove any existing feedback
+            const existingFeedback = element.querySelector('.copy-feedback');
+            if (existingFeedback) {
+                existingFeedback.remove();
+            }
+            
+            // Create feedback element
+            const feedback = document.createElement('div');
+            feedback.className = 'copy-feedback';
+            feedback.textContent = message;
+            feedback.style.backgroundColor = isError ? '#dc3545' : '#28a745';
+            
+            // Position feedback relative to the element
+            const rect = element.getBoundingClientRect();
+            feedback.style.position = 'fixed';
+            feedback.style.left = (rect.left + rect.width / 2) + 'px';
+            feedback.style.top = (rect.top - 10) + 'px';
+            feedback.style.transform = 'translateX(-50%)';
+            
+            element.appendChild(feedback);
+            
+            // Remove feedback after animation
+            setTimeout(() => {
+                if (feedback.parentNode) {
+                    feedback.remove();
+                }
+            }, 2000);
         }
     </script>
 </body>

@@ -519,6 +519,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 
 	data := map[string]interface{}{
 		"Date":           date.Format("Monday, January 2, 2006"),
+		"DateValue":      date.Format("2006-01-02"),
 		"PrevDate":       prevDate.Format("2006-01-02"),
 		"NextDate":       nextDate.Format("2006-01-02"),
 		"Tasks":          tasks,
