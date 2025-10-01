@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -490,4 +491,50 @@ func TestTaskHTML(t *testing.T) {
 		t.Error("Expected HTML output, got empty")
 	}
 
+}
+
+
+func TestAboutHTML(t *testing.T) {
+	// Create a real SQLite cache for testing
+	taskCache, err := cache.NewSQLite(time.Hour, ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create test cache: %v", err)
+	}
+
+	// Create a mock taskMaster with test data
+	tm := &taskMaster{
+		initTime:   time.Now().Add(-2 * time.Hour), // 2 hours ago
+		nextUpdate: time.Now().Add(30 * time.Minute), // 30 minutes from now
+		lastUpdate: time.Now().Add(-15 * time.Minute), // 15 minutes ago
+		taskCache:  taskCache,
+	}
+
+	// Generate HTML using the aboutHTML method
+	html := tm.aboutHTML()
+
+	// Write HTML to a file for easy viewing
+	outputFile := "about_preview.html"
+	err = os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("About preview generated and saved to: ./%s", outputFile)
+
+	// Basic checks
+	if len(html) == 0 {
+		t.Error("Expected HTML output, got empty")
+	}
+
+	// Check that key content is present
+	htmlStr := string(html)
+	if !strings.Contains(htmlStr, "flowlord") {
+		t.Error("Expected 'flowlord' in HTML output")
+	}
+	if !strings.Contains(htmlStr, "System Information") {
+		t.Error("Expected 'System Information' in HTML output")
+	}
+	if !strings.Contains(htmlStr, "Table Breakdown") {
+		t.Error("Expected 'Table Breakdown' in HTML output")
+	}
 }

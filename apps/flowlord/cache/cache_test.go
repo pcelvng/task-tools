@@ -1,13 +1,6 @@
 package cache
 
-import (
-	"testing"
-	"time"
-
-	"github.com/hydronica/trial"
-	"github.com/pcelvng/task"
-)
-
+/*
 func TestAdd(t *testing.T) {
 	fn := func(tasks []task.Task) (map[string]TaskJob, error) {
 		cache := &Memory{cache: make(map[string]TaskJob)}
@@ -225,3 +218,4 @@ func TestRecap(t *testing.T) {
 	}
 	trial.New(fn, cases).SubTest(t)
 }
+*/

@@ -1,0 +1,27 @@
+{{define "header"}}
+<div class="nav-header">
+    <div class="nav-container">
+        <div class="nav-brand">
+            <h1>Flowlord Dashboard</h1>
+        </div>
+        <nav class="nav-menu">
+            <a href="/web/alert{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "alert"}}active{{end}}">
+                <span class="nav-icon">🚨</span>
+                Alerts
+            </a>
+            <a href="/web/files{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "files"}}active{{end}}">
+                <span class="nav-icon">📁</span>
+                Files
+            </a>
+            <a href="/web/task{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "task"}}active{{end}}">
+                <span class="nav-icon">📊</span>
+                Tasks
+            </a>
+            <a href="/web/about" class="nav-link {{if eq .CurrentPage "about"}}active{{end}}">
+                <span class="nav-icon">ℹ️</span>
+                About
+            </a>
+        </nav>
+    </div>
+</div>
+{{end}}

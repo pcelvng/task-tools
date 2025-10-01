@@ -207,9 +207,60 @@
             font-size: 14px;
             color: #6c757d;
         }
+        
+        /* Navigation Header Styles */
+        .nav-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+        .nav-brand h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            padding: 15px 0;
+        }
+        .nav-menu {
+            display: flex;
+            gap: 0;
+        }
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            border-bottom: 3px solid transparent;
+        }
+        .nav-link:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .nav-link.active {
+            color: white;
+            background: rgba(255, 255, 255, 0.15);
+            border-bottom-color: #3498db;
+        }
+        .nav-icon {
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
+    {{template "header" .}}
     <div class="container">
         <div class="header">
             <h1>Task Status Report</h1>

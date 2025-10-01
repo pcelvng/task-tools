@@ -59,6 +59,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/web/alert", tm.htmlAlert)
 	router.Get("/web/files", tm.htmlFiles)
 	router.Get("/web/task", tm.htmlTask)
+	router.Get("/web/about", tm.htmlAbout)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -354,6 +355,13 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	w.Write(taskHTML(tasks, dt, taskType, job, result))
 }
 
+// htmlAbout handles GET /web/about - displays system information and cache statistics
+func (tm *taskMaster) htmlAbout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(tm.aboutHTML())
+}
+
 // filesHTML renders the file messages HTML page
 func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 	// Calculate statistics
@@ -376,6 +384,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 
 	data := map[string]interface{}{
 		"Date":           date.Format("Monday, January 2, 2006"),
+		"DateValue":      date.Format("2006-01-02"),
 		"PrevDate":       prevDate.Format("2006-01-02"),
 		"NextDate":       nextDate.Format("2006-01-02"),
 		"Files":          files,
@@ -383,6 +392,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 		"MatchedFiles":   matchedFiles,
 		"UnmatchedFiles": unmatchedFiles,
 		"TotalTasks":     totalTasks,
+		"CurrentPage":    "files",
 	}
 
 	// Template functions
@@ -408,7 +418,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 	}
 
 	// Parse and execute template using the same pattern as alertHTML
-	tmpl, err := template.New("files").Funcs(funcMap).Parse(handler.FilesTemplate)
+	tmpl, err := template.New("files").Funcs(funcMap).Parse(handler.HeaderTemplate + handler.FilesTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
@@ -533,6 +543,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"CurrentType":    taskType,
 		"CurrentJob":     job,
 		"CurrentResult":  result,
+		"CurrentPage":    "task",
 	}
 
 	// Template functions
@@ -576,7 +587,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 	}
 
 	// Parse and execute template
-	tmpl, err := template.New("task").Funcs(funcMap).Parse(handler.TaskTemplate)
+	tmpl, err := template.New("task").Funcs(funcMap).Parse(handler.HeaderTemplate + handler.TaskTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
@@ -584,6 +595,59 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
+}
+
+// aboutHTML renders the about page HTML
+func (tm *taskMaster) aboutHTML() []byte {
+	// Get basic system information
+	sts := stats{
+		AppName:    "flowlord",
+		Version:    tools.Version,
+		RunTime:    gtools.PrintDuration(time.Since(tm.initTime)),
+		NextUpdate: tm.nextUpdate.Format("2006-01-02T15:04:05"),
+		LastUpdate: tm.lastUpdate.Format("2006-01-02T15:04:05"),
+	}
+
+	// Get database size information
+	dbSize, err := tm.taskCache.GetDBSize()
+	if err != nil {
+		return []byte("Error getting database size: " + err.Error())
+	}
+
+	// Get table statistics
+	tableStats, err := tm.taskCache.GetTableStats()
+	if err != nil {
+		return []byte("Error getting table statistics: " + err.Error())
+	}
+
+	// Create data structure for template
+	data := map[string]interface{}{
+		"AppName":     sts.AppName,
+		"Version":     sts.Version,
+		"RunTime":     sts.RunTime,
+		"LastUpdate":  sts.LastUpdate,
+		"NextUpdate":  sts.NextUpdate,
+		"TotalDBSize": dbSize.TotalSize,
+		"PageCount":   dbSize.PageCount,
+		"PageSize":    dbSize.PageSize,
+		"DBPath":      dbSize.DBPath,
+		"TableStats":  tableStats,
+		"CurrentPage": "about",
+		"DateValue":   "", // About page doesn't need date
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("about").Parse(handler.HeaderTemplate + handler.AboutTemplate)
+	if err != nil {
+		return []byte("Error parsing template: " + err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte("Error executing template: " + err.Error())
 	}
 
 	return buf.Bytes()
@@ -602,11 +666,13 @@ func alertHTML(tasks []cache.AlertRecord) []byte {
 	
 	// Create data structure for template
 	data := map[string]interface{}{
-		"Alerts":  tasks,
-		"Summary": summary,
+		"Alerts":      tasks,
+		"Summary":     summary,
+		"CurrentPage": "alert",
+		"DateValue":   "", // Will be set by the template if needed
 	}
 
-	tmpl, err := template.New("alert").Parse(handler.AlertTemplate)
+	tmpl, err := template.New("alert").Parse(handler.HeaderTemplate + handler.AlertTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}

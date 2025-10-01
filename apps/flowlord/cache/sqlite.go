@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/url"
 	"sort"
@@ -923,4 +924,139 @@ type FileMessageWithTasks struct {
 	TaskCreated time.Time `json:"task_created"`
 	TaskStarted time.Time `json:"task_started"`
 	TaskEnded   time.Time `json:"task_ended"`
+}
+
+// DBSizeInfo contains database size information
+type DBSizeInfo struct {
+	TotalSize   string `json:"total_size"`
+	PageCount   int64  `json:"page_count"`
+	PageSize    int64  `json:"page_size"`
+	DBPath      string `json:"db_path"`
+}
+
+// TableStat contains information about a database table
+type TableStat struct {
+	Name        string  `json:"name"`
+	RowCount    int64   `json:"row_count"`
+	SizeBytes   int64   `json:"size_bytes"`
+	SizeHuman   string  `json:"size_human"`
+	Percentage  float64 `json:"percentage"`
+}
+
+// GetDBSize returns database size information
+func (s *SQLite) GetDBSize() (*DBSizeInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get page count and page size
+	var pageCount, pageSize int64
+	err := s.db.QueryRow("PRAGMA page_count").Scan(&pageCount)
+	if err != nil {
+		return nil, err
+	}
+	
+	err = s.db.QueryRow("PRAGMA page_size").Scan(&pageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get database file path
+	var dbPath string
+	err = s.db.QueryRow("PRAGMA database_list").Scan(&dbPath, nil, nil)
+	if err != nil {
+		// If we can't get the path, use a default
+		dbPath = "unknown"
+	}
+
+	totalSize := pageCount * pageSize
+	totalSizeStr := formatBytes(totalSize)
+
+	return &DBSizeInfo{
+		TotalSize: totalSizeStr,
+		PageCount: pageCount,
+		PageSize:  pageSize,
+		DBPath:    dbPath,
+	}, nil
+}
+
+// GetTableStats returns statistics for all tables in the database
+func (s *SQLite) GetTableStats() ([]TableStat, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get total database size first
+	var totalSize int64
+	err := s.db.QueryRow("SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()").Scan(&totalSize)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get list of tables
+	rows, err := s.db.Query(`
+		SELECT name FROM sqlite_master 
+		WHERE type='table' AND name NOT LIKE 'sqlite_%'
+		ORDER BY name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return nil, err
+		}
+		tables = append(tables, tableName)
+	}
+
+	var stats []TableStat
+	for _, tableName := range tables {
+		// Get row count
+		var rowCount int64
+		err := s.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)).Scan(&rowCount)
+		if err != nil {
+			continue // Skip tables we can't read
+		}
+
+		// Get table size using pragma table_info and estimate
+		// This is an approximation since SQLite doesn't provide exact table sizes
+		var sizeBytes int64
+		if rowCount > 0 {
+			// Estimate size based on row count and average row size
+			// This is a rough approximation
+			avgRowSize := int64(200) // Estimated average row size in bytes
+			sizeBytes = rowCount * avgRowSize
+		}
+
+		percentage := float64(0)
+		if totalSize > 0 {
+			percentage = float64(sizeBytes) / float64(totalSize) * 100
+		}
+
+		stats = append(stats, TableStat{
+			Name:       tableName,
+			RowCount:   rowCount,
+			SizeBytes:  sizeBytes,
+			SizeHuman:  formatBytes(sizeBytes),
+			Percentage: percentage,
+		})
+	}
+
+	return stats, nil
+}
+
+// formatBytes converts bytes to human readable format
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
