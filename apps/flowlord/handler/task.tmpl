@@ -450,37 +450,6 @@
             </div>
         </div>
 
-        <div class="filters">
-            <h3>Filters</h3>
-            <form method="GET" action="/web/task">
-                <input type="hidden" name="date" value="{{.DateValue}}">
-                <div class="filter-row">
-                    <div class="filter-group">
-                        <label for="type">Task Type</label>
-                        <input type="text" id="type" name="type" value="{{.CurrentType}}" placeholder="e.g., csv2json">
-                    </div>
-                    <div class="filter-group">
-                        <label for="job">Job</label>
-                        <input type="text" id="job" name="job" value="{{.CurrentJob}}" placeholder="e.g., hourly">
-                    </div>
-                    <div class="filter-group">
-                        <label for="result">Result</label>
-                        <select id="result" name="result">
-                            <option value="">All</option>
-                            <option value="complete" {{if eq .CurrentResult "complete"}}selected{{end}}>Complete</option>
-                            <option value="error" {{if eq .CurrentResult "error"}}selected{{end}}>Error</option>
-                            <option value="alert" {{if eq .CurrentResult "alert"}}selected{{end}}>Alert</option>
-                            <option value="warn" {{if eq .CurrentResult "warn"}}selected{{end}}>Warning</option>
-                            <option value="" {{if eq .CurrentResult ""}}selected{{end}}>Running</option>
-                        </select>
-                    </div>
-                    <div class="filter-buttons">
-                        <button type="submit" class="btn btn-primary">Apply Filters</button>
-                        <a href="?date={{.Date}}" class="btn btn-secondary">Clear All</a>
-                    </div>
-                </div>
-            </form>
-        </div>
 
         <div class="summary-section">
             <h3>Task Summary</h3>
@@ -522,6 +491,27 @@
                     <div class="summary-details">{{$stat.String}}</div>
                 </div>
                 {{end}}
+            </div>
+        </div>
+
+        <div class="filters">
+            <h3>Filters</h3>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="typeFilter">Task Type</label>
+                    <select id="typeFilter">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="jobFilter">Job</label>
+                    <select id="jobFilter">
+                        <option value="">All Jobs</option>
+                    </select>
+                </div>
+                <div class="filter-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
+                </div>
             </div>
         </div>
 
@@ -737,7 +727,146 @@
 
             // Initialize the page
             initializeSorting();
+            initializeFilters();
         });
+
+        // Initialize responsive filters
+        function initializeFilters() {
+            const typeFilter = document.getElementById('typeFilter');
+            const jobFilter = document.getElementById('jobFilter');
+            const table = document.getElementById('taskTable');
+            
+            if (!table) return;
+            
+            // Get all task rows
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            
+            // Extract unique task types
+            const taskTypes = new Set();
+            const jobMap = new Map(); // type -> Set of jobs
+            
+            rows.forEach(row => {
+                const typeCell = row.cells[1]; // Type column
+                const jobCell = row.cells[2]; // Job column
+                
+                if (typeCell && jobCell) {
+                    const type = typeCell.textContent.trim();
+                    const job = jobCell.textContent.trim();
+                    
+                    if (type) {
+                        taskTypes.add(type);
+                        
+                        if (!jobMap.has(type)) {
+                            jobMap.set(type, new Set());
+                        }
+                        if (job) {
+                            jobMap.get(type).add(job);
+                        }
+                    }
+                }
+            });
+            
+            // Populate task type dropdown
+            const sortedTypes = Array.from(taskTypes).sort();
+            sortedTypes.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                typeFilter.appendChild(option);
+            });
+            
+            // Handle task type change
+            typeFilter.addEventListener('change', function() {
+                const selectedType = this.value;
+                const jobOptions = jobFilter.querySelectorAll('option:not([value=""])');
+                jobOptions.forEach(option => option.remove());
+                
+                if (selectedType && jobMap.has(selectedType)) {
+                    const jobs = Array.from(jobMap.get(selectedType)).sort();
+                    jobs.forEach(job => {
+                        const option = document.createElement('option');
+                        option.value = job;
+                        option.textContent = job;
+                        jobFilter.appendChild(option);
+                    });
+                }
+                
+                filterTable();
+            });
+            
+            // Handle job change
+            jobFilter.addEventListener('change', filterTable);
+            
+            // Initial filter
+            filterTable();
+        }
+        
+        // Filter table based on current filter values
+        function filterTable() {
+            const typeFilter = document.getElementById('typeFilter');
+            const jobFilter = document.getElementById('jobFilter');
+            const table = document.getElementById('taskTable');
+            
+            if (!table) return;
+            
+            const selectedType = typeFilter ? typeFilter.value : '';
+            const selectedJob = jobFilter ? jobFilter.value : '';
+            
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            
+            rows.forEach(row => {
+                const typeCell = row.cells[1];
+                const jobCell = row.cells[2];
+                
+                if (typeCell && jobCell) {
+                    const type = typeCell.textContent.trim();
+                    const job = jobCell.textContent.trim();
+                    
+                    const typeMatch = !selectedType || type === selectedType;
+                    const jobMatch = !selectedJob || job === selectedJob;
+                    
+                    if (typeMatch && jobMatch) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                }
+            });
+            
+            // Update task count
+            updateTaskCount();
+        }
+        
+        // Update the displayed task count
+        function updateTaskCount() {
+            const table = document.getElementById('taskTable');
+            if (!table) return;
+            
+            const visibleRows = Array.from(table.querySelectorAll('tbody tr')).filter(row => 
+                row.style.display !== 'none'
+            );
+            
+            const totalCountElement = document.getElementById('totalCount');
+            if (totalCountElement) {
+                totalCountElement.textContent = visibleRows.length;
+            }
+        }
+        
+        // Clear all filters
+        function clearFilters() {
+            const typeFilter = document.getElementById('typeFilter');
+            const jobFilter = document.getElementById('jobFilter');
+            
+            if (typeFilter) typeFilter.value = '';
+            if (jobFilter) {
+                jobFilter.value = '';
+                // Clear job options except "All Jobs"
+                const jobOptions = jobFilter.querySelectorAll('option:not([value=""])');
+                jobOptions.forEach(option => option.remove());
+            }
+            
+            filterTable();
+        }
 
         // Toggle field expansion/collapse functionality
         function toggleField(element, fullText) {

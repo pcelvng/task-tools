@@ -1,14 +1,25 @@
 package cache
 
 import (
-	"net/url"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/pcelvng/task"
-	"github.com/pcelvng/task/bus"
 )
+
+// todo: name to describe info about completed tasks that are within the cache
+type TaskJob struct {
+	LastUpdate time.Time // time since the last event with id
+	Completed  bool
+	count      int
+	Events     []task.Task
+}
+
+type Stat struct {
+	Count       int
+	Removed     int
+	ProcessTime time.Duration
+	Unfinished  []task.Task
+}
 
 // AlertRecord represents an alert stored in the database
 type AlertRecord struct {
@@ -29,12 +40,18 @@ type SummaryLine struct {
 	TimeRange string `json:"time_range"` // formatted time range
 }
 
-type Cache interface {
-	Add(task.Task)
-	Get(id string) TaskJob
+/*
+import (
+	"net/url"
+	"strings"
+	"sync"
+	"time"
 
-	// todo: listener for cache expiry?
-}
+	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus"
+)
+
+
 
 func NewMemory(ttl time.Duration) *Memory {
 	if ttl < time.Hour {
@@ -53,20 +70,7 @@ type Memory struct {
 	mu    sync.RWMutex
 }
 
-// todo: name to describe info about completed tasks that are within the cache
-type TaskJob struct {
-	LastUpdate time.Time // time since the last event with id
-	Completed  bool
-	count      int
-	Events     []task.Task
-}
 
-type Stat struct {
-	Count       int
-	Removed     int
-	ProcessTime time.Duration
-	Unfinished  []task.Task
-}
 
 // Recycle iterates through the cache
 // clearing all tasks that have been completed within the cache window
@@ -163,3 +167,4 @@ func (m *Memory) SendFunc(p bus.Producer) func(string, *task.Task) error {
 		return p.Send(topic, tsk.JSONBytes())
 	}
 }
+*/

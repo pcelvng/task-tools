@@ -200,14 +200,15 @@ func (s *SQLite) Recycle() Stat {
 			tasks = append(tasks, task)
 		}
 
+		// TODO: Deletion logic commented out for later implementation
 		// Delete the expired record
-		_, err = tx.Exec(`
-			DELETE FROM task_records 
-			WHERE id = ? AND type = ? AND job = ? AND created = ?
-		`, task.ID, task.Type, task.Job, task.Created)
-		if err != nil {
-			continue
-		}
+		// _, err = tx.Exec(`
+		// 	DELETE FROM task_records 
+		// 	WHERE id = ? AND type = ? AND job = ? AND created = ?
+		// `, task.ID, task.Type, task.Job, task.Created)
+		// if err != nil {
+		// 	continue
+		// }
 	}
 
 	// Get remaining count
@@ -223,6 +224,79 @@ func (s *SQLite) Recycle() Stat {
 	return Stat{
 		Count:       remaining,
 		Removed:     total - remaining,
+		ProcessTime: time.Since(t),
+		Unfinished:  tasks,
+	}
+}
+
+// CheckIncompleteTasks checks for tasks that have not completed within the TTL period
+// and adds them to the alerts table with deduplication. Returns count of alerts added.
+// Uses a JOIN query to efficiently find incomplete tasks without existing alerts.
+func (s *SQLite) CheckIncompleteTasks() Stat {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tasks := make([]task.Task, 0)
+	alertsAdded := 0
+	t := time.Now()
+
+	// Use LEFT JOIN to find incomplete tasks that don't have existing alerts
+	// This eliminates the need for separate deduplication queries
+	rows, err := s.db.Query(`
+		SELECT tr.id, tr.type, tr.job, tr.info, tr.result, tr.meta, tr.msg,
+		       tr.created, tr.started, tr.ended
+		FROM task_records tr
+		LEFT JOIN alert_records ar ON (
+			tr.id = ar.task_id AND 
+			tr.type = ar.task_type AND 
+			tr.job = ar.job AND 
+			ar.msg LIKE 'INCOMPLETE:%' AND 
+			ar.created_at > datetime('now', '-1 day')
+		)
+		WHERE tr.created < ? 
+		AND tr.result = '' 
+		AND ar.id IS NULL
+	`, t.Add(-s.ttl))
+	if err != nil {
+		return Stat{}
+	}
+	defer rows.Close()
+
+	// Process incomplete records that don't have alerts
+	for rows.Next() {
+		var task task.Task
+		err := rows.Scan(
+			&task.ID, &task.Type, &task.Job, &task.Info, &task.Result,
+			&task.Meta, &task.Msg, &task.Created, &task.Started, &task.Ended,
+		)
+		if err != nil {
+			continue
+		}
+
+		// Add incomplete task to alert list
+		tasks = append(tasks, task)
+		
+		// Add alert directly (no need to check for duplicates since JOIN already filtered them)
+		taskID := task.ID
+		if taskID == "" {
+			taskID = "unknown"
+		}
+
+		taskTime := tmpl.TaskTime(task)
+
+		_, err = s.db.Exec(`
+			INSERT INTO alert_records (task_id, task_time, task_type, job, msg)
+			VALUES (?, ?, ?, ?, ?)
+		`, taskID, taskTime, task.Type, task.Job, "INCOMPLETE: unfinished task detected")
+		
+		if err == nil {
+			alertsAdded++
+		}
+	}
+
+	return Stat{
+		Count:       alertsAdded,
+		Removed:     0, // No deletion in this method
 		ProcessTime: time.Since(t),
 		Unfinished:  tasks,
 	}
@@ -309,6 +383,7 @@ func (s *SQLite) AddAlert(t task.Task, message string) error {
 
 	return err
 }
+
 
 // extractJobFromTask is a helper function to get job from task
 func extractJobFromTask(t task.Task) string {

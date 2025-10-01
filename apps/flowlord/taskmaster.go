@@ -154,16 +154,7 @@ func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 }
 
 func (tm *taskMaster) refreshCache() ([]string, error) {
-	stat := tm.taskCache.Recycle()
-	if stat.Removed > 0 {
-		log.Printf("task-cache: size %d removed %d time: %v", stat.Count, stat.Removed, stat.ProcessTime)
-		for _, t := range stat.Unfinished {
-			// add unfinished tasks to alerts channel
-			t.Msg += "unfinished task detected"
-			tm.alerts <- t
-		}
-	}
-
+	// Reload workflow files
 	files, err := tm.Cache.Refresh()
 	if err != nil {
 		return nil, fmt.Errorf("error reloading workflow: %w", err)
@@ -470,7 +461,7 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 	}
 }
 
-// handleNotifications gathers all 'failed' tasks and
+// handleNotifications gathers all 'failed' tasks and incomplete tasks
 // sends a summary message every X minutes
 // It uses an exponential backoff to limit the number of messages
 // ie, (min) 5 -> 10 -> 20 -> 40 -> 80 -> 160 (max)
@@ -482,6 +473,11 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 		dur := tm.slack.MinFrequency
 		for ; ; time.Sleep(dur) {
 			var err error
+			
+			// Check for incomplete tasks and add them to alerts
+			tm.taskCache.CheckIncompleteTasks()
+			
+			// Get all alerts (including newly added incomplete task alerts)
 			alerts, err = tm.taskCache.GetAlertsByDate(time.Now())
 			if err != nil {
 				log.Printf("failed to retrieve alerts: %v", err)
