@@ -1,8 +1,18 @@
 {{define "header"}}
 <div class="nav-header">
     <div class="nav-container">
+        <div class="nav-controls">
+            <div class="date-picker-container">
+                <label for="datePicker" class="date-picker-label">Date:</label>
+                <input type="date" id="datePicker" class="date-picker" value="{{.DateValue}}">
+                <button id="todayBtn" class="btn btn-sm btn-outline">Today</button>
+            </div>
+            {{if .ShowRefresh}}
+            <button class="refresh-btn" onclick="location.reload()">Refresh</button>
+            {{end}}
+        </div>
         <div class="nav-brand">
-            <h1>Flowlord Dashboard</h1>
+            <h1>{{if .PageTitle}}{{.PageTitle}}{{else}}Flowlord Dashboard{{end}}</h1>
         </div>
         <nav class="nav-menu">
             <a href="/web/alert{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "alert"}}active{{end}}">
@@ -24,4 +34,51 @@
         </nav>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const datePicker = document.getElementById('datePicker');
+    const todayBtn = document.getElementById('todayBtn');
+    
+    // Set today's date as default if no date is provided
+    if (!datePicker.value) {
+        const today = new Date().toISOString().split('T')[0];
+        datePicker.value = today;
+    }
+    
+    // Handle date change
+    datePicker.addEventListener('change', function() {
+        const selectedDate = this.value;
+        if (selectedDate) {
+            // Get current page and preserve other query parameters
+            const currentUrl = new URL(window.location);
+            const currentPage = currentUrl.pathname;
+            
+            // Build new URL with date parameter
+            const newUrl = new URL(currentPage, window.location.origin);
+            newUrl.searchParams.set('date', selectedDate);
+            
+            // Preserve other query parameters (type, job, result, etc.)
+            const otherParams = ['type', 'job', 'result', 'sort', 'direction'];
+            otherParams.forEach(param => {
+                if (currentUrl.searchParams.has(param)) {
+                    newUrl.searchParams.set(param, currentUrl.searchParams.get(param));
+                }
+            });
+            
+            // Navigate to new URL
+            window.location.href = newUrl.toString();
+        }
+    });
+    
+    // Handle today button
+    todayBtn.addEventListener('click', function() {
+        const today = new Date().toISOString().split('T')[0];
+        datePicker.value = today;
+        
+        // Trigger change event
+        datePicker.dispatchEvent(new Event('change'));
+    });
+});
+</script>
 {{end}}

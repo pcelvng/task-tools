@@ -353,7 +353,7 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 
 // TestWebAlertPreview generates an HTML preview of the alert template for visual inspection
 // this provides an html file
-func TestWebAlertPreview(t *testing.T) {
+func TestAlertHTML(t *testing.T) {
 	// Create sample alert data to showcase the templating
 	sampleAlerts := []cache.AlertRecord{
 		{
@@ -399,10 +399,10 @@ func TestWebAlertPreview(t *testing.T) {
 	}
 
 	// Generate HTML using the alertHTML function
-	htmlContent := alertHTML(sampleAlerts)
+	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"))
 
 	// Write HTML to a file for easy viewing
-	outputFile := "alert_preview.html"
+	outputFile := "handler/alert_preview.html"
 	err := os.WriteFile(outputFile, htmlContent, 0644)
 	if err != nil {
 		t.Fatalf("Failed to write HTML file: %v", err)
@@ -448,7 +448,7 @@ func TestFilesHTML(t *testing.T) {
 	html := filesHTML(files, date)
 
 		// Write HTML to a file for easy viewing
-		outputFile := "files_preview.html"
+		outputFile := "handler/files_preview.html"
 		err := os.WriteFile(outputFile, html, 0644)
 		if err != nil {
 			t.Fatalf("Failed to write HTML file: %v", err)
@@ -478,7 +478,7 @@ func TestTaskHTML(t *testing.T) {
 	html := taskHTML(testTasks, date, "", "", "")
 
 	// Write HTML to a file for easy viewing
-	outputFile := "task_preview.html"
+	outputFile := "handler/task_preview.html"
 	err = os.WriteFile(outputFile, html, 0644)
 	if err != nil {
 		t.Fatalf("Failed to write HTML file: %v", err)
@@ -513,7 +513,7 @@ func TestAboutHTML(t *testing.T) {
 	html := tm.aboutHTML()
 
 	// Write HTML to a file for easy viewing
-	outputFile := "about_preview.html"
+	outputFile := "handler/about_preview.html"
 	err = os.WriteFile(outputFile, html, 0644)
 	if err != nil {
 		t.Fatalf("Failed to write HTML file: %v", err)

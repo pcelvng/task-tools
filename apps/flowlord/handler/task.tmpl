@@ -8,15 +8,7 @@
 </head>
 <body>
     {{template "header" .}}
-    <div class="container">
-        <div class="header">
-            <h1>Flowlord Task Dashboard</h1>
-            <div class="date-nav">
-                <a href="?date={{.PrevDate}}&type={{.CurrentType}}&job={{.CurrentJob}}&result={{.CurrentResult}}">← Previous Day</a>
-                <span class="current-date">{{.Date}}</span>
-                <a href="?date={{.NextDate}}&type={{.CurrentType}}&job={{.CurrentJob}}&result={{.CurrentResult}}">Next Day →</a>
-            </div>
-        </div>
+    <div class="container full-width">
 
 
         <div class="summary-section">
@@ -91,13 +83,13 @@
                         <th class="sortable" data-sort="id">ID</th>
                         <th class="sortable" data-sort="type">Type</th>
                         <th class="sortable" data-sort="job">Job</th>
+                        <th class="sortable" data-sort="message">Message</th>
                         <th class="sortable" data-sort="result">Result</th>
                         <th class="sortable" data-sort="info">Info</th>
                         <th class="sortable" data-sort="meta">Meta</th>
                         <th class="sortable" data-sort="created">Created</th>
                         <th class="sortable" data-sort="task_time">Task Time</th>
                         <th class="sortable" data-sort="queue_time">Queue Time</th>
-                        <th class="sortable" data-sort="message">Message</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -114,6 +106,15 @@
                         </td>
                         <td class="type-cell">{{.Type}}</td>
                         <td class="job-cell">{{if .Job}}{{.Job}}{{else}}{{getJobFromMeta .Meta}}{{end}}</td>
+                        <td class="message-cell truncated copyable" 
+                            data-full-text="{{.Msg}}" 
+                            data-truncated-text="{{if ge (len .Msg) 80}}{{slice .Msg 0 80}}...{{else}}{{.Msg}}{{end}}"
+                            onclick="toggleField(this, '{{.Msg}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.Msg}}')"
+                            ondblclick="copyToClipboard('{{.Msg}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{if ge (len .Msg) 80}}{{slice .Msg 0 80}}...{{else}}{{.Msg}}{{end}}
+                        </td>
                         <td class="result-cell {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}">
                             {{if .Result}}{{.Result}}{{else}}Running{{end}}
                         </td>
@@ -138,12 +139,6 @@
                         <td class="time-cell">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
                         <td class="time-cell">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
                         <td class="time-cell">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
-                        <td class="message-cell copyable" 
-                            oncontextmenu="showContextMenu(event, '{{.Msg}}')"
-                            ondblclick="copyToClipboard('{{.Msg}}')"
-                            title="Double-click or right-click to copy">
-                            {{.Msg}}
-                        </td>
                     </tr>
                     {{end}}
                 </tbody>

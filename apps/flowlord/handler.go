@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,25 +16,41 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jbsmith7741/uri"
-
 	"github.com/go-chi/chi/v5"
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 
+	tools "github.com/pcelvng/task-tools"
 	"github.com/pcelvng/task-tools/apps/flowlord/cache"
-	"github.com/pcelvng/task-tools/apps/flowlord/handler"
+	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
-
-	tools "github.com/pcelvng/task-tools"
-	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
+//go:embed handler/alert.tmpl
+var AlertTemplate string
+
+//go:embed handler/files.tmpl
+var FilesTemplate string
+
+//go:embed handler/task.tmpl
+var TaskTemplate string
+
+//go:embed handler/header.tmpl
+var HeaderTemplate string
+
+//go:embed handler/about.tmpl
+var AboutTemplate string
+
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
+	
+	// Static file serving
+	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("handler/static"))))
+	
 	router.Get("/", tm.Info)
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
@@ -308,7 +325,7 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(alertHTML(alerts))
+	w.Write(alertHTML(alerts, dt))
 }
 
 // htmlFiles handles GET /web/files - displays file messages for a specific date
@@ -368,14 +385,14 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 	totalFiles := len(files)
 	matchedFiles := 0
 	totalTasks := 0
-	
+
 	for _, file := range files {
 		if len(file.TaskNames) > 0 {
 			matchedFiles++
 			totalTasks += len(file.TaskNames)
 		}
 	}
-	
+
 	unmatchedFiles := totalFiles - matchedFiles
 
 	// Calculate navigation dates
@@ -393,6 +410,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 		"UnmatchedFiles": unmatchedFiles,
 		"TotalTasks":     totalTasks,
 		"CurrentPage":    "files",
+		"PageTitle":      "File Messages",
 	}
 
 	// Template functions
@@ -418,7 +436,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 	}
 
 	// Parse and execute template using the same pattern as alertHTML
-	tmpl, err := template.New("files").Funcs(funcMap).Parse(handler.HeaderTemplate + handler.FilesTemplate)
+	tmpl, err := template.New("files").Funcs(funcMap).Parse(HeaderTemplate + FilesTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
@@ -434,7 +452,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 // generateSummaryFromTasks creates a summary of tasks grouped by type:job
 func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 	summary := make(map[string]*cache.Stats)
-	
+
 	for _, t := range tasks {
 		// Get job from TaskView.Job or extract from Meta
 		job := t.Job
@@ -443,10 +461,10 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 				job = meta.Get("job")
 			}
 		}
-		
+
 		// Create key in format "type:job"
 		key := strings.TrimRight(t.Type+":"+job, ":")
-		
+
 		// Get or create stats for this type:job combination
 		stat, found := summary[key]
 		if !found {
@@ -457,7 +475,7 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 			}
 			summary[key] = stat
 		}
-		
+
 		// Convert TaskView to task.Task for processing
 		taskTime := tmpl.TaskTime(task.Task{
 			ID:      t.ID,
@@ -471,7 +489,7 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 			Started: t.Started,
 			Ended:   t.Ended,
 		})
-		
+
 		// Process based on result type
 		if t.Result == "error" {
 			stat.ErrorCount++
@@ -479,7 +497,7 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 		} else if t.Result == "complete" {
 			stat.CompletedCount++
 			stat.CompletedTimes = append(stat.CompletedTimes, taskTime)
-			
+
 			// Add execution time for completed tasks
 			if t.Started != "" && t.Ended != "" {
 				startTime, err1 := time.Parse(time.RFC3339, t.Started)
@@ -491,7 +509,7 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 		}
 		// Note: warn and alert results don't contribute to execution time stats
 	}
-	
+
 	return summary
 }
 
@@ -544,6 +562,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"CurrentJob":     job,
 		"CurrentResult":  result,
 		"CurrentPage":    "task",
+		"PageTitle":      "Task Dashboard",
 	}
 
 	// Template functions
@@ -587,7 +606,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 	}
 
 	// Parse and execute template
-	tmpl, err := template.New("task").Funcs(funcMap).Parse(handler.HeaderTemplate + handler.TaskTemplate)
+	tmpl, err := template.New("task").Funcs(funcMap).Parse(HeaderTemplate + TaskTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
@@ -637,10 +656,11 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"TableStats":  tableStats,
 		"CurrentPage": "about",
 		"DateValue":   "", // About page doesn't need date
+		"PageTitle":   "System Information",
 	}
 
 	// Parse and execute template
-	tmpl, err := template.New("about").Parse(handler.HeaderTemplate + handler.AboutTemplate)
+	tmpl, err := template.New("about").Parse(HeaderTemplate + AboutTemplate)
 	if err != nil {
 		return []byte("Error parsing template: " + err.Error())
 	}
@@ -660,23 +680,24 @@ type AlertData struct {
 }
 
 // alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
-func alertHTML(tasks []cache.AlertRecord) []byte {
+func alertHTML(tasks []cache.AlertRecord, date time.Time) []byte {
 	// Generate summary data using BuildCompactSummary
 	summary := cache.BuildCompactSummary(tasks)
-	
+
 	// Create data structure for template
 	data := map[string]interface{}{
 		"Alerts":      tasks,
 		"Summary":     summary,
 		"CurrentPage": "alert",
-		"DateValue":   "", // Will be set by the template if needed
+		"DateValue":   date.Format("2006-01-02"),
+		"Date":        date.Format("Monday, January 2, 2006"),
+		"PageTitle":   "Task Alerts",
 	}
 
-	tmpl, err := template.New("alert").Parse(handler.HeaderTemplate + handler.AlertTemplate)
+	tmpl, err := template.New("alert").Parse(HeaderTemplate + AlertTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
-
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
@@ -850,4 +871,3 @@ func (m Meta) UnmarshalJSON(d []byte) error {
 	m2 := (map[string][]string)(m)
 	return json.Unmarshal(d, &m2)
 }
-

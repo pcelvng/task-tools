@@ -9,17 +9,6 @@
 <body>
     {{template "header" .}}
     <div class="container">
-        <div class="header simple">
-            <h1>Flowlord File Messages</h1>
-            <div class="date">{{.Date}}</div>
-        </div>
-
-        <div class="date-nav">
-            <a href="?date={{.PrevDate}}">← Previous Day</a>
-            <span class="current-date">{{.Date}}</span>
-            <a href="?date={{.NextDate}}">Next Day →</a>
-            <button class="refresh-btn" onclick="location.reload()">Refresh</button>
-        </div>
 
         {{if .Files}}
         <div class="summary">
