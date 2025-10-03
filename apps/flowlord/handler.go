@@ -2,12 +2,13 @@ package main
 
 import (
 	"bytes"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
@@ -45,11 +46,19 @@ var HeaderTemplate string
 //go:embed handler/about.tmpl
 var AboutTemplate string
 
+//go:embed handler/static/*
+var StaticFiles embed.FS
+
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
 	
-	// Static file serving
-	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("handler/static"))))
+	// Static file serving - serve embedded static files
+	// Create a sub-filesystem that strips the "handler/" prefix
+	staticFS, err := fs.Sub(StaticFiles, "handler/static")
+	if err != nil {
+		log.Fatal("Failed to create static filesystem:", err)
+	}
+	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	
 	router.Get("/", tm.Info)
 	router.Get("/info", tm.Info)
