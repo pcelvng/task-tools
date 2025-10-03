@@ -17,6 +17,12 @@ import (
 
 const testPath = "../../internal/test"
 
+func TestMain(t *testing.M) {
+		staticPath = "./static"
+		t.Run() 
+}
+
+
 // loadTaskViewData loads TaskView data from a JSON file
 func loadTaskViewData(filename string) ([]cache.TaskView, error) {
 	data, err := os.ReadFile(filename)
@@ -354,6 +360,7 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 // TestWebAlertPreview generates an HTML preview of the alert template for visual inspection
 // this provides an html file
 func TestAlertHTML(t *testing.T) {
+
 	// Create sample alert data to showcase the templating
 	sampleAlerts := []cache.AlertRecord{
 		{

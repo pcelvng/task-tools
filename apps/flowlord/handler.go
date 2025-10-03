@@ -49,6 +49,8 @@ var AboutTemplate string
 //go:embed handler/static/*
 var StaticFiles embed.FS
 
+var staticPath = "/static"
+
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
 	
@@ -420,6 +422,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 		"TotalTasks":     totalTasks,
 		"CurrentPage":    "files",
 		"PageTitle":      "File Messages",
+		"staticPath":     staticPath,
 	}
 
 	// Template functions
@@ -572,6 +575,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"CurrentResult":  result,
 		"CurrentPage":    "task",
 		"PageTitle":      "Task Dashboard",
+		"staticPath":     staticPath,
 	}
 
 	// Template functions
@@ -666,6 +670,7 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"CurrentPage": "about",
 		"DateValue":   "", // About page doesn't need date
 		"PageTitle":   "System Information",
+		"staticPath":  staticPath,
 	}
 
 	// Parse and execute template
@@ -701,6 +706,7 @@ func alertHTML(tasks []cache.AlertRecord, date time.Time) []byte {
 		"DateValue":   date.Format("2006-01-02"),
 		"Date":        date.Format("Monday, January 2, 2006"),
 		"PageTitle":   "Task Alerts",
+		"staticPath":  staticPath,
 	}
 
 	tmpl, err := template.New("alert").Parse(HeaderTemplate + AlertTemplate)
