@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flowlord Task Dashboard - {{.Date}}</title>
+    <title>Flowlord: Tasks</title>
     <link rel="stylesheet" href="./static/style.css">
 </head>
 <body>
@@ -14,43 +14,50 @@
         <div class="summary-section">
             <h3>Task Summary</h3>
             <div class="summary-stats">
-                <div class="stat-card">
+                <div class="stat-card active" data-filter="all" onclick="filterByResult('all')">
                     <div class="stat-number">{{.TotalTasks}}</div>
                     <div class="stat-label">Total Tasks</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" data-filter="complete" onclick="filterByResult('complete')">
                     <div class="stat-number">{{.CompletedTasks}}</div>
                     <div class="stat-label">Completed</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" data-filter="error" onclick="filterByResult('error')">
                     <div class="stat-number">{{.ErrorTasks}}</div>
                     <div class="stat-label">Errors</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" data-filter="alert" onclick="filterByResult('alert')">
                     <div class="stat-number">{{.AlertTasks}}</div>
                     <div class="stat-label">Alerts</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" data-filter="warn" onclick="filterByResult('warn')">
                     <div class="stat-number">{{.WarnTasks}}</div>
                     <div class="stat-label">Warnings</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" data-filter="running" onclick="filterByResult('running')">
                     <div class="stat-number">{{.RunningTasks}}</div>
                     <div class="stat-label">Running</div>
                 </div>
             </div>
             
-            <h3>Task Type Summary</h3>
-            <div class="summary-grid">
-                {{range $key, $stat := .Summary}}
-                <div class="summary-card">
-                    <div class="summary-header">
-                        <span class="summary-key">{{$key}}</span>
-                        <span class="summary-count">{{add $stat.CompletedCount $stat.ErrorCount}} tasks</span>
-                    </div>
-                    <div class="summary-details">{{$stat.String}}</div>
+            <div class="collapsible-section">
+                <div class="collapsible-header" onclick="toggleCollapsible('taskTypeSummary')">
+                    <h3>Task Type Summary</h3>
+                    <span class="collapsible-toggle" id="taskTypeSummary-toggle">▼</span>
                 </div>
-                {{end}}
+                <div class="collapsible-content" id="taskTypeSummary-content">
+                    <div class="summary-grid">
+                        {{range $key, $stat := .Summary}}
+                        <div class="summary-card">
+                            <div class="summary-header">
+                                <span class="summary-key">{{$key}}</span>
+                                <span class="summary-count">{{add $stat.CompletedCount $stat.ErrorCount}} tasks</span>
+                            </div>
+                            <div class="summary-details">{{$stat.String}}</div>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -428,7 +435,80 @@
                 jobOptions.forEach(option => option.remove());
             }
             
+            // Clear stat-card active states and reset to "all"
+            clearStatCardActiveStates();
+            updateStatCardActiveStates('all');
+            
             filterTable();
+        }
+
+        // Filter by result type using stat-cards
+        function filterByResult(resultType) {
+            // Update stat-card active states
+            updateStatCardActiveStates(resultType);
+            
+            // Update the existing filter logic to include result filtering
+            const table = document.getElementById('taskTable');
+            if (!table) return;
+            
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            
+            rows.forEach(row => {
+                const resultCell = row.cells[4]; // Result column (0-indexed)
+                
+                if (resultCell) {
+                    const result = resultCell.textContent.trim().toLowerCase();
+                    let shouldShow = false;
+                    
+                    if (resultType === 'all') {
+                        shouldShow = true;
+                    } else if (resultType === 'running') {
+                        shouldShow = result === '' || result === 'running';
+                    } else {
+                        shouldShow = result === resultType;
+                    }
+                    
+                    row.style.display = shouldShow ? '' : 'none';
+                }
+            });
+            
+            // Update task count
+            updateTaskCount();
+        }
+
+        // Update stat-card active states
+        function updateStatCardActiveStates(activeFilter) {
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach(card => {
+                const filter = card.getAttribute('data-filter');
+                if (filter === activeFilter) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                }
+            });
+        }
+
+        // Clear all stat-card active states
+        function clearStatCardActiveStates() {
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach(card => {
+                card.classList.remove('active');
+            });
+        }
+
+        // Toggle collapsible section
+        function toggleCollapsible(sectionId) {
+            const content = document.getElementById(sectionId + '-content');
+            const toggle = document.getElementById(sectionId + '-toggle');
+            
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                toggle.classList.add('expanded');
+            } else {
+                content.classList.add('collapsed');
+                toggle.classList.remove('expanded');
+            }
         }
 
         // Toggle field expansion/collapse functionality
