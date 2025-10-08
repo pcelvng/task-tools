@@ -41,7 +41,6 @@ type taskMaster struct {
 	doneTopic     string
 	failedTopic   string
 	taskCache     *cache.SQLite
-	*workflow.Cache
 	HostName string
 	port     int
 	cron     *cron.Cron
@@ -98,7 +97,7 @@ func New(opts *options) *taskMaster {
 	if opts.Slack.MaxFrequency <= opts.Slack.MinFrequency {
 		opts.Slack.MaxFrequency = 16 * opts.Slack.MinFrequency
 	}
-	if err := opts.DB.Open(*opts.File); err != nil {
+	if err := opts.DB.Open(opts.Workflow, *opts.File); err != nil {
 		log.Fatal("db init", err)
 	}
 
@@ -142,7 +141,7 @@ func pName(topic, job string) string {
 }
 
 func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
-	for _, c := range tm.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
+	for _, c := range tm.taskCache.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
 		job := strings.Trim(c.Topic()+":"+c.Job(), ":")
 		if children := tm.getAllChildren(c.Task, workflow, c.Job()); len(children) > 0 {
 			job += " ➞ " + strings.Join(children, " ➞ ")
@@ -154,7 +153,7 @@ func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
 
 func (tm *taskMaster) refreshCache() ([]string, error) {
 	// Reload workflow files
-	files, err := tm.Cache.Refresh()
+	files, err := tm.taskCache.Refresh()
 	if err != nil {
 		return nil, fmt.Errorf("error reloading workflow: %w", err)
 	}
@@ -176,9 +175,7 @@ func (tm *taskMaster) refreshCache() ([]string, error) {
 }
 
 func (tm *taskMaster) Run(ctx context.Context) (err error) {
-	if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
-		return fmt.Errorf("workflow setup %w", err)
-	}
+	// The SQLite struct now implements the workflow.Cache interface directly
 
 	// check for alerts from today on startup	// refresh the workflow if the file(s) have been changed
 	_, err = tm.refreshCache()
@@ -233,18 +230,30 @@ func validatePhase(p workflow.Phase) string {
 // schedule the tasks and refresh the schedule when updated
 func (tm *taskMaster) schedule() (err error) {
 	errs := make([]error, 0)
-	if len(tm.Workflows) == 0 {
+	
+	// Get all workflow files from database
+	workflowFiles := tm.taskCache.GetWorkflowFiles()
+	
+	if len(workflowFiles) == 0 {
 		return fmt.Errorf("no workflows found check path %s", tm.path)
 	}
-	for path, workflow := range tm.Workflows {
-		for _, w := range workflow.Phases {
+	
+	// Get all phases for each workflow file
+	for filePath := range workflowFiles {
+		phases, err := tm.taskCache.GetPhasesForWorkflow(filePath)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error getting phases for %s: %w", filePath, err))
+			continue
+		}
+		
+		for _, w := range phases {
 			rules, _ := url.ParseQuery(w.Rule)
 			cronSchedule := rules.Get("cron")
 			if f := rules.Get("files"); f != "" {
 				r := fileRule{
 					SrcPattern:   f,
-					workflowFile: path,
-					Phase:        w,
+					workflowFile: filePath,
+					Phase:        w.ToWorkflowPhase(),
 					CronCheck:    cronSchedule,
 				}
 				r.CountCheck, _ = strconv.Atoi(rules.Get("count"))
@@ -256,16 +265,18 @@ func (tm *taskMaster) schedule() (err error) {
 
 			if cronSchedule == "" {
 				log.Printf("no cron: task:%s, rule:%s", w.Task, w.Rule)
+				//TODO: update the phase table with this status message
 				continue
 			}
 
-			j, err := tm.NewJob(w, path)
+			j, err := tm.NewJob(w.ToWorkflowPhase(), filePath)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("issue with %s %w", w.Task, err))
 			}
 
 			if _, err = tm.cron.AddJob(cronSchedule, j); err != nil {
-				errs = append(errs, fmt.Errorf("invalid rule for %s:%s %s %w", path, w.Task, w.Rule, err))
+				// TODO: update the phase table with this status messgae
+				errs = append(errs, fmt.Errorf("invalid rule for %s:%s %s %w", filePath, w.Task, w.Rule, err))
 			}
 		}
 	}
@@ -287,7 +298,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	case task.AlertResult:
 		tm.alerts <- *t
 	case task.ErrResult:
-		p := tm.Get(*t)
+		p := tm.taskCache.Get(*t)
 		rules, _ := url.ParseQuery(p.Rule)
 
 		r := meta.Get("retry")
@@ -341,7 +352,7 @@ func (tm *taskMaster) Process(t *task.Task) error {
 	case task.CompleteResult:
 		// start off any children tasks
 		taskTime := tmpl.TaskTime(*t)
-		phases := tm.Children(*t)
+		phases := tm.taskCache.Children(*t)
 		for _, p := range phases {
 
 			if !isReady(p.Rule, t.Meta) {

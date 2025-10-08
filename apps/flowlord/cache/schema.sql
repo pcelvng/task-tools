@@ -81,3 +81,29 @@ CREATE TABLE IF NOT EXISTS file_messages (
 -- Indexes for efficient querying
 CREATE INDEX IF NOT EXISTS idx_file_messages_path ON file_messages (path);
 CREATE INDEX IF NOT EXISTS idx_file_messages_received ON file_messages (received_at);
+
+-- Workflow file tracking (replaces in-memory workflow file cache)
+CREATE TABLE IF NOT EXISTS workflow_files (
+    file_path TEXT PRIMARY KEY,
+    file_hash TEXT NOT NULL,
+    loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_modified TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Workflow phases (matches Phase struct exactly)
+CREATE TABLE IF NOT EXISTS workflow_phases (
+    workflow_file_path TEXT NOT NULL,
+    task TEXT NOT NULL,           -- topic:job format (e.g., "data-load:hourly")
+    depends_on TEXT,
+    rule TEXT,                    -- URI query parameters (e.g., "cron=0 0 * * *&offset=1h")
+    template TEXT,
+    retry INTEGER DEFAULT 0,      -- threshold of times to retry
+    status TEXT,                  -- phase status info (warnings, errors, validation messages)
+    PRIMARY KEY (workflow_file_path, task)
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_workflow_phases_task ON workflow_phases (task);
+CREATE INDEX IF NOT EXISTS idx_workflow_phases_depends_on ON workflow_phases (depends_on);
+CREATE INDEX IF NOT EXISTS idx_workflow_phases_status ON workflow_phases (status);

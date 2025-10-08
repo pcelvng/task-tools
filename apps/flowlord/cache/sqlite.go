@@ -37,12 +37,17 @@ type SQLite struct {
 	fOpts file.Options
 	//ttl time.Duration
 	mu sync.Mutex
+
+	// Workflow-specific fields
+	workflowPath string
+	isDir        bool
 }
 
 // Open the sqlite DB. If localPath doesn't exist then check if BackupPath exists and copy it to localPath
-// ?: should this open the workflow file and load that into the database as well? 
+// Also initializes workflow path and determines if it's a directory
 func (o *SQLite) Open(workflowPath string, fOpts file.Options) error {
 	o.fOpts = fOpts
+	o.workflowPath = workflowPath
 	if o.TaskTTL < time.Hour {
 		o.TaskTTL = time.Hour
 	}
@@ -73,8 +78,15 @@ func (o *SQLite) Open(workflowPath string, fOpts file.Options) error {
 	}
 
 	//TODO: load workflow file into the database
+	// Determine if workflow path is a directory
+	sts, err := file.Stat(workflowPath, &fOpts)
+	if err != nil {
+		return fmt.Errorf("problem with workflow path %s %w", workflowPath, err)
+	}
+	o.isDir = sts.IsDir
+	_, err = o.loadFile(o.workflowPath, &o.fOpts)
 
-	return nil
+	return err
 }
 
 func copyFiles(src, dst string, fOpts file.Options) error {

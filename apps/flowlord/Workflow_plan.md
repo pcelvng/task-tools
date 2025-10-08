@@ -176,11 +176,12 @@ type Workflow struct {
 
 ## Implementation Strategy
 
-- **Same Package**: Keep everything in `workflow` package
+- **Same Package**: Keep everything in `cache` package (not workflow package)
 - **Same Structs**: Maintain `Phase` and `Workflow` structs exactly as they are
 - **Same Methods**: All existing methods return the same types and behavior
-- **SQLite Backend**: Replace in-memory storage with SQLite persistence
+- **SQLite Backend**: Add workflow methods directly to existing `SQLite` struct
 - **Zero Breaking Changes**: All existing unit tests continue to work unchanged
+- **No Interface Switching**: Do not create new interfaces or compatibility layers
 
 ## Key Benefits
 
@@ -228,55 +229,55 @@ type Workflow struct {
 ### Key Implementation Details
 
 ```go
-// Keep existing Cache struct, add SQLite backend
-type Cache struct {
-    db  *sql.DB
-    path string
-    isDir bool
+// Add workflow methods directly to existing SQLite struct
+type SQLite struct {
+    LocalPath  string
+    BackupPath string
+    TaskTTL   time.Duration
+    Retention time.Duration
+    db    *sql.DB
     fOpts file.Options
-    mutex sync.RWMutex
-    // Remove: Workflows map[string]Workflow
+    mu sync.Mutex
+    
+    // Add workflow-specific fields
+    workflowPath string
+    isDir bool
 }
 
-// Keep existing methods with SQLite implementation using simplified schema
-func (c *Cache) Search(task, job string) (path string, ph Phase) {
+// Add workflow methods to existing SQLite struct
+func (s *SQLite) Search(task, job string) (path string, ph Phase) {
     // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry, status
     //        FROM workflow_phases WHERE task = ? OR task LIKE ?
     //        (where ? is either exact match or topic:job format)
     // Return same results as before, with status info available
 }
 
-func (c *Cache) Get(t task.Task) Phase {
+func (s *SQLite) Get(t task.Task) Phase {
     // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry, status
     //        FROM workflow_phases WHERE task = ? OR task LIKE ?
     //        (where ? is either exact match or topic:job format)
     // Return same Phase struct with status info
 }
 
-func (c *Cache) Children(t task.Task) []Phase {
+func (s *SQLite) Children(t task.Task) []Phase {
     // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry, status
     //        FROM workflow_phases WHERE depends_on = ? OR depends_on LIKE ?
     //        (where ? matches the task type or topic:job format)
     // Return same []Phase slice with status info
 }
 
-func (c *Cache) Refresh() (changedFiles []string, err error) {
+func (s *SQLite) Refresh() (changedFiles []string, err error) {
     // Check file hashes against workflow_files table using file_path as key
     // Load changed files into SQLite using file_path as primary key
     // Return same changedFiles list
 }
 
-// Dynamic task relationship queries (no separate table needed)
-func (c *Cache) GetTaskRelationships(parentTask string) ([]Phase, error) {
-    // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry
-    //        FROM workflow_phases WHERE depends_on = ?
-    //        Returns all phases that depend on the parent task
+func (s *SQLite) IsDir() bool {
+    return s.isDir
 }
 
-func (c *Cache) GetTaskDependencies(childTask string) ([]Phase, error) {
-    // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry
-    //        FROM workflow_phases WHERE task = ?
-    //        Returns the phase that defines the child task and its dependencies
+func (s *SQLite) Close() error {
+    // Existing close logic + any workflow cleanup
 }
 ```
 
@@ -306,10 +307,13 @@ type taskMaster struct {
 
 ### 3. Workflow Loading Changes
 ```go
-// Keep existing code - no changes needed
-if tm.Cache, err = workflow.New(tm.path, tm.fOpts); err != nil {
+// Update to use SQLite struct directly instead of workflow.New()
+// The SQLite struct will implement the workflow.Cache interface
+if tm.Cache, err = tm.taskCache; err != nil {
     return fmt.Errorf("workflow setup %w", err)
 }
+// Or assign directly since SQLite now implements the interface
+tm.Cache = tm.taskCache
 ```
 
 ### 4. Dependency Resolution Updates

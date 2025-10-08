@@ -110,12 +110,17 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 
 	// create a copy of all workflows
 	wCache := make(map[string]map[string]workflow.Phase) // [file][task:job]Phase
-	for key, w := range tm.Cache.Workflows {
-		phases := make(map[string]workflow.Phase)
-		for _, j := range w.Phases {
-			phases[pName(j.Topic(), j.Job())] = j
+	workflowFiles := tm.taskCache.GetWorkflowFiles()
+	for filePath := range workflowFiles {
+		phases, err := tm.taskCache.GetPhasesForWorkflow(filePath)
+		if err != nil {
+			continue
 		}
-		wCache[key] = phases
+		phaseMap := make(map[string]workflow.Phase)
+		for _, j := range phases {
+			phaseMap[pName(j.Topic(), j.Job())] = j.ToWorkflowPhase()
+		}
+		wCache[filePath] = phaseMap
 	}
 	entries := tm.cron.Entries()
 	for i := 0; i < len(entries); i++ {
@@ -282,7 +287,7 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	pth := tm.path
 	// support directory and single file for workflow path lookup.
-	if tm.Cache.IsDir() {
+	if tm.taskCache.IsDir() {
 		pth += "/" + fName
 	}
 
@@ -807,7 +812,7 @@ func (tm *taskMaster) backload(req request) response {
 		end = at
 	}
 
-	workflowPath, phase := tm.Cache.Search(req.Task, req.Job)
+	workflowPath, phase := tm.taskCache.Search(req.Task, req.Job)
 	if workflowPath != "" {
 		msg = append(msg, "phase found in "+workflowPath)
 		req.Template = phase.Template
