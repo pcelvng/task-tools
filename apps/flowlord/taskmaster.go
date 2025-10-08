@@ -98,15 +98,14 @@ func New(opts *options) *taskMaster {
 	if opts.Slack.MaxFrequency <= opts.Slack.MinFrequency {
 		opts.Slack.MaxFrequency = 16 * opts.Slack.MinFrequency
 	}
-	db, err := cache.NewSQLite(opts.TaskTTL, opts.DBPath)
-	if err != nil {
+	if err := opts.DB.Open(*opts.File); err != nil {
 		log.Fatal("db init", err)
 	}
 
 	opts.Slack.file = opts.File
 	tm := &taskMaster{
 		initTime:     time.Now(),
-		taskCache:    db,
+		taskCache:    opts.DB,
 		path:         opts.Workflow,
 		doneTopic:    opts.DoneTopic,
 		failedTopic:  opts.FailedTopic,
@@ -206,8 +205,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	go tm.handleNotifications(tm.alerts, ctx)
 	<-ctx.Done()
 	log.Println("shutting down")
-	return nil
-
+	return tm.taskCache.Close()
 }
 
 func validatePhase(p workflow.Phase) string {
@@ -473,10 +471,10 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 		dur := tm.slack.MinFrequency
 		for ; ; time.Sleep(dur) {
 			var err error
-			
+
 			// Check for incomplete tasks and add them to alerts
 			tm.taskCache.CheckIncompleteTasks()
-			
+
 			// Get all alerts (including newly added incomplete task alerts)
 			alerts, err = tm.taskCache.GetAlertsByDate(time.Now())
 			if err != nil {

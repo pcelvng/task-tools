@@ -53,7 +53,7 @@ var staticPath = "/static"
 
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
-	
+
 	// Static file serving - serve embedded static files
 	// Create a sub-filesystem that strips the "handler/" prefix
 	staticFS, err := fs.Sub(StaticFiles, "handler/static")
@@ -61,7 +61,7 @@ func (tm *taskMaster) StartHandler() {
 		log.Fatal("Failed to create static filesystem:", err)
 	}
 	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-	
+
 	router.Get("/", tm.Info)
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
@@ -202,7 +202,7 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 			}
 
 			children := tm.getAllChildren(v.Topic(), f, v.Job())
-			// todo: remove children from Cache
+			// todo: remove children from SQLite
 			if _, found := sts.Workflow[f]; !found {
 				sts.Workflow[f] = make(map[string]cEntry)
 			}
@@ -244,7 +244,7 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 
 func (tm *taskMaster) taskHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	v := tm.taskCache.Get(id)
+	v := tm.taskCache.GetTask(id)
 	b, _ := json.Marshal(v)
 	w.Header().Add("Content-Type", "application/json")
 	w.Write(b)

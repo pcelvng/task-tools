@@ -13,6 +13,7 @@ import (
 	"github.com/pcelvng/task/bus"
 
 	tools "github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/apps/flowlord/cache"
 	"github.com/pcelvng/task-tools/file"
 )
 
@@ -32,10 +33,10 @@ Field | Field name   | Allowed values  | Allowed special characters
 )
 
 type options struct {
-	Workflow    string        `toml:"workflow" comment:"path to workflow file or directory"`
-	Refresh     time.Duration `toml:"refresh" comment:"the workflow changes refresh duration value default is 15 min"`
-	TaskTTL     time.Duration `toml:"task-ttl" comment:"time that tasks are expected to have completed in. This values tells the cache how long to keep track of items and alerts if items haven't completed when the cache is cleared"`
-	DBPath      string        `toml:"db-path" comment:"path to the sqlite DB file"`
+	Workflow string        `toml:"workflow" comment:"path to workflow file or directory"`
+	Refresh  time.Duration `toml:"refresh" comment:"the workflow changes refresh duration value default is 15 min"`
+	//TaskTTL     time.Duration `toml:"task-ttl" comment:"time that tasks are expected to have completed in. This values tells the cache how long to keep track of items and alerts if items haven't completed when the cache is cleared"`
+	//DBPath      string        `toml:"db-path" comment:"path to the sqlite DB file"`
 	DoneTopic   string        `toml:"done_topic" comment:"default is done"`
 	FileTopic   string        `toml:"file_topic" comment:"file topic for file watching"`
 	FailedTopic string        `toml:"failed_topic" comment:"all retry failures published to this topic default is retry-failed, disable with '-'"`
@@ -44,6 +45,8 @@ type options struct {
 	Slack       *Notification `toml:"slack"`
 	Bus         bus.Options   `toml:"bus"`
 	File        *file.Options `toml:"file"`
+
+	DB *cache.SQLite `toml:"sqlite"`
 }
 
 func main() {
@@ -51,13 +54,15 @@ func main() {
 
 	opts := &options{
 		Refresh:     time.Minute * 15,
-		TaskTTL:     4 * time.Hour,
 		DoneTopic:   "done",
 		Host:        "localhost",
-		DBPath:      "./tasks.db",
 		FailedTopic: "retry-failed",
 		File:        file.NewOptions(),
 		Slack:       &Notification{},
+		DB: &cache.SQLite{
+			TaskTTL:   4 * time.Hour,
+			LocalPath: "./tasks.db",
+		},
 	}
 
 	config.New(opts).Version(tools.String()).Description(description).LoadOrDie()

@@ -81,7 +81,7 @@
                                 <td>{{.RowCount}}</td>
                                 <td class="size-cell">{{.SizeBytes}}</td>
                                 <td class="size-cell">{{.SizeHuman}}</td>
-                                <td class="percentage-cell">{{.Percentage}}%</td>
+                                <td class="percentage-cell">{{printf "%.1f" .Percentage}}%</td>
                             </tr>
                             {{end}}
                         </tbody>

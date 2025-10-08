@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"sort"
@@ -12,10 +13,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
 	"github.com/pcelvng/task/bus"
 	_ "modernc.org/sqlite"
 
+	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 )
@@ -24,32 +27,89 @@ import (
 var schema string
 
 type SQLite struct {
-	db  *sql.DB
-	ttl time.Duration
-	mu  sync.Mutex
+	LocalPath  string
+	BackupPath string
+
+	TaskTTL   time.Duration `toml:"task-ttl" comment:"time that tasks are expected to have completed in. This values tells the cache how long to keep track of items and alerts if items haven't completed when the cache is cleared"`
+	Retention time.Duration // 90 days
+
+	db    *sql.DB
+	fOpts file.Options
+	//ttl time.Duration
+	mu sync.Mutex
 }
 
-func NewSQLite(ttl time.Duration, dbPath string) (*SQLite, error) {
-	if ttl < time.Hour {
-		ttl = time.Hour
+// Open the sqlite DB. If localPath doesn't exist then check if BackupPath exists and copy it to localPath
+// ?: should this open the workflow file and load that into the database as well? 
+func (o *SQLite) Open(workflowPath string, fOpts file.Options) error {
+	o.fOpts = fOpts
+	if o.TaskTTL < time.Hour {
+		o.TaskTTL = time.Hour
+	}
+
+	backupSts, _ := file.Stat(o.BackupPath, &fOpts)
+	localSts, _ := file.Stat(o.LocalPath, &fOpts)
+
+	if localSts.Size == 0 && backupSts.Size > 0 {
+		log.Printf("Restoring local DB from backup %s", o.BackupPath)
+		// no local file but backup exists so copy it down
+		if err := copyFiles(o.BackupPath, o.LocalPath, fOpts); err != nil {
+			log.Println(err) // TODO: should this be fatal?
+		}
 	}
 
 	// Open the database
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", o.LocalPath)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	o.db = db
 
-	// Execute the schema
+	// Execute the schema if the migration version is not the same as the current schema version
+	//TODO: version the schema and migrate if needed
 	_, err = db.Exec(schema)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &SQLite{
-		db:  db,
-		ttl: ttl,
-	}, nil
+	//TODO: load workflow file into the database
+
+	return nil
+}
+
+func copyFiles(src, dst string, fOpts file.Options) error {
+	r, err := file.NewReader(src, &fOpts)
+	if err != nil {
+		return fmt.Errorf("init reader err: %w", err)
+	}
+	w, err := file.NewWriter(dst, &fOpts)
+	if err != nil {
+		return fmt.Errorf("init writer err: %w", err)
+	}
+	_, err = io.Copy(w, r)
+	if err != nil {
+		return fmt.Errorf("copy err: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("close writer err: %w", err)
+	}
+	return r.Close()
+}
+
+// Close the DB connection and copy the current file to the backup location
+func (o *SQLite) Close() error {
+	errs := appenderr.New()
+	errs.Add(o.db.Close())
+	if o.BackupPath != "" {
+		log.Printf("Backing up DB to %s", o.BackupPath)
+		errs.Add(o.Sync())
+	}
+	return errs.ErrOrNil()
+}
+
+// Sync the local DB to the backup location
+func (o *SQLite) Sync() error {
+	return copyFiles(o.LocalPath, o.BackupPath, o.fOpts)
 }
 
 func (s *SQLite) Add(t task.Task) {
@@ -64,7 +124,7 @@ func (s *SQLite) Add(t task.Task) {
 	result, err := s.db.Exec(`
 		INSERT INTO task_records (id, type, job, info, result, meta, msg, created, started, ended)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (type, job, id, created) 
+		ON CONFLICT (TYPE, job, id, created) 
 		DO UPDATE SET
 			result = excluded.result,
 			meta = excluded.meta,
@@ -86,12 +146,12 @@ func (s *SQLite) Add(t task.Task) {
 	if rowsAffected == 0 {
 		// This indicates a conflict occurred and the record was updated
 		// Log this as it's unexpected for new task creation
-		log.Printf("WARNING: Task creation conflict detected - task %s:%s:%s at %s was updated instead of inserted", 
+		log.Printf("WARNING: Task creation conflict detected - task %s:%s:%s at %s was updated instead of inserted",
 			t.Type, t.Job, t.ID, t.Created)
 	}
 }
 
-func (s *SQLite) Get(id string) TaskJob {
+func (s *SQLite) GetTask(id string) TaskJob {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -179,7 +239,7 @@ func (s *SQLite) Recycle() Stat {
 		       created, started, ended
 		FROM task_records
 		WHERE created < ?
-	`, t.Add(-s.ttl))
+	`, t.Add(-s.TaskTTL))
 	if err != nil {
 		return Stat{}
 	}
@@ -257,7 +317,7 @@ func (s *SQLite) CheckIncompleteTasks() Stat {
 		WHERE tr.created < ? 
 		AND tr.result = '' 
 		AND ar.id IS NULL
-	`, t.Add(-s.ttl))
+	`, t.Add(-s.TaskTTL))
 	if err != nil {
 		return Stat{}
 	}
@@ -276,7 +336,7 @@ func (s *SQLite) CheckIncompleteTasks() Stat {
 
 		// Add incomplete task to alert list
 		tasks = append(tasks, task)
-		
+
 		// Add alert directly (no need to check for duplicates since JOIN already filtered them)
 		taskID := task.ID
 		if taskID == "" {
@@ -289,7 +349,7 @@ func (s *SQLite) CheckIncompleteTasks() Stat {
 			INSERT INTO alert_records (task_id, task_time, task_type, job, msg)
 			VALUES (?, ?, ?, ?, ?)
 		`, taskID, taskTime, task.Type, task.Job, "INCOMPLETE: unfinished task detected")
-		
+
 		if err == nil {
 			alertsAdded++
 		}
@@ -356,10 +416,6 @@ func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
 	}
 }
 
-func (s *SQLite) Close() error {
-	return s.db.Close()
-}
-
 // AddAlert stores an alert record in the database
 func (s *SQLite) AddAlert(t task.Task, message string) error {
 	s.mu.Lock()
@@ -384,7 +440,6 @@ func (s *SQLite) AddAlert(t task.Task, message string) error {
 
 	return err
 }
-
 
 // extractJobFromTask is a helper function to get job from task
 func extractJobFromTask(t task.Task) string {
@@ -645,7 +700,7 @@ func (s *SQLite) GetFileMessages(limit int, offset int) ([]FileMessage, error) {
 	defer s.mu.Unlock()
 
 	query := `
-		SELECT id, path, size, last_modified, received_at, task_time, task_ids, task_names
+		SELECT id, path, SIZE, last_modified, received_at, task_time, task_ids, task_names
 		FROM file_messages
 		ORDER BY received_at DESC
 		LIMIT ? OFFSET ?
@@ -691,7 +746,7 @@ func (s *SQLite) GetFileMessagesByDate(date time.Time) ([]FileMessage, error) {
 
 	dateStr := date.Format("2006-01-02")
 	query := `
-		SELECT id, path, size, last_modified, received_at, task_time, task_ids, task_names
+		SELECT id, path, SIZE, last_modified, received_at, task_time, task_ids, task_names
 		FROM file_messages
 		WHERE DATE(received_at) = ?
 		ORDER BY received_at DESC
@@ -738,15 +793,15 @@ func (s *SQLite) GetFileMessagesWithTasks(limit int, offset int) ([]FileMessageW
 	query := `
 		SELECT 
 			fm.id, fm.path, fm.task_time, fm.received_at,
-			json_extract(t.value, '$') as task_id,
-			tl.type as task_type,
-			tl.job as task_job,
-			tl.result as task_result,
-			tl.created as task_created,
-			tl.started as task_started,
-			tl.ended as task_ended
+			json_extract(t.value, '$') AS task_id,
+			tl.type AS task_type,
+			tl.job AS task_job,
+			tl.result AS task_result,
+			tl.created AS task_created,
+			tl.started AS task_started,
+			tl.ended AS task_ended
 		FROM file_messages fm,
-			 json_each(fm.task_ids) as t
+			 json_each(fm.task_ids) AS t
 		JOIN task_log tl ON json_extract(t.value, '$') = tl.id
 		WHERE fm.task_ids IS NOT NULL
 		ORDER BY fm.received_at DESC, fm.id
@@ -814,30 +869,30 @@ func (s *SQLite) GetTasksByDate(date time.Time, taskType, job, result string) ([
 	defer s.mu.Unlock()
 
 	dateStr := date.Format("2006-01-02")
-	
+
 	// Build query with optional filters using the tasks view
 	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
 		FROM tasks
 		WHERE DATE(created) = ?`
 	args := []interface{}{dateStr}
-	
+
 	if taskType != "" {
 		query += " AND type = ?"
 		args = append(args, taskType)
 	}
-	
+
 	if job != "" {
 		query += " AND job = ?"
 		args = append(args, job)
 	}
-	
+
 	if result != "" {
 		query += " AND result = ?"
 		args = append(args, result)
 	}
-	
+
 	query += " ORDER BY created DESC"
-	
+
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -867,12 +922,12 @@ func (s *SQLite) GetTaskSummaryByDate(date time.Time) (map[string]*Stats, error)
 	defer s.mu.Unlock()
 
 	dateStr := date.Format("2006-01-02")
-	
+
 	query := `SELECT id, type, job, info, result, meta, msg, created, started, ended
 		FROM task_records
 		WHERE DATE(created) = ?
 		ORDER BY created`
-	
+
 	rows, err := s.db.Query(query, dateStr)
 	if err != nil {
 		return nil, err
@@ -928,19 +983,19 @@ type FileMessageWithTasks struct {
 
 // DBSizeInfo contains database size information
 type DBSizeInfo struct {
-	TotalSize   string `json:"total_size"`
-	PageCount   int64  `json:"page_count"`
-	PageSize    int64  `json:"page_size"`
-	DBPath      string `json:"db_path"`
+	TotalSize string `json:"total_size"`
+	PageCount int64  `json:"page_count"`
+	PageSize  int64  `json:"page_size"`
+	DBPath    string `json:"db_path"`
 }
 
 // TableStat contains information about a database table
 type TableStat struct {
-	Name        string  `json:"name"`
-	RowCount    int64   `json:"row_count"`
-	SizeBytes   int64   `json:"size_bytes"`
-	SizeHuman   string  `json:"size_human"`
-	Percentage  float64 `json:"percentage"`
+	Name       string  `json:"name"`
+	RowCount   int64   `json:"row_count"`
+	SizeBytes  int64   `json:"size_bytes"`
+	SizeHuman  string  `json:"size_human"`
+	Percentage float64 `json:"percentage"`
 }
 
 // GetDBSize returns database size information
@@ -954,7 +1009,7 @@ func (s *SQLite) GetDBSize() (*DBSizeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	err = s.db.QueryRow("PRAGMA page_size").Scan(&pageSize)
 	if err != nil {
 		return nil, err
