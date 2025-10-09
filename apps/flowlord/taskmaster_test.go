@@ -23,7 +23,9 @@ const base_test_path string = "../../internal/test/"
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-	workflowCache, fatalErr := workflow.New(base_test_path+"workflow", nil)
+			// Initialize taskCache for the test
+	taskCache := &cache.SQLite{LocalPath: ":memory"}
+	fatalErr := taskCache.Open(base_test_path+"workflow", nil)
 	if fatalErr != nil {
 		t.Fatal("cache init", fatalErr)
 	}
@@ -33,12 +35,8 @@ func TestTaskMaster_Process(t *testing.T) {
 	}
 	fn := func(tsk task.Task) ([]task.Task, error) {
 		var alerts int64
-		// Initialize taskCache for the test
-		taskCache, err := cache.NewSQLite(time.Hour, ":memory:")
-		if err != nil {
-			return nil, err
-		}
-		tm := taskMaster{doneConsumer: consumer, Cache: workflowCache, taskCache: taskCache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
+
+		tm := taskMaster{doneConsumer: consumer, taskCache: taskCache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
 		producer, _ := nop.NewProducer("")
 		tm.producer = producer
 		nop.FakeMsg = tsk.JSONBytes()
@@ -277,12 +275,12 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		Files []fileRule
 	}
 	fn := func(in string) (expected, error) {
-		cache, err := workflow.New(base_test_path+in, nil)
-		if err != nil {
+		tm := taskMaster{ cron: cron.New()}
+		tm.taskCache = &cache.SQLite{LocalPath: ":memory"}
+		if err := tm.taskCache.Open(base_test_path+in, nil); err != nil {
 			return expected{}, err
 		}
-		tm := taskMaster{Cache: cache, cron: cron.New()}
-		err = tm.schedule()
+		err := tm.schedule()
 		exp := expected{
 			Jobs:  make([]Cronjob, 0),
 			Files: tm.files,

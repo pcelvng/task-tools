@@ -330,7 +330,7 @@ func (s *SQLite) Children(t task.Task) []Phase {
 // Refresh checks the cache and reloads any files if the checksum has changed.
 func (s *SQLite) Refresh() (changedFiles []string, err error) {
 	if !s.isDir {
-		f, err := s.loadFile(s.workflowPath, &s.fOpts)
+		f, err := s.loadFile(s.workflowPath, s.fOpts)
 		if len(f) > 0 {
 			changedFiles = append(changedFiles, f)
 		}
@@ -338,14 +338,14 @@ func (s *SQLite) Refresh() (changedFiles []string, err error) {
 	}
 	
 	// List and read all files
-	allFiles, err := listAllFiles(s.workflowPath, &s.fOpts)
+	allFiles, err := listAllFiles(s.workflowPath, s.fOpts)
 	if err != nil {
 		return changedFiles, err
 	}
 	
 	errs := appenderr.New()
 	for _, filePath := range allFiles {
-		f, err := s.loadFile(filePath, &s.fOpts)
+		f, err := s.loadFile(filePath, s.fOpts)
 		if err != nil {
 			errs.Add(err)
 		}

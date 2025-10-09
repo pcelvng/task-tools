@@ -69,8 +69,9 @@
                             <tr>
                                 <th>Table Name</th>
                                 <th>Row Count</th>
-                                <th>Size (Bytes)</th>
-                                <th>Size (Human)</th>
+                                <th>Table Size</th>
+                                <th>Index Size</th>
+                                <th>Total Size</th>
                                 <th>Percentage</th>
                             </tr>
                         </thead>
@@ -79,8 +80,9 @@
                             <tr>
                                 <td>{{.Name}}</td>
                                 <td>{{.RowCount}}</td>
-                                <td class="size-cell">{{.SizeBytes}}</td>
-                                <td class="size-cell">{{.SizeHuman}}</td>
+                                <td class="size-cell">{{.TableHuman}}</td>
+                                <td class="size-cell">{{.IndexHuman}}</td>
+                                <td class="size-cell">{{.TotalHuman}}</td>
                                 <td class="percentage-cell">{{printf "%.1f" .Percentage}}%</td>
                             </tr>
                             {{end}}

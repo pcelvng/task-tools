@@ -99,8 +99,7 @@ CREATE TABLE IF NOT EXISTS workflow_phases (
     rule TEXT,                    -- URI query parameters (e.g., "cron=0 0 * * *&offset=1h")
     template TEXT,
     retry INTEGER DEFAULT 0,      -- threshold of times to retry
-    status TEXT,                  -- phase status info (warnings, errors, validation messages)
-    PRIMARY KEY (workflow_file_path, task)
+    status TEXT                  -- phase status info (warnings, errors, validation messages)
 );
 
 -- Indexes for performance

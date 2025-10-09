@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowlord: Workflows</title>
+    <link rel="stylesheet" href="{{.staticPath}}/style.css">
+</head>
+<body>
+    {{template "header" .}}
+    <div class="container full-width">
+
+        <div class="summary-section">
+            <h3>Workflow File Summary</h3>
+            <div class="summary-grid">
+                {{range $filePath, $count := .WorkflowFileSummary}}
+                <div class="summary-card">
+                    <div class="summary-header">
+                        <span class="summary-key">{{$filePath}}</span>
+                        <span class="summary-count">{{$count}} phases</span>
+                    </div>
+                    <div class="summary-details">Workflow file with {{$count}} phase{{if ne $count 1}}s{{end}}</div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="filters">
+            <h3>Filters</h3>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="workflowFilter">Workflow File</label>
+                    <select id="workflowFilter">
+                        <option value="">All Workflows</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="taskFilter">Task Type</label>
+                    <select id="taskFilter">
+                        <option value="">All Tasks</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="jobFilter">Job</label>
+                    <select id="jobFilter">
+                        <option value="">All Jobs</option>
+                    </select>
+                </div>
+                <div class="filter-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
+                </div>
+            </div>
+        </div>
+
+        {{if .Phases}}
+        <div class="table-container">
+            <table id="workflowTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="workflow_file">Workflow File</th>
+                        <th class="sortable" data-sort="task">Task</th>
+                        <th class="sortable" data-sort="job">Job</th>
+                        <th class="sortable" data-sort="rule">Rule</th>
+                        <th class="sortable" data-sort="depends_on">Depends On</th>
+                        <th class="sortable" data-sort="retry">Retry</th>
+                        <th class="sortable" data-sort="template">Template</th>
+                        <th class="sortable" data-sort="status">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Phases}}
+                    <tr>
+                        <td class="workflow-file-cell">{{.WorkflowFile}}</td>
+                        <td class="task-cell">{{.Task}}</td>
+                        <td class="job-cell">{{.Job}}</td>
+                        <td class="rule-cell truncated copyable" 
+                            data-full-text="{{.Rule}}" 
+                            data-truncated-text="{{if ge (len .Rule) 80}}{{slice .Rule 0 80}}...{{else}}{{.Rule}}{{end}}"
+                            onclick="toggleField(this, '{{.Rule}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.Rule}}')"
+                            ondblclick="copyToClipboard('{{.Rule}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{if ge (len .Rule) 80}}{{slice .Rule 0 80}}...{{else}}{{.Rule}}{{end}}
+                        </td>
+                        <td class="depends-on-cell">{{.DependsOn}}</td>
+                        <td class="retry-cell">{{.Retry}}</td>
+                        <td class="template-cell truncated copyable" 
+                            data-full-text="{{.Template}}" 
+                            data-truncated-text="{{if ge (len .Template) 80}}{{slice .Template 0 80}}...{{else}}{{.Template}}{{end}}"
+                            onclick="toggleField(this, '{{.Template}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.Template}}')"
+                            ondblclick="copyToClipboard('{{.Template}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{if ge (len .Template) 80}}{{slice .Template 0 80}}...{{else}}{{.Template}}{{end}}
+                        </td>
+                        <td class="status-cell {{if .Status}}status-warning{{else}}status-ok{{end}}">
+                            {{if .Status}}{{.Status}}{{else}}OK{{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        <div class="stats">
+            Total Phases: <span id="totalCount">{{len .Phases}}</span>
+        </div>
+        {{else}}
+        <div class="no-tasks">
+            <h3>No workflow phases found</h3>
+            <p>No workflow phases were found in the database.</p>
+        </div>
+        {{end}}
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.getElementById('workflowTable');
+            if (!table) return;
+            
+            const tbody = table.querySelector('tbody');
+            const headers = table.querySelectorAll('th.sortable');
+            
+            let currentSort = { column: null, direction: 'asc' };
+
+            // Get URL parameters
+            function getUrlParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return {
+                    workflow: urlParams.get('workflow') || '',
+                    task: urlParams.get('task') || '',
+                    job: urlParams.get('job') || '',
+                    sort: urlParams.get('sort') || '',
+                    direction: urlParams.get('direction') || 'asc'
+                };
+            }
+
+            // Update URL with new parameters
+            function updateUrl(workflow, task, job, sort, direction) {
+                const url = new URL(window.location);
+                
+                if (workflow) url.searchParams.set('workflow', workflow);
+                else url.searchParams.delete('workflow');
+                
+                if (task) url.searchParams.set('task', task);
+                else url.searchParams.delete('task');
+                
+                if (job) url.searchParams.set('job', job);
+                else url.searchParams.delete('job');
+                
+                if (sort) {
+                    url.searchParams.set('sort', sort);
+                    url.searchParams.set('direction', direction);
+                } else {
+                    url.searchParams.delete('sort');
+                    url.searchParams.delete('direction');
+                }
+                
+                // Reload page with new URL
+                window.location.href = url.toString();
+            }
+
+            // Initialize sorting from URL
+            function initializeSorting() {
+                const params = getUrlParams();
+                
+                if (params.sort) {
+                    currentSort = { column: params.sort, direction: params.direction };
+                    sortTable(params.sort, params.direction);
+                    updateSortIndicators(params.sort, params.direction);
+                }
+            }
+
+            function sortTable(column, direction) {
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const columnIndex = Array.from(headers).findIndex(th => th.dataset.sort === column);
+                
+                rows.sort((a, b) => {
+                    const aVal = a.cells[columnIndex].textContent.trim();
+                    const bVal = b.cells[columnIndex].textContent.trim();
+                    
+                    let comparison = 0;
+                    
+                    // Try to parse as numbers first (for retry column)
+                    if (column === 'retry') {
+                        const aNum = parseInt(aVal);
+                        const bNum = parseInt(bVal);
+                        
+                        if (!isNaN(aNum) && !isNaN(bNum)) {
+                            comparison = aNum - bNum;
+                        } else {
+                            comparison = aVal.localeCompare(bVal);
+                        }
+                    } else {
+                        comparison = aVal.localeCompare(bVal);
+                    }
+                    
+                    return direction === 'asc' ? comparison : -comparison;
+                });
+                
+                // Clear tbody and re-append sorted rows
+                tbody.innerHTML = '';
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            function updateSortIndicators(activeColumn, direction) {
+                headers.forEach(th => {
+                    th.classList.remove('sort-asc', 'sort-desc');
+                    if (th.dataset.sort === activeColumn) {
+                        th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                    }
+                });
+            }
+
+            // Column sorting event listeners
+            headers.forEach(header => {
+                header.addEventListener('click', function() {
+                    const column = this.dataset.sort;
+                    let direction = 'asc';
+                    
+                    if (currentSort.column === column) {
+                        direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    }
+                    
+                    currentSort = { column, direction };
+                    const params = getUrlParams();
+                    updateUrl(params.workflow, params.task, params.job, column, direction);
+                });
+            });
+
+            // Initialize the page
+            initializeSorting();
+            initializeFilters();
+        });
+
+        // Initialize responsive filters
+        function initializeFilters() {
+            const workflowFilter = document.getElementById('workflowFilter');
+            const taskFilter = document.getElementById('taskFilter');
+            const jobFilter = document.getElementById('jobFilter');
+            const table = document.getElementById('workflowTable');
+            
+            if (!table) return;
+            
+            // Get all workflow rows
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            
+            // Extract unique values
+            const workflows = new Set();
+            const tasks = new Set();
+            const jobMap = new Map(); // task -> Set of jobs
+            
+            rows.forEach(row => {
+                const workflowCell = row.cells[0]; // Workflow File column
+                const taskCell = row.cells[1]; // Task column
+                const jobCell = row.cells[2]; // Job column
+                
+                if (workflowCell && taskCell && jobCell) {
+                    const workflow = workflowCell.textContent.trim();
+                    const task = taskCell.textContent.trim();
+                    const job = jobCell.textContent.trim();
+                    
+                    if (workflow) workflows.add(workflow);
+                    if (task) {
+                        tasks.add(task);
+                        
+                        if (!jobMap.has(task)) {
+                            jobMap.set(task, new Set());
+                        }
+                        if (job) {
+                            jobMap.get(task).add(job);
+                        }
+                    }
+                }
+            });
+            
+            // Populate workflow dropdown
+            const sortedWorkflows = Array.from(workflows).sort();
+            sortedWorkflows.forEach(workflow => {
+                const option = document.createElement('option');
+                option.value = workflow;
+                option.textContent = workflow;
+                workflowFilter.appendChild(option);
+            });
+            
+            // Populate task dropdown
+            const sortedTasks = Array.from(tasks).sort();
+            sortedTasks.forEach(task => {
+                const option = document.createElement('option');
+                option.value = task;
+                option.textContent = task;
+                taskFilter.appendChild(option);
+            });
+            
+            // Handle task change
+            taskFilter.addEventListener('change', function() {
+                const selectedTask = this.value;
+                const jobOptions = jobFilter.querySelectorAll('option:not([value=""])');
+                jobOptions.forEach(option => option.remove());
+                
+                if (selectedTask && jobMap.has(selectedTask)) {
+                    const jobs = Array.from(jobMap.get(selectedTask)).sort();
+                    jobs.forEach(job => {
+                        const option = document.createElement('option');
+                        option.value = job;
+                        option.textContent = job;
+                        jobFilter.appendChild(option);
+                    });
+                }
+                
+                filterTable();
+            });
+            
+            // Handle filter changes
+            workflowFilter.addEventListener('change', filterTable);
+            jobFilter.addEventListener('change', filterTable);
+            
+            // Initial filter
+            filterTable();
+        }
+        
+        // Filter table based on current filter values
+        function filterTable() {
+            const workflowFilter = document.getElementById('workflowFilter');
+            const taskFilter = document.getElementById('taskFilter');
+            const jobFilter = document.getElementById('jobFilter');
+            const table = document.getElementById('workflowTable');
+            
+            if (!table) return;
+            
+            const selectedWorkflow = workflowFilter ? workflowFilter.value : '';
+            const selectedTask = taskFilter ? taskFilter.value : '';
+            const selectedJob = jobFilter ? jobFilter.value : '';
+            
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            
+            rows.forEach(row => {
+                const workflowCell = row.cells[0];
+                const taskCell = row.cells[1];
+                const jobCell = row.cells[2];
+                
+                if (workflowCell && taskCell && jobCell) {
+                    const workflow = workflowCell.textContent.trim();
+                    const task = taskCell.textContent.trim();
+                    const job = jobCell.textContent.trim();
+                    
+                    const workflowMatch = !selectedWorkflow || workflow === selectedWorkflow;
+                    const taskMatch = !selectedTask || task === selectedTask;
+                    const jobMatch = !selectedJob || job === selectedJob;
+                    
+                    if (workflowMatch && taskMatch && jobMatch) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                }
+            });
+            
+            // Update phase count
+            updatePhaseCount();
+        }
+        
+        // Update the displayed phase count
+        function updatePhaseCount() {
+            const table = document.getElementById('workflowTable');
+            if (!table) return;
+            
+            const visibleRows = Array.from(table.querySelectorAll('tbody tr')).filter(row => 
+                row.style.display !== 'none'
+            );
+            
+            const totalCountElement = document.getElementById('totalCount');
+            if (totalCountElement) {
+                totalCountElement.textContent = visibleRows.length;
+            }
+        }
+        
+        // Clear all filters
+        function clearFilters() {
+            const workflowFilter = document.getElementById('workflowFilter');
+            const taskFilter = document.getElementById('taskFilter');
+            const jobFilter = document.getElementById('jobFilter');
+            
+            if (workflowFilter) workflowFilter.value = '';
+            if (taskFilter) taskFilter.value = '';
+            if (jobFilter) {
+                jobFilter.value = '';
+                // Clear job options except "All Jobs"
+                const jobOptions = jobFilter.querySelectorAll('option:not([value=""])');
+                jobOptions.forEach(option => option.remove());
+            }
+            
+            filterTable();
+        }
+
+        // Toggle collapsible section
+        function toggleCollapsible(sectionId) {
+            const content = document.getElementById(sectionId + '-content');
+            const toggle = document.getElementById(sectionId + '-toggle');
+            
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                toggle.classList.add('expanded');
+            } else {
+                content.classList.add('collapsed');
+                toggle.classList.remove('expanded');
+            }
+        }
+
+        // Toggle field expansion/collapse functionality
+        function toggleField(element, fullText) {
+            // Prevent event bubbling to avoid conflicts with sorting
+            event.stopPropagation();
+            
+            if (element.classList.contains('expanded')) {
+                // Collapse the field
+                element.classList.remove('expanded');
+                element.classList.add('truncated');
+                element.textContent = element.dataset.truncatedText;
+            } else {
+                // Expand the field
+                element.classList.remove('truncated');
+                element.classList.add('expanded');
+                element.textContent = fullText;
+            }
+        }
+
+        // Context menu functionality
+        function showContextMenu(event, text) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Remove any existing context menu
+            const existingMenu = document.querySelector('.context-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+            
+            // Create context menu
+            const contextMenu = document.createElement('div');
+            contextMenu.className = 'context-menu';
+            contextMenu.innerHTML = `
+                <div class="context-menu-item" onclick="copyToClipboard('${text.replace(/'/g, "\\'")}')">
+                    📋 Copy
+                </div>
+            `;
+            
+            // Position the context menu
+            contextMenu.style.left = event.pageX + 'px';
+            contextMenu.style.top = event.pageY + 'px';
+            
+            document.body.appendChild(contextMenu);
+            
+            // Close context menu when clicking elsewhere
+            const closeMenu = (e) => {
+                if (!contextMenu.contains(e.target)) {
+                    contextMenu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            
+            setTimeout(() => {
+                document.addEventListener('click', closeMenu);
+            }, 100);
+        }
+
+        // Copy to clipboard functionality with enhanced feedback
+        function copyToClipboard(text) {
+            const targetElement = event ? event.target : document.activeElement;
+            
+            navigator.clipboard.writeText(text).then(function() {
+                showCopyFeedback(targetElement, 'Copied!');
+            }).catch(function(err) {
+                console.error('Could not copy text: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showCopyFeedback(targetElement, 'Copied!');
+                } catch (err) {
+                    console.error('Fallback copy failed: ', err);
+                    showCopyFeedback(targetElement, 'Copy failed!', true);
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+
+        // Show copy feedback with animation
+        function showCopyFeedback(element, message, isError = false) {
+            // Remove any existing feedback
+            const existingFeedback = element.querySelector('.copy-feedback');
+            if (existingFeedback) {
+                existingFeedback.remove();
+            }
+            
+            // Create feedback element
+            const feedback = document.createElement('div');
+            feedback.className = 'copy-feedback';
+            feedback.textContent = message;
+            feedback.style.backgroundColor = isError ? '#dc3545' : '#28a745';
+            
+            // Position feedback relative to the element
+            const rect = element.getBoundingClientRect();
+            feedback.style.position = 'fixed';
+            feedback.style.left = (rect.left + rect.width / 2) + 'px';
+            feedback.style.top = (rect.top - 10) + 'px';
+            feedback.style.transform = 'translateX(-50%)';
+            
+            element.appendChild(feedback);
+            
+            // Remove feedback after animation
+            setTimeout(() => {
+                if (feedback.parentNode) {
+                    feedback.remove();
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

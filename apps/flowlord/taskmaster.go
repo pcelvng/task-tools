@@ -97,7 +97,7 @@ func New(opts *options) *taskMaster {
 	if opts.Slack.MaxFrequency <= opts.Slack.MinFrequency {
 		opts.Slack.MaxFrequency = 16 * opts.Slack.MinFrequency
 	}
-	if err := opts.DB.Open(opts.Workflow, *opts.File); err != nil {
+	if err := opts.DB.Open(opts.Workflow, opts.File); err != nil {
 		log.Fatal("db init", err)
 	}
 

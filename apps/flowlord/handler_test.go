@@ -12,7 +12,6 @@ import (
 	"github.com/pcelvng/task"
 
 	"github.com/pcelvng/task-tools/apps/flowlord/cache"
-	"github.com/pcelvng/task-tools/workflow"
 )
 
 const testPath = "../../internal/test"
@@ -20,6 +19,7 @@ const testPath = "../../internal/test"
 func TestMain(t *testing.M) {
 		staticPath = "./static"
 		t.Run() 
+		os.Remove(":memory") 
 }
 
 
@@ -40,14 +40,16 @@ func loadTaskViewData(filename string) ([]cache.TaskView, error) {
 }
 
 func TestBackloader(t *testing.T) {
-	cache, err := workflow.New(testPath+"/workflow/f3.toml", nil)
+	sqlDB := &cache.SQLite{LocalPath: ":memory"}
+	err := sqlDB.Open(testPath+"/workflow/f3.toml", nil )
+	//cache, err := workflow.New(testPath+"/workflow/f3.toml", nil)
 	today := time.Now().Format("2006-01-02")
 	toHour := time.Now().Format(DateHour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tm := &taskMaster{
-		Cache: cache,
+		taskCache: sqlDB,
 	}
 	fn := func(req request) (response, error) {
 
@@ -500,11 +502,37 @@ func TestTaskHTML(t *testing.T) {
 
 }
 
+func TestWorkflowHTML(t *testing.T) {
+	// Load workflow files 
+	taskCache := &cache.SQLite{LocalPath: ":memory"}
+	if err := taskCache.Open(testPath+"/workflow/", nil); err != nil  { 
+		t.Fatalf("Failed to create test cache: %v", err)
+	}
+
+	// Test with no filters - summary will be generated from tasks data
+	html := workflowHTML(taskCache)
+
+	// Write HTML to a file for easy viewing
+	outputFile := "handler/workflow_preview.html"
+	err := os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Task preview generated and saved to: ./%s", outputFile)
+
+	// Basic checks
+	if len(html) == 0 {
+		t.Error("Expected HTML output, got empty")
+	}
+
+}
+
 
 func TestAboutHTML(t *testing.T) {
 	// Create a real SQLite cache for testing
-	taskCache, err := cache.NewSQLite(time.Hour, ":memory:")
-	if err != nil {
+	taskCache := &cache.SQLite{LocalPath: ":memory"}
+	if err := taskCache.Open(testPath+"/workflow/", nil); err != nil  { 
 		t.Fatalf("Failed to create test cache: %v", err)
 	}
 
@@ -521,7 +549,7 @@ func TestAboutHTML(t *testing.T) {
 
 	// Write HTML to a file for easy viewing
 	outputFile := "handler/about_preview.html"
-	err = os.WriteFile(outputFile, html, 0644)
+	err := os.WriteFile(outputFile, html, 0644)
 	if err != nil {
 		t.Fatalf("Failed to write HTML file: %v", err)
 	}

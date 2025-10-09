@@ -40,6 +40,9 @@ var FilesTemplate string
 //go:embed handler/task.tmpl
 var TaskTemplate string
 
+//go:embed handler/workflow.tmpl
+var WorkflowTemplate string
+
 //go:embed handler/header.tmpl
 var HeaderTemplate string
 
@@ -87,6 +90,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/web/alert", tm.htmlAlert)
 	router.Get("/web/files", tm.htmlFiles)
 	router.Get("/web/task", tm.htmlTask)
+	router.Get("/web/workflow", tm.htmlWorkflow)
 	router.Get("/web/about", tm.htmlAbout)
 
 	if tm.port == 0 {
@@ -388,6 +392,13 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	w.Write(taskHTML(tasks, dt, taskType, job, result))
 }
 
+// htmlWorkflow handles GET /web/workflow - displays workflow phases from database
+func (tm *taskMaster) htmlWorkflow(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(workflowHTML(tm.taskCache))
+}
+
 // htmlAbout handles GET /web/about - displays system information and cache statistics
 func (tm *taskMaster) htmlAbout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -637,6 +648,71 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 	return buf.Bytes()
 }
 
+// workflowHTML renders the workflow phases HTML page
+func workflowHTML(cache *cache.SQLite) []byte {
+	// Get all workflow files and their phases
+	workflowFiles := cache.GetWorkflowFiles()
+	
+	var allPhases []WorkflowPhaseView
+	workflowFileSummary := make(map[string]int)
+	
+	for filePath := range workflowFiles {
+		phases, err := cache.GetPhasesForWorkflow(filePath)
+		if err != nil {
+			continue
+		}
+		
+		workflowFileSummary[filePath] = len(phases)
+		
+		for _, phase := range phases {
+			allPhases = append(allPhases, WorkflowPhaseView{
+				WorkflowFile: filePath,
+				Task:         phase.Topic(),
+				Job:          phase.Job(),
+				Rule:         phase.Rule,
+				DependsOn:    phase.DependsOn,
+				Retry:        phase.Retry,
+				Template:     phase.Template,
+				Status:       "", // TODO: Get status from database
+			})
+		}
+	}
+	
+	data := map[string]interface{}{
+		"Phases":              allPhases,
+		"WorkflowFileSummary": workflowFileSummary,
+		"CurrentPage":         "workflow",
+		"PageTitle":           "Workflow Dashboard",
+		"staticPath":          staticPath,
+	}
+
+	// Template functions
+	funcMap := template.FuncMap{
+		"slice": func(s string, start, end int) string {
+			if start >= len(s) {
+				return ""
+			}
+			if end > len(s) {
+				end = len(s)
+			}
+			return s[start:end]
+		},
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("workflow").Funcs(funcMap).Parse(HeaderTemplate + WorkflowTemplate)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
+}
+
 // aboutHTML renders the about page HTML
 func (tm *taskMaster) aboutHTML() []byte {
 	// Get basic system information
@@ -783,6 +859,18 @@ type response struct {
 	Tasks  []task.Task
 
 	code int
+}
+
+// WorkflowPhaseView represents a workflow phase for display in the web interface
+type WorkflowPhaseView struct {
+	WorkflowFile string
+	Task         string
+	Job          string
+	Rule         string
+	DependsOn    string
+	Retry        int
+	Template     string
+	Status       string
 }
 
 func (tm *taskMaster) backload(req request) response {

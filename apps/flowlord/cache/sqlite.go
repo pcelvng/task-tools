@@ -34,7 +34,7 @@ type SQLite struct {
 	Retention time.Duration // 90 days
 
 	db    *sql.DB
-	fOpts file.Options
+	fOpts *file.Options
 	//ttl time.Duration
 	mu sync.Mutex
 
@@ -45,15 +45,15 @@ type SQLite struct {
 
 // Open the sqlite DB. If localPath doesn't exist then check if BackupPath exists and copy it to localPath
 // Also initializes workflow path and determines if it's a directory
-func (o *SQLite) Open(workflowPath string, fOpts file.Options) error {
+func (o *SQLite) Open(workflowPath string, fOpts *file.Options) error {
 	o.fOpts = fOpts
 	o.workflowPath = workflowPath
 	if o.TaskTTL < time.Hour {
 		o.TaskTTL = time.Hour
 	}
 
-	backupSts, _ := file.Stat(o.BackupPath, &fOpts)
-	localSts, _ := file.Stat(o.LocalPath, &fOpts)
+	backupSts, _ := file.Stat(o.BackupPath, fOpts)
+	localSts, _ := file.Stat(o.LocalPath, fOpts)
 
 	if localSts.Size == 0 && backupSts.Size > 0 {
 		log.Printf("Restoring local DB from backup %s", o.BackupPath)
@@ -68,6 +68,19 @@ func (o *SQLite) Open(workflowPath string, fOpts file.Options) error {
 	if err != nil {
 		return err
 	}
+	
+	// Set a smaller page size to reduce DB file size
+	_, err = db.Exec("PRAGMA page_size = 4096;")
+	if err != nil {
+		return fmt.Errorf("failed to set page size: %w", err)
+	}
+	
+	// Enable auto vacuum to reclaim space when records are deleted
+	_, err = db.Exec("PRAGMA auto_vacuum = INCREMENTAL;")
+	if err != nil {
+		return fmt.Errorf("failed to set auto vacuum: %w", err)
+	}
+	
 	o.db = db
 
 	// Execute the schema if the migration version is not the same as the current schema version
@@ -79,22 +92,22 @@ func (o *SQLite) Open(workflowPath string, fOpts file.Options) error {
 
 	//TODO: load workflow file into the database
 	// Determine if workflow path is a directory
-	sts, err := file.Stat(workflowPath, &fOpts)
+	sts, err := file.Stat(workflowPath, fOpts)
 	if err != nil {
 		return fmt.Errorf("problem with workflow path %s %w", workflowPath, err)
 	}
 	o.isDir = sts.IsDir
-	_, err = o.loadFile(o.workflowPath, &o.fOpts)
+	_, err = o.Refresh()
 
 	return err
 }
 
-func copyFiles(src, dst string, fOpts file.Options) error {
-	r, err := file.NewReader(src, &fOpts)
+func copyFiles(src, dst string, fOpts *file.Options) error {
+	r, err := file.NewReader(src, fOpts)
 	if err != nil {
 		return fmt.Errorf("init reader err: %w", err)
 	}
-	w, err := file.NewWriter(dst, &fOpts)
+	w, err := file.NewWriter(dst, fOpts)
 	if err != nil {
 		return fmt.Errorf("init writer err: %w", err)
 	}
@@ -1003,11 +1016,15 @@ type DBSizeInfo struct {
 
 // TableStat contains information about a database table
 type TableStat struct {
-	Name       string  `json:"name"`
-	RowCount   int64   `json:"row_count"`
-	SizeBytes  int64   `json:"size_bytes"`
-	SizeHuman  string  `json:"size_human"`
-	Percentage float64 `json:"percentage"`
+	Name         string  `json:"name"`
+	RowCount     int64   `json:"row_count"`
+	TableBytes   int64   `json:"table_bytes"`
+	TableHuman   string  `json:"table_human"`
+	IndexBytes   int64   `json:"index_bytes"`
+	IndexHuman   string  `json:"index_human"`
+	TotalBytes   int64   `json:"total_bytes"`
+	TotalHuman   string  `json:"total_human"`
+	Percentage   float64 `json:"percentage"`
 }
 
 // GetDBSize returns database size information
@@ -1027,12 +1044,9 @@ func (s *SQLite) GetDBSize() (*DBSizeInfo, error) {
 		return nil, err
 	}
 
-	// Get database file path
-	var dbPath string
-	err = s.db.QueryRow("PRAGMA database_list").Scan(&dbPath, nil, nil)
-	if err != nil {
-		// If we can't get the path, use a default
-		dbPath = "unknown"
+	dbPath := s.LocalPath
+	if s.BackupPath != "" {
+		dbPath = s.BackupPath
 	}
 
 	totalSize := pageCount * pageSize
@@ -1079,6 +1093,8 @@ func (s *SQLite) GetTableStats() ([]TableStat, error) {
 	}
 
 	var stats []TableStat
+	var totalTableSize int64
+
 	for _, tableName := range tables {
 		// Get row count
 		var rowCount int64
@@ -1087,31 +1103,79 @@ func (s *SQLite) GetTableStats() ([]TableStat, error) {
 			continue // Skip tables we can't read
 		}
 
-		// Get table size using pragma table_info and estimate
-		// This is an approximation since SQLite doesn't provide exact table sizes
-		var sizeBytes int64
+		// Calculate more accurate table size
+		var tableBytes int64
 		if rowCount > 0 {
-			// Estimate size based on row count and average row size
-			// This is a rough approximation
-			avgRowSize := int64(200) // Estimated average row size in bytes
-			sizeBytes = rowCount * avgRowSize
+			// Try to get actual table size using dbstat if available
+			var actualSize int64
+			err := s.db.QueryRow(fmt.Sprintf(`
+				SELECT SUM(pgsize) FROM dbstat WHERE name = '%s' AND aggregate = 1
+			`, tableName)).Scan(&actualSize)
+			
+			if err == nil && actualSize > 0 {
+				// Use actual size from dbstat
+				tableBytes = actualSize
+			}
 		}
+
+		// Get index sizes for this table
+		indexBytes := s.getIndexSize(tableName)
+		totalBytes := tableBytes + indexBytes
+		totalTableSize += totalBytes
 
 		percentage := float64(0)
 		if totalSize > 0 {
-			percentage = float64(sizeBytes) / float64(totalSize) * 100
+			percentage = float64(totalBytes) / float64(totalSize) * 100
 		}
 
 		stats = append(stats, TableStat{
 			Name:       tableName,
 			RowCount:   rowCount,
-			SizeBytes:  sizeBytes,
-			SizeHuman:  formatBytes(sizeBytes),
+			TableBytes: tableBytes,
+			TableHuman: formatBytes(tableBytes),
+			IndexBytes: indexBytes,
+			IndexHuman: formatBytes(indexBytes),
+			TotalBytes: totalBytes,
+			TotalHuman: formatBytes(totalBytes),
 			Percentage: percentage,
 		})
 	}
 
 	return stats, nil
+}
+
+
+// getIndexSize calculates the total size of all indexes for a table
+func (s *SQLite) getIndexSize(tableName string) int64 {
+	// Get all indexes for this table
+	rows, err := s.db.Query(fmt.Sprintf(`
+		SELECT name FROM sqlite_master 
+		WHERE type='index' AND tbl_name='%s' AND name NOT LIKE 'sqlite_%%'
+	`, tableName))
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+
+	var totalIndexSize int64
+	for rows.Next() {
+		var indexName string
+		if err := rows.Scan(&indexName); err != nil {
+			continue
+		}
+
+		// Try to get actual index size using dbstat
+		var indexSize int64
+		err := s.db.QueryRow(fmt.Sprintf(`
+			SELECT SUM(pgsize) FROM dbstat WHERE name = '%s' AND aggregate = 1
+		`, indexName)).Scan(&indexSize)
+		
+		if err == nil && indexSize > 0 {
+			totalIndexSize += indexSize
+		}
+	}
+
+	return totalIndexSize
 }
 
 // formatBytes converts bytes to human readable format
