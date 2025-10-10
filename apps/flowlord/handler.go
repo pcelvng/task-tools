@@ -115,14 +115,14 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 	// create a copy of all workflows
 	wCache := make(map[string]map[string]workflow.Phase) // [file][task:job]Phase
 	workflowFiles := tm.taskCache.GetWorkflowFiles()
-	for filePath := range workflowFiles {
+	for _, filePath := range workflowFiles {
 		phases, err := tm.taskCache.GetPhasesForWorkflow(filePath)
 		if err != nil {
 			continue
 		}
 		phaseMap := make(map[string]workflow.Phase)
 		for _, j := range phases {
-			phaseMap[pName(j.Topic(), j.Job())] = j.ToWorkflowPhase()
+			phaseMap[pName(j.Phase.Topic(), j.Phase.Job())] = j.ToWorkflowPhase()
 		}
 		wCache[filePath] = phaseMap
 	}
@@ -649,35 +649,23 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 }
 
 // workflowHTML renders the workflow phases HTML page
-func workflowHTML(cache *cache.SQLite) []byte {
+func workflowHTML(tCache *cache.SQLite) []byte {
 	// Get all workflow files and their phases
-	workflowFiles := cache.GetWorkflowFiles()
-	
-	var allPhases []WorkflowPhaseView
+	workflowFiles := tCache.GetWorkflowFiles()
+
 	workflowFileSummary := make(map[string]int)
-	
-	for filePath := range workflowFiles {
-		phases, err := cache.GetPhasesForWorkflow(filePath)
+	allPhases := make([]cache.PhaseDB, 0)
+
+	for _, filePath := range workflowFiles {
+		phases, err := tCache.GetPhasesForWorkflow(filePath)
 		if err != nil {
 			continue
 		}
-		
+
 		workflowFileSummary[filePath] = len(phases)
-		
-		for _, phase := range phases {
-			allPhases = append(allPhases, WorkflowPhaseView{
-				WorkflowFile: filePath,
-				Task:         phase.Topic(),
-				Job:          phase.Job(),
-				Rule:         phase.Rule,
-				DependsOn:    phase.DependsOn,
-				Retry:        phase.Retry,
-				Template:     phase.Template,
-				Status:       "", // TODO: Get status from database
-			})
-		}
+		allPhases = append(allPhases, phases...)
 	}
-	
+
 	data := map[string]interface{}{
 		"Phases":              allPhases,
 		"WorkflowFileSummary": workflowFileSummary,
@@ -859,18 +847,6 @@ type response struct {
 	Tasks  []task.Task
 
 	code int
-}
-
-// WorkflowPhaseView represents a workflow phase for display in the web interface
-type WorkflowPhaseView struct {
-	WorkflowFile string
-	Task         string
-	Job          string
-	Rule         string
-	DependsOn    string
-	Retry        int
-	Template     string
-	Status       string
 }
 
 func (tm *taskMaster) backload(req request) response {

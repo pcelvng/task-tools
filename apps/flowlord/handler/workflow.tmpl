@@ -58,7 +58,7 @@
                 <thead>
                     <tr>
                         <th class="sortable" data-sort="workflow_file">Workflow File</th>
-                        <th class="sortable" data-sort="task">Task</th>
+                        <th class="sortable" data-sort="task">Topic</th>
                         <th class="sortable" data-sort="job">Job</th>
                         <th class="sortable" data-sort="rule">Rule</th>
                         <th class="sortable" data-sort="depends_on">Depends On</th>
@@ -70,8 +70,8 @@
                 <tbody>
                     {{range .Phases}}
                     <tr>
-                        <td class="workflow-file-cell">{{.WorkflowFile}}</td>
-                        <td class="task-cell">{{.Task}}</td>
+                        <td class="workflow-file-cell">{{.FilePath}}</td>
+                        <td class="task-cell">{{.Topic}}</td>
                         <td class="job-cell">{{.Job}}</td>
                         <td class="rule-cell truncated copyable" 
                             data-full-text="{{.Rule}}" 
@@ -93,8 +93,10 @@
                             title="Click to expand/collapse, double-click or right-click to copy">
                             {{if ge (len .Template) 80}}{{slice .Template 0 80}}...{{else}}{{.Template}}{{end}}
                         </td>
-                        <td class="status-cell {{if .Status}}status-warning{{else}}status-ok{{end}}">
-                            {{if .Status}}{{.Status}}{{else}}OK{{end}}
+                        <td class="status-cell">
+                            <span class="{{if .Status}}result-error{{else}}result-complete{{end}}">
+                                {{if .Status}}{{.Status}}{{else}}OK{{end}}
+                            </span>
                         </td>
                     </tr>
                     {{end}}

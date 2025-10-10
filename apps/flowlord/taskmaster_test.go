@@ -23,8 +23,8 @@ const base_test_path string = "../../internal/test/"
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-			// Initialize taskCache for the test
-	taskCache := &cache.SQLite{LocalPath: ":memory"}
+	// Initialize taskCache for the test
+	taskCache := &cache.SQLite{LocalPath: ":memory:"}
 	fatalErr := taskCache.Open(base_test_path+"workflow", nil)
 	if fatalErr != nil {
 		t.Fatal("cache init", fatalErr)
@@ -83,6 +83,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task1 attempt 0": {
 			Input: task.Task{
 				Type:    "task1",
+				Job:     "t2",
 				Info:    "?date=2019-12-12",
 				Result:  task.ErrResult,
 				Started: "now",
@@ -101,6 +102,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task1 attempt 2": {
 			Input: task.Task{
 				Type:   "task1",
+				Job:    "t2",
 				Info:   "?date=2019-12-12",
 				Result: task.ErrResult,
 				ID:     "UUID_task1_attempt2",
@@ -275,8 +277,8 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		Files []fileRule
 	}
 	fn := func(in string) (expected, error) {
-		tm := taskMaster{ cron: cron.New()}
-		tm.taskCache = &cache.SQLite{LocalPath: ":memory"}
+		tm := taskMaster{cron: cron.New()}
+		tm.taskCache = &cache.SQLite{LocalPath: ":memory:"}
 		if err := tm.taskCache.Open(base_test_path+in, nil); err != nil {
 			return expected{}, err
 		}

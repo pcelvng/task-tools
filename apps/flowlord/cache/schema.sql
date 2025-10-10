@@ -93,16 +93,15 @@ CREATE TABLE IF NOT EXISTS workflow_files (
 
 -- Workflow phases (matches Phase struct exactly)
 CREATE TABLE IF NOT EXISTS workflow_phases (
-    workflow_file_path TEXT NOT NULL,
+    file_path TEXT NOT NULL,
     task TEXT NOT NULL,           -- topic:job format (e.g., "data-load:hourly")
     depends_on TEXT,
     rule TEXT,                    -- URI query parameters (e.g., "cron=0 0 * * *&offset=1h")
     template TEXT,
-    retry INTEGER DEFAULT 0,      -- threshold of times to retry
+    retry integer DEFAULT 0,      -- number of retries (default 0)
     status TEXT                  -- phase status info (warnings, errors, validation messages)
 );
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_workflow_phases_task ON workflow_phases (task);
 CREATE INDEX IF NOT EXISTS idx_workflow_phases_depends_on ON workflow_phases (depends_on);
-CREATE INDEX IF NOT EXISTS idx_workflow_phases_status ON workflow_phases (status);

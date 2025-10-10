@@ -41,11 +41,11 @@ type taskMaster struct {
 	doneTopic     string
 	failedTopic   string
 	taskCache     *cache.SQLite
-	HostName string
-	port     int
-	cron     *cron.Cron
-	slack    *Notification
-	files    []fileRule
+	HostName      string
+	port          int
+	cron          *cron.Cron
+	slack         *Notification
+	files         []fileRule
 
 	alerts chan task.Task
 }
@@ -230,22 +230,22 @@ func validatePhase(p workflow.Phase) string {
 // schedule the tasks and refresh the schedule when updated
 func (tm *taskMaster) schedule() (err error) {
 	errs := make([]error, 0)
-	
+
 	// Get all workflow files from database
 	workflowFiles := tm.taskCache.GetWorkflowFiles()
-	
+
 	if len(workflowFiles) == 0 {
 		return fmt.Errorf("no workflows found check path %s", tm.path)
 	}
-	
+
 	// Get all phases for each workflow file
-	for filePath := range workflowFiles {
+	for _, filePath := range workflowFiles {
 		phases, err := tm.taskCache.GetPhasesForWorkflow(filePath)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error getting phases for %s: %w", filePath, err))
 			continue
 		}
-		
+
 		for _, w := range phases {
 			rules, _ := url.ParseQuery(w.Rule)
 			cronSchedule := rules.Get("cron")
@@ -264,8 +264,8 @@ func (tm *taskMaster) schedule() (err error) {
 			}
 
 			if cronSchedule == "" {
-				log.Printf("no cron: task:%s, rule:%s", w.Task, w.Rule)
-				//TODO: update the phase table with this status message
+				//log.Printf("no cron: task:%s, rule:%s", w.Task, w.Rule)
+				// this should already be in the status field
 				continue
 			}
 
@@ -275,7 +275,9 @@ func (tm *taskMaster) schedule() (err error) {
 			}
 
 			if _, err = tm.cron.AddJob(cronSchedule, j); err != nil {
-				// TODO: update the phase table with this status messgae
+				// TODO: Remove log
+				fmt.Println(cronSchedule, j)
+
 				errs = append(errs, fmt.Errorf("invalid rule for %s:%s %s %w", filePath, w.Task, w.Rule, err))
 			}
 		}

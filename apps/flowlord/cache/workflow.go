@@ -11,6 +11,7 @@ import (
 	"github.com/hydronica/toml"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/pcelvng/task"
+	"github.com/robfig/cron/v3"
 
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/workflow"
@@ -23,6 +24,19 @@ type Phase struct {
 	DependsOn string // Task that the previous workflow depends on
 	Retry     int
 	Template  string // template used to create the task
+}
+
+type PhaseDB struct {
+	Phase
+	FilePath string // workflow file path
+	Status   string // status of the phase (e.g. valid, invalid, warning)
+}
+
+func (p PhaseDB) Topic() string {
+	return p.Phase.Topic()
+}
+func (p PhaseDB) Job() string {
+	return p.Phase.Job()
 }
 
 func (p Phase) IsEmpty() bool {
@@ -49,6 +63,7 @@ func (p Phase) Topic() string {
 	return s[0]
 }
 
+// Deprecated:
 // ToWorkflowPhase converts cache.Phase to workflow.Phase
 func (p Phase) ToWorkflowPhase() workflow.Phase {
 	return workflow.Phase{
@@ -79,22 +94,22 @@ func (s *SQLite) Search(task, job string) (path string, ph Phase) {
 	if s == nil {
 		return "", Phase{}
 	}
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Query for phases matching the task topic
 	query := `
-		SELECT workflow_file_path, task, depends_on, rule, template, retry, status
+		SELECT file_path, task, depends_on, rule, template, retry, status
 		FROM workflow_phases 
 		WHERE task LIKE ? OR task = ?
-		ORDER BY workflow_file_path, task
+		ORDER BY file_path, task
 		LIMIT 1
 	`
-	
+
 	var rows *sql.Rows
 	var err error
-	
+
 	if job == "" {
 		// Search by topic only
 		rows, err = s.db.Query(query, task+":%", task)
@@ -102,21 +117,21 @@ func (s *SQLite) Search(task, job string) (path string, ph Phase) {
 		// Search by topic:job
 		rows, err = s.db.Query(query, task+":"+job, task+":"+job)
 	}
-	
+
 	if err != nil {
 		return "", Phase{}
 	}
 	defer rows.Close()
-	
+
 	if rows.Next() {
 		var workflowPath, taskStr, dependsOn, rule, template, status string
 		var retry int
-		
+
 		err := rows.Scan(&workflowPath, &taskStr, &dependsOn, &rule, &template, &retry, &status)
 		if err != nil {
 			return "", Phase{}
 		}
-		
+
 		// Check if job matches if specified
 		if job != "" {
 			phase := Phase{
@@ -130,7 +145,7 @@ func (s *SQLite) Search(task, job string) (path string, ph Phase) {
 				return "", Phase{}
 			}
 		}
-		
+
 		return workflowPath, Phase{
 			Task:      taskStr,
 			Rule:      rule,
@@ -139,121 +154,76 @@ func (s *SQLite) Search(task, job string) (path string, ph Phase) {
 			Template:  template,
 		}
 	}
-	
+
 	return "", Phase{}
+}
+
+// ResetWorkflow deletes all phases in the db files
+// TODO: May not be needed if Refresh() is used properly.
+func (s *SQLite) resetWorkflow() error {
+	if s == nil {
+		return fmt.Errorf("sqlite cache is nil")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Delete all phases for this workflow file
+	_, err := s.db.Exec("DELETE FROM workflow_phases ")
+	if err != nil {
+		return fmt.Errorf("failed to delete workflow phases: %w", err)
+	}
+
+	// Delete the workflow file record
+	_, err = s.db.Exec("DELETE FROM workflow_files")
+	if err != nil {
+		return fmt.Errorf("failed to delete workflow file record: %w", err)
+	}
+
+	return nil
 }
 
 // Get the Phase associated with the task
 // looks for matching phases within a workflow defined in meta
 // that matches the task Type and job.
-func (s *SQLite) Get(t task.Task) Phase {
+func (s *SQLite) Get(t task.Task) PhaseDB {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	values, _ := url.ParseQuery(t.Meta)
-	key := values.Get("workflow")
+	//key := values.Get("workflow")
 	job := t.Job
 	if job == "" {
 		job = values.Get("job")
 	}
-	
-	if key == "*" { // search all workflows for first match
-		query := `
-			SELECT workflow_file_path, task, depends_on, rule, template, retry, status
+	key := t.Type
+	if job != "" {
+		key += ":" + job
+	}
+
+	query := `
+			SELECT file_path, task, depends_on, rule, template, retry, status
 			FROM workflow_phases 
-			WHERE task LIKE ? OR task = ?
-			ORDER BY workflow_file_path, task
+			WHERE task = ?
+			ORDER BY file_path, task
 			LIMIT 1
 		`
-		
-		rows, err := s.db.Query(query, t.Type+":%", t.Type)
-		if err != nil {
-			return Phase{}
-		}
-		defer rows.Close()
-		
-		if rows.Next() {
-			var workflowPath, taskStr, dependsOn, rule, template, status string
-			var retry int
-			
-			err := rows.Scan(&workflowPath, &taskStr, &dependsOn, &rule, &template, &retry, &status)
-			if err != nil {
-				return Phase{}
-			}
-			
-			// Check if job matches if specified
-			if job != "" {
-				phase := Phase{
-					Task:      taskStr,
-					Rule:      rule,
-					DependsOn: dependsOn,
-					Retry:     retry,
-					Template:  template,
-				}
-				if phase.Job() != job {
-					return Phase{}
-				}
-			}
-			
-			return Phase{
-				Task:      taskStr,
-				Rule:      rule,
-				DependsOn: dependsOn,
-				Retry:     retry,
-				Template:  template,
-			}
-		}
-		return Phase{}
-	}
-	
-	// Search within specific workflow
-	query := `
-		SELECT task, depends_on, rule, template, retry, status
-		FROM workflow_phases 
-		WHERE workflow_file_path = ? AND (task LIKE ? OR task = ?)
-		ORDER BY task
-		LIMIT 1
-	`
-	
-	rows, err := s.db.Query(query, key, t.Type+":%", t.Type)
+	rows, err := s.db.Query(query, key)
 	if err != nil {
-		return Phase{}
+		return PhaseDB{Status: err.Error()}
 	}
 	defer rows.Close()
-	
+
 	if rows.Next() {
-		var taskStr, dependsOn, rule, template, status string
-		var retry int
-		
-		err := rows.Scan(&taskStr, &dependsOn, &rule, &template, &retry, &status)
+		ph := PhaseDB{}
+
+		err := rows.Scan(&ph.FilePath, &ph.Task, &ph.DependsOn, &ph.Rule, &ph.Template, &ph.Retry, &ph.Status)
 		if err != nil {
-			return Phase{}
+			return PhaseDB{Status: err.Error()}
 		}
-		
-		// Check if job matches if specified
-		if job != "" {
-			phase := Phase{
-				Task:      taskStr,
-				Rule:      rule,
-				DependsOn: dependsOn,
-				Retry:     retry,
-				Template:  template,
-			}
-			if phase.Job() != job {
-				return Phase{}
-			}
-		}
-		
-		return Phase{
-			Task:      taskStr,
-			Rule:      rule,
-			DependsOn: dependsOn,
-			Retry:     retry,
-			Template:  template,
-		}
+		return ph
 	}
-	
-	return Phase{}
+	return PhaseDB{Status: "not found"}
 }
 
 // Children of the given task t, a child phase is one that dependsOn another task
@@ -263,46 +233,46 @@ func (s *SQLite) Get(t task.Task) Phase {
 func (s *SQLite) Children(t task.Task) []Phase {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if t.Type == "" {
 		return nil
 	}
-	
+
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
 	job := t.Job
 	if job == "" {
 		job = values.Get("job")
 	}
-	
+
 	if key == "" {
 		return nil
 	}
-	
+
 	// Find phases that depend on this task
 	query := `
-		SELECT task, depends_on, rule, template, retry, status
+		SELECT task, depends_on, rule, template, retry,  status
 		FROM workflow_phases 
-		WHERE workflow_file_path = ? AND (depends_on LIKE ? OR depends_on = ?)
+		WHERE file_path = ? AND (depends_on LIKE ? OR depends_on = ?)
 		ORDER BY task
 	`
-	
+
 	rows, err := s.db.Query(query, key, t.Type+":%", t.Type)
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
-	
+
 	var result []Phase
 	for rows.Next() {
 		var taskStr, dependsOn, rule, template, status string
 		var retry int
-		
+
 		err := rows.Scan(&taskStr, &dependsOn, &rule, &template, &retry, &status)
 		if err != nil {
 			continue
 		}
-		
+
 		// Parse depends_on to check if it matches the task
 		v := strings.Split(dependsOn, ":")
 		depends := v[0]
@@ -310,7 +280,7 @@ func (s *SQLite) Children(t task.Task) []Phase {
 		if len(v) > 1 {
 			j = v[1]
 		}
-		
+
 		if depends == t.Type {
 			if j == "" || j == job {
 				result = append(result, Phase{
@@ -323,7 +293,7 @@ func (s *SQLite) Children(t task.Task) []Phase {
 			}
 		}
 	}
-	
+
 	return result
 }
 
@@ -336,13 +306,13 @@ func (s *SQLite) Refresh() (changedFiles []string, err error) {
 		}
 		return changedFiles, err
 	}
-	
+
 	// List and read all files
 	allFiles, err := listAllFiles(s.workflowPath, s.fOpts)
 	if err != nil {
 		return changedFiles, err
 	}
-	
+
 	errs := appenderr.New()
 	for _, filePath := range allFiles {
 		f, err := s.loadFile(filePath, s.fOpts)
@@ -353,9 +323,9 @@ func (s *SQLite) Refresh() (changedFiles []string, err error) {
 			changedFiles = append(changedFiles, f)
 		}
 	}
-	
+
 	// Remove deleted workflows from database
-	for key := range s.GetWorkflowFiles() {
+	for _, key := range s.GetWorkflowFiles() {
 		found := false
 		for _, v := range allFiles {
 			f := s.filePath(v)
@@ -365,11 +335,11 @@ func (s *SQLite) Refresh() (changedFiles []string, err error) {
 			}
 		}
 		if !found {
-			s.removeWorkflow(key)
+			errs.Add(s.removeWorkflow(key))
 			changedFiles = append(changedFiles, "-"+key)
 		}
 	}
-	
+
 	return changedFiles, errs.ErrOrNil()
 }
 
@@ -409,13 +379,13 @@ func (s *SQLite) loadFile(path string, opts *file.Options) (f string, err error)
 	if sts.IsDir {
 		return "", fmt.Errorf("can not read directory %s", path)
 	}
-	
+
 	// Check if file has changed by comparing checksum
 	existingHash := s.getFileHash(f)
 	if existingHash == sts.Checksum {
 		return "", nil // No changes
 	}
-	
+
 	// Read and parse the workflow file
 	r, err := file.NewReader(path, opts)
 	if err != nil {
@@ -425,18 +395,18 @@ func (s *SQLite) loadFile(path string, opts *file.Options) (f string, err error)
 	if err != nil {
 		return "", fmt.Errorf("read-all: %s %w", path, err)
 	}
-	
+
 	var workflow Workflow
 	if _, err := toml.Decode(string(b), &workflow); err != nil {
 		return "", fmt.Errorf("decode: %s %w", string(b), err)
 	}
-	
+
 	// Update database with new workflow data
 	err = s.updateWorkflowInDB(f, sts.Checksum, workflow.Phases)
 	if err != nil {
 		return "", fmt.Errorf("update workflow in db: %w", err)
 	}
-	
+
 	return f, nil
 }
 
@@ -455,8 +425,9 @@ func (s *SQLite) filePath(p string) (filePath string) {
 
 // getFileHash retrieves the current hash for a workflow file
 func (s *SQLite) getFileHash(filePath string) string {
+	path := s.filePath(filePath)
 	var hash string
-	err := s.db.QueryRow("SELECT file_hash FROM workflow_files WHERE file_path = ?", filePath).Scan(&hash)
+	err := s.db.QueryRow("SELECT file_hash FROM workflow_files WHERE file_path = ?", path).Scan(&hash)
 	if err != nil {
 		return ""
 	}
@@ -464,69 +435,58 @@ func (s *SQLite) getFileHash(filePath string) string {
 }
 
 // GetWorkflowFiles returns a map of all workflow files in the database
-func (s *SQLite) GetWorkflowFiles() map[string]bool {
-	files := make(map[string]bool)
+func (s *SQLite) GetWorkflowFiles() []string {
+	files := make([]string, 0)
 	rows, err := s.db.Query("SELECT file_path FROM workflow_files")
 	if err != nil {
 		return files
 	}
 	defer rows.Close()
-	
+
 	for rows.Next() {
 		var filePath string
 		if err := rows.Scan(&filePath); err == nil {
-			files[filePath] = true
+			files = append(files, filePath)
 		}
 	}
 	return files
 }
 
 // GetPhasesForWorkflow returns all phases for a specific workflow file
-func (s *SQLite) GetPhasesForWorkflow(filePath string) ([]Phase, error) {
+func (s *SQLite) GetPhasesForWorkflow(filePath string) ([]PhaseDB, error) {
 	rows, err := s.db.Query(`
-		SELECT task, depends_on, rule, template, retry, status
+		SELECT file_path, task, depends_on, rule, template, retry, status
 		FROM workflow_phases 
-		WHERE workflow_file_path = ?
+		WHERE file_path = ?
 		ORDER BY task
 	`, filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	
-	var phases []Phase
+
+	var phases []PhaseDB
 	for rows.Next() {
-		var taskStr, dependsOn, rule, template, status string
-		var retry int
-		
-		err := rows.Scan(&taskStr, &dependsOn, &rule, &template, &retry, &status)
+		ph := PhaseDB{}
+
+		err := rows.Scan(&ph.FilePath, &ph.Task, &ph.DependsOn, &ph.Rule, &ph.Template, &ph.Retry, &ph.Status)
 		if err != nil {
 			continue
 		}
-		
-		phases = append(phases, Phase{
-			Task:      taskStr,
-			Rule:      rule,
-			DependsOn: dependsOn,
-			Retry:     retry,
-			Template:  template,
-		})
+
+		phases = append(phases, ph)
 	}
-	
+
 	return phases, nil
 }
 
 // updateWorkflowInDB updates the workflow data in the database
 func (s *SQLite) updateWorkflowInDB(filePath, checksum string, phases []Phase) error {
-	// Start transaction
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// Update or insert workflow file record
-	_, err = tx.Exec(`
+	_, err := s.db.Exec(`
 		INSERT INTO workflow_files (file_path, file_hash, loaded_at, last_modified, is_active)
 		VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, TRUE)
 		ON CONFLICT (file_path) DO UPDATE SET
@@ -538,26 +498,31 @@ func (s *SQLite) updateWorkflowInDB(filePath, checksum string, phases []Phase) e
 	if err != nil {
 		return err
 	}
-	
+
 	// Remove existing phases for this workflow
-	_, err = tx.Exec("DELETE FROM workflow_phases WHERE workflow_file_path = ?", filePath)
+	_, err = s.db.Exec("DELETE FROM workflow_phases WHERE file_path = ?", filePath)
 	if err != nil {
 		return err
 	}
-	
+
 	// Insert new phases
 	for _, phase := range phases {
+		task := phase.Task
+		if !strings.Contains(task, ":") && phase.Job() != "" {
+			task = task + ":" + phase.Job()
+		}
+		phase.Task = task
 		status := s.validatePhase(phase)
-		_, err = tx.Exec(`
-			INSERT INTO workflow_phases (workflow_file_path, task, depends_on, rule, template, retry, status)
+		_, err = s.db.Exec(`
+			INSERT INTO workflow_phases (file_path, task, depends_on, rule, template, retry, status)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
 		`, filePath, phase.Task, phase.DependsOn, phase.Rule, phase.Template, phase.Retry, status)
 		if err != nil {
 			return err
 		}
 	}
-	
-	return tx.Commit()
+
+	return nil
 }
 
 // removeWorkflow removes a workflow and its phases from the database
@@ -568,49 +533,48 @@ func (s *SQLite) removeWorkflow(filePath string) error {
 		return err
 	}
 	defer tx.Rollback()
-	
+
 	// Remove phases first
-	_, err = tx.Exec("DELETE FROM workflow_phases WHERE workflow_file_path = ?", filePath)
+	_, err = tx.Exec("DELETE FROM workflow_phases WHERE file_path = ?", filePath)
 	if err != nil {
 		return err
 	}
-	
+
 	// Remove workflow file record
 	_, err = tx.Exec("DELETE FROM workflow_files WHERE file_path = ?", filePath)
 	if err != nil {
 		return err
 	}
-	
+
 	return tx.Commit()
 }
 
 // validatePhase validates a phase and returns status message
 func (s *SQLite) validatePhase(phase Phase) string {
+
+	values, err := url.ParseQuery(phase.Rule)
+	if err != nil {
+		return fmt.Sprintf("invalid rule format: %s", phase.Rule)
+	}
+
 	// Basic validation logic
-	if phase.Rule == "" && phase.DependsOn == "" {
-		return "invalid phase: rule and dependsOn are blank"
+	if phase.DependsOn == "" && values.Get("cron") == "" && values.Get("files") == "" {
+		return "non-scheduled phase must have depends_on, cron or files rule"
 	}
-	
+
 	// Check for valid cron rule
-	if phase.Rule != "" {
-		values, err := url.ParseQuery(phase.Rule)
-		if err != nil {
-			return fmt.Sprintf("invalid rule format: %s", phase.Rule)
+
+	if c := values.Get("cron"); c != "" {
+		if _, err := cron.ParseStandard(c); err != nil {
+			return fmt.Sprintf("invalid cron rule: %s", c)
 		}
-		
-		cron := values.Get("cron")
-		if cron != "" {
-			// Basic cron validation (could be enhanced)
-			if cron == "invalid" {
-				return fmt.Sprintf("no valid rule found: cron=%s", cron)
-			}
-		}
+
 	}
-	
+
 	// Check retry count
 	if phase.Retry > 10 {
 		return "warning: retry count exceeds recommended limit"
 	}
-	
+
 	return "" // No issues
 }

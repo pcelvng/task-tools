@@ -22,14 +22,14 @@ CREATE TABLE workflow_files (
 
 -- Workflow phases (matches Phase struct exactly)
 CREATE TABLE workflow_phases (
-    workflow_file_path TEXT NOT NULL,
+    file_path TEXT NOT NULL,
     task TEXT NOT NULL,           -- topic:job format (e.g., "data-load:hourly")
     depends_on TEXT,
     rule TEXT,                    -- URI query parameters (e.g., "cron=0 0 * * *&offset=1h")
     template TEXT,
     retry INTEGER DEFAULT 0,      -- threshold of times to retry
     status TEXT,                  -- phase status info (warnings, errors, validation messages)
-    PRIMARY KEY (workflow_file_path, task)
+    PRIMARY KEY (file_path, task)
 );
 
 -- Task relationships are generated dynamically from workflow_phases
@@ -50,7 +50,7 @@ CREATE INDEX idx_workflow_phases_status ON workflow_phases (status);
 - Easy to identify and debug workflow issues
 
 ### 2. Composite Primary Keys for Phases
-- `(workflow_file_path, task_name, job_name)` uniquely identifies each phase
+- `(file_path, task_name, job_name)` uniquely identifies each phase
 - Directly readable: `("workflows/data-load.toml", "data-load", "hourly")`
 - No surrogate IDs to remember or map
 
@@ -80,25 +80,25 @@ CREATE INDEX idx_workflow_phases_status ON workflow_phases (status);
 -- Find all phases in a specific workflow file
 SELECT task, depends_on, rule, status
 FROM workflow_phases 
-WHERE workflow_file_path = 'workflows/data-load.toml';
+WHERE file_path = 'workflows/data-load.toml';
 
 -- Find phases that depend on a specific task type
-SELECT workflow_file_path, task, rule, status
+SELECT file_path, task, rule, status
 FROM workflow_phases 
 WHERE depends_on = 'data-load';
 
 -- Find phases by topic (using LIKE for topic:job matching)
-SELECT workflow_file_path, task, depends_on, rule, status
+SELECT file_path, task, depends_on, rule, status
 FROM workflow_phases 
 WHERE task LIKE 'data-load:%';
 
 -- Find phases with warnings or errors
-SELECT workflow_file_path, task, status
+SELECT file_path, task, status
 FROM workflow_phases 
 WHERE status IS NOT NULL AND status != '';
 
 -- Find phases with specific status messages
-SELECT workflow_file_path, task, status
+SELECT file_path, task, status
 FROM workflow_phases 
 WHERE status LIKE '%warning%' OR status LIKE '%error%';
 
@@ -106,7 +106,7 @@ WHERE status LIKE '%warning%' OR status LIKE '%error%';
 SELECT 
     parent.depends_on as parent_task,
     parent.task as child_task,
-    parent.workflow_file_path,
+    parent.file_path,
     parent.rule as child_rule,
     parent.status as child_status
 FROM workflow_phases parent
@@ -115,7 +115,7 @@ WHERE parent.depends_on IS NOT NULL AND parent.depends_on != '';
 -- Find all children of a specific task
 SELECT 
     child.task as child_task,
-    child.workflow_file_path,
+    child.file_path,
     child.rule as child_rule,
     child.status as child_status
 FROM workflow_phases child
@@ -124,7 +124,7 @@ WHERE child.depends_on = 'data-load';
 -- Find all parents of a specific task
 SELECT 
     parent.depends_on as parent_task,
-    parent.workflow_file_path,
+    parent.file_path,
     parent.rule as parent_rule,
     parent.status as parent_status
 FROM workflow_phases parent
@@ -138,7 +138,7 @@ SELECT
     COUNT(wp.task) as phase_count,
     COUNT(CASE WHEN wp.status IS NOT NULL AND wp.status != '' THEN 1 END) as phases_with_status
 FROM workflow_files wf
-LEFT JOIN workflow_phases wp ON wf.file_path = wp.workflow_file_path
+LEFT JOIN workflow_phases wp ON wf.file_path = wp.file_path
 GROUP BY wf.file_path;
 ```
 
@@ -246,21 +246,21 @@ type SQLite struct {
 
 // Add workflow methods to existing SQLite struct
 func (s *SQLite) Search(task, job string) (path string, ph Phase) {
-    // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry, status
+    // Query: SELECT file_path, task, depends_on, rule, template, retry, status
     //        FROM workflow_phases WHERE task = ? OR task LIKE ?
     //        (where ? is either exact match or topic:job format)
     // Return same results as before, with status info available
 }
 
 func (s *SQLite) Get(t task.Task) Phase {
-    // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry, status
+    // Query: SELECT file_path, task, depends_on, rule, template, retry, status
     //        FROM workflow_phases WHERE task = ? OR task LIKE ?
     //        (where ? is either exact match or topic:job format)
     // Return same Phase struct with status info
 }
 
 func (s *SQLite) Children(t task.Task) []Phase {
-    // Query: SELECT workflow_file_path, task, depends_on, rule, template, retry, status
+    // Query: SELECT file_path, task, depends_on, rule, template, retry, status
     //        FROM workflow_phases WHERE depends_on = ? OR depends_on LIKE ?
     //        (where ? matches the task type or topic:job format)
     // Return same []Phase slice with status info

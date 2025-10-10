@@ -51,14 +51,31 @@ func (o *SQLite) Open(workflowPath string, fOpts *file.Options) error {
 	if o.TaskTTL < time.Hour {
 		o.TaskTTL = time.Hour
 	}
+	if o.db == nil {
+	if err := o.initDB(); err != nil {
+		return err 
+	}
+}
 
-	backupSts, _ := file.Stat(o.BackupPath, fOpts)
-	localSts, _ := file.Stat(o.LocalPath, fOpts)
+	// Determine if workflow path is a directory
+	sts, err := file.Stat(workflowPath, fOpts)
+	if err != nil {
+		return fmt.Errorf("problem with workflow path %s %w", workflowPath, err)
+	}
+	o.isDir = sts.IsDir
+	_, err = o.Refresh()
+
+	return err
+}
+
+func (o *SQLite) initDB() error {
+	backupSts, _ := file.Stat(o.BackupPath, o.fOpts)
+	localSts, _ := file.Stat(o.LocalPath, o.fOpts)
 
 	if localSts.Size == 0 && backupSts.Size > 0 {
 		log.Printf("Restoring local DB from backup %s", o.BackupPath)
 		// no local file but backup exists so copy it down
-		if err := copyFiles(o.BackupPath, o.LocalPath, fOpts); err != nil {
+		if err := copyFiles(o.BackupPath, o.LocalPath, o.fOpts); err != nil {
 			log.Println(err) // TODO: should this be fatal?
 		}
 	}
@@ -89,17 +106,7 @@ func (o *SQLite) Open(workflowPath string, fOpts *file.Options) error {
 	if err != nil {
 		return err
 	}
-
-	//TODO: load workflow file into the database
-	// Determine if workflow path is a directory
-	sts, err := file.Stat(workflowPath, fOpts)
-	if err != nil {
-		return fmt.Errorf("problem with workflow path %s %w", workflowPath, err)
-	}
-	o.isDir = sts.IsDir
-	_, err = o.Refresh()
-
-	return err
+	return nil 
 }
 
 func copyFiles(src, dst string, fOpts *file.Options) error {
