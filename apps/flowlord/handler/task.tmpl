@@ -65,6 +65,10 @@
             <h3>Filters</h3>
             <div class="filter-row">
                 <div class="filter-group">
+                    <label for="idSearch">Task ID</label>
+                    <input type="text" id="idSearch" placeholder="Search by ID...">
+                </div>
+                <div class="filter-group">
                     <label for="typeFilter">Task Type</label>
                     <select id="typeFilter">
                         <option value="">All Types</option>
@@ -87,22 +91,22 @@
             <table id="taskTable">
                 <thead>
                     <tr>
-                        <th class="sortable" data-sort="id">ID</th>
-                        <th class="sortable" data-sort="type">Type</th>
-                        <th class="sortable" data-sort="job">Job</th>
-                        <th class="sortable" data-sort="message">Message</th>
-                        <th class="sortable" data-sort="result">Result</th>
-                        <th class="sortable" data-sort="info">Info</th>
-                        <th class="sortable" data-sort="meta">Meta</th>
-                        <th class="sortable" data-sort="created">Created</th>
-                        <th class="sortable" data-sort="task_time">Task Time</th>
-                        <th class="sortable" data-sort="queue_time">Queue Time</th>
+                        <th class="sortable id-column" data-sort="id">ID</th>
+                        <th class="sortable type-column" data-sort="type">Type</th>
+                        <th class="sortable job-column" data-sort="job">Job</th>
+                        <th class="sortable message-column" data-sort="message">Message</th>
+                        <th class="sortable result-column" data-sort="result">Result</th>
+                        <th class="sortable info-column" data-sort="info">Info</th>
+                        <th class="sortable meta-column" data-sort="meta">Meta</th>
+                        <th class="sortable created-column" data-sort="created">Created</th>
+                        <th class="sortable queue-column" data-sort="queue_time">Queue</th>
+                        <th class="sortable process-column" data-sort="task_time">Process</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{range .Tasks}}
                     <tr>
-                        <td class="id-cell truncated copyable" 
+                        <td class="id-cell id-column truncated copyable" 
                             data-full-text="{{.ID}}" 
                             data-truncated-text="{{if ge (len .ID) 8}}{{slice .ID 0 8}}...{{else}}{{.ID}}{{end}}"
                             onclick="toggleField(this, '{{.ID}}')" 
@@ -111,9 +115,9 @@
                             title="Click to expand/collapse, double-click or right-click to copy">
                             {{if ge (len .ID) 8}}{{slice .ID 0 8}}...{{else}}{{.ID}}{{end}}
                         </td>
-                        <td class="type-cell">{{.Type}}</td>
-                        <td class="job-cell">{{if .Job}}{{.Job}}{{else}}{{getJobFromMeta .Meta}}{{end}}</td>
-                        <td class="message-cell truncated copyable" 
+                        <td class="type-cell type-column">{{.Type}}</td>
+                        <td class="job-cell job-column">{{if .Job}}{{.Job}}{{else}}{{getJobFromMeta .Meta}}{{end}}</td>
+                        <td class="message-cell message-column truncated copyable" 
                             data-full-text="{{.Msg}}" 
                             data-truncated-text="{{if ge (len .Msg) 80}}{{slice .Msg 0 80}}...{{else}}{{.Msg}}{{end}}"
                             onclick="toggleField(this, '{{.Msg}}')" 
@@ -122,10 +126,10 @@
                             title="Click to expand/collapse, double-click or right-click to copy">
                             {{if ge (len .Msg) 80}}{{slice .Msg 0 80}}...{{else}}{{.Msg}}{{end}}
                         </td>
-                        <td class="result-cell {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}">
+                        <td class="result-cell result-column {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}">
                             {{if .Result}}{{.Result}}{{else}}Running{{end}}
                         </td>
-                        <td class="info-cell truncated copyable" 
+                        <td class="info-cell info-column truncated copyable" 
                             data-full-text="{{.Info}}" 
                             data-truncated-text="{{if ge (len .Info) 80}}{{slice .Info 0 80}}...{{else}}{{.Info}}{{end}}"
                             onclick="toggleField(this, '{{.Info}}')" 
@@ -134,7 +138,7 @@
                             title="Click to expand/collapse, double-click or right-click to copy">
                             {{if ge (len .Info) 80}}{{slice .Info 0 80}}...{{else}}{{.Info}}{{end}}
                         </td>
-                        <td class="meta-cell truncated copyable" 
+                        <td class="meta-cell meta-column truncated copyable" 
                             data-full-text="{{.Meta}}" 
                             data-truncated-text="{{if ge (len .Meta) 80}}{{slice .Meta 0 80}}...{{else}}{{.Meta}}{{end}}"
                             onclick="toggleField(this, '{{.Meta}}')" 
@@ -143,9 +147,9 @@
                             title="Click to expand/collapse, double-click or right-click to copy">
                             {{if ge (len .Meta) 80}}{{slice .Meta 0 80}}...{{else}}{{.Meta}}{{end}}
                         </td>
-                        <td class="time-cell">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
-                        <td class="time-cell">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
-                        <td class="time-cell">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
+                        <td class="time-cell created-column">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
+                        <td class="time-cell queue-column">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
+                        <td class="time-cell process-column">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
                     </tr>
                     {{end}}
                 </tbody>
@@ -302,6 +306,7 @@
 
         // Initialize responsive filters
         function initializeFilters() {
+            const idSearch = document.getElementById('idSearch');
             const typeFilter = document.getElementById('typeFilter');
             const jobFilter = document.getElementById('jobFilter');
             const table = document.getElementById('taskTable');
@@ -345,6 +350,15 @@
                 typeFilter.appendChild(option);
             });
             
+            // Handle ID search with debouncing
+            let searchTimeout;
+            idSearch.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    filterTable();
+                }, 300); // 300ms delay
+            });
+            
             // Handle task type change
             typeFilter.addEventListener('change', function() {
                 const selectedType = this.value;
@@ -373,29 +387,36 @@
         
         // Filter table based on current filter values
         function filterTable() {
+            const idSearch = document.getElementById('idSearch');
             const typeFilter = document.getElementById('typeFilter');
             const jobFilter = document.getElementById('jobFilter');
             const table = document.getElementById('taskTable');
             
             if (!table) return;
             
+            const searchId = idSearch ? idSearch.value.trim().toLowerCase() : '';
             const selectedType = typeFilter ? typeFilter.value : '';
             const selectedJob = jobFilter ? jobFilter.value : '';
             
             const rows = Array.from(table.querySelectorAll('tbody tr'));
             
             rows.forEach(row => {
-                const typeCell = row.cells[1];
-                const jobCell = row.cells[2];
+                const idCell = row.cells[0]; // ID column
+                const typeCell = row.cells[1]; // Type column
+                const jobCell = row.cells[2]; // Job column
                 
-                if (typeCell && jobCell) {
+                if (idCell && typeCell && jobCell) {
+                    // Use the full ID from data-full-text attribute instead of truncated display text
+                    const fullId = idCell.getAttribute('data-full-text') || idCell.textContent.trim();
+                    const id = fullId.toLowerCase();
                     const type = typeCell.textContent.trim();
                     const job = jobCell.textContent.trim();
                     
+                    const idMatch = !searchId || id.includes(searchId);
                     const typeMatch = !selectedType || type === selectedType;
                     const jobMatch = !selectedJob || job === selectedJob;
                     
-                    if (typeMatch && jobMatch) {
+                    if (idMatch && typeMatch && jobMatch) {
                         row.style.display = '';
                     } else {
                         row.style.display = 'none';
@@ -424,9 +445,11 @@
         
         // Clear all filters
         function clearFilters() {
+            const idSearch = document.getElementById('idSearch');
             const typeFilter = document.getElementById('typeFilter');
             const jobFilter = document.getElementById('jobFilter');
             
+            if (idSearch) idSearch.value = '';
             if (typeFilter) typeFilter.value = '';
             if (jobFilter) {
                 jobFilter.value = '';

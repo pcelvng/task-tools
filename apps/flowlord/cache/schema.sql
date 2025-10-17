@@ -21,6 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_task_records_type_job ON task_records (type, job)
 CREATE INDEX IF NOT EXISTS idx_task_records_date_range ON task_records (created, ended);
 
 -- Create a view that calculates task and queue times
+DROP VIEW IF EXISTS tasks;
 CREATE VIEW IF NOT EXISTS tasks AS
 SELECT 
     task_records.id,
@@ -33,21 +34,35 @@ SELECT
     task_records.msg,
     task_records.result,
     -- Calculate task duration in seconds
-    CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) as task_seconds,
+    CASE 
+        WHEN task_records.ended IS NULL OR task_records.started IS NULL OR task_records.ended = '' OR task_records.started = '' THEN 0
+        ELSE ROUND((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60)
+    END as task_seconds,
     -- Format task duration as HH:MM:SS
-    strftime('%H:%M:%S', 
-        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
-        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
-        CAST((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60 AS INTEGER) % 60
-    ) as task_time,
+    CASE 
+        WHEN task_records.ended IS NULL OR task_records.started IS NULL OR task_records.ended = '' OR task_records.started = '' THEN 'N/A'
+        ELSE 
+            printf('%02d:%02d:%02d',
+                ROUND((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60) / 3600,
+                ROUND((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60) % 3600 / 60,
+                ROUND((julianday(task_records.ended) - julianday(task_records.started)) * 24 * 60 * 60) % 60
+            )
+    END as task_time,
     -- Calculate queue time in seconds
-    CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) as queue_seconds,
+    CASE 
+        WHEN task_records.started IS NULL OR task_records.created IS NULL OR task_records.started = '' OR task_records.created = '' THEN 0
+        ELSE ROUND((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60)
+    END as queue_seconds,
     -- Format queue duration as HH:MM:SS
-    strftime('%H:%M:%S', 
-        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) / 3600 || ':' ||
-        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) % 3600 / 60 || ':' ||
-        CAST((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60 AS INTEGER) % 60
-    ) as queue_time,
+    CASE 
+        WHEN task_records.started IS NULL OR task_records.created IS NULL OR task_records.started = '' OR task_records.created = '' THEN 'N/A'
+        ELSE 
+            printf('%02d:%02d:%02d',
+                ROUND((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60) / 3600,
+                ROUND((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60) % 3600 / 60,
+                ROUND((julianday(task_records.started) - julianday(task_records.created)) * 24 * 60 * 60) % 60
+            )
+    END as queue_time,
     task_records.created,
     task_records.started,
     task_records.ended

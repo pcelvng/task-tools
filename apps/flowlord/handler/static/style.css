@@ -275,12 +275,15 @@ body {
 /* ===== TABLE STYLES ===== */
 .table-container {
     overflow-x: auto;
+    max-width: 100%;
 }
 
 table {
     border-collapse: collapse;
     width: 100%;
     margin: 0;
+    table-layout: fixed;
+    max-width: 100%;
 }
 
 th, td {
@@ -336,6 +339,55 @@ tr:hover {
     color: #6c757d;
 }
 
+/* ===== WORKFLOW TABLE COLUMN WIDTHS ===== */
+th.workflow-file-cell, td.workflow-file-cell {
+    width: 8%;
+    max-width: 120px;
+    word-break: break-all;
+}
+
+th.task-cell, td.task-cell {
+    width: 8%;
+    max-width: 100px;
+    word-break: break-all;
+}
+
+th.job-cell, td.job-cell {
+    width: 6%;
+    max-width: 100px;
+    word-break: break-all;
+}
+
+th.rule-cell, td.rule-cell {
+    width: 25%;
+    max-width: 350px;
+    word-break: break-all;
+}
+
+th.depends-on-cell, td.depends-on-cell {
+    width: 10%;
+    max-width: 120px;
+    word-break: break-all;
+}
+
+th.retry-cell, td.retry-cell {
+    width: 3%;
+    max-width: 60px;
+    text-align: center;
+}
+
+th.template-cell, td.template-cell {
+    width: 25%;
+    max-width: 350px;
+    word-break: break-all;
+}
+
+th.status-cell, td.status-cell {
+    width: 8%;
+    max-width: 80px;
+    text-align: center;
+}
+
 .id-cell, .info-cell, .meta-cell {
     cursor: pointer;
     position: relative;
@@ -346,8 +398,7 @@ tr:hover {
     background-color: #f8f9fa;
 }
 
-.id-cell.truncated, .info-cell.truncated, .meta-cell.truncated {
-    max-width: 200px;
+.id-cell.truncated, .info-cell.truncated, .meta-cell.truncated, .rule-cell.truncated, .template-cell.truncated {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -357,7 +408,11 @@ tr:hover {
     max-width: 100px;
 }
 
-.id-cell.expanded, .info-cell.expanded, .meta-cell.expanded {
+.rule-cell.truncated, .template-cell.truncated {
+    max-width: 250px;
+}
+
+.id-cell.expanded, .info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded {
     max-width: none;
     white-space: normal;
     word-break: break-all;
@@ -368,12 +423,17 @@ tr:hover {
     margin: 2px;
 }
 
-.info-cell.expanded, .meta-cell.expanded {
+.info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded {
     word-wrap: break-word;
 }
 
-.id-cell.copyable, .info-cell.copyable, .meta-cell.copyable {
+.id-cell.copyable, .info-cell.copyable, .meta-cell.copyable, .rule-cell.copyable, .template-cell.copyable {
     position: relative;
+    cursor: pointer;
+}
+
+.rule-cell.copyable:hover, .template-cell.copyable:hover {
+    background-color: #f8f9fa;
 }
 
 .type-cell {
@@ -394,13 +454,90 @@ tr:hover {
 .result-error { color: #dc3545; }
 .result-alert { color: #fd7e14; }
 .result-warn { color: #ffc107; }
+.result-running { color: #007bff; }
 
 .time-cell {
     white-space: nowrap;
 }
 
+/* ===== TASK TABLE COLUMN WIDTHS ===== */
+/* ID column - compact for task IDs */
+th.id-column, td.id-column {
+    width: 7%;
+    max-width: 100px;
+}
+
+/* Type and Job columns - standardized compact width */
+th.type-column, td.type-column,
+th.job-column, td.job-column {
+    width: 6%;
+    max-width: 80px;
+}
+
+/* Message column - takes remaining space */
+th.message-column, td.message-column {
+    width: auto;
+    min-width: 200px;
+}
+
+/* Result column - compact for status */
+th.result-column, td.result-column {
+    width: 6%;
+    max-width: 80px;
+}
+
+/* Info and Meta columns - medium space */
+th.info-column, td.info-column,
+th.meta-column, td.meta-column {
+    width: 12%;
+    max-width: 180px;
+}
+
+/* Created column - standard timestamp width */
+th.created-column, td.created-column {
+    width: 10%;
+    max-width: 180px;
+}
+
+/* Duration columns - standardized for hh:mm:ss format */
+th.queue-column, td.queue-column,
+th.process-column, td.process-column {
+    width: 5%;
+    max-width: 70px;
+}
+
+/* ===== STANDARDIZED COLUMN CLASSES ===== */
+.duration-column {
+    width: 5%;
+    max-width: 70px;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.timestamp-column {
+    width: 10%;
+    max-width: 180px;
+    white-space: nowrap;
+}
+
+.compact-column {
+    width: 6%;
+    max-width: 80px;
+    white-space: nowrap;
+}
+
+.medium-column {
+    width: 12%;
+    max-width: 180px;
+}
+
+.message-column {
+    width: auto;
+    min-width: 200px;
+}
+
 .message-cell {
-    max-width: 300px;
+    max-width: none;
     word-wrap: break-word;
     line-height: 1.4;
     cursor: pointer;

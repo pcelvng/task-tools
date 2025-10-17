@@ -57,14 +57,14 @@
             <table id="workflowTable">
                 <thead>
                     <tr>
-                        <th class="sortable" data-sort="workflow_file">Workflow File</th>
-                        <th class="sortable" data-sort="task">Topic</th>
-                        <th class="sortable" data-sort="job">Job</th>
-                        <th class="sortable" data-sort="rule">Rule</th>
-                        <th class="sortable" data-sort="depends_on">Depends On</th>
-                        <th class="sortable" data-sort="retry">Retry</th>
-                        <th class="sortable" data-sort="template">Template</th>
-                        <th class="sortable" data-sort="status">Status</th>
+                        <th class="sortable workflow-file-cell" data-sort="workflow_file">Workflow</th>
+                        <th class="sortable task-cell" data-sort="task">Topic</th>
+                        <th class="sortable job-cell" data-sort="job">Job</th>
+                        <th class="sortable rule-cell" data-sort="rule">Rule</th>
+                        <th class="sortable depends-on-cell" data-sort="depends_on">Depends On</th>
+                        <th class="sortable retry-cell" data-sort="retry">Retry</th>
+                        <th class="sortable template-cell" data-sort="template">Template</th>
+                        <th class="sortable status-cell" data-sort="status">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -75,23 +75,23 @@
                         <td class="job-cell">{{.Job}}</td>
                         <td class="rule-cell truncated copyable" 
                             data-full-text="{{.Rule}}" 
-                            data-truncated-text="{{if ge (len .Rule) 80}}{{slice .Rule 0 80}}...{{else}}{{.Rule}}{{end}}"
+                            data-truncated-text="{{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}"
                             onclick="toggleField(this, '{{.Rule}}')" 
                             oncontextmenu="showContextMenu(event, '{{.Rule}}')"
                             ondblclick="copyToClipboard('{{.Rule}}')"
                             title="Click to expand/collapse, double-click or right-click to copy">
-                            {{if ge (len .Rule) 80}}{{slice .Rule 0 80}}...{{else}}{{.Rule}}{{end}}
+                            {{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}
                         </td>
                         <td class="depends-on-cell">{{.DependsOn}}</td>
                         <td class="retry-cell">{{.Retry}}</td>
                         <td class="template-cell truncated copyable" 
                             data-full-text="{{.Template}}" 
-                            data-truncated-text="{{if ge (len .Template) 80}}{{slice .Template 0 80}}...{{else}}{{.Template}}{{end}}"
+                            data-truncated-text="{{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}"
                             onclick="toggleField(this, '{{.Template}}')" 
                             oncontextmenu="showContextMenu(event, '{{.Template}}')"
                             ondblclick="copyToClipboard('{{.Template}}')"
                             title="Click to expand/collapse, double-click or right-click to copy">
-                            {{if ge (len .Template) 80}}{{slice .Template 0 80}}...{{else}}{{.Template}}{{end}}
+                            {{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}
                         </td>
                         <td class="status-cell">
                             <span class="{{if .Status}}result-error{{else}}result-complete{{end}}">

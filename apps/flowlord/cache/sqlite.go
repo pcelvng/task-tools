@@ -940,7 +940,8 @@ func (s *SQLite) GetTasksByDate(date time.Time, taskType, job, result string) ([
 			&t.Created, &t.Started, &t.Ended,
 		)
 		if err != nil {
-			continue
+			t.Result = string(task.ErrResult)
+			t.Msg = err.Error()
 		}
 		tasks = append(tasks, t)
 	}
