@@ -52,7 +52,7 @@ var AboutTemplate string
 //go:embed handler/static/*
 var StaticFiles embed.FS
 
-var staticPath = "/static"
+var isLocal = false
 
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
@@ -65,7 +65,7 @@ func (tm *taskMaster) StartHandler() {
 	}
 	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
-	router.Get("/", tm.Info)
+	router.Get("/", tm.htmlAbout)
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
@@ -438,7 +438,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 		"TotalTasks":     totalTasks,
 		"CurrentPage":    "files",
 		"PageTitle":      "File Messages",
-		"staticPath":     staticPath,
+		"isLocal":        isLocal,
 	}
 
 	// Template functions
@@ -548,7 +548,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 	nextDate := date.AddDate(0, 0, 1)
 
 	// Generate summary from tasks data
-	summary := generateSummaryFromTasks(tasks)
+	summary := generateSummaryFromTasks(tasks) //TODO: replace with taskCache.Recap()
 
 	// Calculate statistics
 	totalTasks := len(tasks)
@@ -591,7 +591,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"CurrentResult":  result,
 		"CurrentPage":    "task",
 		"PageTitle":      "Task Dashboard",
-		"staticPath":     staticPath,
+		"isLocal":        isLocal,
 	}
 
 	// Template functions
@@ -632,6 +632,50 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 			}
 			return s[start:end]
 		},
+		"getAlertCount": func(topic, job string) int {
+			// Count alerts for a specific topic and job
+			count := 0
+			for _, task := range tasks {
+				if task.Result == "alert" {
+					// Check if this task matches the topic and job
+					taskJob := task.Job
+					if taskJob == "" {
+						// Try to extract job from meta if not set directly
+						if v, err := url.ParseQuery(task.Meta); err == nil {
+							taskJob = v.Get("job")
+						}
+					}
+					// For now, we'll match any alert task since we don't have topic info in TaskView
+					// This is a simplified implementation
+					if taskJob == job {
+						count++
+					}
+				}
+			}
+			return count
+		},
+		"getWarnCount": func(topic, job string) int {
+			// Count warnings for a specific topic and job
+			count := 0
+			for _, task := range tasks {
+				if task.Result == "warn" {
+					// Check if this task matches the topic and job
+					taskJob := task.Job
+					if taskJob == "" {
+						// Try to extract job from meta if not set directly
+						if v, err := url.ParseQuery(task.Meta); err == nil {
+							taskJob = v.Get("job")
+						}
+					}
+					// For now, we'll match any warn task since we don't have topic info in TaskView
+					// This is a simplified implementation
+					if taskJob == job {
+						count++
+					}
+				}
+			}
+			return count
+		},
 	}
 
 	// Parse and execute template
@@ -671,7 +715,7 @@ func workflowHTML(tCache *cache.SQLite) []byte {
 		"WorkflowFileSummary": workflowFileSummary,
 		"CurrentPage":         "workflow",
 		"PageTitle":           "Workflow Dashboard",
-		"staticPath":          staticPath,
+		"isLocal":             isLocal,
 	}
 
 	// Template functions
@@ -690,12 +734,12 @@ func workflowHTML(tCache *cache.SQLite) []byte {
 	// Parse and execute template
 	tmpl, err := template.New("workflow").Funcs(funcMap).Parse(HeaderTemplate + WorkflowTemplate)
 	if err != nil {
-		return []byte(err.Error())
+		return []byte("Error:"+ err.Error())
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return []byte(err.Error())
+		return []byte("Error:" + err.Error())
 	}
 
 	return buf.Bytes()
@@ -739,7 +783,7 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"CurrentPage": "about",
 		"DateValue":   "", // About page doesn't need date
 		"PageTitle":   "System Information",
-		"staticPath":  staticPath,
+		"isLocal":     isLocal,
 	}
 
 	// Parse and execute template
@@ -775,7 +819,7 @@ func alertHTML(tasks []cache.AlertRecord, date time.Time) []byte {
 		"DateValue":   date.Format("2006-01-02"),
 		"Date":        date.Format("Monday, January 2, 2006"),
 		"PageTitle":   "Task Alerts",
-		"staticPath":  staticPath,
+		"isLocal":     isLocal,
 	}
 
 	tmpl, err := template.New("alert").Parse(HeaderTemplate + AlertTemplate)

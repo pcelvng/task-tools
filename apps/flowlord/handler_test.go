@@ -17,7 +17,7 @@ import (
 const testPath = "../../internal/test"
 
 func TestMain(t *testing.M) {
-	staticPath = "./static"
+	isLocal = true
 	t.Run()
 
 }
@@ -381,7 +381,7 @@ func TestAlertHTML(t *testing.T) {
 			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T12:15:00Z"),
 		},
 		{
-			TaskID:    "task-003",
+			TaskID:    "task-003-really-long-id12345",
 			TaskTime:  trial.TimeHour("2024-01-15T11"),
 			Type:      "file-transfer",
 			Job:       "backup",
@@ -393,7 +393,7 @@ func TestAlertHTML(t *testing.T) {
 			TaskTime:  trial.TimeHour("2024-01-15T13"),
 			Type:      "database-sync",
 			Job:       "replication",
-			Msg:       "Database sync failed: connection timeout",
+			Msg:       "This is a really long message that needs to be shorten. The quick brown fox jumped over the lazy dog. Peter Pipper picked a peck of pickled peppers. ",
 			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T13:30:00Z"),
 		},
 		{
@@ -409,6 +409,11 @@ func TestAlertHTML(t *testing.T) {
 	// Generate HTML using the alertHTML function
 	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"))
 
+	// Validate HTML using the new function
+	if err := validateHTML(htmlContent); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
 	// Write HTML to a file for easy viewing
 	outputFile := "handler/alert_preview.html"
 	err := os.WriteFile(outputFile, htmlContent, 0644)
@@ -417,11 +422,6 @@ func TestAlertHTML(t *testing.T) {
 	}
 
 	t.Logf("Alert preview generated and saved to: ./%s", outputFile)
-
-	// Basic validation that HTML was generated
-	if len(htmlContent) == 0 {
-		t.Error("Generated HTML content is empty")
-	}
 
 }
 
@@ -454,6 +454,11 @@ func TestFilesHTML(t *testing.T) {
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
 	html := filesHTML(files, date)
 
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
 	// Write HTML to a file for easy viewing
 	outputFile := "handler/files_preview.html"
 	err := os.WriteFile(outputFile, html, 0644)
@@ -461,13 +466,46 @@ func TestFilesHTML(t *testing.T) {
 		t.Fatalf("Failed to write HTML file: %v", err)
 	}
 
-	t.Logf("Alert preview generated and saved to: ./%s", outputFile)
+	t.Logf("Files preview generated and saved to: ./%s", outputFile)
 
-	// Basic checks
+}
+
+// validateHTML performs general HTML validation and returns an error if invalid
+func validateHTML(html []byte) error {
+	htmlStr := string(html)
+	
+	// Check for empty HTML
 	if len(html) == 0 {
-		t.Error("Expected HTML output, got empty")
+		return errors.New("HTML output is empty")
 	}
-
+	
+	// Check for valid HTML structure
+	if !strings.Contains(htmlStr, "<!DOCTYPE html>") {
+		return errors.New("HTML missing DOCTYPE declaration")
+	}
+	if !strings.Contains(htmlStr, "<html") {
+		return errors.New("HTML missing opening html tag")
+	}
+	if !strings.Contains(htmlStr, "</html>") {
+		return errors.New("HTML missing closing html tag")
+	}
+	
+	// Check for template execution errors (any Go template error messages)
+	if strings.Contains(htmlStr, "template:") && strings.Contains(htmlStr, "error") {
+		return errors.New("template execution error detected in HTML output")
+	}
+	
+	// Check for function not defined errors
+	if strings.Contains(htmlStr, "not defined") {
+		return errors.New("template function not defined error detected in HTML output")
+	}
+	
+	// Check for any other common template errors
+	if strings.Contains(htmlStr, "executing") && strings.Contains(htmlStr, "error") {
+		return errors.New("template execution error detected")
+	}
+	
+	return nil
 }
 
 func TestTaskHTML(t *testing.T) {
@@ -483,6 +521,11 @@ func TestTaskHTML(t *testing.T) {
 	// Test with no filters - summary will be generated from tasks data
 	html := taskHTML(testTasks, date, "", "", "")
 
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
 	// Write HTML to a file for easy viewing
 	outputFile := "handler/task_preview.html"
 	err = os.WriteFile(outputFile, html, 0644)
@@ -491,12 +534,6 @@ func TestTaskHTML(t *testing.T) {
 	}
 
 	t.Logf("Task preview generated and saved to: ./%s", outputFile)
-
-	// Basic checks
-	if len(html) == 0 {
-		t.Error("Expected HTML output, got empty")
-	}
-
 }
 
 func TestWorkflowHTML(t *testing.T) {
@@ -509,6 +546,11 @@ func TestWorkflowHTML(t *testing.T) {
 	// Test with no filters - summary will be generated from tasks data
 	html := workflowHTML(taskCache)
 
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
 	// Write HTML to a file for easy viewing
 	outputFile := "handler/workflow_preview.html"
 	err := os.WriteFile(outputFile, html, 0644)
@@ -516,12 +558,7 @@ func TestWorkflowHTML(t *testing.T) {
 		t.Fatalf("Failed to write HTML file: %v", err)
 	}
 
-	t.Logf("Task preview generated and saved to: ./%s", outputFile)
-
-	// Basic checks
-	if len(html) == 0 {
-		t.Error("Expected HTML output, got empty")
-	}
+	t.Logf("Workflow preview generated and saved to: ./%s", outputFile)
 
 }
 
@@ -543,6 +580,11 @@ func TestAboutHTML(t *testing.T) {
 	// Generate HTML using the aboutHTML method
 	html := tm.aboutHTML()
 
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
 	// Write HTML to a file for easy viewing
 	outputFile := "handler/about_preview.html"
 	err := os.WriteFile(outputFile, html, 0644)
@@ -551,11 +593,6 @@ func TestAboutHTML(t *testing.T) {
 	}
 
 	t.Logf("About preview generated and saved to: ./%s", outputFile)
-
-	// Basic checks
-	if len(html) == 0 {
-		t.Error("Expected HTML output, got empty")
-	}
 
 	// Check that key content is present
 	htmlStr := string(html)

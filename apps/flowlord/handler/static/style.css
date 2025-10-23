@@ -6,20 +6,6 @@
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
-/* Common colors - removed unused classes */
-
-/* Common spacing - removed unused classes */
-
-/* Common border styles - removed unused classes */
-
-/* Common shadow styles - removed unused classes */
-
-/* Common display styles - removed unused classes */
-
-/* Common text styles - removed unused classes */
-
-/* Common transition - removed unused classes */
-
 /* ===== BASE STYLES ===== */
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -339,54 +325,6 @@ tr:hover {
     color: #6c757d;
 }
 
-/* ===== WORKFLOW TABLE COLUMN WIDTHS ===== */
-th.workflow-file-cell, td.workflow-file-cell {
-    width: 8%;
-    max-width: 120px;
-    word-break: break-all;
-}
-
-th.task-cell, td.task-cell {
-    width: 8%;
-    max-width: 100px;
-    word-break: break-all;
-}
-
-th.job-cell, td.job-cell {
-    width: 6%;
-    max-width: 100px;
-    word-break: break-all;
-}
-
-th.rule-cell, td.rule-cell {
-    width: 25%;
-    max-width: 350px;
-    word-break: break-all;
-}
-
-th.depends-on-cell, td.depends-on-cell {
-    width: 10%;
-    max-width: 120px;
-    word-break: break-all;
-}
-
-th.retry-cell, td.retry-cell {
-    width: 3%;
-    max-width: 60px;
-    text-align: center;
-}
-
-th.template-cell, td.template-cell {
-    width: 25%;
-    max-width: 350px;
-    word-break: break-all;
-}
-
-th.status-cell, td.status-cell {
-    width: 8%;
-    max-width: 80px;
-    text-align: center;
-}
 
 .id-cell, .info-cell, .meta-cell {
     cursor: pointer;
@@ -398,7 +336,7 @@ th.status-cell, td.status-cell {
     background-color: #f8f9fa;
 }
 
-.id-cell.truncated, .info-cell.truncated, .meta-cell.truncated, .rule-cell.truncated, .template-cell.truncated {
+.id-cell.truncated, .info-cell.truncated, .meta-cell.truncated, .rule-cell.truncated, .template-cell.truncated, .message-cell.truncated {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -412,7 +350,11 @@ th.status-cell, td.status-cell {
     max-width: 250px;
 }
 
-.id-cell.expanded, .info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded {
+.message-cell.truncated {
+    max-width: 400px;
+}
+
+.id-cell.expanded, .info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded, .message-cell.expanded {
     max-width: none;
     white-space: normal;
     word-break: break-all;
@@ -423,16 +365,16 @@ th.status-cell, td.status-cell {
     margin: 2px;
 }
 
-.info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded {
+.info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded, .message-cell.expanded {
     word-wrap: break-word;
 }
 
-.id-cell.copyable, .info-cell.copyable, .meta-cell.copyable, .rule-cell.copyable, .template-cell.copyable {
+.id-cell.copyable, .info-cell.copyable, .meta-cell.copyable, .rule-cell.copyable, .template-cell.copyable, .message-cell.copyable {
     position: relative;
     cursor: pointer;
 }
 
-.rule-cell.copyable:hover, .template-cell.copyable:hover {
+.rule-cell.copyable:hover, .template-cell.copyable:hover, .message-cell.copyable:hover {
     background-color: #f8f9fa;
 }
 
@@ -457,11 +399,14 @@ th.status-cell, td.status-cell {
 .result-running { color: #007bff; }
 
 .time-cell {
-    white-space: nowrap;
+    white-space: normal;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
-/* ===== TASK TABLE COLUMN WIDTHS ===== */
-/* ID column - compact for task IDs */
+/* ===== UNIFIED TABLE COLUMN WIDTHS ===== */
+/* ID column - compact for IDs across all templates */
 th.id-column, td.id-column {
     width: 7%;
     max-width: 100px;
@@ -474,14 +419,15 @@ th.job-column, td.job-column {
     max-width: 80px;
 }
 
-/* Message column - takes remaining space */
+/* Message column - takes remaining space with generous width */
 th.message-column, td.message-column {
     width: auto;
-    min-width: 200px;
+    min-width: 400px;
 }
 
-/* Result column - compact for status */
-th.result-column, td.result-column {
+/* Result/Status column - compact for status */
+th.result-column, td.result-column,
+th.status-column, td.status-column {
     width: 6%;
     max-width: 80px;
 }
@@ -493,10 +439,16 @@ th.meta-column, td.meta-column {
     max-width: 180px;
 }
 
-/* Created column - standard timestamp width */
-th.created-column, td.created-column {
+/* Timestamp columns - standard width for all time fields */
+th.created-column, td.created-column,
+th.alerted-column, td.alerted-column,
+th.tasktime-column, td.tasktime-column {
     width: 10%;
     max-width: 180px;
+    word-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+    overflow-wrap: break-word;
 }
 
 /* Duration columns - standardized for hh:mm:ss format */
@@ -506,34 +458,41 @@ th.process-column, td.process-column {
     max-width: 70px;
 }
 
-/* ===== STANDARDIZED COLUMN CLASSES ===== */
-.duration-column {
-    width: 5%;
-    max-width: 70px;
-    white-space: nowrap;
-    text-align: center;
+/* ===== WORKFLOW-SPECIFIC COLUMN WIDTHS ===== */
+/* Workflow file column - compact for file names */
+th.workflow-file-cell, td.workflow-file-cell {
+    width: 8%;
+    max-width: 120px;
+    word-break: break-all;
 }
 
-.timestamp-column {
+/* Workflow task column - compact for task names */
+th.task-cell, td.task-cell {
+    width: 8%;
+    max-width: 100px;
+    word-break: break-all;
+}
+
+/* Workflow rule and template columns - wide for content */
+th.rule-cell, td.rule-cell,
+th.template-cell, td.template-cell {
+    width: 25%;
+    max-width: 350px;
+    word-break: break-all;
+}
+
+/* Workflow depends-on column - medium width */
+th.depends-on-cell, td.depends-on-cell {
     width: 10%;
-    max-width: 180px;
-    white-space: nowrap;
+    max-width: 120px;
+    word-break: break-all;
 }
 
-.compact-column {
-    width: 6%;
-    max-width: 80px;
-    white-space: nowrap;
-}
-
-.medium-column {
-    width: 12%;
-    max-width: 180px;
-}
-
-.message-column {
-    width: auto;
-    min-width: 200px;
+/* Workflow retry column - very compact */
+th.retry-cell, td.retry-cell {
+    width: 3%;
+    max-width: 60px;
+    text-align: center;
 }
 
 .message-cell {
@@ -591,10 +550,6 @@ th.process-column, td.process-column {
 .btn-secondary:hover {
     background: #545b62;
 }
-
-/* ===== DATE NAVIGATION STYLES - removed unused classes ===== */
-
-/* ===== DATE SELECTOR STYLES - removed unused classes ===== */
 
 /* ===== SUMMARY STYLES ===== */
 .summary-section {
@@ -720,6 +675,140 @@ th.process-column, td.process-column {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 20px;
+}
+
+/* ===== TOPIC SUMMARY STYLES ===== */
+.topic-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.topic-card {
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: box-shadow 0.2s ease;
+}
+
+.topic-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.topic-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.topic-name {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.topic-total {
+    background: #007bff;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.jobs-breakdown {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.job-card {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+.job-card:hover {
+    background: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.job-name {
+    font-weight: 600;
+    color: #495057;
+    font-size: 16px;
+}
+
+.job-total {
+    background: #6c757d;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.job-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.metric-label {
+    font-size: 14px;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.metric-value {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 8px;
+    min-width: 30px;
+    text-align: center;
+}
+
+.metric-value.complete {
+    background: #d4edda;
+    color: #155724;
+}
+
+.metric-value.error {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.metric-value.alert {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.metric-value.warn {
+    background: #ffeaa7;
+    color: #6c5ce7;
 }
 
 .stat-card {
@@ -927,8 +1016,51 @@ th.process-column, td.process-column {
     font-size: 12px;
 }
 
-/* ===== CONTEXT MENU STYLES - removed unused classes ===== */
+/* ===== CONTEXT MENU STYLES ===== */
+.context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 120px;
+    padding: 4px 0;
+}
 
-/* ===== COPY FEEDBACK STYLES - removed unused classes ===== */
+.context-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #495057;
+    transition: background-color 0.2s ease;
+}
 
-/* ===== ERROR AND SUCCESS STATES - removed unused classes ===== */
+.context-menu-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* ===== COPY FEEDBACK STYLES ===== */
+.copy-feedback {
+    position: fixed;
+    background: #28a745;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 1001;
+    pointer-events: none;
+    animation: copyFeedbackFade 2s ease-out forwards;
+}
+
+@keyframes copyFeedbackFade {
+    0% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-10px);
+    }
+}

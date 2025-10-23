@@ -545,7 +545,7 @@ func (tm *taskMaster) sendAlertSummary(alerts []cache.AlertRecord) error {
 
 	// format message similar to current Slack format  
 	var message strings.Builder
-	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?dt=%s\n", tm.HostName, tm.port, time.Now().Format("2006-01-02")))
+	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n", tm.HostName, tm.port, time.Now().Format("2006-01-02")))
 
 	for _, line := range summary {
 		message.WriteString(fmt.Sprintf("%-35s%5d  %s\n",

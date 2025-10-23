@@ -15,6 +15,28 @@
             <h1>{{if .PageTitle}}{{.PageTitle}}{{else}}Flowlord Dashboard{{end}}</h1>
         </div>
         <nav class="nav-menu">
+            {{if .isLocal}}
+            <a href="./alert_preview.html{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "alert"}}active{{end}}">
+                <span class="nav-icon">🚨</span>
+                Alerts
+            </a>
+            <a href="./files_preview.html{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "files"}}active{{end}}">
+                <span class="nav-icon">📁</span>
+                Files
+            </a>
+            <a href="./task_preview.html{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "task"}}active{{end}}">
+                <span class="nav-icon">📊</span>
+                Tasks
+            </a>
+            <a href="./workflow_preview.html" class="nav-link {{if eq .CurrentPage "workflow"}}active{{end}}">
+                <span class="nav-icon">🌳</span>
+                Workflow
+            </a>
+            <a href="./about_preview.html" class="nav-link {{if eq .CurrentPage "about"}}active{{end}}">
+                <span class="nav-icon">ℹ️</span>
+                About
+            </a>
+            {{else}}
             <a href="/web/alert{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "alert"}}active{{end}}">
                 <span class="nav-icon">🚨</span>
                 Alerts
@@ -35,6 +57,7 @@
                 <span class="nav-icon">ℹ️</span>
                 About
             </a>
+            {{end}}
         </nav>
     </div>
 </div>

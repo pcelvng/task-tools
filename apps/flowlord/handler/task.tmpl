@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flowlord: Tasks</title>
-    <link rel="stylesheet" href="{{.staticPath}}/style.css">
+    <link rel="stylesheet" href="{{if .isLocal}}./static{{else}}/static{{end}}/style.css">
 </head>
 <body>
     {{template "header" .}}
@@ -42,18 +42,43 @@
             
             <div class="collapsible-section">
                 <div class="collapsible-header" onclick="toggleCollapsible('taskTypeSummary')">
-                    <h3>Task Type Summary</h3>
+                    <h3>Task Topic Summary</h3>
                     <span class="collapsible-toggle" id="taskTypeSummary-toggle">▼</span>
                 </div>
                 <div class="collapsible-content" id="taskTypeSummary-content">
-                    <div class="summary-grid">
-                        {{range $key, $stat := .Summary}}
-                        <div class="summary-card">
-                            <div class="summary-header">
-                                <span class="summary-key">{{$key}}</span>
-                                <span class="summary-count">{{add $stat.CompletedCount $stat.ErrorCount}} tasks</span>
+                    <div class="topic-summary">
+                        {{range $key, $stats := .Summary}}
+                        <div class="topic-card">
+                            <div class="topic-header">
+                                <h4 class="topic-name">{{$key}}</h4>
+                                <span class="topic-total">1 job</span>
                             </div>
-                            <div class="summary-details">{{$stat.String}}</div>
+                            <div class="jobs-breakdown">
+                                <div class="job-card">
+                                    <div class="job-header">
+                                        <span class="job-name">{{$key}}</span>
+                                        <span class="job-total">{{add $stats.CompletedCount $stats.ErrorCount}} tasks</span>
+                                    </div>
+                                    <div class="job-metrics">
+                                        <div class="metric-row">
+                                            <span class="metric-label">Complete:</span>
+                                            <span class="metric-value complete">{{$stats.CompletedCount}}</span>
+                                        </div>
+                                        <div class="metric-row">
+                                            <span class="metric-label">Error:</span>
+                                            <span class="metric-value error">{{$stats.ErrorCount}}</span>
+                                        </div>
+                                        <div class="metric-row">
+                                            <span class="metric-label">Alert:</span>
+                                            <span class="metric-value alert">{{getAlertCount $key $key}}</span>
+                                        </div>
+                                        <div class="metric-row">
+                                            <span class="metric-label">Warning:</span>
+                                            <span class="metric-value warn">{{getWarnCount $key $key}}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         {{end}}
                     </div>
