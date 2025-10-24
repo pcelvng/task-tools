@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flowlord: Files</title>
+    <link rel="icon" type="image/svg+xml" href="{{if .isLocal}}./static{{else}}/static{{end}}/favicon.svg">
     <link rel="stylesheet" href="{{if .isLocal}}./static{{else}}/static{{end}}/style.css">
 </head>
 <body>
@@ -38,12 +39,12 @@
                 <div class="file-path">{{.Path}}</div>
                 <div class="file-meta">
                     <span>Size: {{.Size | formatBytes}}</span>
-                    <span>Received: {{.ReceivedAt | formatReceivedTime}}</span>
+                    <span>Received: {{.ReceivedAt | formatFullDate}}</span>
                     {{if not .LastModified.IsZero}}
-                    <span>Last Modified: {{.LastModified | formatReceivedTime}}</span>
+                    <span>Last Modified: {{.LastModified | formatFullDate}}</span>
                     {{end}}
                     {{if not .TaskTime.IsZero}}
-                    <span>Task Time: {{.TaskTime | formatTaskTime}}</span>
+                    <span>Task Time: {{.TaskTime | formatTimeHour}}</span>
                     {{end}}
                 </div>
                 {{if .TaskIDs}}

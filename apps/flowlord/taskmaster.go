@@ -23,7 +23,6 @@ import (
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
-	"github.com/pcelvng/task-tools/workflow"
 )
 
 var cronParser = cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
@@ -205,28 +204,6 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	<-ctx.Done()
 	log.Println("shutting down")
 	return tm.taskCache.Close()
-}
-
-func validatePhase(p workflow.Phase) string {
-	if p.DependsOn == "" {
-		if p.Rule == "" {
-			return "invalid phase: rule and dependsOn are blank"
-		}
-		// verify at least one valid rule is there
-		rules, _ := url.ParseQuery(p.Rule)
-		if rules.Get("cron") == "" {
-			return fmt.Sprintf("no valid rule found: %v", p.Rule)
-		}
-
-		return ""
-
-	}
-	// DependsOn != ""
-	if p.Rule != "" {
-		return fmt.Sprintf("ignored rule: %v", p.Rule)
-	}
-
-	return ""
 }
 
 // schedule the tasks and refresh the schedule when updated

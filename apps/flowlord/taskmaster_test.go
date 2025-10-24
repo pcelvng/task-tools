@@ -529,37 +529,3 @@ func TestIsReady(t *testing.T) {
 	}
 	trial.New(fn, cases).Test(t)
 }
-
-func TestValidatePhase(t *testing.T) {
-	fn := func(in workflow.Phase) (string, error) {
-		s := validatePhase(in)
-		if s != "" {
-			return "", errors.New(s)
-		}
-		return s, nil
-	}
-	cases := trial.Cases[workflow.Phase, string]{
-		"empty phase": {
-			Input:       workflow.Phase{},
-			ExpectedErr: errors.New("invalid phase"),
-		},
-		"valid cron phase": {
-			Input: workflow.Phase{
-				Rule: "cron=* * * * * *",
-			},
-			Expected: "",
-		},
-		"unknown rule": {
-			Input:     workflow.Phase{Rule: "abcedfg"},
-			ShouldErr: true,
-		},
-		"dependsOn and rule": {
-			Input: workflow.Phase{
-				Rule:      "cron=abc",
-				DependsOn: "task1",
-			},
-			ShouldErr: true,
-		},
-	}
-	trial.New(fn, cases).SubTest(t)
-}

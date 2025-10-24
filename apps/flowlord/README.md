@@ -1,10 +1,28 @@
 # flowlord taskmaster
-flowlord schedules and coordinates task dependency across workflows. Flowlord reads tasks from the done topic, failed tasks can be configured to retry a set number of times before being sent to slack and/or a retry_failed topic. Successful tasks will start children tasks.
+
+<img src="handler/static/favicon.svg" align="left" style="margin-right: 20px;" />
+
+**Flowlord** is a production-ready task orchestration engine that manages complex workflow dependencies with intelligent scheduling, automatic retries, and real-time monitoring. Built on the [task](https://github.com/pcelvng/task) ecosystem, it coordinates distributed workers through message bus communication while providing visibility into task execution through a web dashboard.
+
+**Key Features:**
+- **Workflow Management** - Define multi-phase workflows with parent-child task dependencies
+- **Intelligent Scheduling** - Cron-based scheduling with template-based task generation
+- **Automatic Retries** - Configurable retry logic with exponential backoff and jitter to prevent thundering herd
+- **File Watching** - Trigger tasks automatically when files are written to specified paths
+- **Batch Processing** - Generate multiple tasks from date ranges, metadata arrays, or data files
+- **Alerting** - Slack notifications for failed tasks and incomplete jobs with smart frequency management
+- **RESTful API** - Web UI and API for monitoring workflows, viewing task history, and managing alerts
+
+[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](https://github.com/pcelvng/task-tools/wiki/Flowlord-API)
+
+<br clear="all"/>
+
+## Overview 
 
 ![](flowlord.drawio.svg)
 
 
-[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](https://github.com/pcelvng/task-tools/wiki/Flowlord-API)
+
 
 
 ## workflow 

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flowlord: Tasks</title>
+    <link rel="icon" type="image/svg+xml" href="{{if .isLocal}}./static{{else}}/static{{end}}/favicon.svg">
     <link rel="stylesheet" href="{{if .isLocal}}./static{{else}}/static{{end}}/style.css">
 </head>
 <body>
@@ -95,7 +96,7 @@
                             {{if ge (len .ID) 8}}{{slice .ID 0 8}}...{{else}}{{.ID}}{{end}}
                         </td>
                         <td class="type-cell type-column">{{.Type}}</td>
-                        <td class="job-cell job-column">{{if .Job}}{{.Job}}{{else}}{{getJobFromMeta .Meta}}{{end}}</td>
+                        <td class="job-cell job-column">{{.Job}}</td>
                         <td class="message-cell message-column truncated copyable" 
                             data-full-text="{{.Msg}}" 
                             data-truncated-text="{{if ge (len .Msg) 80}}{{slice .Msg 0 80}}...{{else}}{{.Msg}}{{end}}"

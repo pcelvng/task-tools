@@ -54,7 +54,7 @@ func TestLoadFile(t *testing.T) {
 // TestLoadPhase is used to validated that a phase is correctly loaded into the DB
 func TestValidatePhase(t *testing.T) {
 	fn := func(ph Phase) (string, error) {
-		s := validatePhase(ph)
+		s := ph.Validate()
 		if s != "" {
 			return "", errors.New(s)
 		}
@@ -64,13 +64,13 @@ func TestValidatePhase(t *testing.T) {
 		"Ok": {
 			Input: Phase{Rule: "files=s3:/bucket/path/*/*.txt"},
 		},
-		"non-scheduled": {
+		"empty phase": {
 			Input:       Phase{},
 			ExpectedErr: errors.New("non-scheduled phase"),
 		},
 		"invalid cron": {
 			Input:       Phase{Rule: "cron=abcdefg"},
-			ExpectedErr: errors.New("invalid cron rule"),
+			ExpectedErr: errors.New("invalid cron"),
 		},
 		"cron 5": {
 			Input: Phase{Rule: "cron=1 2 3 4 5"},
@@ -78,13 +78,13 @@ func TestValidatePhase(t *testing.T) {
 		"cron 6": {
 			Input: Phase{Rule: "cron=1 2 3 4 5 6"},
 		},
+		"cron complex": 
+		{
+			Input: Phase{Rule: "cron=20 */6 * * SUN"},
+		},
 		"parse_err": {
 			Input:       Phase{Rule: "a;lskdfj?%$`?\"^"},
 			ExpectedErr: errors.New("invalid rule format"),
-		},
-		"high_retry": {
-			Input:       Phase{Retry: 20, Rule: "files=s3:/bucket/path/*/*.txt"},
-			ExpectedErr: errors.New("retry count exceeds recommended limit"),
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

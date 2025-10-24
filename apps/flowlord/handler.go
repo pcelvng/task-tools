@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
@@ -17,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/go-chi/chi/v5"
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/go-tools/appenderr"
@@ -28,7 +28,6 @@ import (
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
-	"github.com/pcelvng/task-tools/workflow"
 )
 
 //go:embed handler/alert.tmpl
@@ -53,6 +52,42 @@ var AboutTemplate string
 var StaticFiles embed.FS
 
 var isLocal = false
+
+// getBaseFuncMap returns a template.FuncMap with all common template functions
+func getBaseFuncMap() template.FuncMap {
+	return template.FuncMap{
+		// Time formatting functions
+		"formatFullDate": func(t time.Time) string {
+			return t.Format(time.RFC3339)
+		},
+		"formatTimeHour": func(t time.Time) string {
+			return t.Format("2006-01-02T15")
+		},
+		// Duration formatting
+		"formatDuration": gtools.PrintDuration,
+		// Size formatting
+		"formatBytes": func(bytes int64) string {
+			if bytes < 0 {
+				return "0 B"
+			}
+			return humanize.Bytes(uint64(bytes))
+		}, 
+		// String manipulation
+		"slice": func(s string, start, end int) string {
+			if start >= len(s) {
+				return ""
+			}
+			if end > len(s) {
+				end = len(s)
+			}
+			return s[start:end]
+		},
+		// Math functions
+		"add": func(a, b int) int {
+			return a + b
+		},
+	}
+}
 
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
@@ -113,16 +148,16 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a copy of all workflows
-	wCache := make(map[string]map[string]workflow.Phase) // [file][task:job]Phase
+	wCache := make(map[string]map[string]cache.Phase) // [file][task:job]Phase
 	workflowFiles := tm.taskCache.GetWorkflowFiles()
 	for _, filePath := range workflowFiles {
 		phases, err := tm.taskCache.GetPhasesForWorkflow(filePath)
 		if err != nil {
 			continue
 		}
-		phaseMap := make(map[string]workflow.Phase)
+		phaseMap := make(map[string]cache.Phase)
 		for _, j := range phases {
-			phaseMap[pName(j.Phase.Topic(), j.Phase.Job())] = j.ToWorkflowPhase()
+			phaseMap[pName(j.Phase.Topic(), j.Phase.Job())] = j.Phase
 		}
 		wCache[filePath] = phaseMap
 	}
@@ -197,27 +232,27 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 
 	// Add non cron based tasks
 	for f, w := range wCache {
-		for _, v := range w {
-			k := pName(v.Topic(), v.Job())
+		for _, ph := range w {
+			k := pName(ph.Topic(), ph.Job())
 			// check for parents
-			for v.DependsOn != "" {
-				if t, found := wCache[f][v.DependsOn]; found {
-					k = v.DependsOn
-					v = t
+			for ph.DependsOn != "" {
+				if t, found := wCache[f][ph.DependsOn]; found {
+					k = ph.DependsOn
+					ph = t
 				} else {
 					break
 				}
 
 			}
 
-			children := tm.getAllChildren(v.Topic(), f, v.Job())
+			children := tm.getAllChildren(ph.Topic(), f, ph.Job())
 			// todo: remove children from SQLite
 			if _, found := sts.Workflow[f]; !found {
 				sts.Workflow[f] = make(map[string]cEntry)
 			}
-			warning := validatePhase(v)
-			if v.DependsOn != "" {
-				warning += "parent task not found: " + v.DependsOn
+			warning := ph.Validate()
+			if ph.DependsOn != "" {
+				warning += "parent task not found: " + ph.DependsOn
 			}
 			sts.Workflow[f][k] = cEntry{
 				Schedule: make([]string, 0),
@@ -441,30 +476,8 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 		"isLocal":        isLocal,
 	}
 
-	// Template functions
-	funcMap := template.FuncMap{
-		"formatBytes": func(bytes int64) string {
-			const unit = 1024
-			if bytes < unit {
-				return fmt.Sprintf("%d B", bytes)
-			}
-			div, exp := int64(unit), 0
-			for n := bytes / unit; n >= unit; n /= unit {
-				div *= unit
-				exp++
-			}
-			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-		},
-		"formatReceivedTime": func(t time.Time) string {
-			return t.Format(time.RFC3339)
-		},
-		"formatTaskTime": func(t time.Time) string {
-			return t.Format("2006-01-02T15")
-		},
-	}
-
-	// Parse and execute template using the same pattern as alertHTML
-	tmpl, err := template.New("files").Funcs(funcMap).Parse(HeaderTemplate + FilesTemplate)
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("files").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + FilesTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
@@ -594,82 +607,51 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"isLocal":        isLocal,
 	}
 
-	// Template functions
-	funcMap := template.FuncMap{
-		"formatTime": func(t time.Time) string {
-			return t.Format("2006-01-02T15:04:05Z")
-		},
-		"formatDuration": func(d time.Duration) string {
-			if d == 0 {
-				return "0s"
-			}
-			return gtools.PrintDuration(d)
-		},
-		"getJobFromMeta": func(meta string) string {
-			if meta == "" {
-				return ""
-			}
-			if v, err := url.ParseQuery(meta); err == nil {
-				return v.Get("job")
-			}
-			return ""
-		},
-		"add": func(a, b int) int {
-			return a + b
-		},
-		"slice": func(s string, start, end int) string {
-			if start >= len(s) {
-				return ""
-			}
-			if end > len(s) {
-				end = len(s)
-			}
-			return s[start:end]
-		},
-		"getAlertCount": func(topic, job string) int {
-			// Count alerts for a specific topic and job
-			count := 0
-			for _, task := range tasks {
-				if task.Result == "alert" {
-					// Check if this task matches the topic and job
-					taskJob := task.Job
-					if taskJob == "" {
-						// Try to extract job from meta if not set directly
-						if v, err := url.ParseQuery(task.Meta); err == nil {
-							taskJob = v.Get("job")
-						}
-					}
-					// For now, we'll match any alert task since we don't have topic info in TaskView
-					// This is a simplified implementation
-					if taskJob == job {
-						count++
+	// Get base funcMap and extend it with task-specific closures
+	funcMap := getBaseFuncMap()
+	funcMap["getAlertCount"] = func(topic, job string) int {
+		// Count alerts for a specific topic and job
+		count := 0
+		for _, task := range tasks {
+			if task.Result == "alert" {
+				// Check if this task matches the topic and job
+				taskJob := task.Job
+				if taskJob == "" {
+					// Try to extract job from meta if not set directly
+					if v, err := url.ParseQuery(task.Meta); err == nil {
+						taskJob = v.Get("job")
 					}
 				}
-			}
-			return count
-		},
-		"getWarnCount": func(topic, job string) int {
-			// Count warnings for a specific topic and job
-			count := 0
-			for _, task := range tasks {
-				if task.Result == "warn" {
-					// Check if this task matches the topic and job
-					taskJob := task.Job
-					if taskJob == "" {
-						// Try to extract job from meta if not set directly
-						if v, err := url.ParseQuery(task.Meta); err == nil {
-							taskJob = v.Get("job")
-						}
-					}
-					// For now, we'll match any warn task since we don't have topic info in TaskView
-					// This is a simplified implementation
-					if taskJob == job {
-						count++
-					}
+				// For now, we'll match any alert task since we don't have topic info in TaskView
+				// This is a simplified implementation
+				if taskJob == job {
+					count++
 				}
 			}
-			return count
-		},
+		}
+		return count
+	}
+	funcMap["getWarnCount"] = func(topic, job string) int {
+		// Count warnings for a specific topic and job
+		count := 0
+		for _, task := range tasks {
+			if task.Result == "warn" {
+				// Check if this task matches the topic and job
+				taskJob := task.Job
+				if taskJob == "" {
+					// Try to extract job from meta if not set directly
+					if v, err := url.ParseQuery(task.Meta); err == nil {
+						taskJob = v.Get("job")
+					}
+				}
+				// For now, we'll match any warn task since we don't have topic info in TaskView
+				// This is a simplified implementation
+				if taskJob == job {
+					count++
+				}
+			}
+		}
+		return count
 	}
 
 	// Parse and execute template
@@ -712,21 +694,8 @@ func workflowHTML(tCache *cache.SQLite) []byte {
 		"isLocal":             isLocal,
 	}
 
-	// Template functions
-	funcMap := template.FuncMap{
-		"slice": func(s string, start, end int) string {
-			if start >= len(s) {
-				return ""
-			}
-			if end > len(s) {
-				end = len(s)
-			}
-			return s[start:end]
-		},
-	}
-
-	// Parse and execute template
-	tmpl, err := template.New("workflow").Funcs(funcMap).Parse(HeaderTemplate + WorkflowTemplate)
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("workflow").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + WorkflowTemplate)
 	if err != nil {
 		return []byte("Error:"+ err.Error())
 	}
@@ -780,8 +749,8 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"isLocal":     isLocal,
 	}
 
-	// Parse and execute template
-	tmpl, err := template.New("about").Parse(HeaderTemplate + AboutTemplate)
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("about").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + AboutTemplate)
 	if err != nil {
 		return []byte("Error parsing template: " + err.Error())
 	}
@@ -816,7 +785,8 @@ func alertHTML(tasks []cache.AlertRecord, date time.Time) []byte {
 		"isLocal":     isLocal,
 	}
 
-	tmpl, err := template.New("alert").Parse(HeaderTemplate + AlertTemplate)
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("alert").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + AlertTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}

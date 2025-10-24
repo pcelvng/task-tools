@@ -39,18 +39,18 @@ func (p PhaseDB) Job() string {
 	return p.Phase.Job()
 }
 
-func (p Phase) IsEmpty() bool {
-	return p.Task == "" && p.Rule == "" && p.DependsOn == "" && p.Template == ""
+func (ph Phase) IsEmpty() bool {
+	return ph.Task == "" && ph.Rule == "" && ph.DependsOn == "" && ph.Template == ""
 }
 
 // Job portion of the Task
-func (p Phase) Job() string {
-	s := strings.Split(p.Task, ":")
+func (ph Phase) Job() string {
+	s := strings.Split(ph.Task, ":")
 	if len(s) > 1 {
 		return s[1]
 	}
 
-	r, _ := url.ParseQuery(p.Rule)
+	r, _ := url.ParseQuery(ph.Rule)
 	if j := r.Get("job"); j != "" {
 		return j
 	}
@@ -58,20 +58,20 @@ func (p Phase) Job() string {
 }
 
 // Topic portion of the Task
-func (p Phase) Topic() string {
-	s := strings.Split(p.Task, ":")
+func (ph Phase) Topic() string {
+	s := strings.Split(ph.Task, ":")
 	return s[0]
 }
 
 // Deprecated:
 // ToWorkflowPhase converts cache.Phase to workflow.Phase
-func (p Phase) ToWorkflowPhase() workflow.Phase {
+func (ph Phase) ToWorkflowPhase() workflow.Phase {
 	return workflow.Phase{
-		Task:      p.Task,
-		Rule:      p.Rule,
-		DependsOn: p.DependsOn,
-		Retry:     p.Retry,
-		Template:  p.Template,
+		Task:      ph.Task,
+		Rule:      ph.Rule,
+		DependsOn: ph.DependsOn,
+		Retry:     ph.Retry,
+		Template:  ph.Template,
 	}
 }
 
@@ -512,11 +512,11 @@ func (s *SQLite) updateWorkflowInDB(filePath, checksum string, phases []Phase) e
 			task = task + ":" + phase.Job()
 		}
 		phase.Task = task
-		status := validatePhase(phase)
+		
 		_, err = s.db.Exec(`
 			INSERT INTO workflow_phases (file_path, task, depends_on, rule, template, retry, status)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, filePath, phase.Task, phase.DependsOn, phase.Rule, phase.Template, phase.Retry, status)
+		`, filePath, phase.Task, phase.DependsOn, phase.Rule, phase.Template, phase.Retry, phase.Validate())
 		if err != nil {
 			return err
 		}
@@ -550,16 +550,16 @@ func (s *SQLite) removeWorkflow(filePath string) error {
 }
 
 // validatePhase validates a phase and returns status message
-func validatePhase(phase Phase) string {
+func (ph Phase) Validate() string {
 
-	values, err := url.ParseQuery(phase.Rule)
+	values, err := url.ParseQuery(ph.Rule)
 	if err != nil {
-		return fmt.Sprintf("invalid rule format: %s", phase.Rule)
+		return fmt.Sprintf("invalid rule format: %s", ph.Rule)
 	}
 
 	// Basic validation logic
-	if phase.DependsOn == "" && values.Get("cron") == "" && values.Get("files") == "" {
-		return "non-scheduled phase must have depends_on, cron or files rule"
+	if ph.DependsOn == "" && values.Get("cron") == "" && values.Get("files") == "" {
+		return "non-scheduled phase: use depends_on, cron or files"
 	}
 
 	// Check for valid cron rule
@@ -569,14 +569,9 @@ func validatePhase(phase Phase) string {
 		if _, err := cron.NewParser(
 			cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 		).Parse(c); err != nil {
-			return fmt.Sprintf("invalid cron rule: %s", c)
+			return fmt.Sprintf("invalid cron: %s", c)
 		}
 
-	}
-
-	// Check retry count
-	if phase.Retry > 10 {
-		return "warning: retry count exceeds recommended limit"
 	}
 
 	return "" // No issues
