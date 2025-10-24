@@ -599,17 +599,11 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"formatTime": func(t time.Time) string {
 			return t.Format("2006-01-02T15:04:05Z")
 		},
-		"formatDuration": func(start, end string) string {
-			if start == "" || end == "" {
-				return "N/A"
+		"formatDuration": func(d time.Duration) string {
+			if d == 0 {
+				return "0s"
 			}
-			startTime, err1 := time.Parse(time.RFC3339, start)
-			endTime, err2 := time.Parse(time.RFC3339, end)
-			if err1 != nil || err2 != nil {
-				return "N/A"
-			}
-			duration := endTime.Sub(startTime)
-			return duration.String()
+			return gtools.PrintDuration(d)
 		},
 		"getJobFromMeta": func(meta string) string {
 			if meta == "" {

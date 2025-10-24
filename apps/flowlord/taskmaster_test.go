@@ -277,7 +277,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		Files []fileRule
 	}
 	fn := func(in string) (expected, error) {
-		tm := taskMaster{cron: cron.New()}
+		tm := taskMaster{cron: cron.New(cron.WithParser(cronParser))}
 		tm.taskCache = &cache.SQLite{LocalPath: ":memory:"}
 		if err := tm.taskCache.Open(base_test_path+in, nil); err != nil {
 			return expected{}, err
@@ -302,7 +302,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t2",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 0 * * * *",
+						Schedule: "0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -310,7 +310,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t4",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 0 * * * *",
+						Schedule: "0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -324,7 +324,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 					{
 						Workflow: "f3.toml",
 						Topic:    "task1",
-						Schedule: "0 0 0 * * *",
+						Schedule: "0 0 * * *",
 						Template: "?date={yyyy}-{mm}-{dd}",
 					},
 				},
@@ -381,7 +381,7 @@ func Test_NewJob(t *testing.T) {
 			},
 			Expected: &Cronjob{
 				Topic:    "task5",
-				Schedule: "0 35 13 * * *",
+				Schedule: "35 13 * * *",
 				Template: "?date={yyyy}-{mm}-{dd}",
 			},
 		},

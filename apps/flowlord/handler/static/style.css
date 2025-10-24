@@ -347,7 +347,10 @@ tr:hover {
 }
 
 .rule-cell.truncated, .template-cell.truncated {
-    max-width: 250px;
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .message-cell.truncated {
@@ -357,12 +360,13 @@ tr:hover {
 .id-cell.expanded, .info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded, .message-cell.expanded {
     max-width: none;
     white-space: normal;
-    word-break: break-all;
+    word-break: break-word;
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 4px;
     padding: 8px;
     margin: 2px;
+    line-height: 1.4;
 }
 
 .info-cell.expanded, .meta-cell.expanded, .rule-cell.expanded, .template-cell.expanded, .message-cell.expanded {
@@ -460,6 +464,7 @@ th.process-column, td.process-column {
 
 /* ===== WORKFLOW-SPECIFIC COLUMN WIDTHS ===== */
 /* Workflow file column - compact for file names */
+th.workflow-file-column, td.workflow-file-column,
 th.workflow-file-cell, td.workflow-file-cell {
     width: 8%;
     max-width: 120px;
@@ -467,21 +472,35 @@ th.workflow-file-cell, td.workflow-file-cell {
 }
 
 /* Workflow task column - compact for task names */
+th.task-column, td.task-column,
 th.task-cell, td.task-cell {
     width: 8%;
     max-width: 100px;
     word-break: break-all;
 }
 
-/* Workflow rule and template columns - wide for content */
-th.rule-cell, td.rule-cell,
-th.template-cell, td.template-cell {
-    width: 25%;
-    max-width: 350px;
+/* Workflow job column - compact for job names */
+th.job-column, td.job-column,
+th.job-cell, td.job-cell {
+    width: 8%;
+    max-width: 100px;
     word-break: break-all;
 }
 
+/* Workflow rule and template columns - wide for content with better multi-line handling */
+th.rule-column, td.rule-column,
+th.template-column, td.template-column,
+th.rule-cell, td.rule-cell,
+th.template-cell, td.template-cell {
+    width: 20%;
+    max-width: 300px;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.4;
+}
+
 /* Workflow depends-on column - medium width */
+th.depends-on-column, td.depends-on-column,
 th.depends-on-cell, td.depends-on-cell {
     width: 10%;
     max-width: 120px;
@@ -489,10 +508,53 @@ th.depends-on-cell, td.depends-on-cell {
 }
 
 /* Workflow retry column - very compact */
+th.retry-column, td.retry-column,
 th.retry-cell, td.retry-cell {
-    width: 3%;
+    width: 4%;
     max-width: 60px;
     text-align: center;
+}
+
+/* Workflow status column - more space for status display */
+th.status-column, td.status-column,
+th.status-cell, td.status-cell {
+    width: 8%;
+    max-width: 100px;
+    text-align: center;
+    font-weight: 500;
+}
+
+/* Enhanced workflow table styling for better consistency */
+#workflowTable {
+    table-layout: fixed;
+    width: 100%;
+}
+
+#workflowTable th,
+#workflowTable td {
+    padding: 12px 8px;
+    vertical-align: top;
+}
+
+/* Ensure workflow table doesn't overflow horizontally */
+.table-container {
+    overflow-x: auto;
+    max-width: 100%;
+    width: 100%;
+}
+
+/* Better responsive handling for workflow table */
+@media (max-width: 1200px) {
+    th.rule-column, td.rule-column,
+    th.template-column, td.template-column {
+        width: 18%;
+        max-width: 250px;
+    }
+    
+    th.workflow-file-column, td.workflow-file-column {
+        width: 10%;
+        max-width: 100px;
+    }
 }
 
 .message-cell {

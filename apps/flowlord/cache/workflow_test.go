@@ -52,15 +52,41 @@ func TestLoadFile(t *testing.T) {
 }
 
 // TestLoadPhase is used to validated that a phase is correctly loaded into the DB
-func TestLoadPhase(t *testing.T) {
-	fn := func(ph Phase) (PhaseDB, error) {
-		cache := MockSQLite()
-		if err := cache.updateWorkflowInDB("test.toml", "NA", []Phase{ph}); err != nil {
-			return PhaseDB{}, err
+func TestValidatePhase(t *testing.T) {
+	fn := func(ph Phase) (string, error) {
+		s := validatePhase(ph)
+		if s != "" {
+			return "", errors.New(s)
 		}
-		return cache.Get(task.Task{Type: ph.Task, Meta: "workflow=test.toml"}), nil
+		return "", nil
 	}
-	cases := trial.Cases[Phase, PhaseDB]{}
+	cases := trial.Cases[Phase, string]{
+		"Ok": {
+			Input: Phase{Rule: "files=s3:/bucket/path/*/*.txt"},
+		},
+		"non-scheduled": {
+			Input:       Phase{},
+			ExpectedErr: errors.New("non-scheduled phase"),
+		},
+		"invalid cron": {
+			Input:       Phase{Rule: "cron=abcdefg"},
+			ExpectedErr: errors.New("invalid cron rule"),
+		},
+		"cron 5": {
+			Input: Phase{Rule: "cron=1 2 3 4 5"},
+		},
+		"cron 6": {
+			Input: Phase{Rule: "cron=1 2 3 4 5 6"},
+		},
+		"parse_err": {
+			Input:       Phase{Rule: "a;lskdfj?%$`?\"^"},
+			ExpectedErr: errors.New("invalid rule format"),
+		},
+		"high_retry": {
+			Input:       Phase{Retry: 20, Rule: "files=s3:/bucket/path/*/*.txt"},
+			ExpectedErr: errors.New("retry count exceeds recommended limit"),
+		},
+	}
 	trial.New(fn, cases).SubTest(t)
 }
 

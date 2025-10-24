@@ -512,7 +512,7 @@ func (s *SQLite) updateWorkflowInDB(filePath, checksum string, phases []Phase) e
 			task = task + ":" + phase.Job()
 		}
 		phase.Task = task
-		status := s.validatePhase(phase)
+		status := validatePhase(phase)
 		_, err = s.db.Exec(`
 			INSERT INTO workflow_phases (file_path, task, depends_on, rule, template, retry, status)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -550,7 +550,7 @@ func (s *SQLite) removeWorkflow(filePath string) error {
 }
 
 // validatePhase validates a phase and returns status message
-func (s *SQLite) validatePhase(phase Phase) string {
+func validatePhase(phase Phase) string {
 
 	values, err := url.ParseQuery(phase.Rule)
 	if err != nil {
@@ -565,7 +565,10 @@ func (s *SQLite) validatePhase(phase Phase) string {
 	// Check for valid cron rule
 
 	if c := values.Get("cron"); c != "" {
-		if _, err := cron.ParseStandard(c); err != nil {
+
+		if _, err := cron.NewParser(
+			cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
+		).Parse(c); err != nil {
 			return fmt.Sprintf("invalid cron rule: %s", c)
 		}
 

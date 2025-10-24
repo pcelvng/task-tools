@@ -26,6 +26,8 @@ import (
 	"github.com/pcelvng/task-tools/workflow"
 )
 
+var cronParser = cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+
 type taskMaster struct {
 	//	options
 
@@ -113,7 +115,7 @@ func New(opts *options) *taskMaster {
 		doneConsumer: consumer,
 		port:         opts.Port,
 		HostName:     opts.Host,
-		cron:         cron.New(cron.WithSeconds()),
+		cron:         cron.New(cron.WithParser(cronParser)),
 		dur:          opts.Refresh,
 		slack:        opts.Slack,
 		alerts:       make(chan task.Task, 20),
