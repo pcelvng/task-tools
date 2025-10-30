@@ -459,6 +459,11 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.Context) {
 	sendChan := make(chan struct{})
 	var alerts []cache.AlertRecord
+	
+	// Initialize lastAlertTime to today at 00:00:00 (zero hour)
+	now := time.Now()
+	lastAlertTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	
 	go func() {
 		dur := tm.slack.MinFrequency
 		for ; ; time.Sleep(dur) {
@@ -467,8 +472,8 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 			// Check for incomplete tasks and add them to alerts
 			tm.taskCache.CheckIncompleteTasks()
 
-			// Get all alerts (including newly added incomplete task alerts)
-			alerts, err = tm.taskCache.GetAlertsByDate(time.Now())
+			// Get NEW alerts only - those after the last time we sent
+			alerts, err = tm.taskCache.GetAlertsAfterTime(lastAlertTime)
 			if err != nil {
 				log.Printf("failed to retrieve alerts: %v", err)
 				continue
@@ -476,11 +481,14 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 
 			if len(alerts) > 0 {
 				sendChan <- struct{}{}
+				// Update lastAlertTime to now (before we send, so we don't miss any)
+				lastAlertTime = time.Now()
 				if dur *= 2; dur > tm.slack.MaxFrequency {
 					dur = tm.slack.MaxFrequency
 				}
 				log.Println("wait time ", dur)
 			} else if dur != tm.slack.MinFrequency {
+				// No NEW alerts - reset to minimum frequency
 				dur = tm.slack.MinFrequency
 				log.Println("Reset ", dur)
 			}

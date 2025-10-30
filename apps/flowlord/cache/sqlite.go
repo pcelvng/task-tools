@@ -518,6 +518,38 @@ func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
 	return alerts, nil
 }
 
+// GetAlertsAfterTime retrieves all alerts created after a specific time
+func (s *SQLite) GetAlertsAfterTime(afterTime time.Time) ([]AlertRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	query := `SELECT id, task_id, task_time, task_type, job, msg, created_at
+			FROM alert_records 
+			WHERE created_at > ?
+			ORDER BY created_at ASC`
+
+	rows, err := s.db.Query(query, afterTime.Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var alerts []AlertRecord
+	for rows.Next() {
+		var alert AlertRecord
+		err := rows.Scan(
+			&alert.ID, &alert.TaskID, &alert.TaskTime, &alert.Type,
+			&alert.Job, &alert.Msg, &alert.CreatedAt,
+		)
+		if err != nil {
+			continue
+		}
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
 // BuildCompactSummary processes alerts in memory to create compact summary
 // Groups by TaskType:Job and collects task times for proper date formatting
 func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
