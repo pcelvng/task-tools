@@ -733,20 +733,26 @@ func (tm *taskMaster) aboutHTML() []byte {
 
 	// Create data structure for template
 	data := map[string]interface{}{
-		"AppName":     sts.AppName,
-		"Version":     sts.Version,
-		"RunTime":     sts.RunTime,
-		"LastUpdate":  sts.LastUpdate,
-		"NextUpdate":  sts.NextUpdate,
-		"TotalDBSize": dbSize.TotalSize,
-		"PageCount":   dbSize.PageCount,
-		"PageSize":    dbSize.PageSize,
-		"DBPath":      dbSize.DBPath,
-		"TableStats":  tableStats,
-		"CurrentPage": "about",
-		"DateValue":   "", // About page doesn't need date
-		"PageTitle":   "System Information",
-		"isLocal":     isLocal,
+		"AppName":           sts.AppName,
+		"Version":           sts.Version,
+		"RunTime":           sts.RunTime,
+		"LastUpdate":        sts.LastUpdate,
+		"NextUpdate":        sts.NextUpdate,
+		"TotalDBSize":       dbSize.TotalSize,
+		"PageCount":         dbSize.PageCount,
+		"PageSize":          dbSize.PageSize,
+		"DBPath":            dbSize.DBPath,
+		"TableStats":        tableStats,
+		"SchemaVersion":     tm.taskCache.GetSchemaVersion(),
+		"Retention":         gtools.PrintDuration(tm.taskCache.Retention),
+		"TaskTTL":           gtools.PrintDuration(tm.taskCache.TaskTTL),
+		"MinFrequency":      gtools.PrintDuration(tm.slack.MinFrequency),
+		"MaxFrequency":      gtools.PrintDuration(tm.slack.MaxFrequency),
+		"CurrentFrequency":  gtools.PrintDuration(tm.slack.GetCurrentDuration()),
+		"CurrentPage":       "about",
+		"DateValue":         "", // About page doesn't need date
+		"PageTitle":         "System Information",
+		"isLocal":           isLocal,
 	}
 
 	// Parse and execute template using the shared funcMap

@@ -1,3 +1,8 @@
+-- Schema version tracking
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY
+);
+
 -- SQL schema for the task cache
 -- Single table for all task records with composite primary key
 CREATE TABLE IF NOT EXISTS task_records (

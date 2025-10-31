@@ -26,6 +26,10 @@ import (
 //go:embed schema.sql
 var schema string
 
+// currentSchemaVersion is the current version of the database schema.
+// Increment this when making schema changes that require migration.
+const currentSchemaVersion = 1
+
 type SQLite struct {
 	LocalPath  string
 	BackupPath string
@@ -100,13 +104,14 @@ func (o *SQLite) initDB() error {
 	
 	o.db = db
 
-	// Execute the schema if the migration version is not the same as the current schema version
-	//TODO: version the schema and migrate if needed
-	_, err = db.Exec(schema)
-	if err != nil {
-		return err
+	// Check and migrate schema if needed
+	// This will handle initial schema creation for new databases (version 0)
+	// and apply incremental migrations for existing databases
+	if err := o.migrateIfNeeded(); err != nil {
+		return fmt.Errorf("schema migration failed: %w", err)
 	}
-	return nil 
+
+	return nil
 }
 
 func copyFiles(src, dst string, fOpts *file.Options) error {
@@ -126,6 +131,78 @@ func copyFiles(src, dst string, fOpts *file.Options) error {
 		return fmt.Errorf("close writer err: %w", err)
 	}
 	return r.Close()
+}
+
+// migrateIfNeeded checks the current schema version and applies migrations if needed
+func (o *SQLite) migrateIfNeeded() error {
+	currentVersion := o.GetSchemaVersion()
+
+	if currentVersion < currentSchemaVersion {
+		log.Printf("Migrating database schema from version %d to %d", currentVersion, currentSchemaVersion)
+		if err := o.migrateSchema(currentVersion); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+		if err := o.setVersion(currentSchemaVersion); err != nil {
+			return fmt.Errorf("failed to update schema version: %w", err)
+		}
+		log.Printf("Schema migration completed successfully")
+	}
+
+	return nil
+}
+
+// GetSchemaVersion returns the current schema version from the database.
+// Returns 0 if the schema_version table doesn't exist or is empty (new database).
+func (o *SQLite) GetSchemaVersion() int {
+	var version int
+	err := o.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version)
+	if err != nil {
+		// Table doesn't exist or other error - treat as version 0 (new database)
+		// schema.sql will create the table when applied
+		return 0
+	}
+
+	return version
+}
+
+// setVersion updates the schema version in the database
+func (o *SQLite) setVersion(version int) error {
+	_, err := o.db.Exec("INSERT OR REPLACE INTO schema_version (version) VALUES (?)", version)
+	return err
+}
+
+// migrateSchema applies version-specific migrations based on the current version
+func (o *SQLite) migrateSchema(currentVersion int) error {
+	// Version 0 → 1: Initial schema creation for new databases
+	if currentVersion < 1 {
+		log.Println("Creating initial schema (version 1)")
+		_, err := o.db.Exec(schema)
+		if err != nil {
+			return fmt.Errorf("failed to create initial schema: %w", err)
+		}
+	}
+
+	// Add future migrations here as needed:
+	// Example:
+	// if currentVersion < 2 {
+	//     db := o.db
+	//     // Drop an old table
+	//     db.Exec("DROP TABLE IF EXISTS obsolete_table")
+	//     
+	//     // Add new column if it doesn't exist
+	//     if !columnExists(db, "task_records", "new_field") {
+	//         db.Exec("ALTER TABLE task_records ADD COLUMN new_field TEXT")
+	//     }
+	// }
+	//
+	// if currentVersion < 3 {
+	//     db := o.db
+	//     // Drop column by recreating table (since data loss is OK)
+	//     db.Exec("DROP TABLE IF EXISTS task_records")
+	//     // schema.sql will recreate it with correct structure
+	// }
+
+	return nil
 }
 
 // Close the DB connection and copy the current file to the backup location

@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	gtools "github.com/jbsmith7741/go-tools"
@@ -54,10 +55,21 @@ type taskMaster struct {
 type Notification struct {
 	slack.Slack
 	//ReportPath   string
-	MinFrequency time.Duration
-	MaxFrequency time.Duration
+	MinFrequency    time.Duration
+	MaxFrequency    time.Duration
+	currentDuration atomic.Int64 // Current notification duration (atomically updated)
 
 	file *file.Options
+}
+
+// GetCurrentDuration returns the current notification duration
+func (n *Notification) GetCurrentDuration() time.Duration {
+	return time.Duration(n.currentDuration.Load())
+}
+
+// setCurrentDuration atomically sets the current notification duration
+func (n *Notification) setCurrentDuration(d time.Duration) {
+	n.currentDuration.Store(int64(d))
 }
 
 type stats struct {
@@ -103,6 +115,8 @@ func New(opts *options) *taskMaster {
 	}
 
 	opts.Slack.file = opts.File
+	// Initialize current duration to MinFrequency
+	opts.Slack.setCurrentDuration(opts.Slack.MinFrequency)
 	tm := &taskMaster{
 		initTime:     time.Now(),
 		taskCache:    opts.DB,
@@ -486,10 +500,12 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 				if dur *= 2; dur > tm.slack.MaxFrequency {
 					dur = tm.slack.MaxFrequency
 				}
+				tm.slack.setCurrentDuration(dur) // Update current duration atomically
 				log.Println("wait time ", dur)
 			} else if dur != tm.slack.MinFrequency {
 				// No NEW alerts - reset to minimum frequency
 				dur = tm.slack.MinFrequency
+				tm.slack.setCurrentDuration(dur) // Update current duration atomically
 				log.Println("Reset ", dur)
 			}
 		}

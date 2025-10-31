@@ -43,6 +43,10 @@
                         <span class="info-label">Database File</span>
                         <span class="info-value">{{.DBPath}}</span>
                     </div>
+                    <div class="info-item">
+                        <span class="info-label">Schema Version</span>
+                        <span class="info-value">{{.SchemaVersion}}</span>
+                    </div>
                 </div>
                 
                 <div class="info-card">
@@ -58,6 +62,34 @@
                     <div class="info-item">
                         <span class="info-label">Page Size</span>
                         <span class="info-value">{{.PageSize}}</span>
+                    </div>
+                </div>
+                
+                <div class="info-card">
+                    <h3>Cache Settings</h3>
+                    <div class="info-item">
+                        <span class="info-label">Retention Period</span>
+                        <span class="info-value">{{.Retention}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Task TTL</span>
+                        <span class="info-value">{{.TaskTTL}}</span>
+                    </div>
+                </div>
+                
+                <div class="info-card">
+                    <h3>Notification Settings</h3>
+                    <div class="info-item">
+                        <span class="info-label">Current Frequency</span>
+                        <span class="info-value">{{.CurrentFrequency}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Min Frequency</span>
+                        <span class="info-value">{{.MinFrequency}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Max Frequency</span>
+                        <span class="info-value">{{.MaxFrequency}}</span>
                     </div>
                 </div>
             </div>
