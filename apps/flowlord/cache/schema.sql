@@ -102,8 +102,7 @@ CREATE TABLE IF NOT EXISTS workflow_files (
     file_path TEXT PRIMARY KEY,
     file_hash TEXT NOT NULL,
     loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified TIMESTAMP,
-    is_active BOOLEAN DEFAULT TRUE
+    last_modified TIMESTAMP
 );
 
 -- Workflow phases (matches Phase struct exactly)
@@ -113,8 +112,7 @@ CREATE TABLE IF NOT EXISTS workflow_phases (
     depends_on TEXT,
     rule TEXT,                    -- URI query parameters (e.g., "cron=0 0 * * *&offset=1h")
     template TEXT,
-    retry integer DEFAULT 0,      -- number of retries (default 0)
-    status TEXT                  -- phase status info (warnings, errors, validation messages)
+    retry integer DEFAULT 0       -- number of retries (default 0)
 );
 
 -- Indexes for performance

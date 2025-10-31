@@ -17,7 +17,6 @@ CREATE TABLE workflow_files (
     file_hash TEXT NOT NULL,
     loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified TIMESTAMP,
-    is_active BOOLEAN DEFAULT TRUE
 );
 
 -- Workflow phases (matches Phase struct exactly)
