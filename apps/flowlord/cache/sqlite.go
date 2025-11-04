@@ -177,7 +177,16 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 	if currentVersion < 1 {
 		log.Println("Creating initial schema (version 1)")
 		
-		_, err := o.db.Exec(schema)
+		// Drop workflow tables if they exist (they may have been created before versioning)
+		_, err := o.db.Exec(`
+			DROP TABLE IF EXISTS workflow_files;
+			DROP TABLE IF EXISTS workflow_phases;
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to drop old workflow tables: %w", err)
+		}
+		
+		_, err = o.db.Exec(schema)
 		if err != nil {
 			return fmt.Errorf("failed to create initial schema: %w", err)
 		}
