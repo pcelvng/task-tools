@@ -407,7 +407,9 @@ func TestAlertHTML(t *testing.T) {
 	}
 
 	// Generate HTML using the alertHTML function
-	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"))
+	// Pass sample dates with data for calendar highlighting
+	datesWithData := []string{"2024-01-14", "2024-01-15", "2024-01-16"}
+	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"), datesWithData)
 
 	// Validate HTML using the new function
 	if err := validateHTML(htmlContent); err != nil {
@@ -452,7 +454,9 @@ func TestFilesHTML(t *testing.T) {
 	}
 
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	html := filesHTML(files, date)
+	// Pass sample dates with data for calendar highlighting
+	datesWithData := []string{ "2024-01-15"}
+	html := filesHTML(files, date, datesWithData)
 
 	// Validate HTML using the new function
 	if err := validateHTML(html); err != nil {
@@ -519,7 +523,9 @@ func TestTaskHTML(t *testing.T) {
 	date := trial.TimeDay("2024-01-15")
 
 	// Test with no filters - summary will be generated from tasks data
-	html := taskHTML(testTasks, date, "", "", "")
+	// Pass sample dates with data for calendar highlighting
+	datesWithData := []string{"2024-01-15"}
+	html := taskHTML(testTasks, date, "", "", "", datesWithData)
 
 	// Validate HTML using the new function
 	if err := validateHTML(html); err != nil {
@@ -569,12 +575,20 @@ func TestAboutHTML(t *testing.T) {
 		t.Fatalf("Failed to create test cache: %v", err)
 	}
 
+	// Create a mock Notification for slack
+	notification := &Notification{
+		MinFrequency: 5 * time.Minute,
+		MaxFrequency: 30 * time.Minute,
+	}
+	notification.currentDuration.Store(int64(10 * time.Minute))
+
 	// Create a mock taskMaster with test data
 	tm := &taskMaster{
 		initTime:   time.Now().Add(-2 * time.Hour),    // 2 hours ago
 		nextUpdate: time.Now().Add(30 * time.Minute),  // 30 minutes from now
 		lastUpdate: time.Now().Add(-15 * time.Minute), // 15 minutes ago
 		taskCache:  taskCache,
+		slack:      notification,
 	}
 
 	// Generate HTML using the aboutHTML method

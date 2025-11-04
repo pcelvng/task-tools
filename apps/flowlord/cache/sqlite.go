@@ -176,6 +176,7 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 	// Version 0 → 1: Initial schema creation for new databases
 	if currentVersion < 1 {
 		log.Println("Creating initial schema (version 1)")
+		
 		_, err := o.db.Exec(schema)
 		if err != nil {
 			return fmt.Errorf("failed to create initial schema: %w", err)
@@ -1106,6 +1107,121 @@ func (s *SQLite) GetTaskSummaryByDate(date time.Time) (map[string]*Stats, error)
 	}
 
 	return data, nil
+}
+
+// GetDatesWithData returns a list of dates (YYYY-MM-DD format) that have any data
+// for tasks, alerts, or files within the retention period
+func (s *SQLite) GetDatesWithData() ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	query := `
+		SELECT DISTINCT date_val FROM (
+			SELECT DISTINCT DATE(created) as date_val FROM task_records
+			WHERE created >= datetime('now', '-' || ? || ' days')
+			UNION
+			SELECT DISTINCT DATE(created_at) as date_val FROM alert_records
+			WHERE created_at >= datetime('now', '-' || ? || ' days')
+			UNION
+			SELECT DISTINCT DATE(received_at) as date_val FROM file_messages
+			WHERE received_at >= datetime('now', '-' || ? || ' days')
+		)
+		ORDER BY date_val DESC
+	`
+
+	// Use retention period in days (default 90)
+	retentionDays := int(s.Retention.Hours() / 24)
+	if retentionDays == 0 {
+		retentionDays = 90
+	}
+
+	rows, err := s.db.Query(query, retentionDays, retentionDays, retentionDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dates []string
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			continue
+		}
+		dates = append(dates, date)
+	}
+
+	return dates, nil
+}
+
+// DatesByType returns a list of dates (YYYY-MM-DD format) that have data for the specified type
+// dataType can be "tasks", "alerts", or "files"
+func (s *SQLite) DatesByType(dataType string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	retentionDays := int(s.Retention.Hours() / 24)
+	if retentionDays == 0 {
+		retentionDays = 90
+	}
+
+	var query string
+	switch dataType {
+	case "tasks":
+		query = `
+			SELECT DISTINCT DATE(created) as date_val 
+			FROM task_records
+			WHERE created >= datetime('now', '-' || ? || ' days')
+			ORDER BY date_val DESC
+		`
+	case "alerts":
+		query = `
+			SELECT DISTINCT DATE(created_at) as date_val 
+			FROM alert_records
+			WHERE created_at >= datetime('now', '-' || ? || ' days')
+			ORDER BY date_val DESC
+		`
+	case "files":
+		query = `
+			SELECT DISTINCT DATE(received_at) as date_val 
+			FROM file_messages
+			WHERE received_at >= datetime('now', '-' || ? || ' days')
+			ORDER BY date_val DESC
+		`
+	default:
+		return nil, fmt.Errorf("invalid data type: %s (must be 'tasks', 'alerts', or 'files')", dataType)
+	}
+
+	rows, err := s.db.Query(query, retentionDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dates []string
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			continue
+		}
+		dates = append(dates, date)
+	}
+
+	return dates, nil
+}
+
+// GetDatesWithTasks returns a list of dates (YYYY-MM-DD format) that have task records
+func (s *SQLite) GetDatesWithTasks() ([]string, error) {
+	return s.DatesByType("tasks")
+}
+
+// GetDatesWithAlerts returns a list of dates (YYYY-MM-DD format) that have alert records
+func (s *SQLite) GetDatesWithAlerts() ([]string, error) {
+	return s.DatesByType("alerts")
+}
+
+// GetDatesWithFiles returns a list of dates (YYYY-MM-DD format) that have file message records
+func (s *SQLite) GetDatesWithFiles() ([]string, error) {
+	return s.DatesByType("files")
 }
 
 // FileMessageWithTasks represents a file message with associated task details

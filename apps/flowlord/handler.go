@@ -378,9 +378,12 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get dates with alerts for calendar highlighting
+	datesWithData, _ := tm.taskCache.DatesByType("alerts")
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(alertHTML(alerts, dt))
+	w.Write(alertHTML(alerts, dt, datesWithData))
 }
 
 // htmlFiles handles GET /web/files - displays file messages for a specific date
@@ -397,9 +400,12 @@ func (tm *taskMaster) htmlFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get dates with file messages for calendar highlighting
+	datesWithData, _ := tm.taskCache.DatesByType("files")
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(filesHTML(files, dt))
+	w.Write(filesHTML(files, dt, datesWithData))
 }
 
 // htmlTask handles GET /web/task - displays task summary and table for a specific date
@@ -422,9 +428,12 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get dates with tasks for calendar highlighting
+	datesWithData, _ := tm.taskCache.DatesByType("tasks")
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(taskHTML(tasks, dt, taskType, job, result))
+	w.Write(taskHTML(tasks, dt, taskType, job, result, datesWithData))
 }
 
 // htmlWorkflow handles GET /web/workflow - displays workflow phases from database
@@ -442,7 +451,7 @@ func (tm *taskMaster) htmlAbout(w http.ResponseWriter, r *http.Request) {
 }
 
 // filesHTML renders the file messages HTML page
-func filesHTML(files []cache.FileMessage, date time.Time) []byte {
+func filesHTML(files []cache.FileMessage, date time.Time, datesWithData []string) []byte {
 	// Calculate statistics
 	totalFiles := len(files)
 	matchedFiles := 0
@@ -474,6 +483,7 @@ func filesHTML(files []cache.FileMessage, date time.Time) []byte {
 		"CurrentPage":    "files",
 		"PageTitle":      "File Messages",
 		"isLocal":        isLocal,
+		"DatesWithData":  datesWithData,
 	}
 
 	// Parse and execute template using the shared funcMap
@@ -555,7 +565,7 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 }
 
 // taskHTML renders the task summary and table HTML page
-func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result string) []byte {
+func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result string, datesWithData []string) []byte {
 	// Calculate navigation dates
 	prevDate := date.AddDate(0, 0, -1)
 	nextDate := date.AddDate(0, 0, 1)
@@ -605,6 +615,7 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"CurrentPage":    "task",
 		"PageTitle":      "Task Dashboard",
 		"isLocal":        isLocal,
+		"DatesWithData":  datesWithData,
 	}
 
 	// Get base funcMap and extend it with task-specific closures
@@ -692,6 +703,7 @@ func workflowHTML(tCache *cache.SQLite) []byte {
 		"CurrentPage":         "workflow",
 		"PageTitle":           "Workflow Dashboard",
 		"isLocal":             isLocal,
+		"DatesWithData":       []string{}, // Workflow page doesn't use date picker with highlights
 	}
 
 	// Parse and execute template using the shared funcMap
@@ -753,6 +765,7 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"DateValue":         "", // About page doesn't need date
 		"PageTitle":         "System Information",
 		"isLocal":           isLocal,
+		"DatesWithData":     []string{}, // About page doesn't use date picker with highlights
 	}
 
 	// Parse and execute template using the shared funcMap
@@ -776,19 +789,20 @@ type AlertData struct {
 }
 
 // alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
-func alertHTML(tasks []cache.AlertRecord, date time.Time) []byte {
+func alertHTML(tasks []cache.AlertRecord, date time.Time, datesWithData []string) []byte {
 	// Generate summary data using BuildCompactSummary
 	summary := cache.BuildCompactSummary(tasks)
 
 	// Create data structure for template
 	data := map[string]interface{}{
-		"Alerts":      tasks,
-		"Summary":     summary,
-		"CurrentPage": "alert",
-		"DateValue":   date.Format("2006-01-02"),
-		"Date":        date.Format("Monday, January 2, 2006"),
-		"PageTitle":   "Task Alerts",
-		"isLocal":     isLocal,
+		"Alerts":        tasks,
+		"Summary":       summary,
+		"CurrentPage":   "alert",
+		"DateValue":     date.Format("2006-01-02"),
+		"Date":          date.Format("Monday, January 2, 2006"),
+		"PageTitle":     "Task Alerts",
+		"isLocal":       isLocal,
+		"DatesWithData": datesWithData,
 	}
 
 	// Parse and execute template using the shared funcMap

@@ -382,6 +382,11 @@ func TestPrintDates(t *testing.T) {
 			Input:    trial.Times(f, "2018/04/09T00", "2018/04/10T00", "2018/04/11T00", "2018/04/12T00"),
 			Expected: "2018/04/09-2018/04/12",
 		},
+		"daily records offset": // TODO: Need to know if task is daily or hourly or monthly
+		{
+			Input:    trial.Times(f, "2018/04/09T04", "2018/04/10T04", "2018/04/11T04", "2018/04/12T06"),
+			Expected: "2018/04/09-2018/04/12",
+		},
 		"daily records with gaps": {
 			Input:    trial.Times(f, "2018/04/09T00", "2018/04/10T00", "2018/04/11T00", "2018/04/12T00", "2018/04/15T00", "2018/04/16T00", "2018/04/17T00"),
 			Expected: "2018/04/09-2018/04/12,2018/04/15-2018/04/17",
