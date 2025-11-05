@@ -254,24 +254,22 @@ func TestDatesByType(t *testing.T) {
 		Ended:   "2024-01-16T10:05:00Z",
 	})
 
-	// Add sample alert records
-	db.AddAlert(task.Task{
-		ID:      "alert1",
-		Type:    "data-validation",
-		Job:     "check",
-		Created: "2024-01-15T11:00:00Z",
-	}, "Validation error")
-	db.AddAlert(task.Task{
-		ID:      "alert2",
-		Type:    "data-validation",
-		Job:     "check",
-		Created: "2024-01-17T11:00:00Z",
-	}, "Validation error")
+	// Add sample alert records with specific created_at times
+	_, err := db.db.Exec(`
+		INSERT INTO alert_records (task_id, task_time, task_type, job, msg, created_at)
+		VALUES (?, ?, ?, ?, ?, ?),
+		       (?, ?, ?, ?, ?, ?)
+	`, "alert1", "2024-01-15T11:00:00Z", "data-validation", "check", "Validation error", "2024-01-15T11:00:00Z",
+	   "alert2", "2024-01-17T11:00:00Z", "data-validation", "check", "Validation error", "2024-01-17T11:00:00Z")
+	if err != nil {
+		t.Fatalf("Failed to insert alerts: %v", err)
+	}
 
 	// Add sample file messages
-	fileMsg1 := stat.New()
-	fileMsg1.Path = "gs://bucket/file1.json"
-	fileMsg1.Size = 1024
+	fileMsg1 := stat.Stats{
+		Path: "gs://bucket/file1.json", 
+		Size: 1024, 
+	}
 	db.AddFileMessage(fileMsg1, []string{}, []string{})
 
 	// Test "tasks" type
@@ -292,7 +290,7 @@ func TestDatesByType(t *testing.T) {
 		t.Errorf("DatesByType('alerts') error: %v", err)
 	}
 	if len(alertDates) != 2 {
-		t.Errorf("Expected 2 alert dates, got %d", len(alertDates))
+		t.Errorf("Expected 2 alert dates, got %v", alertDates)
 	}
 
 	// Test "files" type

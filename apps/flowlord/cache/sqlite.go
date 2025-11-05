@@ -1179,21 +1179,18 @@ func (s *SQLite) DatesByType(dataType string) ([]string, error) {
 		query = `
 			SELECT DISTINCT DATE(created) as date_val 
 			FROM task_records
-			WHERE created >= datetime('now', '-' || ? || ' days')
 			ORDER BY date_val DESC
 		`
 	case "alerts":
 		query = `
 			SELECT DISTINCT DATE(created_at) as date_val 
 			FROM alert_records
-			WHERE created_at >= datetime('now', '-' || ? || ' days')
 			ORDER BY date_val DESC
 		`
 	case "files":
 		query = `
 			SELECT DISTINCT DATE(received_at) as date_val 
 			FROM file_messages
-			WHERE received_at >= datetime('now', '-' || ? || ' days')
 			ORDER BY date_val DESC
 		`
 	default:
