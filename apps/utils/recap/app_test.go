@@ -46,17 +46,17 @@ func TestDoneTopic(t *testing.T) {
 	cases := trial.Cases[string, []string]{
 		"task without job": {
 			Input:    `{"type":"test1","info":"?date=2020-01-02","result":"complete"}`,
-			Expected: []string{"test1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02"},
+			Expected: []string{"test1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02T00"},
 		},
 		"task with job meta": {
 			Input:    `{"type":"test2","info":"?date=2020-01-02","result":"complete","meta":"job=part1"}`,
-			Expected: []string{"test2:part1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02"},
+			Expected: []string{"test2:part1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02T00"},
 		},
 		"2 task with job meta": {
 			Input: `{"type":"test3","info":"?date=2020-01-02","result":"complete","meta":"job=part1"}
 {"type":"test3","info":"?date=2020-01-02","result":"complete","meta":"job=part2"}`,
-			Expected: []string{"test3:part1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02",
-				"test3:part2\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02"},
+			Expected: []string{"test3:part1\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02T00",
+				"test3:part2\n\tmin: 0s max 0s avg:0s\n\tComplete   1  2020/01/02T00"},
 		},
 	}
 	trial.New(fn, cases).Test(t)
