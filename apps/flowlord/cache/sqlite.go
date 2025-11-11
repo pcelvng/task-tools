@@ -28,7 +28,9 @@ var schema string
 
 // currentSchemaVersion is the current version of the database schema.
 // Increment this when making schema changes that require migration.
-const currentSchemaVersion = 1
+// Version 1: Initial schema
+// Version 2: Added date_index table for performance optimization
+const currentSchemaVersion = 2
 
 type SQLite struct {
 	LocalPath  string
@@ -167,8 +169,19 @@ func (o *SQLite) GetSchemaVersion() int {
 
 // setVersion updates the schema version in the database
 func (o *SQLite) setVersion(version int) error {
-	_, err := o.db.Exec("INSERT OR REPLACE INTO schema_version (version) VALUES (?)", version)
-	return err
+	// Delete all existing records to ensure we only have one row
+	_, err := o.db.Exec("DELETE FROM schema_version")
+	if err != nil {
+		return fmt.Errorf("failed to clear schema_version: %w", err)
+	}
+	
+	// Insert the new version
+	_, err = o.db.Exec("INSERT INTO schema_version (version) VALUES (?)", version)
+	if err != nil {
+		return fmt.Errorf("failed to insert schema version: %w", err)
+	}
+	
+	return nil
 }
 
 // migrateSchema applies version-specific migrations based on the current version
@@ -192,19 +205,26 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 		}
 	}
 
+	// Version 1 → 2: Add date_index table for performance optimization
+	if currentVersion < 2 {
+		log.Println("Migrating schema from version 1 to 2 (adding date_index table)")
+		
+		// Re-apply schema.sql - it has IF NOT EXISTS so it's safe and will add new tables
+		_, err := o.db.Exec(schema)
+		if err != nil {
+			return fmt.Errorf("failed to apply schema for version 2: %w", err)
+		}
+		
+		// Populate the date_index from existing data
+		if err := o.RebuildDateIndex(); err != nil {
+			return fmt.Errorf("failed to populate date_index: %w", err)
+		}
+		
+		log.Println("Successfully migrated to schema version 2")
+	}
+
 	// Add future migrations here as needed:
 	// Example:
-	// if currentVersion < 2 {
-	//     db := o.db
-	//     // Drop an old table
-	//     db.Exec("DROP TABLE IF EXISTS obsolete_table")
-	//     
-	//     // Add new column if it doesn't exist
-	//     if !columnExists(db, "task_records", "new_field") {
-	//         db.Exec("ALTER TABLE task_records ADD COLUMN new_field TEXT")
-	//     }
-	// }
-	//
 	// if currentVersion < 3 {
 	//     db := o.db
 	//     // Drop column by recreating table (since data loss is OK)
@@ -258,6 +278,11 @@ func (s *SQLite) Add(t task.Task) {
 	if err != nil {
 		log.Printf("ERROR: Failed to insert task record: %v", err)
 		return
+	}
+
+	// Update date index for this task's date
+	if t.Created != "" {
+		s.updateDateIndex(t.Created, "tasks")
 	}
 
 	// Check if this was an update (conflict) rather than insert
@@ -557,7 +582,14 @@ func (s *SQLite) AddAlert(t task.Task, message string) error {
 		VALUES (?, ?, ?, ?, ?)
 	`, taskID, taskTime, t.Type, job, message)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Update date index - use current time for alert created_at
+	s.updateDateIndex(time.Now().Format(time.RFC3339), "alerts")
+
+	return nil
 }
 
 // extractJobFromTask is a helper function to get job from task
@@ -569,6 +601,49 @@ func extractJobFromTask(t task.Task) string {
 		}
 	}
 	return job
+}
+
+// updateDateIndex updates the date_index table for a given timestamp and data type
+// This method should be called within an existing lock (s.mu.Lock)
+func (s *SQLite) updateDateIndex(timestamp, dataType string) {
+	// Parse timestamp to extract date
+	t, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		// Try other formats if RFC3339 fails
+		t, err = time.Parse("2006-01-02 15:04:05", timestamp)
+		if err != nil {
+			return // Skip if we can't parse the timestamp
+		}
+	}
+
+	dateStr := t.Format("2006-01-02")
+
+	// Determine which column to update
+	var column string
+	switch dataType {
+	case "tasks":
+		column = "has_tasks"
+	case "alerts":
+		column = "has_alerts"
+	case "files":
+		column = "has_files"
+	default:
+		return
+	}
+
+	// First try to insert the date, if it already exists, update the column
+	_, err = s.db.Exec("INSERT OR IGNORE INTO date_index (date) VALUES (?)", dateStr)
+	if err != nil {
+		log.Printf("WARNING: Failed to insert date into date_index for %s on %s: %v", dataType, dateStr, err)
+		return
+	}
+
+	// Now update the specific column
+	query := fmt.Sprintf("UPDATE date_index SET %s = 1 WHERE date = ?", column)
+	_, err = s.db.Exec(query, dateStr)
+	if err != nil {
+		log.Printf("WARNING: Failed to update date_index for %s on %s: %v", dataType, dateStr, err)
+	}
 }
 
 // GetAlertsByDate retrieves all alerts for a specific date
@@ -842,7 +917,14 @@ func (s *SQLite) AddFileMessage(sts stat.Stats, taskIDs []string, taskNames []st
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, sts.Path, sts.Size, lastModified, taskTime, taskIDsJSON, taskNamesJSON)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Update date index - use current time for received_at
+	s.updateDateIndex(time.Now().Format(time.RFC3339), "files")
+
+	return nil
 }
 
 // GetFileMessages retrieves file messages with optional filtering
@@ -1164,40 +1246,31 @@ func (s *SQLite) GetDatesWithData() ([]string, error) {
 
 // DatesByType returns a list of dates (YYYY-MM-DD format) that have data for the specified type
 // dataType can be "tasks", "alerts", or "files"
+// This uses the date_index table for instant lookups
 func (s *SQLite) DatesByType(dataType string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	retentionDays := int(s.Retention.Hours() / 24)
-	if retentionDays == 0 {
-		retentionDays = 90
-	}
-
-	var query string
+	var column string
 	switch dataType {
 	case "tasks":
-		query = `
-			SELECT DISTINCT DATE(created) as date_val 
-			FROM task_records
-			ORDER BY date_val DESC
-		`
+		column = "has_tasks"
 	case "alerts":
-		query = `
-			SELECT DISTINCT DATE(created_at) as date_val 
-			FROM alert_records
-			ORDER BY date_val DESC
-		`
+		column = "has_alerts"
 	case "files":
-		query = `
-			SELECT DISTINCT DATE(received_at) as date_val 
-			FROM file_messages
-			ORDER BY date_val DESC
-		`
+		column = "has_files"
 	default:
 		return nil, fmt.Errorf("invalid data type: %s (must be 'tasks', 'alerts', or 'files')", dataType)
 	}
 
-	rows, err := s.db.Query(query, retentionDays)
+	query := fmt.Sprintf(`
+		SELECT date 
+		FROM date_index
+		WHERE %s = 1
+		ORDER BY date DESC
+	`, column)
+
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -1228,6 +1301,77 @@ func (s *SQLite) GetDatesWithAlerts() ([]string, error) {
 // GetDatesWithFiles returns a list of dates (YYYY-MM-DD format) that have file message records
 func (s *SQLite) GetDatesWithFiles() ([]string, error) {
 	return s.DatesByType("files")
+}
+
+// RebuildDateIndex scans all tables and rebuilds the date_index table
+// This should be called once during migration or can be exposed as an admin endpoint
+func (s *SQLite) RebuildDateIndex() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	log.Println("Starting date_index rebuild...")
+
+	// Clear existing index
+	_, err := s.db.Exec("DELETE FROM date_index")
+	if err != nil {
+		return fmt.Errorf("failed to clear date_index: %w", err)
+	}
+
+	// Populate from task_records
+	// First insert the dates, then update the has_tasks flag
+	_, err = s.db.Exec(`
+		INSERT OR IGNORE INTO date_index (date, has_tasks)
+		SELECT DISTINCT DATE(created), 1
+		FROM task_records
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to populate date_index from tasks: %w", err)
+	}
+
+	// Populate from alert_records
+	// Insert new dates and update has_alerts for existing dates
+	_, err = s.db.Exec(`
+		INSERT OR IGNORE INTO date_index (date)
+		SELECT DISTINCT DATE(created_at)
+		FROM alert_records
+		WHERE DATE(created_at) NOT IN (SELECT date FROM date_index)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to insert new dates from alerts: %w", err)
+	}
+	
+	_, err = s.db.Exec(`
+		UPDATE date_index
+		SET has_alerts = 1
+		WHERE date IN (SELECT DISTINCT DATE(created_at) FROM alert_records)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to update date_index from alerts: %w", err)
+	}
+
+	// Populate from file_messages
+	// Insert new dates and update has_files for existing dates
+	_, err = s.db.Exec(`
+		INSERT OR IGNORE INTO date_index (date)
+		SELECT DISTINCT DATE(received_at)
+		FROM file_messages
+		WHERE DATE(received_at) NOT IN (SELECT date FROM date_index)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to insert new dates from files: %w", err)
+	}
+	
+	_, err = s.db.Exec(`
+		UPDATE date_index
+		SET has_files = 1
+		WHERE date IN (SELECT DISTINCT DATE(received_at) FROM file_messages)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to update date_index from files: %w", err)
+	}
+
+	log.Println("Successfully rebuilt date_index")
+	return nil
 }
 
 // FileMessageWithTasks represents a file message with associated task details

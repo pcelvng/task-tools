@@ -1,6 +1,7 @@
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
-    version INTEGER PRIMARY KEY
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    version INTEGER NOT NULL
 );
 
 -- SQL schema for the task cache
@@ -123,3 +124,15 @@ CREATE TABLE IF NOT EXISTS workflow_phases (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_workflow_phases_task ON workflow_phases (task);
 CREATE INDEX IF NOT EXISTS idx_workflow_phases_depends_on ON workflow_phases (depends_on);
+
+-- Date index table for fast date lookups
+-- Tracks which dates have data in each table
+CREATE TABLE IF NOT EXISTS date_index (
+    date TEXT PRIMARY KEY,
+    -- YYYY-MM-DD format
+    has_tasks BOOLEAN DEFAULT 0,
+    -- 1 if task_records has data for this date
+    has_alerts BOOLEAN DEFAULT 0,
+    -- 1 if alert_records has data for this date
+    has_files BOOLEAN DEFAULT 0 -- 1 if file_messages has data for this date
+);

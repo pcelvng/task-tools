@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -421,15 +422,19 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	result := r.URL.Query().Get("result")
 
 	// Get tasks with filters
+	start := time.Now() 
 	tasks, err := tm.taskCache.GetTasksByDate(dt, taskType, job, result)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
 	}
-
+	log.Printf("getTasksbyDate %v", time.Since(start)) 
+	
+	start = time.Now()
 	// Get dates with tasks for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("tasks")
+	log.Printf("DatesByType %v", time.Since(start)) 
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
@@ -571,15 +576,21 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 	nextDate := date.AddDate(0, 0, 1)
 
 	// Generate summary from tasks data
+	start := time.Now() 
 	summary := generateSummaryFromTasks(tasks) //TODO: replace with taskCache.Recap()
+	log.Printf("generateSummary %v", 	time.Since(start)) 
 
-	// Calculate statistics
+	// Calculate statistics and extract unique types/jobs
 	totalTasks := len(tasks)
 	completedTasks := 0
 	errorTasks := 0
 	alertTasks := 0
 	warnTasks := 0
 	runningTasks := 0
+	
+	// Extract unique types and jobs for filter dropdowns
+	uniqueTypes := make(map[string]struct{})
+	uniqueJobs := make(map[string]map[string]struct{}) // type -> jobs
 
 	for _, t := range tasks {
 		switch t.Result {
@@ -594,6 +605,37 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		case "":
 			runningTasks++
 		}
+		
+		// Track unique types
+		if t.Type != "" {
+			uniqueTypes[t.Type] = struct{}{}
+			
+			// Track jobs per type
+			if uniqueJobs[t.Type] == nil {
+				uniqueJobs[t.Type] = make(map[string]struct{})
+			}
+			if t.Job != "" {
+				uniqueJobs[t.Type][t.Job] = struct{}{}
+			}
+		}
+	}
+	
+	// Convert to sorted slices for template
+	types := make([]string, 0, len(uniqueTypes))
+	for t := range uniqueTypes {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	
+	// Convert jobs map to sorted slices
+	jobsByType := make(map[string][]string)
+	for typ, jobs := range uniqueJobs {
+		jobList := make([]string, 0, len(jobs))
+		for j := range jobs {
+			jobList = append(jobList, j)
+		}
+		sort.Strings(jobList)
+		jobsByType[typ] = jobList
 	}
 
 	data := map[string]interface{}{
@@ -616,6 +658,8 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"PageTitle":      "Task Dashboard",
 		"isLocal":        isLocal,
 		"DatesWithData":  datesWithData,
+		"UniqueTypes":    types,
+		"JobsByType":     jobsByType,
 	}
 
 	// Get base funcMap and extend it with task-specific closures
@@ -672,9 +716,11 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 	}
 
 	var buf bytes.Buffer
+	start = time.Now() 
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return []byte(err.Error())
 	}
+	log.Printf("execute tmpl %v", time.Since(start))
 
 	return buf.Bytes()
 }

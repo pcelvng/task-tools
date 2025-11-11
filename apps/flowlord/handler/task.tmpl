@@ -293,37 +293,16 @@
             
             if (!table) return;
             
-            // Get all task rows
-            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            // Use server-provided data instead of extracting from DOM
+            const taskTypes = [{{range $i, $t := .UniqueTypes}}{{if $i}},{{end}}"{{$t}}"{{end}}];
+            const jobMap = new Map([
+                {{range $type, $jobs := .JobsByType}}
+                ["{{$type}}", [{{range $j, $job := $jobs}}{{if $j}},{{end}}"{{$job}}"{{end}}]],
+                {{end}}
+            ]);
             
-            // Extract unique task types
-            const taskTypes = new Set();
-            const jobMap = new Map(); // type -> Set of jobs
-            
-            rows.forEach(row => {
-                const typeCell = row.cells[1]; // Type column
-                const jobCell = row.cells[2]; // Job column
-                
-                if (typeCell && jobCell) {
-                    const type = typeCell.textContent.trim();
-                    const job = jobCell.textContent.trim();
-                    
-                    if (type) {
-                        taskTypes.add(type);
-                        
-                        if (!jobMap.has(type)) {
-                            jobMap.set(type, new Set());
-                        }
-                        if (job) {
-                            jobMap.get(type).add(job);
-                        }
-                    }
-                }
-            });
-            
-            // Populate task type dropdown
-            const sortedTypes = Array.from(taskTypes).sort();
-            sortedTypes.forEach(type => {
+            // Populate task type dropdown from server data
+            taskTypes.forEach(type => {
                 const option = document.createElement('option');
                 option.value = type;
                 option.textContent = type;

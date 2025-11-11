@@ -52,6 +52,12 @@ func TestDatesByType(t *testing.T) {
 	}
 	db.AddFileMessage(fileMsg1, []string{}, []string{})
 
+	// Rebuild the date index to capture the directly-inserted alerts
+	// (In production, all inserts go through Add/AddAlert/AddFileMessage which maintain the index)
+	if err := db.RebuildDateIndex(); err != nil {
+		t.Fatalf("Failed to rebuild date index: %v", err)
+	}
+
 	// Test "tasks" type
 	taskDates, err := db.DatesByType("tasks")
 	if err != nil {
