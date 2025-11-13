@@ -2,11 +2,13 @@
 <div class="nav-header">
     <div class="nav-container">
         <div class="nav-controls">
+            {{if and (ne .CurrentPage "workflow") (ne .CurrentPage "about")}}
             <div class="date-picker-container">
                 <label for="datePicker" class="date-picker-label">Date:</label>
                 <input type="text" id="datePicker" class="date-picker" value="{{.DateValue}}" readonly>
                 <button id="todayBtn" class="btn btn-sm btn-outline">Today</button>
             </div>
+            {{end}}
             {{if .ShowRefresh}}
             <button class="refresh-btn" onclick="location.reload()">Refresh</button>
             {{end}}

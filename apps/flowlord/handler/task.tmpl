@@ -14,40 +14,51 @@
         <div class="summary-section">
             <h3>Task Summary</h3>
             <div class="summary-stats">
-                <div class="stat-card active" data-filter="all" onclick="filterByResult('all')">
+                <div class="stat-card{{if not .CurrentResult}} active{{end}}" data-filter="all" onclick="filterByResult('all')">
                     <div class="stat-number">{{.TotalTasks}}</div>
                     <div class="stat-label">Total Tasks</div>
                 </div>
-                <div class="stat-card" data-filter="complete" onclick="filterByResult('complete')">
+                <div class="stat-card{{if eq .CurrentResult "complete"}} active{{end}}" data-filter="complete" onclick="filterByResult('complete')">
                     <div class="stat-number">{{.CompletedTasks}}</div>
                     <div class="stat-label">Completed</div>
                 </div>
-                <div class="stat-card" data-filter="error" onclick="filterByResult('error')">
+                <div class="stat-card{{if eq .CurrentResult "error"}} active{{end}}" data-filter="error" onclick="filterByResult('error')">
                     <div class="stat-number">{{.ErrorTasks}}</div>
                     <div class="stat-label">Errors</div>
                 </div>
-                <div class="stat-card" data-filter="alert" onclick="filterByResult('alert')">
+                <div class="stat-card{{if eq .CurrentResult "alert"}} active{{end}}" data-filter="alert" onclick="filterByResult('alert')">
                     <div class="stat-number">{{.AlertTasks}}</div>
                     <div class="stat-label">Alerts</div>
                 </div>
-                <div class="stat-card" data-filter="warn" onclick="filterByResult('warn')">
+                <div class="stat-card{{if eq .CurrentResult "warn"}} active{{end}}" data-filter="warn" onclick="filterByResult('warn')">
                     <div class="stat-number">{{.WarnTasks}}</div>
                     <div class="stat-label">Warnings</div>
                 </div>
-                <div class="stat-card" data-filter="running" onclick="filterByResult('running')">
+                <div class="stat-card{{if eq .CurrentResult "running"}} active{{end}}" data-filter="running" onclick="filterByResult('running')">
                     <div class="stat-number">{{.RunningTasks}}</div>
                     <div class="stat-label">Running</div>
                 </div>
             </div>
         </div>
 
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .CurrentType .CurrentJob .CurrentResult}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
+            <div class="pagination-controls">
+                {{if gt .Page 1}}
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Previous</a>
+                {{end}}
+                
+                {{if lt .Page .TotalPages}}
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Next</a>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
         <div class="filters">
             <h3>Filters</h3>
             <div class="filter-row">
-                <div class="filter-group">
-                    <label for="idSearch">Task ID</label>
-                    <input type="text" id="idSearch" placeholder="Search by ID...">
-                </div>
                 <div class="filter-group">
                     <label for="typeFilter">Task Type</label>
                     <select id="typeFilter">
@@ -136,8 +147,27 @@
             </table>
         </div>
         <div class="stats">
-            Total Tasks: <span id="totalCount">{{.TotalTasks}}</span>
+            {{if or .CurrentType .CurrentJob .CurrentResult}}
+            Showing: <span id="visibleCount">{{len .Tasks}}</span> | Filtered Tasks: <span id="filteredCount">{{.FilteredCount}}</span> | Total Tasks: <span id="totalCount">{{.TotalTasks}}</span>
+            {{else}}
+            Showing: <span id="visibleCount">{{len .Tasks}}</span> | Total Tasks: <span id="totalCount">{{.TotalTasks}}</span>
+            {{end}}
         </div>
+        
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
+            <div class="pagination-controls">
+                {{if gt .Page 1}}
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Previous</a>
+                {{end}}
+                
+                {{if lt .Page .TotalPages}}
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Next</a>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
         {{else}}
         <div class="no-tasks">
             <h3>No tasks found</h3>
@@ -149,7 +179,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const table = document.getElementById('taskTable');
-            if (!table) return;
+            if (!table) {
+                return;
+            }
             
             const tbody = table.querySelector('tbody');
             const headers = table.querySelectorAll('th.sortable');
@@ -203,7 +235,8 @@
                 
                 if (params.sort) {
                     currentSort = { column: params.sort, direction: params.direction };
-                    sortTable(params.sort, params.direction);
+                    // Don't sort on initial load - too expensive with thousands of rows
+                    // sortTable(params.sort, params.direction);
                     updateSortIndicators(params.sort, params.direction);
                 }
             }
@@ -309,23 +342,37 @@
                 typeFilter.appendChild(option);
             });
             
-            // Handle ID search with debouncing
-            let searchTimeout;
-            idSearch.addEventListener('input', function() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    filterTable();
-                }, 300); // 300ms delay
-            });
+            // Populate job dropdown based on current type selection
+            const currentType = "{{.CurrentType}}";
+            const currentJob = "{{.CurrentJob}}";
             
-            // Handle task type change
+            if (currentType && jobMap.has(currentType)) {
+                const jobs = jobMap.get(currentType);
+                jobs.forEach(job => {
+                    const option = document.createElement('option');
+                    option.value = job;
+                    option.textContent = job;
+                    if (job === currentJob) {
+                        option.selected = true;
+                    }
+                    jobFilter.appendChild(option);
+                });
+            }
+            
+            // Set current filter values from URL
+            if (currentType) {
+                typeFilter.value = currentType;
+            }
+            
+            // Handle task type change - update job dropdown and apply filter
             typeFilter.addEventListener('change', function() {
                 const selectedType = this.value;
                 const jobOptions = jobFilter.querySelectorAll('option:not([value=""])');
                 jobOptions.forEach(option => option.remove());
+                jobFilter.value = ''; // Clear job selection
                 
                 if (selectedType && jobMap.has(selectedType)) {
-                    const jobs = Array.from(jobMap.get(selectedType)).sort();
+                    const jobs = jobMap.get(selectedType);
                     jobs.forEach(job => {
                         const option = document.createElement('option');
                         option.value = job;
@@ -334,151 +381,95 @@
                     });
                 }
                 
-                filterTable();
+                // Apply filter by reloading page
+                applyFiltersWithResultReset();
             });
             
-            // Handle job change
-            jobFilter.addEventListener('change', filterTable);
-            
-            // Initial filter
-            filterTable();
+            // Handle job change - reload page with filter
+            jobFilter.addEventListener('change', function() {
+                applyFilters();
+            });
         }
         
-        // Filter table based on current filter values
-        function filterTable() {
-            const idSearch = document.getElementById('idSearch');
+        // Apply filters by reloading page with query parameters
+        function applyFilters() {
             const typeFilter = document.getElementById('typeFilter');
             const jobFilter = document.getElementById('jobFilter');
-            const table = document.getElementById('taskTable');
             
-            if (!table) return;
+            const url = new URL(window.location);
+            url.searchParams.delete('page'); // Reset to page 1 when filtering
             
-            const searchId = idSearch ? idSearch.value.trim().toLowerCase() : '';
             const selectedType = typeFilter ? typeFilter.value : '';
             const selectedJob = jobFilter ? jobFilter.value : '';
             
-            const rows = Array.from(table.querySelectorAll('tbody tr'));
-            
-            rows.forEach(row => {
-                const idCell = row.cells[0]; // ID column
-                const typeCell = row.cells[1]; // Type column
-                const jobCell = row.cells[2]; // Job column
-                
-                if (idCell && typeCell && jobCell) {
-                    // Use the full ID from data-full-text attribute instead of truncated display text
-                    const fullId = idCell.getAttribute('data-full-text') || idCell.textContent.trim();
-                    const id = fullId.toLowerCase();
-                    const type = typeCell.textContent.trim();
-                    const job = jobCell.textContent.trim();
-                    
-                    const idMatch = !searchId || id.includes(searchId);
-                    const typeMatch = !selectedType || type === selectedType;
-                    const jobMatch = !selectedJob || job === selectedJob;
-                    
-                    if (idMatch && typeMatch && jobMatch) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                }
-            });
-            
-            // Update task count
-            updateTaskCount();
-        }
-        
-        // Update the displayed task count
-        function updateTaskCount() {
-            const table = document.getElementById('taskTable');
-            if (!table) return;
-            
-            const visibleRows = Array.from(table.querySelectorAll('tbody tr')).filter(row => 
-                row.style.display !== 'none'
-            );
-            
-            const totalCountElement = document.getElementById('totalCount');
-            if (totalCountElement) {
-                totalCountElement.textContent = visibleRows.length;
+            if (selectedType) {
+                url.searchParams.set('type', selectedType);
+            } else {
+                url.searchParams.delete('type');
             }
+            
+            if (selectedJob) {
+                url.searchParams.set('job', selectedJob);
+            } else {
+                url.searchParams.delete('job');
+            }
+            
+            window.location.href = url.toString();
         }
         
-        // Clear all filters
-        function clearFilters() {
-            const idSearch = document.getElementById('idSearch');
+        // Apply filters and reset result filter (for task type changes)
+        function applyFiltersWithResultReset() {
             const typeFilter = document.getElementById('typeFilter');
             const jobFilter = document.getElementById('jobFilter');
             
-            if (idSearch) idSearch.value = '';
-            if (typeFilter) typeFilter.value = '';
-            if (jobFilter) {
-                jobFilter.value = '';
-                // Clear job options except "All Jobs"
-                const jobOptions = jobFilter.querySelectorAll('option:not([value=""])');
-                jobOptions.forEach(option => option.remove());
+            const url = new URL(window.location);
+            url.searchParams.delete('page'); // Reset to page 1 when filtering
+            url.searchParams.delete('result'); // Reset result filter to show all results
+            
+            const selectedType = typeFilter ? typeFilter.value : '';
+            const selectedJob = jobFilter ? jobFilter.value : '';
+            
+            if (selectedType) {
+                url.searchParams.set('type', selectedType);
+            } else {
+                url.searchParams.delete('type');
             }
             
-            // Clear stat-card active states and reset to "all"
-            clearStatCardActiveStates();
-            updateStatCardActiveStates('all');
+            if (selectedJob) {
+                url.searchParams.set('job', selectedJob);
+            } else {
+                url.searchParams.delete('job');
+            }
             
-            filterTable();
+            window.location.href = url.toString();
+        }
+        // Clear all filters
+        function clearFilters() {
+            const url = new URL(window.location);
+            url.searchParams.delete('type');
+            url.searchParams.delete('job');
+            url.searchParams.delete('result');
+            url.searchParams.delete('page');
+            window.location.href = url.toString();
         }
 
         // Filter by result type using stat-cards
         function filterByResult(resultType) {
-            // Update stat-card active states
-            updateStatCardActiveStates(resultType);
+            const url = new URL(window.location);
+            url.searchParams.delete('page'); // Reset to page 1
             
-            // Update the existing filter logic to include result filtering
-            const table = document.getElementById('taskTable');
-            if (!table) return;
+            // Reset task type and job filters when clicking on stat cards
+            url.searchParams.delete('type');
+            url.searchParams.delete('job');
             
-            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            if (resultType === 'all') {
+                url.searchParams.delete('result');
+            } else {
+                url.searchParams.set('result', resultType);
+            }
             
-            rows.forEach(row => {
-                const resultCell = row.cells[4]; // Result column (0-indexed)
-                
-                if (resultCell) {
-                    const result = resultCell.textContent.trim().toLowerCase();
-                    let shouldShow = false;
-                    
-                    if (resultType === 'all') {
-                        shouldShow = true;
-                    } else if (resultType === 'running') {
-                        shouldShow = result === '' || result === 'running';
-                    } else {
-                        shouldShow = result === resultType;
-                    }
-                    
-                    row.style.display = shouldShow ? '' : 'none';
-                }
-            });
-            
-            // Update task count
-            updateTaskCount();
+            window.location.href = url.toString();
         }
-
-        // Update stat-card active states
-        function updateStatCardActiveStates(activeFilter) {
-            const statCards = document.querySelectorAll('.stat-card');
-            statCards.forEach(card => {
-                const filter = card.getAttribute('data-filter');
-                if (filter === activeFilter) {
-                    card.classList.add('active');
-                } else {
-                    card.classList.remove('active');
-                }
-            });
-        }
-
-        // Clear all stat-card active states
-        function clearStatCardActiveStates() {
-            const statCards = document.querySelectorAll('.stat-card');
-            statCards.forEach(card => {
-                card.classList.remove('active');
-            });
-        }
-
         // Toggle collapsible section
         function toggleCollapsible(sectionId) {
             const content = document.getElementById(sectionId + '-content');

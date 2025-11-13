@@ -420,25 +420,39 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	taskType := r.URL.Query().Get("type")
 	job := r.URL.Query().Get("job")
 	result := r.URL.Query().Get("result")
+	
+	// Get pagination parameters
+	page := 1
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	
+	pageSize := 500 // Show 500 tasks per page
+	if pageSizeStr := r.URL.Query().Get("pageSize"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 1000 {
+			pageSize = ps
+		}
+	}
 
-	// Get tasks with filters
-	start := time.Now() 
-	tasks, err := tm.taskCache.GetTasksByDate(dt, taskType, job, result)
+	// Get ALL tasks for the date (no filtering at all) to populate summary and dropdowns
+	queryStart := time.Now() 
+	allTasks, err := tm.taskCache.GetTasksByDate(dt, "", "", "")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
 	}
-	log.Printf("getTasksbyDate %v", time.Since(start)) 
+	queryTime := time.Since(queryStart)
 	
-	start = time.Now()
 	// Get dates with tasks for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("tasks")
-	log.Printf("DatesByType %v", time.Since(start)) 
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(taskHTML(tasks, dt, taskType, job, result, datesWithData))
+	htmlBytes := taskHTML(allTasks, dt, taskType, job, result, datesWithData, page, pageSize, queryTime)
+	w.Write(htmlBytes)
 }
 
 // htmlWorkflow handles GET /web/workflow - displays workflow phases from database
@@ -570,29 +584,29 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 }
 
 // taskHTML renders the task summary and table HTML page
-func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result string, datesWithData []string) []byte {
+func taskHTML(allTasks []cache.TaskView, date time.Time, taskType, job, result string, datesWithData []string, page, pageSize int, queryTime time.Duration) []byte {
+	renderStart := time.Now()
+	
 	// Calculate navigation dates
 	prevDate := date.AddDate(0, 0, -1)
 	nextDate := date.AddDate(0, 0, 1)
 
-	// Generate summary from tasks data
-	start := time.Now() 
-	summary := generateSummaryFromTasks(tasks) //TODO: replace with taskCache.Recap()
-	log.Printf("generateSummary %v", 	time.Since(start)) 
+	// Generate summary from ALL tasks (not filtered)
+	summary := generateSummaryFromTasks(allTasks) //TODO: replace with taskCache.Recap() 
 
-	// Calculate statistics and extract unique types/jobs
-	totalTasks := len(tasks)
+	// Calculate statistics and extract unique types/jobs from ALL tasks
+	totalAllTasks := len(allTasks)
 	completedTasks := 0
 	errorTasks := 0
 	alertTasks := 0
 	warnTasks := 0
 	runningTasks := 0
 	
-	// Extract unique types and jobs for filter dropdowns
+	// Extract unique types and jobs for filter dropdowns from ALL tasks
 	uniqueTypes := make(map[string]struct{})
 	uniqueJobs := make(map[string]map[string]struct{}) // type -> jobs
 
-	for _, t := range tasks {
+	for _, t := range allTasks {
 		switch t.Result {
 		case "complete":
 			completedTasks++
@@ -637,16 +651,63 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		sort.Strings(jobList)
 		jobsByType[typ] = jobList
 	}
+	
+	// Filter tasks for display based on taskType, job, and result parameters
+	filteredTasks := make([]cache.TaskView, 0, len(allTasks))
+	for _, t := range allTasks {
+		// Apply type filter if specified
+		if taskType != "" && t.Type != taskType {
+			continue
+		}
+		// Apply job filter if specified
+		if job != "" && t.Job != job {
+			continue
+		}
+		// Apply result filter if specified
+		if result != "" {
+			// Handle "running" as empty result
+			if result == "running" {
+				if t.Result != "" {
+					continue
+				}
+			} else if t.Result != result {
+				continue
+			}
+		}
+		filteredTasks = append(filteredTasks, t)
+	}
+	
+	// Calculate pagination based on filtered tasks
+	totalFilteredTasks := len(filteredTasks)
+	totalPages := (totalFilteredTasks + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	
+	// Slice tasks for current page
+	startIdx := (page - 1) * pageSize
+	endIdx := startIdx + pageSize
+	if endIdx > totalFilteredTasks {
+		endIdx = totalFilteredTasks
+	}
+	if startIdx > totalFilteredTasks {
+		startIdx = totalFilteredTasks
+	}
+	
+	pagedTasks := filteredTasks[startIdx:endIdx]
 
 	data := map[string]interface{}{
 		"Date":           date.Format("Monday, January 2, 2006"),
 		"DateValue":      date.Format("2006-01-02"),
 		"PrevDate":       prevDate.Format("2006-01-02"),
 		"NextDate":       nextDate.Format("2006-01-02"),
-		"Tasks":          tasks,
+		"Tasks":          pagedTasks,        // Only show current page's tasks
 		"Summary":        summary,
-		"TotalTasks":     totalTasks,
-		"CompletedTasks": completedTasks,
+		"TotalTasks":     totalAllTasks,     // Total count of ALL tasks for the day (for summary)
+		"CompletedTasks": completedTasks,    // Stats from ALL tasks
 		"ErrorTasks":     errorTasks,
 		"AlertTasks":     alertTasks,
 		"WarnTasks":      warnTasks,
@@ -660,67 +721,34 @@ func taskHTML(tasks []cache.TaskView, date time.Time, taskType, job, result stri
 		"DatesWithData":  datesWithData,
 		"UniqueTypes":    types,
 		"JobsByType":     jobsByType,
+		// Pagination info (based on filtered tasks)
+		"Page":           page,
+		"PageSize":       pageSize,
+		"TotalPages":     totalPages,
+		"StartIndex":     startIdx + 1,
+		"EndIndex":       endIdx,
+		"FilteredCount":  totalFilteredTasks,  // Number of tasks after filtering
 	}
 
-	// Get base funcMap and extend it with task-specific closures
-	funcMap := getBaseFuncMap()
-	funcMap["getAlertCount"] = func(topic, job string) int {
-		// Count alerts for a specific topic and job
-		count := 0
-		for _, task := range tasks {
-			if task.Result == "alert" {
-				// Check if this task matches the topic and job
-				taskJob := task.Job
-				if taskJob == "" {
-					// Try to extract job from meta if not set directly
-					if v, err := url.ParseQuery(task.Meta); err == nil {
-						taskJob = v.Get("job")
-					}
-				}
-				// For now, we'll match any alert task since we don't have topic info in TaskView
-				// This is a simplified implementation
-				if taskJob == job {
-					count++
-				}
-			}
-		}
-		return count
-	}
-	funcMap["getWarnCount"] = func(topic, job string) int {
-		// Count warnings for a specific topic and job
-		count := 0
-		for _, task := range tasks {
-			if task.Result == "warn" {
-				// Check if this task matches the topic and job
-				taskJob := task.Job
-				if taskJob == "" {
-					// Try to extract job from meta if not set directly
-					if v, err := url.ParseQuery(task.Meta); err == nil {
-						taskJob = v.Get("job")
-					}
-				}
-				// For now, we'll match any warn task since we don't have topic info in TaskView
-				// This is a simplified implementation
-				if taskJob == job {
-					count++
-				}
-			}
-		}
-		return count
-	}
-
-	// Parse and execute template
-	tmpl, err := template.New("task").Funcs(funcMap).Parse(HeaderTemplate + TaskTemplate)
+	// Parse and execute template using base funcMap
+	tmpl, err := template.New("task").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + TaskTemplate)
 	if err != nil {
 		return []byte(err.Error())
 	}
 
 	var buf bytes.Buffer
-	start = time.Now() 
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return []byte(err.Error())
 	}
-	log.Printf("execute tmpl %v", time.Since(start))
+	
+	htmlSize := buf.Len()
+	renderTime := time.Since(renderStart)
+	
+	// Single consolidated log with all metrics
+	log.Printf("Task page: date=%s filters=[type=%q job=%q result=%q] tasks=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
+		date.Format("2006-01-02"), taskType, job, result,
+		totalAllTasks, totalFilteredTasks, page, totalPages,
+		queryTime, renderTime, float64(htmlSize)/(1024*1024))
 
 	return buf.Bytes()
 }
