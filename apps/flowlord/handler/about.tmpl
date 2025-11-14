@@ -128,9 +128,11 @@
     
     <script>
         // Auto-refresh every 30 seconds
-        setTimeout(function() {
-            location.reload();
-        }, 30000);
+        if (window.location.search.indexOf('norefresh') === -1) {
+            setTimeout(function() {
+                location.reload();
+            }, 30000);
+        }
     </script>
 </body>
 </html>

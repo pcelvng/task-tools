@@ -525,7 +525,7 @@ func TestTaskHTML(t *testing.T) {
 	// Test with no filters - summary will be generated from tasks data
 	// Pass sample dates with data for calendar highlighting
 	datesWithData := []string{"2024-01-15"}
-	html := taskHTML(testTasks, date, "", "", "", datesWithData, 1, 100, 0)
+	html := taskHTML(testTasks, date, "", "", "", datesWithData, 1, 0)
 
 	// Validate HTML using the new function
 	if err := validateHTML(html); err != nil {
