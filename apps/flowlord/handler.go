@@ -19,6 +19,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/go-tools/appenderr"
 	"github.com/jbsmith7741/uri"
@@ -92,6 +93,9 @@ func getBaseFuncMap() template.FuncMap {
 
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
+
+	// Enable gzip compression for all responses
+	router.Use(middleware.Compress(5))
 
 	// Static file serving - serve embedded static files
 	// Create a sub-filesystem that strips the "handler/" prefix
@@ -428,13 +432,7 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 			page = p
 		}
 	}
-	
-	pageSize := 500 // Show 500 tasks per page
-	if pageSizeStr := r.URL.Query().Get("pageSize"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 1000 {
-			pageSize = ps
-		}
-	}
+
 
 	// Get ALL tasks for the date (no filtering at all) to populate summary and dropdowns
 	queryStart := time.Now() 
@@ -451,7 +449,7 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
-	htmlBytes := taskHTML(allTasks, dt, taskType, job, result, datesWithData, page, pageSize, queryTime)
+	htmlBytes := taskHTML(allTasks, dt, taskType, job, result, datesWithData, page, queryTime)
 	w.Write(htmlBytes)
 }
 
@@ -582,9 +580,9 @@ func generateSummaryFromTasks(tasks []cache.TaskView) map[string]*cache.Stats {
 
 	return summary
 }
-
+const pageSize = 100 
 // taskHTML renders the task summary and table HTML page
-func taskHTML(allTasks []cache.TaskView, date time.Time, taskType, job, result string, datesWithData []string, page, pageSize int, queryTime time.Duration) []byte {
+func taskHTML(allTasks []cache.TaskView, date time.Time, taskType, job, result string, datesWithData []string, page int, queryTime time.Duration) []byte {
 	renderStart := time.Now()
 	
 	// Calculate navigation dates
