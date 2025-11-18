@@ -11,7 +11,7 @@ import (
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 
-	"github.com/pcelvng/task-tools/apps/flowlord/cache"
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 )
 
 const testPath = "../../internal/test"
@@ -23,13 +23,13 @@ func TestMain(t *testing.M) {
 }
 
 // loadTaskViewData loads TaskView data from a JSON file
-func loadTaskViewData(filename string) ([]cache.TaskView, error) {
+func loadTaskViewData(filename string) ([]sqlite.TaskView, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var tasks []cache.TaskView
+	var tasks []sqlite.TaskView
 	err = json.Unmarshal(data, &tasks)
 	if err != nil {
 		return nil, err
@@ -39,9 +39,8 @@ func loadTaskViewData(filename string) ([]cache.TaskView, error) {
 }
 
 func TestBackloader(t *testing.T) {
-	sqlDB := &cache.SQLite{LocalPath: ":memory:"}
+	sqlDB := &sqlite.SQLite{LocalPath: ":memory:"}
 	err := sqlDB.Open(testPath+"/workflow/f3.toml", nil)
-	//cache, err := workflow.New(testPath+"/workflow/f3.toml", nil)
 	today := time.Now().Format("2006-01-02")
 	toHour := time.Now().Format(DateHour)
 	if err != nil {
@@ -363,7 +362,7 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 func TestAlertHTML(t *testing.T) {
 
 	// Create sample alert data to showcase the templating
-	sampleAlerts := []cache.AlertRecord{
+	sampleAlerts := []sqlite.AlertRecord{
 		{
 			TaskID:    "task-001",
 			TaskTime:  trial.TimeHour("2024-01-15T11"),
@@ -430,7 +429,7 @@ func TestAlertHTML(t *testing.T) {
 // TestFilesHTML generate a html file based on the files.tmpl it is used for vision examination of the files
 func TestFilesHTML(t *testing.T) {
 	// Create sample file messages
-	files := []cache.FileMessage{
+	files := []sqlite.FileMessage{
 		{
 			ID:           1,
 			Path:         "gs://bucket/data/2024-01-15/file1.json",
@@ -522,10 +521,15 @@ func TestTaskHTML(t *testing.T) {
 	// Set test date
 	date := trial.TimeDay("2024-01-15")
 
+	// Create empty task stats and filter for the test
+	taskStats := generateSummary(testTasks)
+	filter := &sqlite.TaskFilter{Page: 1, Limit: 100}
+	
+
 	// Test with no filters - summary will be generated from tasks data
 	// Pass sample dates with data for calendar highlighting
 	datesWithData := []string{"2024-01-15"}
-	html := taskHTML(testTasks, date, "", "", "", datesWithData, 1, 0)
+	html := taskHTML(testTasks, taskStats, len(testTasks), date, filter, datesWithData, 0)
 
 	// Validate HTML using the new function
 	if err := validateHTML(html); err != nil {
@@ -542,9 +546,51 @@ func TestTaskHTML(t *testing.T) {
 	t.Logf("Task preview generated and saved to: ./%s", outputFile)
 }
 
+func generateSummary(tasks []sqlite.TaskView) sqlite.TaskStats {
+	data := make(map[string]*sqlite.Stats)
+	
+	for _, tv := range tasks {
+		// Convert TaskView to task.Task
+		t := task.Task{
+			ID:      tv.ID,
+			Type:    tv.Type,
+			Job:     tv.Job,
+			Info:    tv.Info,
+			Result:  task.Result(tv.Result),
+			Meta:    tv.Meta,
+			Msg:     tv.Msg,
+			Created: tv.Created,
+			Started: tv.Started,
+			Ended:   tv.Ended,
+		}
+		
+		// Create key from type:job (same logic as Recap)
+		key := strings.TrimRight(t.Type+":"+t.Job, ":")
+		
+		// Get or create stats for this key
+		stat, found := data[key]
+		if !found {
+			stat = &sqlite.Stats{
+				CompletedTimes: make([]time.Time, 0),
+				ErrorTimes:     make([]time.Time, 0),
+				AlertTimes:     make([]time.Time, 0),
+				WarnTimes:      make([]time.Time, 0),
+				RunningTimes:   make([]time.Time, 0),
+				ExecTimes:      &sqlite.DurationStats{},
+			}
+			data[key] = stat
+		}
+		
+		// Add task to stats
+		stat.Add(t)
+	}
+	
+	return sqlite.TaskStats(data)
+}
+
 func TestWorkflowHTML(t *testing.T) {
 	// Load workflow files 
-	taskCache := &cache.SQLite{LocalPath: ":memory:"}
+	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}
 	if err := taskCache.Open(testPath+"/workflow/", nil); err != nil {
 		t.Fatalf("Failed to create test cache: %v", err)
 	}
@@ -570,7 +616,7 @@ func TestWorkflowHTML(t *testing.T) {
 
 func TestAboutHTML(t *testing.T) {
 	// Create a real SQLite cache for testing
-	taskCache := &cache.SQLite{LocalPath: ":memory:"}
+	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}
 	if err := taskCache.Open(testPath+"/workflow/", nil); err != nil {
 		t.Fatalf("Failed to create test cache: %v", err)
 	}

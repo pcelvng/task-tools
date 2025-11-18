@@ -13,7 +13,7 @@ import (
 	"github.com/pcelvng/task/bus"
 
 	tools "github.com/pcelvng/task-tools"
-	"github.com/pcelvng/task-tools/apps/flowlord/cache"
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 	"github.com/pcelvng/task-tools/file"
 )
 
@@ -44,7 +44,7 @@ type options struct {
 	Bus         bus.Options   `toml:"bus"`
 	File        *file.Options `toml:"file"`
 
-	DB *cache.SQLite `toml:"sqlite"`
+	DB *sqlite.SQLite `toml:"sqlite"`
 }
 
 func main() {
@@ -57,7 +57,7 @@ func main() {
 		FailedTopic: "retry-failed",
 		File:        file.NewOptions(),
 		Slack:       &Notification{},
-		DB: &cache.SQLite{
+		DB: &sqlite.SQLite{
 			TaskTTL:   4 * time.Hour,
 			LocalPath: "./tasks.db",
 		},

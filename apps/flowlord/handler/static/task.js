@@ -301,6 +301,7 @@
     // Clear all filters
     window.clearFilters = function() {
         const url = new URL(window.location);
+        url.searchParams.delete('id');
         url.searchParams.delete('type');
         url.searchParams.delete('job');
         url.searchParams.delete('result');

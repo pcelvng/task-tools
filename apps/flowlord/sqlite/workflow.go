@@ -1,7 +1,6 @@
-package cache
+package sqlite
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
 	"net/url"
@@ -90,97 +89,8 @@ func (s *SQLite) IsDir() bool {
 
 // Search the all workflows within the cache and return the first
 // matching phase with the specific task and job (optional)
-func (s *SQLite) Search(task, job string) (path string, ph Phase) {
-	if s == nil {
-		return "", Phase{}
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Query for phases matching the task topic
-	query := `
-		SELECT file_path, task, depends_on, rule, template, retry
-		FROM workflow_phases 
-		WHERE task LIKE ? OR task = ?
-		ORDER BY file_path, task
-		LIMIT 1
-	`
-
-	var rows *sql.Rows
-	var err error
-
-	if job == "" {
-		// Search by topic only
-		rows, err = s.db.Query(query, task+":%", task)
-	} else {
-		// Search by topic:job
-		rows, err = s.db.Query(query, task+":"+job, task+":"+job)
-	}
-
-	if err != nil {
-		return "", Phase{}
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var workflowPath, taskStr, dependsOn, rule, template string
-		var retry int
-
-		err := rows.Scan(&workflowPath, &taskStr, &dependsOn, &rule, &template, &retry)
-		if err != nil {
-			return "", Phase{}
-		}
-
-		// Check if job matches if specified
-		if job != "" {
-			phase := Phase{
-				Task:      taskStr,
-				Rule:      rule,
-				DependsOn: dependsOn,
-				Retry:     retry,
-				Template:  template,
-			}
-			if phase.Job() != job {
-				return "", Phase{}
-			}
-		}
-
-		return workflowPath, Phase{
-			Task:      taskStr,
-			Rule:      rule,
-			DependsOn: dependsOn,
-			Retry:     retry,
-			Template:  template,
-		}
-	}
-
-	return "", Phase{}
-}
-
-// ResetWorkflow deletes all phases in the db files
-// TODO: May not be needed if Refresh() is used properly.
-func (s *SQLite) resetWorkflow() error {
-	if s == nil {
-		return fmt.Errorf("sqlite cache is nil")
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Delete all phases for this workflow file
-	_, err := s.db.Exec("DELETE FROM workflow_phases ")
-	if err != nil {
-		return fmt.Errorf("failed to delete workflow phases: %w", err)
-	}
-
-	// Delete the workflow file record
-	_, err = s.db.Exec("DELETE FROM workflow_files")
-	if err != nil {
-		return fmt.Errorf("failed to delete workflow file record: %w", err)
-	}
-
-	return nil
+func (s *SQLite) Search(taskType, job string) PhaseDB {
+	return s.Get(task.Task{Type: taskType, Job: job}) 
 }
 
 // Get the Phase associated with the task

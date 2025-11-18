@@ -24,7 +24,7 @@ import (
 	"github.com/pcelvng/task"
 
 	tools "github.com/pcelvng/task-tools"
-	"github.com/pcelvng/task-tools/apps/flowlord/cache"
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 )
@@ -150,14 +150,14 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a copy of all workflows
-	wCache := make(map[string]map[string]cache.Phase) // [file][task:job]Phase
+	wCache := make(map[string]map[string]sqlite.Phase) // [file][task:job]Phase
 	workflowFiles := tm.taskCache.GetWorkflowFiles()
 	for _, filePath := range workflowFiles {
 		phases, err := tm.taskCache.GetPhasesForWorkflow(filePath)
 		if err != nil {
 			continue
 		}
-		phaseMap := make(map[string]cache.Phase)
+		phaseMap := make(map[string]sqlite.Phase)
 		for _, j := range phases {
 			phaseMap[pName(j.Phase.Topic(), j.Phase.Job())] = j.Phase
 		}
@@ -425,12 +425,13 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	filter := &cache.TaskFilter{
+	filter := &sqlite.TaskFilter{
+		ID:     r.URL.Query().Get("id"),
 		Type:   r.URL.Query().Get("type"),
 		Job:    r.URL.Query().Get("job"),
 		Result: r.URL.Query().Get("result"),
 		Page:   page,
-		Limit:  cache.DefaultPageSize,
+		Limit:  sqlite.DefaultPageSize,
 	}
 
 	// Get task summary statistics for the date
@@ -439,7 +440,7 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	summaryTime := time.Since(summaryStart)
 	if err != nil {
 		log.Printf("Error getting task summary: %v", err)
-		taskStats = cache.TaskStats{}
+		taskStats = sqlite.TaskStats{}
 	}
 
 	// Get filtered and paginated tasks
@@ -448,7 +449,7 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	queryTime := time.Since(queryStart)
 	if err != nil {
 		log.Printf("Error getting tasks: %v", err)
-		tasks = []cache.TaskView{}
+		tasks = []sqlite.TaskView{}
 		totalCount = 0
 	}
 
@@ -476,7 +477,7 @@ func (tm *taskMaster) htmlAbout(w http.ResponseWriter, r *http.Request) {
 }
 
 // filesHTML renders the file messages HTML page
-func filesHTML(files []cache.FileMessage, date time.Time, datesWithData []string) []byte {
+func filesHTML(files []sqlite.FileMessage, date time.Time, datesWithData []string) []byte {
 	// Calculate statistics
 	totalFiles := len(files)
 	matchedFiles := 0
@@ -526,7 +527,7 @@ func filesHTML(files []cache.FileMessage, date time.Time, datesWithData []string
 }
 
 // taskHTML renders the task summary and table HTML page
-func taskHTML(tasks []cache.TaskView, taskStats cache.TaskStats, totalCount int, date time.Time, filter *cache.TaskFilter, datesWithData []string, queryTime time.Duration) []byte {
+func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration) []byte {
 	renderStart := time.Now()
 
 	// Calculate navigation dates
@@ -592,8 +593,8 @@ func taskHTML(tasks []cache.TaskView, taskStats cache.TaskStats, totalCount int,
 	renderTime := time.Since(renderStart)
 
 	// Single consolidated log with all metrics
-	log.Printf("Task page: date=%s filters=[type=%q job=%q result=%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
-		date.Format("2006-01-02"), filter.Type, filter.Job, filter.Result,
+	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
+		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result,
 		counts.Total, totalCount, filter.Page, totalPages,
 		queryTime, renderTime, float64(htmlSize)/(1024*1024))
 
@@ -601,12 +602,12 @@ func taskHTML(tasks []cache.TaskView, taskStats cache.TaskStats, totalCount int,
 }
 
 // workflowHTML renders the workflow phases HTML page
-func workflowHTML(tCache *cache.SQLite) []byte {
+func workflowHTML(tCache *sqlite.SQLite) []byte {
 	// Get all workflow files and their phases
 	workflowFiles := tCache.GetWorkflowFiles()
 
 	workflowFileSummary := make(map[string]int)
-	allPhases := make([]cache.PhaseDB, 0)
+	allPhases := make([]sqlite.PhaseDB, 0)
 
 	for _, filePath := range workflowFiles {
 		phases, err := tCache.GetPhasesForWorkflow(filePath)
@@ -705,14 +706,14 @@ func (tm *taskMaster) aboutHTML() []byte {
 
 // AlertData holds both the alerts and summary data for the template
 type AlertData struct {
-	Alerts  []cache.AlertRecord
-	Summary []cache.SummaryLine
+	Alerts  []sqlite.AlertRecord
+	Summary []sqlite.SummaryLine
 }
 
 // alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
-func alertHTML(tasks []cache.AlertRecord, date time.Time, datesWithData []string) []byte {
+func alertHTML(tasks []sqlite.AlertRecord, date time.Time, datesWithData []string) []byte {
 	// Generate summary data using BuildCompactSummary
-	summary := cache.BuildCompactSummary(tasks)
+	summary := sqlite.BuildCompactSummary(tasks)
 
 	// Create data structure for template
 	data := map[string]interface{}{
@@ -824,12 +825,12 @@ func (tm *taskMaster) backload(req request) response {
 		start = at
 		end = at
 	}
-
-	workflowPath, phase := tm.taskCache.Search(req.Task, req.Job)
-	if workflowPath != "" {
-		msg = append(msg, "phase found in "+workflowPath)
+	
+	phase := tm.taskCache.Search(req.Task, req.Job)
+	if phase.FilePath != "" {
+		msg = append(msg, "phase found in "+phase.FilePath)
 		req.Template = phase.Template
-		req.Workflow = workflowPath
+		req.Workflow = phase.FilePath
 	}
 	if req.Template == "" {
 		name := req.Task

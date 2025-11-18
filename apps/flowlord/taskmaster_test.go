@@ -15,7 +15,7 @@ import (
 	"github.com/pcelvng/task/bus/nop"
 	"github.com/robfig/cron/v3"
 
-	"github.com/pcelvng/task-tools/apps/flowlord/cache"
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -24,7 +24,7 @@ const base_test_path string = "../../internal/test/"
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
 	// Initialize taskCache for the test
-	taskCache := &cache.SQLite{LocalPath: ":memory:"}
+	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}
 	fatalErr := taskCache.Open(base_test_path+"workflow", nil)
 	if fatalErr != nil {
 		t.Fatal("cache init", fatalErr)
@@ -278,7 +278,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 	}
 	fn := func(in string) (expected, error) {
 		tm := taskMaster{cron: cron.New(cron.WithParser(cronParser))}
-		tm.taskCache = &cache.SQLite{LocalPath: ":memory:"}
+		tm.taskCache = &sqlite.SQLite{LocalPath: ":memory:"}
 		if err := tm.taskCache.Open(base_test_path+in, nil); err != nil {
 			return expected{}, err
 		}

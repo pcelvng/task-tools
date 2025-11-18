@@ -21,8 +21,43 @@
 
 ![](flowlord.drawio.svg)
 
+## Monitoring & Troubleshooting
 
+SQLite is used to store phases and provides troubleshooting convenience by recording task history. As flowlord is stateless task management system, the cache persistent is not required for flowlord to work, but it convenient to review historical tasks and alerts. It is recommended to backup the task and alert logs for long term storage. 
 
+- **Task Records** - Full execution lifecycle with timing metrics
+- **Alert History** - Failed task tracking for debugging
+- **File Processing Audit** - Which files triggered which tasks
+- **Workflow State** - Phase configuration and dependencies
+
+The database is optional and non-critical. If deleted, Flowlord continues normally and rebuilds fresh data. Features:
+- Automatic backup/restore from remote paths (S3/GCS)
+- 90-day default retention with automatic cleanup
+- WAL mode for concurrent access
+
+**Configuration:**
+```toml
+[cache]
+  local_path = "./tasks.db"              # required local cache
+  backup_path = "gs://bucket/tasks.db"   # Optional backup location
+  retention = "2160h"                    # 90 days
+  task_ttl = "4h"                        # Alert deadline from task to complete (creation to complete)  
+```
+
+## Web Dashboard
+
+Built-in web UI for monitoring workflows and troubleshooting. Uses Go templates to render HTML dashboards with:
+- Task execution history with filtering and pagination
+- Alert summaries grouped by task type
+- File processing history
+- Workflow phase visualization
+- System statistics
+
+Access at `http://localhost:8080/` (or configured port)
+
+| Files View | Tasks View | Alerts View | Workflow View |
+|:----------:|:----------:|:-----------:|:-------------:|
+| [![Files View](../../internal/docs/img/flowlord_files.png)](../../internal/docs/img/flowlord_files.png) | [![Tasks View](../../internal/docs/img/flowlord_tasks.png)](../../internal/docs/img/flowlord_tasks.png) | [![Alerts View](../../internal/docs/img/flowlord_alerts.png)](../../internal/docs/img/flowlord_alerts.png) | [![Workflow View](../../internal/docs/img/flowlord_workflow.png)](../../internal/docs/img/flowlord_workflow.png) |
 
 
 ## workflow 

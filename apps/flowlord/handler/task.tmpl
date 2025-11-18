@@ -43,7 +43,7 @@
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
-            <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .Filter.Type .Filter.Job .Filter.Result}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
+            <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
                 <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Previous</a>
@@ -60,18 +60,23 @@
             <h3>Filters</h3>
             <div class="filter-row">
                 <div class="filter-group">
+                    <label for="idFilter">Task ID</label>
+                    <input type="text" id="idFilter" placeholder="Search by ID..." value="{{.Filter.ID}}">
+                </div>
+                <div class="filter-group">
                     <label for="typeFilter">Task Type</label>
-                    <select id="typeFilter">
+                    <select id="typeFilter"{{if .Filter.ID}} disabled{{end}}>
                         <option value="">All Types</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label for="jobFilter">Job</label>
-                    <select id="jobFilter">
+                    <select id="jobFilter"{{if .Filter.ID}} disabled{{end}}>
                         <option value="">All Jobs</option>
                     </select>
                 </div>
                 <div class="filter-buttons">
+                    <button type="button" class="btn btn-primary" onclick="searchById()">Search ID</button>
                     <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
                 </div>
             </div>
@@ -115,7 +120,7 @@
             </table>
         </div>
         <div class="stats">
-            {{if or .Filter.Type .Filter.Job .Filter.Result}}
+            {{if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result}}
             Showing: <span id="visibleCount">{{len .Tasks}}</span> | Filtered Tasks: <span id="filteredCount">{{.FilteredCount}}</span> | Total Tasks: <span id="totalCount">{{.Counts.Total}}</span>
             {{else}}
             Showing: <span id="visibleCount">{{len .Tasks}}</span> | Total Tasks: <span id="totalCount">{{.Counts.Total}}</span>
@@ -161,7 +166,25 @@
                 };
                 window.FlowlordTask.init(config);
             }
+
+            // Enable Enter key for ID search
+            const idFilter = document.getElementById('idFilter');
+            if (idFilter) {
+                idFilter.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        searchById();
+                    }
+                });
+            }
         });
+
+        // Search by task ID - resets other filters
+        function searchById() {
+            const idValue = document.getElementById('idFilter').value.trim();
+            if (idValue) {
+                window.location.href = '?date={{.DateValue}}&id=' + encodeURIComponent(idValue);
+            }
+        }
     </script>
 </body>
 </html>

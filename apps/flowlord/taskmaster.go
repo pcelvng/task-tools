@@ -20,7 +20,7 @@ import (
 	"github.com/pcelvng/task/bus"
 	"github.com/robfig/cron/v3"
 
-	"github.com/pcelvng/task-tools/apps/flowlord/cache"
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -42,7 +42,7 @@ type taskMaster struct {
 	fOpts         *file.Options
 	doneTopic     string
 	failedTopic   string
-	taskCache     *cache.SQLite
+	taskCache     *sqlite.SQLite
 	HostName      string
 	port          int
 	cron          *cron.Cron
@@ -479,7 +479,7 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 // The backoff is cleared after no failed tasks occur within the window
 func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.Context) {
 	sendChan := make(chan struct{})
-	var alerts []cache.AlertRecord
+	var alerts []sqlite.AlertRecord
 
 	// Initialize lastAlertTime to today at 00:00:00 (zero hour)
 	now := time.Now()
@@ -545,13 +545,13 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 
 // sendAlertSummary sends a formatted alert summary to Slack
 // This can be reused by backup alert system and other components
-func (tm *taskMaster) sendAlertSummary(alerts []cache.AlertRecord) error {
+func (tm *taskMaster) sendAlertSummary(alerts []sqlite.AlertRecord) error {
 	if len(alerts) == 0 {
 		return nil
 	}
 
 	// build compact summary using existing logic
-	summary := cache.BuildCompactSummary(alerts)
+	summary := sqlite.BuildCompactSummary(alerts)
 
 	// format message similar to current Slack format  
 	var message strings.Builder
