@@ -198,10 +198,20 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 		log.Fatal(err)
 	}
 	go func() { // auto refresh cache after set duration
-		tick := time.NewTicker(tm.dur)
-		for range tick.C {
-			if _, err := tm.refreshCache(); err != nil {
-				log.Println(err)
+		workflowTick := time.NewTicker(tm.dur)
+		DBTick := time.NewTicker(24 * time.Hour)
+		for {
+			select {
+			case <-DBTick.C:
+				if i, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention)); err != nil {
+					log.Println("task cache recycle:", err)
+				} else {
+					log.Printf("task cache recycled %d old records", i)
+				}
+			case <-workflowTick.C:
+				if _, err := tm.refreshCache(); err != nil {
+					log.Println(err)
+				}
 			}
 		}
 	}()
@@ -268,9 +278,6 @@ func (tm *taskMaster) schedule() (err error) {
 			}
 
 			if _, err = tm.cron.AddJob(cronSchedule, j); err != nil {
-				// TODO: Remove log
-				fmt.Println(cronSchedule, j)
-
 				errs = append(errs, fmt.Errorf("invalid rule for %s:%s %s %w", filePath, w.Task, w.Rule, err))
 			}
 		}
@@ -473,11 +480,11 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.Context) {
 	sendChan := make(chan struct{})
 	var alerts []cache.AlertRecord
-	
+
 	// Initialize lastAlertTime to today at 00:00:00 (zero hour)
 	now := time.Now()
 	lastAlertTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	
+
 	go func() {
 		dur := tm.slack.MinFrequency
 		for ; ; time.Sleep(dur) {

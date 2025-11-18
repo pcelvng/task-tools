@@ -26,6 +26,11 @@ import (
 //go:embed schema.sql
 var schema string
 
+const (
+	// DefaultPageSize is the default number of items per page for paginated queries
+	DefaultPageSize = 100
+)
+
 // currentSchemaVersion is the current version of the database schema.
 // Increment this when making schema changes that require migration.
 // Version 1: Initial schema
@@ -58,10 +63,10 @@ func (o *SQLite) Open(workflowPath string, fOpts *file.Options) error {
 		o.TaskTTL = time.Hour
 	}
 	if o.db == nil {
-	if err := o.initDB(); err != nil {
-		return err 
+		if err := o.initDB(); err != nil {
+			return err
+		}
 	}
-}
 
 	// Determine if workflow path is a directory
 	sts, err := file.Stat(workflowPath, fOpts)
@@ -91,19 +96,33 @@ func (o *SQLite) initDB() error {
 	if err != nil {
 		return err
 	}
-	
+
+	// Enable WAL mode for safer concurrent reads and writes
+	// WAL mode allows multiple readers and one writer simultaneously
+	_, err = db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		return fmt.Errorf("failed to set WAL mode: %w", err)
+	}
+
+	// Set busy timeout to handle concurrent access gracefully
+	// This prevents immediate lock failures by retrying for up to 30 seconds
+	_, err = db.Exec("PRAGMA busy_timeout = 30000;")
+	if err != nil {
+		return fmt.Errorf("failed to set busy timeout: %w", err)
+	}
+
 	// Set a smaller page size to reduce DB file size
 	_, err = db.Exec("PRAGMA page_size = 4096;")
 	if err != nil {
 		return fmt.Errorf("failed to set page size: %w", err)
 	}
-	
+
 	// Enable auto vacuum to reclaim space when records are deleted
 	_, err = db.Exec("PRAGMA auto_vacuum = INCREMENTAL;")
 	if err != nil {
 		return fmt.Errorf("failed to set auto vacuum: %w", err)
 	}
-	
+
 	o.db = db
 
 	// Check and migrate schema if needed
@@ -174,13 +193,13 @@ func (o *SQLite) setVersion(version int) error {
 	if err != nil {
 		return fmt.Errorf("failed to clear schema_version: %w", err)
 	}
-	
+
 	// Insert the new version
 	_, err = o.db.Exec("INSERT INTO schema_version (version) VALUES (?)", version)
 	if err != nil {
 		return fmt.Errorf("failed to insert schema version: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -189,7 +208,7 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 	// Version 0 → 1: Initial schema creation for new databases
 	if currentVersion < 1 {
 		log.Println("Creating initial schema (version 1)")
-		
+
 		// Drop workflow tables if they exist (they may have been created before versioning)
 		_, err := o.db.Exec(`
 			DROP TABLE IF EXISTS workflow_files;
@@ -198,7 +217,7 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 		if err != nil {
 			return fmt.Errorf("failed to drop old workflow tables: %w", err)
 		}
-		
+
 		_, err = o.db.Exec(schema)
 		if err != nil {
 			return fmt.Errorf("failed to create initial schema: %w", err)
@@ -208,18 +227,18 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 	// Version 1 → 2: Add date_index table for performance optimization
 	if currentVersion < 2 {
 		log.Println("Migrating schema from version 1 to 2 (adding date_index table)")
-		
+
 		// Re-apply schema.sql - it has IF NOT EXISTS so it's safe and will add new tables
 		_, err := o.db.Exec(schema)
 		if err != nil {
 			return fmt.Errorf("failed to apply schema for version 2: %w", err)
 		}
-		
+
 		// Populate the date_index from existing data
 		if err := o.RebuildDateIndex(); err != nil {
 			return fmt.Errorf("failed to populate date_index: %w", err)
 		}
-		
+
 		log.Println("Successfully migrated to schema version 2")
 	}
 
@@ -356,93 +375,48 @@ func (s *SQLite) GetTask(id string) TaskJob {
 	return tj
 }
 
-func (s *SQLite) Recycle() Stat {
+// Recycle cleans up any records older than day in the DB tables: files, alerts and tasks.
+func (s *SQLite) Recycle(t time.Time) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	day := t.Format("2006-01-02")
+	totalDeleted := 0
 
-	tasks := make([]task.Task, 0)
-	t := time.Now()
-
-	// Start a transaction
-	tx, err := s.db.Begin()
+	// Delete old task records
+	result, err := s.db.Exec("DELETE FROM task_records WHERE created < ?", day)
 	if err != nil {
-		return Stat{}
+		return totalDeleted, fmt.Errorf("error deleting old task records: %w", err)
 	}
-	defer tx.Rollback()
+	rowsAffected, _ := result.RowsAffected()
+	totalDeleted += int(rowsAffected)
 
-	// Get total count before deletion
-	var total int
-	err = tx.QueryRow("SELECT COUNT(*) FROM task_records").Scan(&total)
+	// Delete old alert records
+	result, err = s.db.Exec("DELETE FROM alert_records WHERE created_at < ?", day)
 	if err != nil {
-		return Stat{}
+		return totalDeleted, fmt.Errorf("error deleting old alert records: %w", err)
 	}
+	rowsAffected, _ = result.RowsAffected()
+	totalDeleted += int(rowsAffected)
 
-	// Get expired task records
-	rows, err := tx.Query(`
-		SELECT id, type, job, info, result, meta, msg,
-		       created, started, ended
-		FROM task_records
-		WHERE created < ?
-	`, t.Add(-s.TaskTTL))
+	// Delete old file messages
+	result, err = s.db.Exec("DELETE FROM file_messages WHERE received_at < ?", day)
 	if err != nil {
-		return Stat{}
+		return totalDeleted, fmt.Errorf("error deleting old file messages: %w", err)
 	}
-	defer rows.Close()
+	rowsAffected, _ = result.RowsAffected()
+	totalDeleted += int(rowsAffected)
 
-	// Process expired records
-	for rows.Next() {
-		var task task.Task
-		err := rows.Scan(
-			&task.ID, &task.Type, &task.Job, &task.Info, &task.Result,
-			&task.Meta, &task.Msg, &task.Created, &task.Started, &task.Ended,
-		)
-		if err != nil {
-			continue
-		}
-
-		// Check if task is incomplete
-		if task.Result == "" {
-			tasks = append(tasks, task)
-		}
-
-		// TODO: Deletion logic commented out for later implementation
-		// Delete the expired record
-		// _, err = tx.Exec(`
-		// 	DELETE FROM task_records 
-		// 	WHERE id = ? AND type = ? AND job = ? AND created = ?
-		// `, task.ID, task.Type, task.Job, task.Created)
-		// if err != nil {
-		// 	continue
-		// }
-	}
-
-	// Get remaining count
-	var remaining int
-	err = tx.QueryRow("SELECT COUNT(*) FROM task_records").Scan(&remaining)
-	if err != nil {
-		return Stat{}
-	}
-
-	// Commit the transaction
-	tx.Commit()
-
-	return Stat{
-		Count:       remaining,
-		Removed:     total - remaining,
-		ProcessTime: time.Since(t),
-		Unfinished:  tasks,
-	}
+	return totalDeleted, nil
 }
 
 // CheckIncompleteTasks checks for tasks that have not completed within the TTL period
-// and adds them to the alerts table with deduplication. Returns count of alerts added.
+// and adds them to the alerts table with deduplication. Returns count of incomplete tasks found.
 // Uses a JOIN query to efficiently find incomplete tasks without existing alerts.
-func (s *SQLite) CheckIncompleteTasks() Stat {
+func (s *SQLite) CheckIncompleteTasks() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	tasks := make([]task.Task, 0)
-	alertsAdded := 0
 	t := time.Now()
 
 	// Use LEFT JOIN to find incomplete tasks that don't have existing alerts
@@ -463,7 +437,7 @@ func (s *SQLite) CheckIncompleteTasks() Stat {
 		AND ar.id IS NULL
 	`, t.Add(-s.TaskTTL))
 	if err != nil {
-		return Stat{}
+		return 0
 	}
 	defer rows.Close()
 
@@ -494,20 +468,17 @@ func (s *SQLite) CheckIncompleteTasks() Stat {
 			VALUES (?, ?, ?, ?, ?)
 		`, taskID, taskTime, task.Type, task.Job, "INCOMPLETE: unfinished task detected")
 
-		if err == nil {
-			alertsAdded++
+		if err != nil {
+			// Continue processing even if alert insertion fails
+			continue
 		}
 	}
 
-	return Stat{
-		Count:       alertsAdded,
-		Removed:     0, // No deletion in this method
-		ProcessTime: time.Since(t),
-		Unfinished:  tasks,
-	}
+	return len(tasks)
 }
 
-func (s *SQLite) Recap() map[string]*Stats {
+// Recap returns a summary of task statistics for a given day
+func (s *SQLite) Recap(day time.Time) TaskStats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -515,8 +486,9 @@ func (s *SQLite) Recap() map[string]*Stats {
 	rows, err := s.db.Query(`
 		SELECT id, type, job, info, result, meta, msg,
 		       created, started, ended
-		FROM task_records
-	`)
+		FROM task_records 
+		WHERE created >= ? AND created < ?
+	`, day.Format("2006-01-02"), day.Add(24*time.Hour).Format("2006-01-02"))
 	if err != nil {
 		return data
 	}
@@ -531,18 +503,15 @@ func (s *SQLite) Recap() map[string]*Stats {
 		if err != nil {
 			continue
 		}
-
-		job := t.Job
-		if job == "" {
-			v, _ := url.ParseQuery(t.Meta)
-			job = v.Get("job")
-		}
-		key := strings.TrimRight(t.Type+":"+job, ":")
+		key := strings.TrimRight(t.Type+":"+t.Job, ":")
 		stat, found := data[key]
 		if !found {
 			stat = &Stats{
 				CompletedTimes: make([]time.Time, 0),
 				ErrorTimes:     make([]time.Time, 0),
+				AlertTimes:     make([]time.Time, 0),
+				WarnTimes:      make([]time.Time, 0),
+				RunningTimes:   make([]time.Time, 0),
 				ExecTimes:      &DurationStats{},
 			}
 			data[key] = stat
@@ -550,7 +519,7 @@ func (s *SQLite) Recap() map[string]*Stats {
 		stat.Add(t)
 	}
 
-	return data
+	return TaskStats(data)
 }
 
 func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
@@ -639,7 +608,7 @@ func (s *SQLite) updateDateIndex(timestamp, dataType string) {
 	}
 
 	// Now update the specific column
-	query := fmt.Sprintf("UPDATE date_index SET %s = 1 WHERE date = ?", column)
+	query := fmt.Sprintf("UPDATE date_index SET %s = 1 WHERE DATE = ?", column)
 	_, err = s.db.Exec(query, dateStr)
 	if err != nil {
 		log.Printf("WARNING: Failed to update date_index for %s on %s: %v", dataType, dateStr, err)
@@ -767,111 +736,6 @@ type summaryGroup struct {
 	Count     int
 	TaskTimes []time.Time
 }
-
-/*
-// GetTasks retrieves all tasks with parsed URL and meta information
-func (s *SQLite) GetTasks() ([]TaskView, error) {
-	rows, err := s.db.Query(`
-		SELECT id, type, job, info, meta, msg, result,
-		       task_seconds, task_time, queue_seconds, queue_time,
-		       created, started, ended
-		FROM tasks
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tasks []TaskView
-	for rows.Next() {
-		var t TaskView
-		var createdStr, startedStr, endedStr string
-
-		err := rows.Scan(
-			&t.ID, &t.Type, &t.Job, &t.Info, &t.Meta, &t.Msg, &t.Result,
-			&t.TaskSeconds, &t.TaskTime, &t.QueueSeconds, &t.QueueTime,
-			&createdStr, &startedStr, &endedStr,
-		)
-		if err != nil {
-			continue
-		}
-
-		// Parse timestamps
-		t.Created, _ = time.Parse(time.RFC3339, createdStr)
-		t.Started, _ = time.Parse(time.RFC3339, startedStr)
-		t.Ended, _ = time.Parse(time.RFC3339, endedStr)
-
-		// Parse URL if present
-		if t.Info != "" {
-			t.ParsedURL, _ = url.Parse(t.Info)
-		}
-
-		// Parse meta parameters
-		if t.Meta != "" {
-			v, err := url.ParseQuery(t.Meta)
-			if err == nil {
-				for _, val := range v {
-					if len(val) > 0 {
-						t.ParsedParam = val[0]
-						break
-					}
-				}
-			}
-		}
-
-		tasks = append(tasks, t)
-	}
-
-	return tasks, nil
-}
-
-// GetTaskByID retrieves a single task by ID with parsed URL and meta information
-func (s *SQLite) GetTaskByID(id string) (*TaskView, error) {
-	row := s.db.QueryRow(`
-		SELECT id, type, job, info, meta, msg, result,
-		       task_seconds, task_time, queue_seconds, queue_time,
-		       created, started, ended
-		FROM tasks
-		WHERE id = ?
-	`, id)
-
-	var t TaskView
-	var createdStr, startedStr, endedStr string
-
-	err := row.Scan(
-		&t.ID, &t.Type, &t.Job, &t.Info, &t.Meta, &t.Msg, &t.Result,
-		&t.TaskSeconds, &t.TaskTime, &t.QueueSeconds, &t.QueueTime,
-		&createdStr, &startedStr, &endedStr,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse timestamps
-	t.Created, _ = time.Parse(time.RFC3339, createdStr)
-	t.Started, _ = time.Parse(time.RFC3339, startedStr)
-	t.Ended, _ = time.Parse(time.RFC3339, endedStr)
-
-	// Parse URL if present
-	if t.Info != "" {
-		t.ParsedURL, _ = url.Parse(t.Info)
-	}
-
-	// Parse meta parameters
-	if t.Meta != "" {
-		v, err := url.ParseQuery(t.Meta)
-		if err == nil {
-			for _, val := range v {
-				if len(val) > 0 {
-					t.ParsedParam = val[0]
-					break
-				}
-			}
-		}
-	}
-
-	return &t, nil
-} */
 
 // FileMessage represents a file message record
 type FileMessage struct {
@@ -1078,6 +942,16 @@ func (s *SQLite) GetFileMessagesWithTasks(limit int, offset int) ([]FileMessageW
 	return results, nil
 }
 
+// TaskFilter contains options for filtering and paginating task queries.
+// Empty string fields are ignored in the query.
+type TaskFilter struct {
+	Type   string // Filter by task type
+	Job    string // Filter by job name
+	Result string // Filter by result status (complete, error, alert, warn, or "running" for empty)
+	Page   int    // Page number (1-based, default: 1)
+	Limit  int    // Number of results per page (default: 100)
+}
+
 // TaskView represents a task with calculated times from the tasks view
 type TaskView struct {
 	ID           string `json:"id"`
@@ -1096,39 +970,69 @@ type TaskView struct {
 	Ended        string `json:"ended"`
 }
 
-// GetTasksByDate retrieves tasks for a specific date with optional filtering using the tasks view
-func (s *SQLite) GetTasksByDate(date time.Time, taskType, job, result string) ([]TaskView, error) {
+// GetTasksByDate retrieves tasks for a specific date with optional filtering and pagination
+func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Handle nil filter or set defaults
+	if filter == nil {
+		filter = &TaskFilter{}
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = DefaultPageSize
+	}
+	if filter.Page <= 0 {
+		filter.Page = 1 // default to first page
+	}
+
 	dateStr := date.Format("2006-01-02")
 
-	// Build query with optional filters using the tasks view
-	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
-		FROM tasks
-		WHERE DATE(created) = ?`
+	// Build WHERE clause with filters
+	whereClause := "WHERE DATE(created) = ?"
 	args := []interface{}{dateStr}
 
-	if taskType != "" {
-		query += " AND type = ?"
-		args = append(args, taskType)
+	if filter.Type != "" {
+		whereClause += " AND type = ?"
+		args = append(args, filter.Type)
 	}
 
-	if job != "" {
-		query += " AND job = ?"
-		args = append(args, job)
+	if filter.Job != "" {
+		whereClause += " AND job = ?"
+		args = append(args, filter.Job)
 	}
 
-	if result != "" {
-		query += " AND result = ?"
-		args = append(args, result)
+	if filter.Result != "" {
+		// Handle "running" as empty result
+		if filter.Result == "running" {
+			whereClause += " AND result = ''"
+		} else {
+			whereClause += " AND result = ?"
+			args = append(args, filter.Result)
+		}
 	}
 
-	query += " ORDER BY created DESC"
+	// Get total count of filtered results
+	countQuery := "SELECT COUNT(*) FROM tasks " + whereClause
+	var totalCount int
+	err := s.db.QueryRow(countQuery, args...).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Build main query with pagination
+	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
+		FROM tasks ` + whereClause + `
+		ORDER BY created DESC
+		LIMIT ? OFFSET ?`
+
+	// Calculate offset from page number
+	offset := (filter.Page - 1) * filter.Limit
+	args = append(args, filter.Limit, offset)
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -1147,11 +1051,11 @@ func (s *SQLite) GetTasksByDate(date time.Time, taskType, job, result string) ([
 		tasks = append(tasks, t)
 	}
 
-	return tasks, nil
+	return tasks, totalCount, nil
 }
 
 // GetTaskSummaryByDate creates a summary of tasks for a specific date
-func (s *SQLite) GetTaskSummaryByDate(date time.Time) (map[string]*Stats, error) {
+func (s *SQLite) GetTaskSummaryByDate(date time.Time) (TaskStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1190,6 +1094,9 @@ func (s *SQLite) GetTaskSummaryByDate(date time.Time) (map[string]*Stats, error)
 			stat = &Stats{
 				CompletedTimes: make([]time.Time, 0),
 				ErrorTimes:     make([]time.Time, 0),
+				AlertTimes:     make([]time.Time, 0),
+				WarnTimes:      make([]time.Time, 0),
+				RunningTimes:   make([]time.Time, 0),
 				ExecTimes:      &DurationStats{},
 			}
 			data[key] = stat
@@ -1197,7 +1104,7 @@ func (s *SQLite) GetTaskSummaryByDate(date time.Time) (map[string]*Stats, error)
 		stat.Add(t)
 	}
 
-	return data, nil
+	return TaskStats(data), nil
 }
 
 // GetDatesWithData returns a list of dates (YYYY-MM-DD format) that have any data
@@ -1208,13 +1115,13 @@ func (s *SQLite) GetDatesWithData() ([]string, error) {
 
 	query := `
 		SELECT DISTINCT date_val FROM (
-			SELECT DISTINCT DATE(created) as date_val FROM task_records
+			SELECT DISTINCT DATE(created) AS date_val FROM task_records
 			WHERE created >= datetime('now', '-' || ? || ' days')
 			UNION
-			SELECT DISTINCT DATE(created_at) as date_val FROM alert_records
+			SELECT DISTINCT DATE(created_at) AS date_val FROM alert_records
 			WHERE created_at >= datetime('now', '-' || ? || ' days')
 			UNION
-			SELECT DISTINCT DATE(received_at) as date_val FROM file_messages
+			SELECT DISTINCT DATE(received_at) AS date_val FROM file_messages
 			WHERE received_at >= datetime('now', '-' || ? || ' days')
 		)
 		ORDER BY date_val DESC
@@ -1264,10 +1171,10 @@ func (s *SQLite) DatesByType(dataType string) ([]string, error) {
 	}
 
 	query := fmt.Sprintf(`
-		SELECT date 
+		SELECT DATE 
 		FROM date_index
 		WHERE %s = 1
-		ORDER BY date DESC
+		ORDER BY DATE DESC
 	`, column)
 
 	rows, err := s.db.Query(query)
@@ -1320,7 +1227,7 @@ func (s *SQLite) RebuildDateIndex() error {
 	// Populate from task_records
 	// First insert the dates, then update the has_tasks flag
 	_, err = s.db.Exec(`
-		INSERT OR IGNORE INTO date_index (date, has_tasks)
+		INSERT OR IGNORE INTO date_index (DATE, has_tasks)
 		SELECT DISTINCT DATE(created), 1
 		FROM task_records
 	`)
@@ -1331,19 +1238,19 @@ func (s *SQLite) RebuildDateIndex() error {
 	// Populate from alert_records
 	// Insert new dates and update has_alerts for existing dates
 	_, err = s.db.Exec(`
-		INSERT OR IGNORE INTO date_index (date)
+		INSERT OR IGNORE INTO date_index (DATE)
 		SELECT DISTINCT DATE(created_at)
 		FROM alert_records
-		WHERE DATE(created_at) NOT IN (SELECT date FROM date_index)
+		WHERE DATE(created_at) NOT IN (SELECT DATE FROM date_index)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to insert new dates from alerts: %w", err)
 	}
-	
+
 	_, err = s.db.Exec(`
 		UPDATE date_index
 		SET has_alerts = 1
-		WHERE date IN (SELECT DISTINCT DATE(created_at) FROM alert_records)
+		WHERE DATE IN (SELECT DISTINCT DATE(created_at) FROM alert_records)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to update date_index from alerts: %w", err)
@@ -1352,19 +1259,19 @@ func (s *SQLite) RebuildDateIndex() error {
 	// Populate from file_messages
 	// Insert new dates and update has_files for existing dates
 	_, err = s.db.Exec(`
-		INSERT OR IGNORE INTO date_index (date)
+		INSERT OR IGNORE INTO date_index (DATE)
 		SELECT DISTINCT DATE(received_at)
 		FROM file_messages
-		WHERE DATE(received_at) NOT IN (SELECT date FROM date_index)
+		WHERE DATE(received_at) NOT IN (SELECT DATE FROM date_index)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to insert new dates from files: %w", err)
 	}
-	
+
 	_, err = s.db.Exec(`
 		UPDATE date_index
 		SET has_files = 1
-		WHERE date IN (SELECT DISTINCT DATE(received_at) FROM file_messages)
+		WHERE DATE IN (SELECT DISTINCT DATE(received_at) FROM file_messages)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to update date_index from files: %w", err)
@@ -1399,15 +1306,15 @@ type DBSizeInfo struct {
 
 // TableStat contains information about a database table
 type TableStat struct {
-	Name         string  `json:"name"`
-	RowCount     int64   `json:"row_count"`
-	TableBytes   int64   `json:"table_bytes"`
-	TableHuman   string  `json:"table_human"`
-	IndexBytes   int64   `json:"index_bytes"`
-	IndexHuman   string  `json:"index_human"`
-	TotalBytes   int64   `json:"total_bytes"`
-	TotalHuman   string  `json:"total_human"`
-	Percentage   float64 `json:"percentage"`
+	Name       string  `json:"name"`
+	RowCount   int64   `json:"row_count"`
+	TableBytes int64   `json:"table_bytes"`
+	TableHuman string  `json:"table_human"`
+	IndexBytes int64   `json:"index_bytes"`
+	IndexHuman string  `json:"index_human"`
+	TotalBytes int64   `json:"total_bytes"`
+	TotalHuman string  `json:"total_human"`
+	Percentage float64 `json:"percentage"`
 }
 
 // GetDBSize returns database size information
@@ -1494,7 +1401,7 @@ func (s *SQLite) GetTableStats() ([]TableStat, error) {
 			err := s.db.QueryRow(fmt.Sprintf(`
 				SELECT SUM(pgsize) FROM dbstat WHERE name = '%s' AND aggregate = 1
 			`, tableName)).Scan(&actualSize)
-			
+
 			if err == nil && actualSize > 0 {
 				// Use actual size from dbstat
 				tableBytes = actualSize
@@ -1527,7 +1434,6 @@ func (s *SQLite) GetTableStats() ([]TableStat, error) {
 	return stats, nil
 }
 
-
 // getIndexSize calculates the total size of all indexes for a table
 func (s *SQLite) getIndexSize(tableName string) int64 {
 	// Get all indexes for this table
@@ -1552,7 +1458,7 @@ func (s *SQLite) getIndexSize(tableName string) int64 {
 		err := s.db.QueryRow(fmt.Sprintf(`
 			SELECT SUM(pgsize) FROM dbstat WHERE name = '%s' AND aggregate = 1
 		`, indexName)).Scan(&indexSize)
-		
+
 		if err == nil && indexSize > 0 {
 			totalIndexSize += indexSize
 		}

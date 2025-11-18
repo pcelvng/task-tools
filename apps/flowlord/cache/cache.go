@@ -14,12 +14,6 @@ type TaskJob struct {
 	Events     []task.Task
 }
 
-type Stat struct {
-	Count       int
-	Removed     int
-	ProcessTime time.Duration
-	Unfinished  []task.Task
-}
 
 // AlertRecord represents an alert stored in the database
 type AlertRecord struct {

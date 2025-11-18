@@ -14,28 +14,28 @@
         <div class="summary-section">
             <h3>Task Summary</h3>
             <div class="summary-stats">
-                <div class="stat-card{{if not .CurrentResult}} active{{end}}" data-filter="all" onclick="filterByResult('all')">
-                    <div class="stat-number">{{.TotalTasks}}</div>
+                <div class="stat-card{{if not .Filter.Result}} active{{end}}" data-filter="all" onclick="filterByResult('all')">
+                    <div class="stat-number">{{.Counts.Total}}</div>
                     <div class="stat-label">Total Tasks</div>
                 </div>
-                <div class="stat-card{{if eq .CurrentResult "complete"}} active{{end}}" data-filter="complete" onclick="filterByResult('complete')">
-                    <div class="stat-number">{{.CompletedTasks}}</div>
+                <div class="stat-card{{if eq .Filter.Result "complete"}} active{{end}}" data-filter="complete" onclick="filterByResult('complete')">
+                    <div class="stat-number">{{.Counts.Completed}}</div>
                     <div class="stat-label">Completed</div>
                 </div>
-                <div class="stat-card{{if eq .CurrentResult "error"}} active{{end}}" data-filter="error" onclick="filterByResult('error')">
-                    <div class="stat-number">{{.ErrorTasks}}</div>
+                <div class="stat-card{{if eq .Filter.Result "error"}} active{{end}}" data-filter="error" onclick="filterByResult('error')">
+                    <div class="stat-number">{{.Counts.Error}}</div>
                     <div class="stat-label">Errors</div>
                 </div>
-                <div class="stat-card{{if eq .CurrentResult "alert"}} active{{end}}" data-filter="alert" onclick="filterByResult('alert')">
-                    <div class="stat-number">{{.AlertTasks}}</div>
+                <div class="stat-card{{if eq .Filter.Result "alert"}} active{{end}}" data-filter="alert" onclick="filterByResult('alert')">
+                    <div class="stat-number">{{.Counts.Alert}}</div>
                     <div class="stat-label">Alerts</div>
                 </div>
-                <div class="stat-card{{if eq .CurrentResult "warn"}} active{{end}}" data-filter="warn" onclick="filterByResult('warn')">
-                    <div class="stat-number">{{.WarnTasks}}</div>
+                <div class="stat-card{{if eq .Filter.Result "warn"}} active{{end}}" data-filter="warn" onclick="filterByResult('warn')">
+                    <div class="stat-number">{{.Counts.Warn}}</div>
                     <div class="stat-label">Warnings</div>
                 </div>
-                <div class="stat-card{{if eq .CurrentResult "running"}} active{{end}}" data-filter="running" onclick="filterByResult('running')">
-                    <div class="stat-number">{{.RunningTasks}}</div>
+                <div class="stat-card{{if eq .Filter.Result "running"}} active{{end}}" data-filter="running" onclick="filterByResult('running')">
+                    <div class="stat-number">{{.Counts.Running}}</div>
                     <div class="stat-label">Running</div>
                 </div>
             </div>
@@ -43,14 +43,14 @@
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
-            <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .CurrentType .CurrentJob .CurrentResult}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
+            <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .Filter.Type .Filter.Job .Filter.Result}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
         </div>
@@ -115,10 +115,10 @@
             </table>
         </div>
         <div class="stats">
-            {{if or .CurrentType .CurrentJob .CurrentResult}}
-            Showing: <span id="visibleCount">{{len .Tasks}}</span> | Filtered Tasks: <span id="filteredCount">{{.FilteredCount}}</span> | Total Tasks: <span id="totalCount">{{.TotalTasks}}</span>
+            {{if or .Filter.Type .Filter.Job .Filter.Result}}
+            Showing: <span id="visibleCount">{{len .Tasks}}</span> | Filtered Tasks: <span id="filteredCount">{{.FilteredCount}}</span> | Total Tasks: <span id="totalCount">{{.Counts.Total}}</span>
             {{else}}
-            Showing: <span id="visibleCount">{{len .Tasks}}</span> | Total Tasks: <span id="totalCount">{{.TotalTasks}}</span>
+            Showing: <span id="visibleCount">{{len .Tasks}}</span> | Total Tasks: <span id="totalCount">{{.Counts.Total}}</span>
             {{end}}
         </div>
         
@@ -127,11 +127,11 @@
             <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .CurrentType}}&type={{.CurrentType}}{{end}}{{if .CurrentJob}}&job={{.CurrentJob}}{{end}}{{if .CurrentResult}}&result={{.CurrentResult}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
         </div>
@@ -156,8 +156,8 @@
                         ["{{$type}}", [{{range $j, $job := $jobs}}{{if $j}},{{end}}"{{$job}}"{{end}}]],
                         {{end}}
                     ],
-                    currentType: "{{.CurrentType}}",
-                    currentJob: "{{.CurrentJob}}"
+                    currentType: "{{.Filter.Type}}",
+                    currentJob: "{{.Filter.Job}}"
                 };
                 window.FlowlordTask.init(config);
             }
