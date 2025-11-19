@@ -1,0 +1,78 @@
+{{define "header"}}
+<div class="nav-header">
+    <div class="nav-container">
+        <div class="nav-controls">
+            {{if and (ne .CurrentPage "workflow") (ne .CurrentPage "about")}}
+            <div class="date-picker-container">
+                <label for="datePicker" class="date-picker-label">Date:</label>
+                <input type="text" id="datePicker" class="date-picker" value="{{.DateValue}}" readonly>
+                <button id="todayBtn" class="btn btn-sm btn-outline">Today</button>
+            </div>
+            {{end}}
+            {{if .ShowRefresh}}
+            <button class="refresh-btn" onclick="location.reload()">Refresh</button>
+            {{end}}
+        </div>
+        <div class="nav-brand">
+            <h1>{{if .PageTitle}}{{.PageTitle}}{{else}}Flowlord Dashboard{{end}}</h1>
+        </div>
+        <nav class="nav-menu">
+            {{if .isLocal}}
+            <a href="./alert_preview.html{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "alert"}}active{{end}}">
+                <span class="nav-icon">🚨</span>
+                Alerts
+            </a>
+            <a href="./files_preview.html{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "files"}}active{{end}}">
+                <span class="nav-icon">📁</span>
+                Files
+            </a>
+            <a href="./task_preview.html{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "task"}}active{{end}}">
+                <span class="nav-icon">📊</span>
+                Tasks
+            </a>
+            <a href="./workflow_preview.html" class="nav-link {{if eq .CurrentPage "workflow"}}active{{end}}">
+                <span class="nav-icon">🌳</span>
+                Workflow
+            </a>
+            <a href="./about_preview.html" class="nav-link {{if eq .CurrentPage "about"}}active{{end}}">
+                <span class="nav-icon">ℹ️</span>
+                About
+            </a>
+            {{else}}
+            <a href="/web/alert{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "alert"}}active{{end}}">
+                <span class="nav-icon">🚨</span>
+                Alerts
+            </a>
+            <a href="/web/files{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "files"}}active{{end}}">
+                <span class="nav-icon">📁</span>
+                Files
+            </a>
+            <a href="/web/task{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "task"}}active{{end}}">
+                <span class="nav-icon">📊</span>
+                Tasks
+            </a>
+            <a href="/web/workflow" class="nav-link {{if eq .CurrentPage "workflow"}}active{{end}}">
+                <span class="nav-icon">🌳</span>
+                Workflow
+            </a>
+            <a href="/web/about" class="nav-link {{if eq .CurrentPage "about"}}active{{end}}">
+                <span class="nav-icon">ℹ️</span>
+                About
+            </a>
+            {{end}}
+        </nav>
+    </div>
+</div>
+
+<script src="{{if .isLocal}}./static{{else}}/static{{end}}/utils.js"></script>
+<script src="{{if .isLocal}}./static{{else}}/static{{end}}/calendar.js"></script>
+<script>
+    // Initialize calendar with server-provided dates
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.FlowlordCalendar) {
+            const datesWithData = [{{range $index, $date := .DatesWithData}}{{if $index}},{{end}}"{{$date}}"{{end}}];
+            window.FlowlordCalendar.init(datesWithData);
+        }
+    });
+</script>
+{{end}}

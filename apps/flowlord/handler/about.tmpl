@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowlord: About</title>
+    <link rel="icon" type="image/svg+xml" href="{{if .isLocal}}./static{{else}}/static{{end}}/favicon.svg">
+    <link rel="stylesheet" href="{{if .isLocal}}./static{{else}}/static{{end}}/style.css">
+</head>
+<body>
+    {{template "header" .}}
+    <div class="container">
+        
+        <div class="content">
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>Application</h3>
+                    <div class="info-item">
+                        <span class="info-label">App Name</span>
+                        <span class="info-value">{{.AppName}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Version</span>
+                        <span class="info-value">{{.Version}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Runtime</span>
+                        <span class="info-value">{{.RunTime}}</span>
+                    </div>
+                </div>
+                
+                <div class="info-card">
+                    <h3>Cache Status</h3>
+                    <div class="info-item">
+                        <span class="info-label">Last Update</span>
+                        <span class="info-value">{{.LastUpdate}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Next Update</span>
+                        <span class="info-value">{{.NextUpdate}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Database</span>
+                        <span class="info-value">{{.DBPath}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Schema Version</span>
+                        <span class="info-value">{{.SchemaVersion}}</span>
+                    </div>
+                </div>
+                
+                <div class="info-card">
+                    <h3>Database Size</h3>
+                    <div class="info-item">
+                        <span class="info-label">Total Size</span>
+                        <span class="info-value">{{.TotalDBSize}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Page Count</span>
+                        <span class="info-value">{{.PageCount}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Page Size</span>
+                        <span class="info-value">{{.PageSize}}</span>
+                    </div>
+                </div>
+                
+                <div class="info-card">
+                    <h3>Cache Settings</h3>
+                    <div class="info-item">
+                        <span class="info-label">Retention Period</span>
+                        <span class="info-value">{{.Retention}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Task TTL</span>
+                        <span class="info-value">{{.TaskTTL}}</span>
+                    </div>
+                </div>
+                
+                <div class="info-card">
+                    <h3>Notification Settings</h3>
+                    <div class="info-item">
+                        <span class="info-label">Current Frequency</span>
+                        <span class="info-value">{{.CurrentFrequency}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Min Frequency</span>
+                        <span class="info-value">{{.MinFrequency}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Max Frequency</span>
+                        <span class="info-value">{{.MaxFrequency}}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="cache-section">
+                <h3>Table Breakdown</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Table Name</th>
+                                <th>Row Count</th>
+                                <th>Table Size</th>
+                                <th>Index Size</th>
+                                <th>Total Size</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .TableStats}}
+                            <tr>
+                                <td>{{.Name}}</td>
+                                <td>{{.RowCount}}</td>
+                                <td class="size-cell">{{.TableHuman}}</td>
+                                <td class="size-cell">{{.IndexHuman}}</td>
+                                <td class="size-cell">{{.TotalHuman}}</td>
+                                <td class="percentage-cell">{{printf "%.1f" .Percentage}}%</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-refresh every 30 seconds
+        if (window.location.search.indexOf('norefresh') === -1) {
+            setTimeout(function() {
+                location.reload();
+            }, 30000);
+        }
+    </script>
+</body>
+</html>

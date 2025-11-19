@@ -1,34 +1,108 @@
 package main
 
 import (
+	"bytes"
+	"embed"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/jbsmith7741/uri"
-
-	"github.com/pcelvng/task-tools/slack"
-
+	"github.com/dustin/go-humanize"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	gtools "github.com/jbsmith7741/go-tools"
 	"github.com/jbsmith7741/go-tools/appenderr"
+	"github.com/jbsmith7741/uri"
 	"github.com/pcelvng/task"
 
 	tools "github.com/pcelvng/task-tools"
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 	"github.com/pcelvng/task-tools/file"
-	"github.com/pcelvng/task-tools/workflow"
+	"github.com/pcelvng/task-tools/slack"
 )
+
+//go:embed handler/alert.tmpl
+var AlertTemplate string
+
+//go:embed handler/files.tmpl
+var FilesTemplate string
+
+//go:embed handler/task.tmpl
+var TaskTemplate string
+
+//go:embed handler/workflow.tmpl
+var WorkflowTemplate string
+
+//go:embed handler/header.tmpl
+var HeaderTemplate string
+
+//go:embed handler/about.tmpl
+var AboutTemplate string
+
+//go:embed handler/static/*
+var StaticFiles embed.FS
+
+var isLocal = false
+
+// getBaseFuncMap returns a template.FuncMap with all common template functions
+func getBaseFuncMap() template.FuncMap {
+	return template.FuncMap{
+		// Time formatting functions
+		"formatFullDate": func(t time.Time) string {
+			return t.Format(time.RFC3339)
+		},
+		"formatTimeHour": func(t time.Time) string {
+			return t.Format("2006-01-02T15")
+		},
+		// Duration formatting
+		"formatDuration": gtools.PrintDuration,
+		// Size formatting
+		"formatBytes": func(bytes int64) string {
+			if bytes < 0 {
+				return "0 B"
+			}
+			return humanize.Bytes(uint64(bytes))
+		},
+		// String manipulation
+		"slice": func(s string, start, end int) string {
+			if start >= len(s) {
+				return ""
+			}
+			if end > len(s) {
+				end = len(s)
+			}
+			return s[start:end]
+		},
+		// Math functions
+		"add": func(a, b int) int {
+			return a + b
+		},
+	}
+}
 
 func (tm *taskMaster) StartHandler() {
 	router := chi.NewRouter()
-	router.Get("/", tm.Info)
+
+	// Enable gzip compression for all responses
+	router.Use(middleware.Compress(5))
+
+	// Static file serving - serve embedded static files
+	// Create a sub-filesystem that strips the "handler/" prefix
+	staticFS, err := fs.Sub(StaticFiles, "handler/static")
+	if err != nil {
+		log.Fatal("Failed to create static filesystem:", err)
+	}
+	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+
+	router.Get("/", tm.htmlAbout)
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
@@ -50,6 +124,11 @@ func (tm *taskMaster) StartHandler() {
 	})
 	router.Get("/task/{id}", tm.taskHandler)
 	router.Get("/recap", tm.recapHandler)
+	router.Get("/web/alert", tm.htmlAlert)
+	router.Get("/web/files", tm.htmlFiles)
+	router.Get("/web/task", tm.htmlTask)
+	router.Get("/web/workflow", tm.htmlWorkflow)
+	router.Get("/web/about", tm.htmlAbout)
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
@@ -71,13 +150,18 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a copy of all workflows
-	wCache := make(map[string]map[string]workflow.Phase) // [file][task:job]Phase
-	for key, w := range tm.Cache.Workflows {
-		phases := make(map[string]workflow.Phase)
-		for _, j := range w.Phases {
-			phases[pName(j.Topic(), j.Job())] = j
+	wCache := make(map[string]map[string]sqlite.Phase) // [file][task:job]Phase
+	workflowFiles := tm.taskCache.GetWorkflowFiles()
+	for _, filePath := range workflowFiles {
+		phases, err := tm.taskCache.GetPhasesForWorkflow(filePath)
+		if err != nil {
+			continue
 		}
-		wCache[key] = phases
+		phaseMap := make(map[string]sqlite.Phase)
+		for _, j := range phases {
+			phaseMap[pName(j.Phase.Topic(), j.Phase.Job())] = j.Phase
+		}
+		wCache[filePath] = phaseMap
 	}
 	entries := tm.cron.Entries()
 	for i := 0; i < len(entries); i++ {
@@ -150,27 +234,27 @@ func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
 
 	// Add non cron based tasks
 	for f, w := range wCache {
-		for _, v := range w {
-			k := pName(v.Topic(), v.Job())
+		for _, ph := range w {
+			k := pName(ph.Topic(), ph.Job())
 			// check for parents
-			for v.DependsOn != "" {
-				if t, found := wCache[f][v.DependsOn]; found {
-					k = v.DependsOn
-					v = t
+			for ph.DependsOn != "" {
+				if t, found := wCache[f][ph.DependsOn]; found {
+					k = ph.DependsOn
+					ph = t
 				} else {
 					break
 				}
 
 			}
 
-			children := tm.getAllChildren(v.Topic(), f, v.Job())
-			// todo: remove children from Cache
+			children := tm.getAllChildren(ph.Topic(), f, ph.Job())
+			// todo: remove children from SQLite
 			if _, found := sts.Workflow[f]; !found {
 				sts.Workflow[f] = make(map[string]cEntry)
 			}
-			warning := validatePhase(v)
-			if v.DependsOn != "" {
-				warning += "parent task not found: " + v.DependsOn
+			warning := ph.Validate()
+			if ph.DependsOn != "" {
+				warning += "parent task not found: " + ph.DependsOn
 			}
 			sts.Workflow[f][k] = cEntry{
 				Schedule: make([]string, 0),
@@ -206,7 +290,7 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 
 func (tm *taskMaster) taskHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	v := tm.taskCache.Get(id)
+	v := tm.taskCache.GetTask(id)
 	b, _ := json.Marshal(v)
 	w.Header().Add("Content-Type", "application/json")
 	w.Write(b)
@@ -214,7 +298,7 @@ func (tm *taskMaster) taskHandler(w http.ResponseWriter, r *http.Request) {
 
 func (tm *taskMaster) recapHandler(w http.ResponseWriter, r *http.Request) {
 
-	data := tm.taskCache.Recap()
+	data := tm.taskCache.Recap(time.Now().UTC())
 
 	if r.Header.Get("Accept") == "application/json" {
 		b, err := json.Marshal(data)
@@ -242,13 +326,10 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	var pth string
+	pth := tm.path
 	// support directory and single file for workflow path lookup.
-	if _, f := path.Split(tm.path); f == "" {
-		pth = tm.path + "/" + fName
-	} else {
-		// for single file show the file regardless of the file param
-		pth = tm.path
+	if tm.taskCache.IsDir() {
+		pth += "/" + fName
 	}
 
 	sts, err := file.Stat(pth, tm.fOpts)
@@ -258,12 +339,12 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	if sts.IsDir {
+		w.WriteHeader(http.StatusOK)
 		files, _ := file.List(pth, tm.fOpts)
 		for _, f := range files {
 			b, a, _ := strings.Cut(f.Path, tm.path)
 			w.Write([]byte(b + a + "\n"))
 		}
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 	reader, err := file.NewReader(pth, tm.fOpts)
@@ -279,11 +360,385 @@ func (tm *taskMaster) workflowFiles(w http.ResponseWriter, r *http.Request) {
 	case "json":
 		w.Header().Set("Content-Type", "application/json")
 	case "yaml", "yml":
-		w.Header().Set("Context-Type", "text/x-yaml")
+		w.Header().Set("Content-Type", "text/x-yaml")
 	}
-	b, _ := io.ReadAll(reader)
 	w.WriteHeader(http.StatusOK)
+	b, _ := io.ReadAll(reader)
 	w.Write(b)
+}
+
+func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
+
+	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+	if dt.IsZero() {
+		dt = time.Now()
+	}
+	alerts, err := tm.taskCache.GetAlertsByDate(dt)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Get dates with alerts for calendar highlighting
+	datesWithData, _ := tm.taskCache.DatesByType("alerts")
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(alertHTML(alerts, dt, datesWithData))
+}
+
+// htmlFiles handles GET /web/files - displays file messages for a specific date
+func (tm *taskMaster) htmlFiles(w http.ResponseWriter, r *http.Request) {
+	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+	if dt.IsZero() {
+		dt = time.Now()
+	}
+
+	files, err := tm.taskCache.GetFileMessagesByDate(dt)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Get dates with file messages for calendar highlighting
+	datesWithData, _ := tm.taskCache.DatesByType("files")
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(filesHTML(files, dt, datesWithData))
+}
+
+// htmlTask handles GET /web/task - displays task summary and table for a specific date
+func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
+	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+	if dt.IsZero() {
+		dt = time.Now()
+	}
+
+	// Get filter parameters from query string
+	page := 1
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	filter := &sqlite.TaskFilter{
+		ID:     r.URL.Query().Get("id"),
+		Type:   r.URL.Query().Get("type"),
+		Job:    r.URL.Query().Get("job"),
+		Result: r.URL.Query().Get("result"),
+		Page:   page,
+		Limit:  sqlite.DefaultPageSize,
+	}
+
+	// Get task summary statistics for the date
+	summaryStart := time.Now()
+	taskStats, err := tm.taskCache.GetTaskSummaryByDate(dt)
+	summaryTime := time.Since(summaryStart)
+	if err != nil {
+		log.Printf("Error getting task summary: %v", err)
+		taskStats = sqlite.TaskStats{}
+	}
+
+	// Get filtered and paginated tasks
+	queryStart := time.Now()
+	tasks, totalCount, err := tm.taskCache.GetTasksByDate(dt, filter)
+	queryTime := time.Since(queryStart)
+	if err != nil {
+		log.Printf("Error getting tasks: %v", err)
+		tasks = []sqlite.TaskView{}
+		totalCount = 0
+	}
+
+	// Get dates with tasks for calendar highlighting
+	datesWithData, _ := tm.taskCache.DatesByType("tasks")
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime)
+	w.Write(htmlBytes)
+}
+
+// htmlWorkflow handles GET /web/workflow - displays workflow phases from database
+func (tm *taskMaster) htmlWorkflow(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(workflowHTML(tm.taskCache))
+}
+
+// htmlAbout handles GET /web/about - displays system information and cache statistics
+func (tm *taskMaster) htmlAbout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(tm.aboutHTML())
+}
+
+// filesHTML renders the file messages HTML page
+func filesHTML(files []sqlite.FileMessage, date time.Time, datesWithData []string) []byte {
+	// Calculate statistics
+	totalFiles := len(files)
+	matchedFiles := 0
+	totalTasks := 0
+
+	for _, file := range files {
+		if len(file.TaskNames) > 0 {
+			matchedFiles++
+			totalTasks += len(file.TaskNames)
+		}
+	}
+
+	unmatchedFiles := totalFiles - matchedFiles
+
+	// Calculate navigation dates
+	prevDate := date.AddDate(0, 0, -1)
+	nextDate := date.AddDate(0, 0, 1)
+
+	data := map[string]interface{}{
+		"Date":           date.Format("Monday, January 2, 2006"),
+		"DateValue":      date.Format("2006-01-02"),
+		"PrevDate":       prevDate.Format("2006-01-02"),
+		"NextDate":       nextDate.Format("2006-01-02"),
+		"Files":          files,
+		"TotalFiles":     totalFiles,
+		"MatchedFiles":   matchedFiles,
+		"UnmatchedFiles": unmatchedFiles,
+		"TotalTasks":     totalTasks,
+		"CurrentPage":    "files",
+		"PageTitle":      "File Messages",
+		"isLocal":        isLocal,
+		"DatesWithData":  datesWithData,
+	}
+
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("files").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + FilesTemplate)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
+}
+
+// taskHTML renders the task summary and table HTML page
+func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration) []byte {
+	renderStart := time.Now()
+
+	// Calculate navigation dates
+	prevDate := date.AddDate(0, 0, -1)
+	nextDate := date.AddDate(0, 0, 1)
+
+	// Get aggregate counts from TaskStats
+	counts := taskStats.TotalCounts()
+
+	// Get unique types and jobs from TaskStats for filter dropdowns
+	types := taskStats.UniqueTypes()
+	jobsByType := taskStats.JobsByType()
+
+	// Calculate pagination info
+	totalPages := (totalCount + filter.Limit - 1) / filter.Limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	// Calculate display indices
+	startIdx := (filter.Page-1)*filter.Limit + 1
+	endIdx := startIdx + len(tasks) - 1
+	if len(tasks) == 0 {
+		startIdx = 0
+		endIdx = 0
+	}
+
+	data := map[string]interface{}{
+		"Date":          date.Format("Monday, January 2, 2006"),
+		"DateValue":     date.Format("2006-01-02"),
+		"PrevDate":      prevDate.Format("2006-01-02"),
+		"NextDate":      nextDate.Format("2006-01-02"),
+		"Tasks":         tasks,
+		"Counts":        counts,
+		"Filter":        filter,
+		"CurrentPage":   "task",
+		"PageTitle":     "Task Dashboard",
+		"isLocal":       isLocal,
+		"DatesWithData": datesWithData,
+		"UniqueTypes":   types,
+		"JobsByType":    jobsByType,
+		// Pagination info
+		"Page":          filter.Page,
+		"PageSize":      filter.Limit,
+		"TotalPages":    totalPages,
+		"StartIndex":    startIdx,
+		"EndIndex":      endIdx,
+		"FilteredCount": totalCount,
+	}
+
+	// Parse and execute template using base funcMap
+	tmpl, err := template.New("task").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + TaskTemplate)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte(err.Error())
+	}
+
+	htmlSize := buf.Len()
+	renderTime := time.Since(renderStart)
+
+	// Single consolidated log with all metrics
+	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
+		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result,
+		counts.Total, totalCount, filter.Page, totalPages,
+		queryTime, renderTime, float64(htmlSize)/(1024*1024))
+
+	return buf.Bytes()
+}
+
+// workflowHTML renders the workflow phases HTML page
+func workflowHTML(tCache *sqlite.SQLite) []byte {
+	// Get all workflow files and their phases
+	workflowFiles := tCache.GetWorkflowFiles()
+
+	workflowFileSummary := make(map[string]int)
+	allPhases := make([]sqlite.PhaseDB, 0)
+
+	for _, filePath := range workflowFiles {
+		phases, err := tCache.GetPhasesForWorkflow(filePath)
+		if err != nil {
+			continue
+		}
+
+		workflowFileSummary[filePath] = len(phases)
+		allPhases = append(allPhases, phases...)
+	}
+
+	data := map[string]interface{}{
+		"Phases":              allPhases,
+		"WorkflowFileSummary": workflowFileSummary,
+		"CurrentPage":         "workflow",
+		"PageTitle":           "Workflow Dashboard",
+		"isLocal":             isLocal,
+		"DatesWithData":       []string{}, // Workflow page doesn't use date picker with highlights
+	}
+
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("workflow").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + WorkflowTemplate)
+	if err != nil {
+		return []byte("Error:" + err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte("Error:" + err.Error())
+	}
+
+	return buf.Bytes()
+}
+
+// aboutHTML renders the about page HTML
+func (tm *taskMaster) aboutHTML() []byte {
+	// Get basic system information
+	sts := stats{
+		AppName:    "flowlord",
+		Version:    tools.Version,
+		RunTime:    gtools.PrintDuration(time.Since(tm.initTime)),
+		NextUpdate: tm.nextUpdate.Format("2006-01-02T15:04:05"),
+		LastUpdate: tm.lastUpdate.Format("2006-01-02T15:04:05"),
+	}
+
+	// Get database size information
+	dbSize, err := tm.taskCache.GetDBSize()
+	if err != nil {
+		return []byte("Error getting database size: " + err.Error())
+	}
+
+	// Get table statistics
+	tableStats, err := tm.taskCache.GetTableStats()
+	if err != nil {
+		return []byte("Error getting table statistics: " + err.Error())
+	}
+
+	// Create data structure for template
+	data := map[string]interface{}{
+		"AppName":          sts.AppName,
+		"Version":          sts.Version,
+		"RunTime":          sts.RunTime,
+		"LastUpdate":       sts.LastUpdate,
+		"NextUpdate":       sts.NextUpdate,
+		"TotalDBSize":      dbSize.TotalSize,
+		"PageCount":        dbSize.PageCount,
+		"PageSize":         dbSize.PageSize,
+		"DBPath":           dbSize.DBPath,
+		"TableStats":       tableStats,
+		"SchemaVersion":    tm.taskCache.GetSchemaVersion(),
+		"Retention":        gtools.PrintDuration(tm.taskCache.Retention),
+		"TaskTTL":          gtools.PrintDuration(tm.taskCache.TaskTTL),
+		"MinFrequency":     gtools.PrintDuration(tm.slack.MinFrequency),
+		"MaxFrequency":     gtools.PrintDuration(tm.slack.MaxFrequency),
+		"CurrentFrequency": gtools.PrintDuration(tm.slack.GetCurrentDuration()),
+		"CurrentPage":      "about",
+		"DateValue":        "", // About page doesn't need date
+		"PageTitle":        "System Information",
+		"isLocal":          isLocal,
+		"DatesWithData":    []string{}, // About page doesn't use date picker with highlights
+	}
+
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("about").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + AboutTemplate)
+	if err != nil {
+		return []byte("Error parsing template: " + err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte("Error executing template: " + err.Error())
+	}
+
+	return buf.Bytes()
+}
+
+// AlertData holds both the alerts and summary data for the template
+type AlertData struct {
+	Alerts  []sqlite.AlertRecord
+	Summary []sqlite.SummaryLine
+}
+
+// alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
+func alertHTML(tasks []sqlite.AlertRecord, date time.Time, datesWithData []string) []byte {
+	// Generate summary data using BuildCompactSummary
+	summary := sqlite.BuildCompactSummary(tasks)
+
+	// Create data structure for template
+	data := map[string]interface{}{
+		"Alerts":        tasks,
+		"Summary":       summary,
+		"CurrentPage":   "alert",
+		"DateValue":     date.Format("2006-01-02"),
+		"Date":          date.Format("Monday, January 2, 2006"),
+		"PageTitle":     "Task Alerts",
+		"isLocal":       isLocal,
+		"DatesWithData": datesWithData,
+	}
+
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("alert").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + AlertTemplate)
+	if err != nil {
+		return []byte(err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte(err.Error())
+	}
+
+	return buf.Bytes()
 }
 
 type request struct {
@@ -370,12 +825,12 @@ func (tm *taskMaster) backload(req request) response {
 		start = at
 		end = at
 	}
-
-	workflowPath, phase := tm.Cache.Search(req.Task, req.Job)
-	if workflowPath != "" {
-		msg = append(msg, "phase found in "+workflowPath)
+	
+	phase := tm.taskCache.Search(req.Task, req.Job)
+	if phase.FilePath != "" {
+		msg = append(msg, "phase found in "+phase.FilePath)
 		req.Template = phase.Template
-		req.Workflow = workflowPath
+		req.Workflow = phase.FilePath
 	}
 	if req.Template == "" {
 		name := req.Task

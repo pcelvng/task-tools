@@ -382,9 +382,52 @@ func TestPrintDates(t *testing.T) {
 			Input:    trial.Times(f, "2018/04/09T00", "2018/04/10T00", "2018/04/11T00", "2018/04/12T00"),
 			Expected: "2018/04/09-2018/04/12",
 		},
+		"daily records offset":
+		{
+			Input:    trial.Times(f, "2018/04/09T04", "2018/04/10T04", "2018/04/11T04", "2018/04/12T06"),
+			Expected: "2018/04/09-2018/04/12",
+		},
+		"daily records offset with duplicates":
+		{
+			Input:    trial.Times(f, "2018/04/09T04","2018/04/09T04", "2018/04/09T04", "2018/04/10T04", "2018/04/11T04", "2018/04/12T06"),
+			Expected: "2018/04/09-2018/04/12",
+		},
 		"daily records with gaps": {
 			Input:    trial.Times(f, "2018/04/09T00", "2018/04/10T00", "2018/04/11T00", "2018/04/12T00", "2018/04/15T00", "2018/04/16T00", "2018/04/17T00"),
 			Expected: "2018/04/09-2018/04/12,2018/04/15-2018/04/17",
+		},
+
+		"monthly consecutive": {
+			Input:    trial.Times(f, "2018/01/15T10", "2018/02/20T11", "2018/03/10T09"),
+			Expected: "2018/01-2018/03",
+		},
+		"monthly with gaps": {
+			Input:    trial.Times(f, "2018/01/15T10", "2018/02/20T11", "2018/05/10T09", "2018/06/15T12"),
+			Expected: "2018/01-2018/02,2018/05-2018/06",
+		},
+		"monthly single": {
+			Input:    trial.Times(f, "2018/01/15T10", "2018/03/20T11", "2018/08/10T09"),
+			Expected: "2018/01/15T10,2018/03/20T11,2018/08/10T09",
+		},
+		"daily with different hours": {
+			Input:    trial.Times(f, "2020/05/01T08", "2020/05/02T10", "2020/05/03T09", "2020/05/04T11"),
+			Expected: "2020/05/01-2020/05/04",
+		},
+		"single timestamp": {
+			Input:    trial.Times(f, "2020/05/01T10"),
+			Expected: "2020/05/01T10",
+		},
+		"empty input": {
+			Input:    []time.Time{},
+			Expected: "",
+		},
+		"cross year monthly": {
+			Input:    trial.Times(f, "2020/11/15T10", "2020/12/20T11", "2021/01/10T09"),
+			Expected: "2020/11-2021/01",
+		},
+		"cross month daily": {
+			Input:    trial.Times(f, "2020/01/30T10", "2020/01/31T10", "2020/02/01T10", "2020/02/02T10"),
+			Expected: "2020/01/30-2020/02/02",
 		},
 	}
 	trial.New(fn, cases).Test(t)

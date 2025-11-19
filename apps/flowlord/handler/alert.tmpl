@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowlord: Alerts</title>
+    <link rel="icon" type="image/svg+xml" href="{{if .isLocal}}./static{{else}}/static{{end}}/favicon.svg">
+    <link rel="stylesheet" href="{{if .isLocal}}./static{{else}}/static{{end}}/style.css">
+</head>
+<body>
+    {{template "header" .}}
+    <div class="container full-width">
+        <div class="summary-section">
+            <h3>Alert Summary</h3>
+            <div class="summary-grid">
+                {{range .Summary}}
+                <div class="summary-card">
+                    <div class="summary-header">
+                        <span class="summary-key">{{.Key}}</span>
+                        <span class="summary-count">{{.Count}} alerts</span>
+                    </div>
+                    <div class="summary-time">{{.TimeRange}}</div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        <div class="table-container">
+            <table id="alertTable">
+                <thead>
+                    <tr>
+                        <th class="sortable id-column" data-sort="id">ID</th>
+                        <th class="sortable type-column" data-sort="type">Task Type</th>
+                        <th class="sortable job-column" data-sort="job">Job</th>
+                        <th class="sortable message-column" data-sort="message">Message</th>
+                        <th class="sortable alerted-column" data-sort="alerted">Alerted At</th>
+                        <th class="sortable tasktime-column" data-sort="tasktime">Task Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Alerts}}
+                    <tr>
+                        <td class="id-cell id-column truncated copyable" 
+                            data-full-text="{{.TaskID}}" 
+                            onclick="toggleField(this, '{{.TaskID}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.TaskID}}')"
+                            ondblclick="copyToClipboard('{{.TaskID}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{.TaskID}}
+                        </td>
+                        <td class="type-cell type-column">{{.Type}}</td>
+                        <td class="job-cell job-column">{{.Job}}</td>
+                        <td class="message-cell message-column truncated copyable" 
+                            data-full-text="{{.Msg}}" 
+                            onclick="toggleField(this, '{{.Msg}}')" 
+                            oncontextmenu="showContextMenu(event, '{{.Msg}}')"
+                            ondblclick="copyToClipboard('{{.Msg}}')"
+                            title="Click to expand/collapse, double-click or right-click to copy">
+                            {{.Msg}}
+                        </td>
+                        <td class="time-cell alerted-column">{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}</td>
+                        <td class="time-cell tasktime-column">{{if .TaskTime.IsZero}}N/A{{else}}{{.TaskTime.Format "2006-01-02T15"}}{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        <div class="stats">
+            Total Alerts: <span id="totalCount">{{len .Alerts}}</span>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.getElementById('alertTable');
+            const tbody = table.querySelector('tbody');
+            const headers = table.querySelectorAll('th.sortable');
+            const dateFilter = document.getElementById('dateFilter');
+            const clearFilter = document.getElementById('clearFilter');
+            
+            let currentSort = { column: null, direction: 'asc' };
+
+            // Get URL parameters
+            function getUrlParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return {
+                    date: urlParams.get('date') || '',
+                    sort: urlParams.get('sort') || '',
+                    direction: urlParams.get('direction') || 'asc'
+                };
+            }
+
+            // Update URL with new parameters
+            function updateUrl(date, sort, direction) {
+                const url = new URL(window.location);
+                
+                if (date) {
+                    url.searchParams.set('date', date);
+                } else {
+                    url.searchParams.delete('date');
+                }
+                
+                if (sort) {
+                    url.searchParams.set('sort', sort);
+                    url.searchParams.set('direction', direction);
+                } else {
+                    url.searchParams.delete('sort');
+                    url.searchParams.delete('direction');
+                }
+                
+                // Reload page with new URL
+                window.location.href = url.toString();
+            }
+
+            // Initialize date filter from URL
+            function initializeDateFilter() {
+                const params = getUrlParams();
+                
+                if (params.date) {
+                    dateFilter.value = params.date;
+                } else {
+                    // Set today's date as default if no date parameter
+                    const today = new Date().toISOString().split('T')[0];
+                    dateFilter.value = today;
+                }
+            }
+
+            // Initialize sorting from URL
+            function initializeSorting() {
+                const params = getUrlParams();
+                
+                if (params.sort) {
+                    currentSort = { column: params.sort, direction: params.direction };
+                    sortTable(params.sort, params.direction);
+                    updateSortIndicators(params.sort, params.direction);
+                }
+            }
+
+            function sortTable(column, direction) {
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const columnIndex = Array.from(headers).findIndex(th => th.dataset.sort === column);
+                
+                rows.sort((a, b) => {
+                    const aVal = a.cells[columnIndex].textContent.trim();
+                    const bVal = b.cells[columnIndex].textContent.trim();
+                    
+                    let comparison = 0;
+                    
+                    // Check if this is a datetime column (alerted or created)
+                    if (column === 'alerted' || column === 'created') {
+                        // Parse as ISO datetime strings
+                        const aDate = new Date(aVal);
+                        const bDate = new Date(bVal);
+                        
+                        if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
+                            comparison = aDate - bDate;
+                        } else {
+                            // Fallback to string comparison if parsing fails
+                            comparison = aVal.localeCompare(bVal);
+                        }
+                    } else {
+                        // Try to parse as numbers first for other columns
+                        const aNum = parseFloat(aVal);
+                        const bNum = parseFloat(bVal);
+                        
+                        if (!isNaN(aNum) && !isNaN(bNum)) {
+                            comparison = aNum - bNum;
+                        } else {
+                            // Compare as strings
+                            comparison = aVal.localeCompare(bVal);
+                        }
+                    }
+                    
+                    return direction === 'asc' ? comparison : -comparison;
+                });
+                
+                // Clear tbody and re-append sorted rows
+                tbody.innerHTML = '';
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            function updateSortIndicators(activeColumn, direction) {
+                headers.forEach(th => {
+                    th.classList.remove('sort-asc', 'sort-desc');
+                    if (th.dataset.sort === activeColumn) {
+                        th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                    }
+                });
+            }
+
+            // Column sorting event listeners
+            headers.forEach(header => {
+                header.addEventListener('click', function() {
+                    const column = this.dataset.sort;
+                    let direction = 'asc';
+                    
+                    if (currentSort.column === column) {
+                        direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    }
+                    
+                    currentSort = { column, direction };
+                    updateUrl(getUrlParams().date, column, direction);
+                });
+            });
+
+            // Date filter event listeners
+            dateFilter.addEventListener('change', function() {
+                const params = getUrlParams();
+                updateUrl(this.value, params.sort, params.direction);
+            });
+
+            clearFilter.addEventListener('click', function() {
+                const params = getUrlParams();
+                updateUrl('', params.sort, params.direction);
+            });
+
+            // Initialize the page
+            initializeDateFilter();
+            initializeSorting();
+        });
+
+        // Toggle field expansion/collapse functionality
+        function toggleField(element, fullText) {
+            // Prevent event bubbling to avoid conflicts with sorting
+            event.stopPropagation();
+            
+            if (element.classList.contains('expanded')) {
+                // Collapse the field
+                element.classList.remove('expanded');
+                element.classList.add('truncated');
+            } else {
+                // Expand the field
+                element.classList.remove('truncated');
+                element.classList.add('expanded');
+            }
+        }
+
+        // Context menu functionality
+        function showContextMenu(event, text) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Remove any existing context menu
+            const existingMenu = document.querySelector('.context-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+            
+            // Create context menu
+            const contextMenu = document.createElement('div');
+            contextMenu.className = 'context-menu';
+            contextMenu.innerHTML = `
+                <div class="context-menu-item" onclick="copyToClipboard('${text.replace(/'/g, "\\'")}')">
+                    📋 Copy
+                </div>
+            `;
+            
+            // Position the context menu
+            contextMenu.style.left = event.pageX + 'px';
+            contextMenu.style.top = event.pageY + 'px';
+            
+            document.body.appendChild(contextMenu);
+            
+            // Close context menu when clicking elsewhere
+            const closeMenu = (e) => {
+                if (!contextMenu.contains(e.target)) {
+                    contextMenu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            
+            setTimeout(() => {
+                document.addEventListener('click', closeMenu);
+            }, 100);
+        }
+
+        // Copy to clipboard functionality with enhanced feedback
+        function copyToClipboard(text) {
+            const targetElement = event ? event.target : document.activeElement;
+            
+            navigator.clipboard.writeText(text).then(function() {
+                showCopyFeedback(targetElement, 'Copied!');
+            }).catch(function(err) {
+                console.error('Could not copy text: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showCopyFeedback(targetElement, 'Copied!');
+                } catch (err) {
+                    console.error('Fallback copy failed: ', err);
+                    showCopyFeedback(targetElement, 'Copy failed!', true);
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+
+        // Show copy feedback with animation
+        function showCopyFeedback(element, message, isError = false) {
+            // Remove any existing feedback
+            const existingFeedback = element.querySelector('.copy-feedback');
+            if (existingFeedback) {
+                existingFeedback.remove();
+            }
+            
+            // Create feedback element
+            const feedback = document.createElement('div');
+            feedback.className = 'copy-feedback';
+            feedback.textContent = message;
+            feedback.style.backgroundColor = isError ? '#dc3545' : '#28a745';
+            
+            // Position feedback relative to the element
+            const rect = element.getBoundingClientRect();
+            feedback.style.position = 'fixed';
+            feedback.style.left = (rect.left + rect.width / 2) + 'px';
+            feedback.style.top = (rect.top - 10) + 'px';
+            feedback.style.transform = 'translateX(-50%)';
+            
+            element.appendChild(feedback);
+            
+            // Remove feedback after animation
+            setTimeout(() => {
+                if (feedback.parentNode) {
+                    feedback.remove();
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
+</html>

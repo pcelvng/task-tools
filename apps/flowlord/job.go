@@ -2,9 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/jbsmith7741/uri"
@@ -74,10 +74,8 @@ func (tm *taskMaster) NewJob(ph workflow.Phase, path string) (cron.Job, error) {
 		return nil, err
 	}
 
-	if fields := strings.Fields(bJob.Schedule); len(fields) == 5 {
-		bJob.Schedule = "0 " + bJob.Schedule
-	} else if len(fields) > 6 || len(fields) < 5 {
-		return nil, errors.New("invalid schedule must be of pattern [second] minute day_of_month month day_of_week")
+	if _, err := cronParser.Parse(bJob.Schedule); err != nil {
+		return nil, fmt.Errorf("cron: %w", err)
 	}
 
 	// return Cronjob if not batch params

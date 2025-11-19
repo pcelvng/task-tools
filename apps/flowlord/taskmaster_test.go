@@ -15,6 +15,7 @@ import (
 	"github.com/pcelvng/task/bus/nop"
 	"github.com/robfig/cron/v3"
 
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 	"github.com/pcelvng/task-tools/workflow"
 )
 
@@ -22,7 +23,9 @@ const base_test_path string = "../../internal/test/"
 
 func TestTaskMaster_Process(t *testing.T) {
 	delayRegex := regexp.MustCompile(`delayed=(\d+.\d+)`)
-	cache, fatalErr := workflow.New(base_test_path+"workflow", nil)
+	// Initialize taskCache for the test
+	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}
+	fatalErr := taskCache.Open(base_test_path+"workflow", nil)
 	if fatalErr != nil {
 		t.Fatal("cache init", fatalErr)
 	}
@@ -32,7 +35,8 @@ func TestTaskMaster_Process(t *testing.T) {
 	}
 	fn := func(tsk task.Task) ([]task.Task, error) {
 		var alerts int64
-		tm := taskMaster{doneConsumer: consumer, Cache: cache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
+
+		tm := taskMaster{doneConsumer: consumer, taskCache: taskCache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
 		producer, _ := nop.NewProducer("")
 		tm.producer = producer
 		nop.FakeMsg = tsk.JSONBytes()
@@ -79,6 +83,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task1 attempt 0": {
 			Input: task.Task{
 				Type:    "task1",
+				Job:     "t2",
 				Info:    "?date=2019-12-12",
 				Result:  task.ErrResult,
 				Started: "now",
@@ -97,6 +102,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task1 attempt 2": {
 			Input: task.Task{
 				Type:   "task1",
+				Job:    "t2",
 				Info:   "?date=2019-12-12",
 				Result: task.ErrResult,
 				ID:     "UUID_task1_attempt2",
@@ -271,12 +277,12 @@ func TestTaskMaster_Schedule(t *testing.T) {
 		Files []fileRule
 	}
 	fn := func(in string) (expected, error) {
-		cache, err := workflow.New(base_test_path+in, nil)
-		if err != nil {
+		tm := taskMaster{cron: cron.New(cron.WithParser(cronParser))}
+		tm.taskCache = &sqlite.SQLite{LocalPath: ":memory:"}
+		if err := tm.taskCache.Open(base_test_path+in, nil); err != nil {
 			return expected{}, err
 		}
-		tm := taskMaster{Cache: cache, cron: cron.New()}
-		err = tm.schedule()
+		err := tm.schedule()
 		exp := expected{
 			Jobs:  make([]Cronjob, 0),
 			Files: tm.files,
@@ -296,7 +302,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t2",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 0 * * * *",
+						Schedule: "0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -304,7 +310,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 						Name:     "t4",
 						Workflow: "f1.toml",
 						Topic:    "task1",
-						Schedule: "0 0 * * * *",
+						Schedule: "0 * * * *",
 						Offset:   -4 * time.Hour,
 						Template: "?date={yyyy}-{mm}-{dd}T{hh}",
 					},
@@ -318,7 +324,7 @@ func TestTaskMaster_Schedule(t *testing.T) {
 					{
 						Workflow: "f3.toml",
 						Topic:    "task1",
-						Schedule: "0 0 0 * * *",
+						Schedule: "0 0 * * *",
 						Template: "?date={yyyy}-{mm}-{dd}",
 					},
 				},
@@ -375,7 +381,7 @@ func Test_NewJob(t *testing.T) {
 			},
 			Expected: &Cronjob{
 				Topic:    "task5",
-				Schedule: "0 35 13 * * *",
+				Schedule: "35 13 * * *",
 				Template: "?date={yyyy}-{mm}-{dd}",
 			},
 		},
@@ -522,38 +528,4 @@ func TestIsReady(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).Test(t)
-}
-
-func TestValidatePhase(t *testing.T) {
-	fn := func(in workflow.Phase) (string, error) {
-		s := validatePhase(in)
-		if s != "" {
-			return "", errors.New(s)
-		}
-		return s, nil
-	}
-	cases := trial.Cases[workflow.Phase, string]{
-		"empty phase": {
-			Input:       workflow.Phase{},
-			ExpectedErr: errors.New("invalid phase"),
-		},
-		"valid cron phase": {
-			Input: workflow.Phase{
-				Rule: "cron=* * * * * *",
-			},
-			Expected: "",
-		},
-		"unknown rule": {
-			Input:     workflow.Phase{Rule: "abcedfg"},
-			ShouldErr: true,
-		},
-		"dependsOn and rule": {
-			Input: workflow.Phase{
-				Rule:      "cron=abc",
-				DependsOn: "task1",
-			},
-			ShouldErr: true,
-		},
-	}
-	trial.New(fn, cases).SubTest(t)
 }

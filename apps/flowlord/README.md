@@ -1,10 +1,63 @@
 # flowlord taskmaster
-flowlord schedules and coordinates task dependency across workflows. Flowlord reads tasks from the done topic, failed tasks can be configured to retry a set number of times before being sent to slack and/or a retry_failed topic. Successful tasks will start children tasks.
+
+<img src="handler/static/favicon.svg" align="left" style="margin-right: 20px;" />
+
+**Flowlord** is a production-ready task orchestration engine that manages complex workflow dependencies with intelligent scheduling, automatic retries, and real-time monitoring. Built on the [task](https://github.com/pcelvng/task) ecosystem, it coordinates distributed workers through message bus communication while providing visibility into task execution through a web dashboard.
+
+**Key Features:**
+- **Workflow Management** - Define multi-phase workflows with parent-child task dependencies
+- **Intelligent Scheduling** - Cron-based scheduling with template-based task generation
+- **Automatic Retries** - Configurable retry logic with exponential backoff and jitter to prevent thundering herd
+- **File Watching** - Trigger tasks automatically when files are written to specified paths
+- **Batch Processing** - Generate multiple tasks from date ranges, metadata arrays, or data files
+- **Alerting** - Slack notifications for failed tasks and incomplete jobs with smart frequency management
+- **RESTful API** - Web UI and API for monitoring workflows, viewing task history, and managing alerts
+
+[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](https://github.com/pcelvng/task-tools/wiki/Flowlord-API)
+
+<br clear="all"/>
+
+## Overview 
 
 ![](flowlord.drawio.svg)
 
+## Monitoring & Troubleshooting
 
-[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](https://github.com/pcelvng/task-tools/wiki/Flowlord-API)
+SQLite is used to store phases and provides troubleshooting convenience by recording task history. As flowlord is stateless task management system, the cache persistent is not required for flowlord to work, but it convenient to review historical tasks and alerts. It is recommended to backup the task and alert logs for long term storage. 
+
+- **Task Records** - Full execution lifecycle with timing metrics
+- **Alert History** - Failed task tracking for debugging
+- **File Processing Audit** - Which files triggered which tasks
+- **Workflow State** - Phase configuration and dependencies
+
+The database is optional and non-critical. If deleted, Flowlord continues normally and rebuilds fresh data. Features:
+- Automatic backup/restore from remote paths (S3/GCS)
+- 90-day default retention with automatic cleanup
+- WAL mode for concurrent access
+
+**Configuration:**
+```toml
+[cache]
+  local_path = "./tasks.db"              # required local cache
+  backup_path = "gs://bucket/tasks.db"   # Optional backup location
+  retention = "2160h"                    # 90 days
+  task_ttl = "4h"                        # Alert deadline from task to complete (creation to complete)  
+```
+
+## Web Dashboard
+
+Built-in web UI for monitoring workflows and troubleshooting. Uses Go templates to render HTML dashboards with:
+- Task execution history with filtering and pagination
+- Alert summaries grouped by task type
+- File processing history
+- Workflow phase visualization
+- System statistics
+
+Access at `http://localhost:8080/` (or configured port)
+
+| Files View | Tasks View | Alerts View | Workflow View |
+|:----------:|:----------:|:-----------:|:-------------:|
+| [![Files View](../../internal/docs/img/flowlord_files.png)](../../internal/docs/img/flowlord_files.png) | [![Tasks View](../../internal/docs/img/flowlord_tasks.png)](../../internal/docs/img/flowlord_tasks.png) | [![Alerts View](../../internal/docs/img/flowlord_alerts.png)](../../internal/docs/img/flowlord_alerts.png) | [![Workflow View](../../internal/docs/img/flowlord_workflow.png)](../../internal/docs/img/flowlord_workflow.png) |
 
 
 ## workflow 

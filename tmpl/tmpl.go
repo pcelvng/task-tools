@@ -286,61 +286,162 @@ type Getter interface {
 	Get(string) string
 }
 
+type granularity int
+
+const (
+	granularityHourly granularity = iota
+	granularityDaily
+	granularityMonthly
+)
+
+// isConsecutive checks if two times are consecutive based on the granularity
+func isConsecutive(t1, t2 time.Time, gran granularity) bool {
+	// Equal times are always consecutive (handles duplicates)
+	if t1.Equal(t2) {
+		return true
+	}
+	
+	switch gran {
+	case granularityHourly:
+		return t2.Sub(t1) == time.Hour
+	case granularityDaily:
+		// Check if next calendar day (not exactly 24 hours)
+		y1, m1, d1 := t1.Date()
+		y2, m2, d2 := t2.Date()
+		// Add one day to t1 and check if it matches t2's date
+		nextDay := time.Date(y1, m1, d1+1, 0, 0, 0, 0, t1.Location())
+		yn, mn, dn := nextDay.Date()
+		return y2 == yn && m2 == mn && d2 == dn
+	case granularityMonthly:
+		// Check if next month
+		y1, m1, _ := t1.Date()
+		y2, m2, _ := t2.Date()
+		expectedYear := y1
+		expectedMonth := m1 + 1
+		if expectedMonth > 12 {
+			expectedMonth = 1
+			expectedYear++
+		}
+		return y2 == expectedYear && m2 == expectedMonth
+	}
+	return false
+}
+
+// formatTime formats a time based on granularity
+func formatTime(t time.Time, gran granularity) string {
+	switch gran {
+	case granularityMonthly:
+		return t.Format("2006/01")
+	case granularityDaily:
+		return t.Format("2006/01/02")
+	case granularityHourly:
+		return t.Format("2006/01/02T15")
+	}
+	return t.Format("2006/01/02T15")
+}
+
 // PrintDates takes a slice of times and displays the range of times in a more friendly format.
+// It automatically detects the granularity (hourly/daily/monthly) and formats accordingly.
+// Examples:
+//   - Hourly: "2006/01/02T15-2006/01/02T18"
+//   - Daily: "2006/01/02-2006/01/05"
+//   - Monthly: "2006/01-2006/04"
+//   - Mixed: "2006/01-2006/03, 2006/05/01T10"
 func PrintDates(dates []time.Time) string {
-	tFormat := "2006/01/02T15"
 	if len(dates) == 0 {
 		return ""
 	}
+
+	// Sort dates
 	sort.Slice(dates, func(i, j int) bool { return dates[i].Before(dates[j]) })
+
+	// Single timestamp - return full hour format
+	if len(dates) == 1 {
+		return dates[0].Format("2006/01/02T15")
+	}
+
+	// Detect granularity in a single pass (skip duplicates)
+	monthMap := make(map[string]bool)
+	dayMap := make(map[string]bool)
+	gran := granularityMonthly // Start optimistic, downgrade as needed
+	
+	for i, t := range dates {
+		// Skip duplicates for granularity detection
+		if i > 0 && t.Equal(dates[i-1]) {
+			continue
+		}
+		
+		// Detect granularity while iterating
+		monthKey := t.Format("2006-01")
+		dayKey := t.Format("2006-01-02")
+		
+		// If we've seen this month before, it's not monthly data
+		if monthMap[monthKey] && gran == granularityMonthly {
+			gran = granularityDaily
+		}
+		// If we've seen this day before, it's hourly data
+		if dayMap[dayKey] && gran == granularityDaily {
+			gran = granularityHourly
+		}
+		
+		monthMap[monthKey] = true
+		dayMap[dayKey] = true
+	}
+
+	// Build output
+	var result strings.Builder
+	rangeStart := dates[0]
 	prev := dates[0]
-	s := prev.Format(tFormat)
-	series := false
-	for _, t := range dates {
-		diff := t.Truncate(time.Hour).Sub(prev.Truncate(time.Hour))
-		if diff != time.Hour && diff != 0 {
-			if series {
-				s += "-" + prev.Format(tFormat)
-			}
-			s += "," + t.Format(tFormat)
-			series = false
-		} else if diff == time.Hour {
-			series = true
+	inRange := false
+
+	for i := 1; i < len(dates); i++ {
+		curr := dates[i]
+		
+		if isConsecutive(prev, curr, gran) {
+			// Continue range
+			inRange = true
+			prev = curr
+			continue
 		}
-		prev = t
-	}
-	if series {
-		s += "-" + prev.Format(tFormat)
-	}
-
-	//check for daily records only
-	if !strings.Contains(s, "-") {
-		days := strings.Split(s, ",")
-		prev, _ := time.Parse(tFormat, days[0])
-		dailyString := prev.Format("2006/01/02")
-		series = false
-
-		for i := 1; i < len(days); i++ {
-			tm, _ := time.Parse(tFormat, days[i])
-			if r := tm.Sub(prev) % (24 * time.Hour); r != 0 {
-				return s
-			}
-			if tm.Sub(prev) != 24*time.Hour {
-				if series {
-					dailyString += "-" + prev.Format("2006/01/02")
-					series = false
-				}
-				dailyString += "," + tm.Format("2006/01/02")
-
+		
+		// Range broken or gap - write the previous range/item
+		if inRange {
+			// Close the range (but check if it's just duplicates)
+			if rangeStart.Equal(prev) {
+				// Just duplicates, write as single item
+				result.WriteString(rangeStart.Format("2006/01/02T15"))
 			} else {
-				series = true
+				result.WriteString(formatTime(rangeStart, gran))
+				result.WriteString("-")
+				result.WriteString(formatTime(prev, gran))
 			}
-			prev = tm
+		} else {
+			// Single item in a multi-timestamp dataset - use hour format
+			result.WriteString(rangeStart.Format("2006/01/02T15"))
 		}
-		if series {
-			return dailyString + "-" + prev.Format("2006/01/02")
-		}
-		return dailyString
+		result.WriteString(",")
+		
+		// Start new range
+		rangeStart = curr
+		inRange = false
+		prev = curr
 	}
-	return s
+
+	// Handle the last item/range
+	if inRange {
+		// Close final range (but check if it's just duplicates)
+		if rangeStart.Equal(prev) {
+			// Just duplicates, write as single item
+			result.WriteString(rangeStart.Format("2006/01/02T15"))
+		} else {
+			result.WriteString(formatTime(rangeStart, gran))
+			result.WriteString("-")
+			result.WriteString(formatTime(prev, gran))
+		}
+		return result.String()
+	}
+	
+	// Single final item in multi-timestamp dataset - use hour format
+	result.WriteString(rangeStart.Format("2006/01/02T15"))
+	return result.String()
 }

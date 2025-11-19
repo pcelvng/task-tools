@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowlord: Files</title>
+    <link rel="icon" type="image/svg+xml" href="{{if .isLocal}}./static{{else}}/static{{end}}/favicon.svg">
+    <link rel="stylesheet" href="{{if .isLocal}}./static{{else}}/static{{end}}/style.css">
+</head>
+<body>
+    {{template "header" .}}
+    <div class="container full-width">
+
+        {{if .Files}}
+        <div class="summary">
+            <div class="summary-stats">
+                <div class="stat-card active" data-filter="all" onclick="filterFilesByType('all')">
+                    <div class="stat-number">{{.TotalFiles}}</div>
+                    <div class="stat-label">Total Files</div>
+                </div>
+                <div class="stat-card" data-filter="matched" onclick="filterFilesByType('matched')">
+                    <div class="stat-number">{{.MatchedFiles}}</div>
+                    <div class="stat-label">With Tasks</div>
+                </div>
+                <div class="stat-card" data-filter="unmatched" onclick="filterFilesByType('unmatched')">
+                    <div class="stat-number">{{.UnmatchedFiles}}</div>
+                    <div class="stat-label">No Matches</div>
+                </div>
+                <div class="stat-card" data-filter="tasks" onclick="filterFilesByType('tasks')">
+                    <div class="stat-number">{{.TotalTasks}}</div>
+                    <div class="stat-label">Tasks Created</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="files-list">
+            {{range .Files}}
+            <div class="file-item" data-file-type="{{if .TaskIDs}}matched{{else}}unmatched{{end}}" data-has-tasks="{{if .TaskIDs}}true{{else}}false{{end}}">
+                <div class="file-path">{{.Path}}</div>
+                <div class="file-meta">
+                    <span>Size: {{.Size | formatBytes}}</span>
+                    <span>Received: {{.ReceivedAt | formatFullDate}}</span>
+                    {{if not .LastModified.IsZero}}
+                    <span>Last Modified: {{.LastModified | formatFullDate}}</span>
+                    {{end}}
+                    {{if not .TaskTime.IsZero}}
+                    <span>Task Time: {{.TaskTime | formatTimeHour}}</span>
+                    {{end}}
+                </div>
+                {{if .TaskIDs}}
+                <div class="tasks-section">
+                    <div class="tasks-label">Task IDs: 
+                        {{range $index, $taskID := .TaskIDs}}
+                        <span class="task-id">{{$taskID}}</span>
+                        {{end}}
+                    </div>
+                    <div class="tasks-label">Tasks Names: 
+                        {{range .TaskNames}}
+                        <span class="task-tag">{{.}}</span>
+                        {{end}}
+                    </div>
+                </div>
+                {{else}}
+                <div class="tasks-section">
+                    <div class="no-tasks">No matching patterns found</div>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="no-files">
+            <h3>No file messages found</h3>
+            <p>No files were processed on {{.Date}}</p>
+        </div>
+        {{end}}
+    </div>
+
+    <script>
+        // Auto-refresh every 30 seconds
+        setTimeout(function() {
+            location.reload();
+        }, 30000);
+
+        // Filter files by type using stat-cards
+        function filterFilesByType(filterType) {
+            // Update stat-card active states
+            updateFileStatCardActiveStates(filterType);
+            
+            // Filter file items
+            const fileItems = document.querySelectorAll('.file-item');
+            
+            fileItems.forEach(item => {
+                const fileType = item.getAttribute('data-file-type');
+                const hasTasks = item.getAttribute('data-has-tasks') === 'true';
+                let shouldShow = false;
+                
+                switch(filterType) {
+                    case 'all':
+                        shouldShow = true;
+                        break;
+                    case 'matched':
+                        shouldShow = fileType === 'matched';
+                        break;
+                    case 'unmatched':
+                        shouldShow = fileType === 'unmatched';
+                        break;
+                    case 'tasks':
+                        shouldShow = hasTasks;
+                        break;
+                    default:
+                        shouldShow = true;
+                }
+                
+                item.style.display = shouldShow ? '' : 'none';
+            });
+            
+            // Update file count display
+            updateFileCount();
+        }
+
+        // Update stat-card active states for files
+        function updateFileStatCardActiveStates(activeFilter) {
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach(card => {
+                const filter = card.getAttribute('data-filter');
+                if (filter === activeFilter) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                }
+            });
+        }
+
+        // Update file count display
+        function updateFileCount() {
+            const visibleItems = document.querySelectorAll('.file-item[style*="display: none"], .file-item:not([style*="display: none"])');
+            const visibleCount = Array.from(visibleItems).filter(item => 
+                !item.style.display || item.style.display !== 'none'
+            ).length;
+            
+            // Update the stat numbers if needed (optional)
+            console.log(`Showing ${visibleCount} files`);
+        }
+    </script>
+</body>
+</html>

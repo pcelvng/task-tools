@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/pcelvng/task-tools/slack"
+	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/pcelvng/task-tools/slack"
+
 	"github.com/hydronica/go-config"
+
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/file/stat"
 )
@@ -42,6 +44,8 @@ func main() {
 		err = ls(f1, &conf)
 	case "cat":
 		err = cat(f1, &conf)
+	case "stat":
+		err = stats(f1, &conf)
 	case "cp":
 		err = cp(f1, f2, &conf)
 	case "slack":
@@ -146,26 +150,26 @@ func cp(from, to string, opt *file.Options) error {
 	if to == "" || from == "" {
 		return fmt.Errorf(usage)
 	}
-	sts, _ := file.Stat(to, opt)
-	if sts.IsDir {
-		_, fName := filepath.Split(from)
-		to = strings.TrimRight(to, "/") + "/" + fName
-	}
 	r, err := file.NewReader(from, opt)
 	if err != nil {
-		return fmt.Errorf("reader init for %s %w", from, err)
+		return fmt.Errorf("init reader err: %w", err)
 	}
 	w, err := file.NewWriter(to, opt)
 	if err != nil {
-		return fmt.Errorf("writer init for %s %w", to, err)
+		return fmt.Errorf("init writer err: %w", err)
 	}
+	_, err = io.Copy(w, r)
+	if err != nil {
+		return fmt.Errorf("copy err: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("close writer err: %w", err)
+	}
+	return r.Close()
+}
 
-	s := file.NewScanner(r)
-	for s.Scan() {
-		if err := w.WriteLine(s.Bytes()); err != nil {
-			w.Abort()
-			return fmt.Errorf("write error: %w", err)
-		}
-	}
-	return w.Close()
+func stats(path string, opt *file.Options) error {
+	sts, err := file.Stat(path, opt)
+	fmt.Println(sts.JSONString())
+	return err
 }

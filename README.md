@@ -88,9 +88,16 @@ func (tm *taskMaster) Run(ctx context.Context) error {
 ## Pre-built Apps 
 
 ### **Flowlord**
-an all-purpose TaskMaster that should be used with workflow files to schedule when tasks should run and the task hierarchy. It can retry failed jobs, alert when tasks fail and has an API that can be used to backload/schedule jobs and give a recap of recent jobs run. 
+Production-ready task orchestration engine for managing complex workflow dependencies with intelligent scheduling, automatic retries, and real-time monitoring. Features include:
 
-See Additional [docs](apps/flowlord/README.md).  
+- **Workflow Management** - Multi-phase workflows with parent-child task dependencies
+- **Intelligent Scheduling** - Cron-based scheduling with template-based task generation
+- **Optional SQLite Cache** - Task history, alerts, and file tracking for troubleshooting (non-critical, stateless operation)
+- **Web Dashboard** - Real-time monitoring UI with filtering, pagination, and date navigation
+- **Batch Processing** - Generate multiple tasks from date ranges, metadata arrays, or data files
+- **RESTful API** - Comprehensive API for backloading, monitoring, and workflow management
+
+See detailed [documentation](apps/flowlord/README.md).  
 
 
 ### Workers

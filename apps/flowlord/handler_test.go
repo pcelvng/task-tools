@@ -1,27 +1,53 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 
-	"github.com/pcelvng/task-tools/workflow"
+	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 )
 
 const testPath = "../../internal/test"
 
+func TestMain(t *testing.M) {
+	isLocal = true
+	t.Run()
+
+}
+
+// loadTaskViewData loads TaskView data from a JSON file
+func loadTaskViewData(filename string) ([]sqlite.TaskView, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []sqlite.TaskView
+	err = json.Unmarshal(data, &tasks)
+	if err != nil {
+		return nil, err
+	}
+
+	return tasks, nil
+}
+
 func TestBackloader(t *testing.T) {
-	cache, err := workflow.New(testPath+"/workflow/f3.toml", nil)
+	sqlDB := &sqlite.SQLite{LocalPath: ":memory:"}
+	err := sqlDB.Open(testPath+"/workflow/f3.toml", nil)
 	today := time.Now().Format("2006-01-02")
 	toHour := time.Now().Format(DateHour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tm := &taskMaster{
-		Cache: cache,
+		taskCache: sqlDB,
 	}
 	fn := func(req request) (response, error) {
 
@@ -329,4 +355,314 @@ func TestMeta_UnmarshalJSON(t *testing.T) {
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
+}
+
+// TestWebAlertPreview generates an HTML preview of the alert template for visual inspection
+// this provides an html file
+func TestAlertHTML(t *testing.T) {
+
+	// Create sample alert data to showcase the templating
+	sampleAlerts := []sqlite.AlertRecord{
+		{
+			TaskID:    "task-001",
+			TaskTime:  trial.TimeHour("2024-01-15T11"),
+			Type:      "data-validation",
+			Job:       "quality-check",
+			Msg:       "Validation failed: missing required field 'email'",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T11:15:00Z"),
+		},
+		{
+			TaskID:    "task-002",
+			TaskTime:  trial.TimeHour("2024-01-15T12"),
+			Type:      "data-validation",
+			Job:       "quality-check",
+			Msg:       "Validation failed: missing required field 'email'",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T12:15:00Z"),
+		},
+		{
+			TaskID:    "task-003-really-long-id12345",
+			TaskTime:  trial.TimeHour("2024-01-15T11"),
+			Type:      "file-transfer",
+			Job:       "backup",
+			Msg:       "File transfer completed: 1.2GB transferred",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T12:00:00Z"),
+		},
+		{
+			TaskID:    "task-004",
+			TaskTime:  trial.TimeHour("2024-01-15T13"),
+			Type:      "database-sync",
+			Job:       "replication",
+			Msg:       "This is a really long message that needs to be shorten. The quick brown fox jumped over the lazy dog. Peter Pipper picked a peck of pickled peppers. ",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T13:30:00Z"),
+		},
+		{
+			TaskID:    "task-005",
+			TaskTime:  trial.TimeHour("2024-01-15T13"),
+			Type:      "notification",
+			Job:       "email-alert",
+			Msg:       "Email notification sent to 150 users",
+			CreatedAt: trial.Time(time.RFC3339, "2024-01-15T14:00:00Z"),
+		},
+	}
+
+	// Generate HTML using the alertHTML function
+	// Pass sample dates with data for calendar highlighting
+	datesWithData := []string{"2024-01-14", "2024-01-15", "2024-01-16"}
+	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"), datesWithData)
+
+	// Validate HTML using the new function
+	if err := validateHTML(htmlContent); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
+	// Write HTML to a file for easy viewing
+	outputFile := "handler/alert_preview.html"
+	err := os.WriteFile(outputFile, htmlContent, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Alert preview generated and saved to: ./%s", outputFile)
+
+}
+
+// TestFilesHTML generate a html file based on the files.tmpl it is used for vision examination of the files
+func TestFilesHTML(t *testing.T) {
+	// Create sample file messages
+	files := []sqlite.FileMessage{
+		{
+			ID:           1,
+			Path:         "gs://bucket/data/2024-01-15/file1.json",
+			Size:         1024,
+			LastModified: time.Now().Add(-1 * time.Hour),
+			ReceivedAt:   time.Now().Add(-30 * time.Minute),
+			TaskTime:     time.Now().Add(-1 * time.Hour),
+			TaskIDs:      []string{"task-1", "task-2"},
+			TaskNames:    []string{"data-load:import", "transform:clean"},
+		},
+		{
+			ID:           2,
+			Path:         "gs://bucket/data/2024-01-15/file2.csv",
+			Size:         2048,
+			LastModified: time.Now().Add(-2 * time.Hour),
+			ReceivedAt:   time.Now().Add(-15 * time.Minute),
+			TaskTime:     time.Now().Add(-2 * time.Hour),
+			TaskIDs:      []string{},
+			TaskNames:    []string{},
+		},
+	}
+
+	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	// Pass sample dates with data for calendar highlighting
+	datesWithData := []string{ "2024-01-15"}
+	html := filesHTML(files, date, datesWithData)
+
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
+	// Write HTML to a file for easy viewing
+	outputFile := "handler/files_preview.html"
+	err := os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Files preview generated and saved to: ./%s", outputFile)
+
+}
+
+// validateHTML performs general HTML validation and returns an error if invalid
+func validateHTML(html []byte) error {
+	htmlStr := string(html)
+	
+	// Check for empty HTML
+	if len(html) == 0 {
+		return errors.New("HTML output is empty")
+	}
+	
+	// Check for valid HTML structure
+	if !strings.Contains(htmlStr, "<!DOCTYPE html>") {
+		return errors.New("HTML missing DOCTYPE declaration")
+	}
+	if !strings.Contains(htmlStr, "<html") {
+		return errors.New("HTML missing opening html tag")
+	}
+	if !strings.Contains(htmlStr, "</html>") {
+		return errors.New("HTML missing closing html tag")
+	}
+	
+	// Check for template execution errors (any Go template error messages)
+	if strings.Contains(htmlStr, "template:") && strings.Contains(htmlStr, "error") {
+		return errors.New("template execution error detected in HTML output")
+	}
+	
+	// Check for function not defined errors
+	if strings.Contains(htmlStr, "not defined") {
+		return errors.New("template function not defined error detected in HTML output")
+	}
+	
+	// Check for any other common template errors
+	if strings.Contains(htmlStr, "executing") && strings.Contains(htmlStr, "error") {
+		return errors.New("template execution error detected")
+	}
+	
+	return nil
+}
+
+func TestTaskHTML(t *testing.T) {
+	// Load TaskView data from JSON file
+	testTasks, err := loadTaskViewData("test/tasks.json")
+	if err != nil {
+		t.Fatalf("Failed to load task data: %v", err)
+	}
+
+	// Set test date
+	date := trial.TimeDay("2024-01-15")
+
+	// Create empty task stats and filter for the test
+	taskStats := generateSummary(testTasks)
+	filter := &sqlite.TaskFilter{Page: 1, Limit: 100}
+	
+
+	// Test with no filters - summary will be generated from tasks data
+	// Pass sample dates with data for calendar highlighting
+	datesWithData := []string{"2024-01-15"}
+	html := taskHTML(testTasks, taskStats, len(testTasks), date, filter, datesWithData, 0)
+
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
+	// Write HTML to a file for easy viewing
+	outputFile := "handler/task_preview.html"
+	err = os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Task preview generated and saved to: ./%s", outputFile)
+}
+
+func generateSummary(tasks []sqlite.TaskView) sqlite.TaskStats {
+	data := make(map[string]*sqlite.Stats)
+	
+	for _, tv := range tasks {
+		// Convert TaskView to task.Task
+		t := task.Task{
+			ID:      tv.ID,
+			Type:    tv.Type,
+			Job:     tv.Job,
+			Info:    tv.Info,
+			Result:  task.Result(tv.Result),
+			Meta:    tv.Meta,
+			Msg:     tv.Msg,
+			Created: tv.Created,
+			Started: tv.Started,
+			Ended:   tv.Ended,
+		}
+		
+		// Create key from type:job (same logic as Recap)
+		key := strings.TrimRight(t.Type+":"+t.Job, ":")
+		
+		// Get or create stats for this key
+		stat, found := data[key]
+		if !found {
+			stat = &sqlite.Stats{
+				CompletedTimes: make([]time.Time, 0),
+				ErrorTimes:     make([]time.Time, 0),
+				AlertTimes:     make([]time.Time, 0),
+				WarnTimes:      make([]time.Time, 0),
+				RunningTimes:   make([]time.Time, 0),
+				ExecTimes:      &sqlite.DurationStats{},
+			}
+			data[key] = stat
+		}
+		
+		// Add task to stats
+		stat.Add(t)
+	}
+	
+	return sqlite.TaskStats(data)
+}
+
+func TestWorkflowHTML(t *testing.T) {
+	// Load workflow files 
+	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}
+	if err := taskCache.Open(testPath+"/workflow/", nil); err != nil {
+		t.Fatalf("Failed to create test cache: %v", err)
+	}
+
+	// Test with no filters - summary will be generated from tasks data
+	html := workflowHTML(taskCache)
+
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
+	// Write HTML to a file for easy viewing
+	outputFile := "handler/workflow_preview.html"
+	err := os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("Workflow preview generated and saved to: ./%s", outputFile)
+
+}
+
+func TestAboutHTML(t *testing.T) {
+	// Create a real SQLite cache for testing
+	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}
+	if err := taskCache.Open(testPath+"/workflow/", nil); err != nil {
+		t.Fatalf("Failed to create test cache: %v", err)
+	}
+
+	// Create a mock Notification for slack
+	notification := &Notification{
+		MinFrequency: 5 * time.Minute,
+		MaxFrequency: 30 * time.Minute,
+	}
+	notification.currentDuration.Store(int64(10 * time.Minute))
+
+	// Create a mock taskMaster with test data
+	tm := &taskMaster{
+		initTime:   time.Now().Add(-2 * time.Hour),    // 2 hours ago
+		nextUpdate: time.Now().Add(30 * time.Minute),  // 30 minutes from now
+		lastUpdate: time.Now().Add(-15 * time.Minute), // 15 minutes ago
+		taskCache:  taskCache,
+		slack:      notification,
+	}
+
+	// Generate HTML using the aboutHTML method
+	html := tm.aboutHTML()
+
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
+	// Write HTML to a file for easy viewing
+	outputFile := "handler/about_preview.html"
+	err := os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("About preview generated and saved to: ./%s", outputFile)
+
+	// Check that key content is present
+	htmlStr := string(html)
+	if !strings.Contains(htmlStr, "flowlord") {
+		t.Error("Expected 'flowlord' in HTML output")
+	}
+	if !strings.Contains(htmlStr, "System Information") {
+		t.Error("Expected 'System Information' in HTML output")
+	}
+	if !strings.Contains(htmlStr, "Table Breakdown") {
+		t.Error("Expected 'Table Breakdown' in HTML output")
+	}
 }

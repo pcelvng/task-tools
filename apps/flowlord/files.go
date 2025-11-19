@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
 	"github.com/pcelvng/task-tools/workflow"
@@ -93,6 +94,9 @@ func unmarshalStat(b []byte) (sts stat.Stats) {
 // if a match is found it will create a task and send it out
 func (tm *taskMaster) matchFile(sts stat.Stats) error {
 	matches := 0
+	var taskIDs []string
+	var taskNames []string
+
 	for _, f := range tm.files {
 		if isMatch, _ := filepath.Match(f.SrcPattern, sts.Path); !isMatch {
 			continue
@@ -106,19 +110,33 @@ func (tm *taskMaster) matchFile(sts stat.Stats) error {
 		meta.Set("file", sts.Path)
 		meta.Set("filename", filepath.Base(sts.Path))
 		meta.Set("workflow", f.workflowFile)
-		// todo: add job if provided in task name ex -> task:job
 
 		// populate the info string
 		info := tmpl.Parse(f.Template, t)
 		info, _ = tmpl.Meta(info, meta)
 
 		tsk := task.New(f.Topic(), info)
+		tsk.Job = f.Job()
 		tsk.Meta, _ = url.QueryUnescape(meta.Encode())
+
+		// Collect task information for storage
+		taskIDs = append(taskIDs, tsk.ID)
+		taskName := tsk.Type
+		if tsk.Job != "" {
+			taskName += ":" + tsk.Job
+		}
+		taskNames = append(taskNames, taskName)
 
 		if err := tm.producer.Send(tsk.Type, tsk.JSONBytes()); err != nil {
 			return err
 		}
 	}
+
+	// Store file message in database
+	if tm.taskCache != nil {
+		tm.taskCache.AddFileMessage(sts, taskIDs, taskNames)
+	}
+
 	if matches == 0 {
 		return fmt.Errorf("no match found for %q", sts.Path)
 	}

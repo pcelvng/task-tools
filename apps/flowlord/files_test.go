@@ -128,7 +128,7 @@ func TestTaskMaster_MatchFile(t *testing.T) {
 			Input: stat.Stats{Path: "gs://bucket/group/data.txt"},
 			Expected: []task.Task{
 				{Type: "basic", Meta: "file=gs://bucket/group/data.txt&filename=data.txt&workflow=basic.toml"},
-				{Type: "data", Meta: "file=gs://bucket/group/data.txt&filename=data.txt&job=1&workflow=data.toml"},
+				{Type: "data", Job: "1",  Meta: "file=gs://bucket/group/data.txt&filename=data.txt&job=1&workflow=data.toml"},
 			},
 		},
 	}
