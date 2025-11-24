@@ -2,7 +2,6 @@ package util
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"testing"
 
@@ -31,7 +30,7 @@ func TestOpenTmp(t *testing.T) {
 	trial.New(fn, cases).Comparer(trial.Contains).Test(t)
 }
 
-func ExampleMultiWriteCloser() {
+func TestMultiWriteCloser(t *testing.T) {
 	// showing:
 	// - write err
 	// - close err
@@ -42,17 +41,23 @@ func ExampleMultiWriteCloser() {
 	writers := make([]io.WriteCloser, 1)
 	writers[0] = errW
 	w := NewMultiWriteCloser(writers)
-	_, err := w.Write([]byte("test err"))
-	fmt.Println(err) // error writing
-	err = w.Close()
-	fmt.Println(err) // error closing
+if 	_, err := w.Write([]byte("test err")); err == nil {
+	t.Error("Expected write to error") 
+}
+if 	err := w.Close(); err == nil {
+	t.Error("Expected close to error") 
+}
+	
 
 	// short write err
 	errShort := new(shortWriteCloser)
 	writers[0] = errShort
 	w = NewMultiWriteCloser(writers)
-	_, err = w.Write([]byte("test short"))
-	fmt.Println(err) // short write
+	if _, err := w.Write([]byte("test short")); err == nil {
+		t.Error("Expected error for short writer")
+		// This checks that the byte count returns is the same as the text sent it. 
+	}
+	
 
 	// Output:
 	// error writing
