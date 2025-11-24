@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -11,116 +10,115 @@ import (
 	"github.com/pcelvng/task-tools/file"
 )
 
-func ExampleDoTaskJSON() {
+func TestDoTaskJSON(t *testing.T) {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
-	opts := options{}
-	// initialize producer
-	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+	t.Run("happy path", func(t *testing.T) {
+		opts := options{}
+		opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
 
-	// write file
-	w, _ := file.NewWriter("./test/test-20050405T201112.json", nil)
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T17:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T18:05:06Z"}`))
-	w.Close()
+		// write file
+		w, _ := file.NewWriter("./test/test-20050405T201112.json", nil)
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T17:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T18:05:06Z"}`))
+		w.Close()
 
-	ctx, _ := context.WithCancel(context.Background())
-	info := `./test/test-20050405T201112.json?date-field=dateField&dest-template=./test/{HH}-{SRC_TS}.json`
-	wkr := opts.newWorker(info)
-	result, msg := wkr.DoTask(ctx)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		info := `./test/test-20050405T201112.json?date-field=dateField&dest-template=./test/{HH}-{SRC_TS}.json`
+		wkr := opts.newWorker(info)
+		result, msg := wkr.DoTask(ctx)
 
-	fmt.Println(result) // output: complete
-	fmt.Println(msg)    // output: wrote 4 lines over 3 files
+		if result != "complete" {
+			t.Errorf("expected result 'complete', got '%s'", result)
+		}
+		if msg != "wrote 4 lines over 3 files" {
+			t.Errorf("expected msg 'wrote 4 lines over 3 files', got '%s'", msg)
+		}
 
-	// cleanup
-	os.Remove("./test/test-20050405T201112.json")
-	os.Remove("./test/16-20050405T201112.json")
-	os.Remove("./test/17-20050405T201112.json")
-	os.Remove("./test/18-20050405T201112.json")
-	os.Remove("./test")
+		// cleanup
+		os.Remove("./test/test-20050405T201112.json")
+		os.Remove("./test/16-20050405T201112.json")
+		os.Remove("./test/17-20050405T201112.json")
+		os.Remove("./test/18-20050405T201112.json")
+		os.Remove("./test")
+	})
 
-	// Output:
-	// complete
-	// wrote 4 lines over 3 files
+	t.Run("bad record error", func(t *testing.T) {
+		opts := options{}
+		opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+
+		// write file
+		w, _ := file.NewWriter("./test/test.json", nil)
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T17:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T18:05:06Z"}`))
+		w.WriteLine([]byte(`{"badField":"2007-02-03T18:05:06Z"}`))
+		w.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json`
+		wkr := opts.newWorker(info)
+		result, msg := wkr.DoTask(ctx)
+
+		if result != "error" {
+			t.Errorf("expected result 'error', got '%s'", result)
+		}
+		expectedMsg := `issue at line 5: field "dateField" not in '{"badField":"2007-02-03T18:05:06Z"}' (./test/test.json)`
+		if msg != expectedMsg {
+			t.Errorf("expected msg '%s', got '%s'", expectedMsg, msg)
+		}
+
+		// cleanup
+		os.Remove("./test/test.json")
+		os.Remove("./test/16.json")
+		os.Remove("./test/17.json")
+		os.Remove("./test/18.json")
+		os.Remove("./test")
+	})
+
+	t.Run("bad record discard mode", func(t *testing.T) {
+		opts := options{}
+		opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
+
+		// write file
+		w, _ := file.NewWriter("./test/test.json", nil)
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T17:05:06Z"}`))
+		w.WriteLine([]byte(`{"dateField":"2007-02-03T18:05:06Z"}`))
+		w.WriteLine([]byte(`{"badField":"2007-02-03T18:05:06Z"}`))
+		w.WriteLine([]byte(`{"badField":"2007-02-03T18:05:06Z"}`))
+		w.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json&discard=true`
+		wkr := opts.newWorker(info)
+		result, msg := wkr.DoTask(ctx)
+
+		if result != "complete" {
+			t.Errorf("expected result 'complete', got '%s'", result)
+		}
+		if msg != "wrote 4 lines over 3 files (2 discarded)" {
+			t.Errorf("expected msg 'wrote 4 lines over 3 files (2 discarded)', got '%s'", msg)
+		}
+
+		// cleanup
+		os.Remove("./test/test.json")
+		os.Remove("./test/16.json")
+		os.Remove("./test/17.json")
+		os.Remove("./test/18.json")
+		os.Remove("./test")
+	})
 }
 
-func ExampleDoTaskJSONBadRecord() {
-	os.Setenv("TZ", "UTC")
-	defer os.Unsetenv("TZ")
-
-	opts := options{}
-	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
-
-	// write file
-	w, _ := file.NewWriter("./test/test.json", nil)
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T17:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T18:05:06Z"}`))
-	w.WriteLine([]byte(`{"badField":"2007-02-03T18:05:06Z"}`))
-	w.Close()
-
-	ctx, _ := context.WithCancel(context.Background())
-	info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json`
-	wkr := opts.newWorker(info)
-	result, msg := wkr.DoTask(ctx)
-
-	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: issue at line 5: field "dateField" not in '{"badField":"2007-02-03T18:05:06Z"}' (./test/test.json)
-
-	// cleanup
-	os.Remove("./test/test.json")
-	os.Remove("./test/16.json")
-	os.Remove("./test/17.json")
-	os.Remove("./test/18.json")
-	os.Remove("./test")
-
-	// Output:
-	// error
-	// issue at line 5: field "dateField" not in '{"badField":"2007-02-03T18:05:06Z"}' (./test/test.json)
-}
-
-func ExampleDoTaskJSONBadRecordDiscard() {
-	os.Setenv("TZ", "UTC")
-	defer os.Unsetenv("TZ")
-
-	opts := options{}
-	opts.Producer, _ = bus.NewProducer(bus.NewOptions("nop"))
-
-	// write file
-	w, _ := file.NewWriter("./test/test.json", nil)
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T16:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T17:05:06Z"}`))
-	w.WriteLine([]byte(`{"dateField":"2007-02-03T18:05:06Z"}`))
-	w.WriteLine([]byte(`{"badField":"2007-02-03T18:05:06Z"}`))
-	w.WriteLine([]byte(`{"badField":"2007-02-03T18:05:06Z"}`))
-	w.Close()
-
-	ctx, _ := context.WithCancel(context.Background())
-	info := `./test/test.json?date-field=dateField&dest-template=./test/{HH}.json&discard=true`
-	wkr := opts.newWorker(info)
-	result, msg := wkr.DoTask(ctx)
-
-	fmt.Println(result) // output: complete
-	fmt.Println(msg)    // output: output: wrote 4 lines over 3 files (2 discarded)
-
-	// cleanup
-	os.Remove("./test/test.json")
-	os.Remove("./test/16.json")
-	os.Remove("./test/17.json")
-	os.Remove("./test/18.json")
-	os.Remove("./test")
-
-	// Output:
-	// complete
-	// wrote 4 lines over 3 files (2 discarded)
-}
-
-func ExampleDoTaskCSV() {
+func TestDoTaskCSV(t *testing.T) {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
@@ -135,13 +133,18 @@ func ExampleDoTaskCSV() {
 	w.WriteLine([]byte(`2007-02-03T18:05:06Z`))
 	w.Close()
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	info := "./test/test.csv?date-field=0&dest-template=./test/{HH}.csv&sep=,"
 	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
-	fmt.Println(result) // output: complete
-	fmt.Println(msg)    // output: wrote 4 lines over 3 files
+	if result != "complete" {
+		t.Errorf("expected result 'complete', got '%s'", result)
+	}
+	if msg != "wrote 4 lines over 3 files" {
+		t.Errorf("expected msg 'wrote 4 lines over 3 files', got '%s'", msg)
+	}
 
 	// cleanup
 	os.Remove("./test/test.csv")
@@ -149,57 +152,57 @@ func ExampleDoTaskCSV() {
 	os.Remove("./test/17.csv")
 	os.Remove("./test/18.csv")
 	os.Remove("./test")
-
-	// Output:
-	// complete
-	// wrote 4 lines over 3 files
 }
 
-func ExampleDoTaskWCloseErr() {
+func TestDoTaskErrors(t *testing.T) {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
-	// write file
-	w, _ := file.NewWriter("./test/test.csv", nil)
-	w.WriteLine([]byte(`2007-02-03T16:05:06Z`))
-	w.Close()
-	opts := options{}
-	ctx, _ := context.WithCancel(context.Background())
-	info := "./test/test.csv?date-field=0&dest-template=nop://close_err/{HH}.csv&sep=,"
-	wkr := opts.newWorker(info)
-	result, msg := wkr.DoTask(ctx)
+	t.Run("writer close error", func(t *testing.T) {
+		// write file
+		w, _ := file.NewWriter("./test/test.csv", nil)
+		w.WriteLine([]byte(`2007-02-03T16:05:06Z`))
+		w.Close()
 
-	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: close_err
+		opts := options{}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		info := "./test/test.csv?date-field=0&dest-template=nop://close_err/{HH}.csv&sep=,"
+		wkr := opts.newWorker(info)
+		result, msg := wkr.DoTask(ctx)
 
-	// cleanup
-	os.Remove("./test/test.csv")
-	os.Remove("./test/16.csv")
-	os.Remove("./test")
+		if result != "error" {
+			t.Errorf("expected result 'error', got '%s'", result)
+		}
+		if msg != "close_err" {
+			t.Errorf("expected msg 'close_err', got '%s'", msg)
+		}
 
-	// Output:
-	// error
-	// close_err
+		// cleanup
+		os.Remove("./test/test.csv")
+		os.Remove("./test/16.csv")
+		os.Remove("./test")
+	})
+
+	t.Run("readline error", func(t *testing.T) {
+		opts := options{}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		info := `nop://readline_err?date-field=0&dest-template=nop://{HH}.csv&sep=,`
+		wkr := opts.newWorker(info)
+		result, msg := wkr.DoTask(ctx)
+
+		if result != "error" {
+			t.Errorf("expected result 'error', got '%s'", result)
+		}
+		expectedMsg := "issue at line 1: readline_err (nop://readline_err)"
+		if msg != expectedMsg {
+			t.Errorf("expected msg '%s', got '%s'", expectedMsg, msg)
+		}
+	})
 }
 
-func ExampleDoTaskReadLineErr() {
-	os.Setenv("TZ", "UTC")
-	defer os.Unsetenv("TZ")
-	opts := options{}
-	ctx, _ := context.WithCancel(context.Background())
-	info := `nop://readline_err?date-field=0&dest-template=nop://{HH}.csv&sep=,`
-	wkr := opts.newWorker(info)
-	result, msg := wkr.DoTask(ctx)
-
-	fmt.Println(result) // output: error
-	fmt.Println(msg)    // output: issue at line 1: readline_err (nop://readline_err)
-
-	// Output:
-	// error
-	// issue at line 1: readline_err (nop://readline_err)
-}
-
-func ExampleWorker_DoTaskDirSrc() {
+func TestDoTaskDirSrc(t *testing.T) {
 	os.Setenv("TZ", "UTC")
 	defer os.Unsetenv("TZ")
 
@@ -230,13 +233,18 @@ func ExampleWorker_DoTaskDirSrc() {
 	w3.WriteLine([]byte(`2007-02-03T19:05:06Z`))
 	w3.Close()
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	info := "./test/dir?date-field=0&dest-template=./test/{HH}.csv&sep=,"
 	wkr := opts.newWorker(info)
 	result, msg := wkr.DoTask(ctx)
 
-	fmt.Println(result) // output: complete
-	fmt.Println(msg)    // output: wrote 8 lines over 3 files
+	if result != "complete" {
+		t.Errorf("expected result 'complete', got '%s'", result)
+	}
+	if msg != "wrote 12 lines over 5 files" {
+		t.Errorf("expected msg 'wrote 12 lines over 5 files', got '%s'", msg)
+	}
 
 	// cleanup
 	os.Remove("./test/dir/test1.csv")
@@ -249,10 +257,6 @@ func ExampleWorker_DoTaskDirSrc() {
 	os.Remove("./test/20.csv")
 	os.Remove("./test/dir")
 	os.Remove("./test")
-
-	// Output:
-	// complete
-	// wrote 12 lines over 5 files
 }
 
 func TestParseTmpl(t *testing.T) {
