@@ -180,5 +180,3 @@ func BuildCompactSummary(alerts []AlertRecord) []SummaryLine {
 
 	return result
 }
-
-

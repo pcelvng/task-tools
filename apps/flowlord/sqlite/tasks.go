@@ -209,8 +209,7 @@ func (s *SQLite) CheckIncompleteTasks() int {
 			tr.id = ar.task_id AND 
 			tr.type = ar.task_type AND 
 			tr.job = ar.job AND 
-			ar.msg LIKE 'INCOMPLETE:%' AND 
-			ar.created_at > datetime('now', '-1 day')
+			ar.msg LIKE 'INCOMPLETE:%'
 		)
 		WHERE tr.created < ? 
 		AND tr.result = '' 
@@ -400,8 +399,8 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	return tasks, totalCount, nil
 }
 
-// GetTaskSummaryByDate creates a summary of tasks for a specific date
-func (s *SQLite) GetTaskSummaryByDate(date time.Time) (TaskStats, error) {
+// GetTaskRecapByDate creates a recap of tasks for a specific date
+func (s *SQLite) GetTaskRecapByDate(date time.Time) (TaskStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -463,5 +462,3 @@ func extractJobFromTask(t task.Task) string {
 	}
 	return job
 }
-
-

@@ -436,7 +436,7 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 
 	// Get task summary statistics for the date
 	summaryStart := time.Now()
-	taskStats, err := tm.taskCache.GetTaskSummaryByDate(dt)
+	taskStats, err := tm.taskCache.GetTaskRecapByDate(dt)
 	summaryTime := time.Since(summaryStart)
 	if err != nil {
 		log.Printf("Error getting task summary: %v", err)
@@ -825,7 +825,7 @@ func (tm *taskMaster) backload(req request) response {
 		start = at
 		end = at
 	}
-	
+
 	phase := tm.taskCache.Search(req.Task, req.Job)
 	if phase.FilePath != "" {
 		msg = append(msg, "phase found in "+phase.FilePath)
