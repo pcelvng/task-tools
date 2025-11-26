@@ -49,7 +49,7 @@ func (o *options) NewWorker(info string) task.Worker {
 		Destination string            `uri:"dest"`
 	}{}
 	if err := uri.Unmarshal(info, &iOpts); err != nil {
-		return task.InvalidWorker(err.Error())
+		return task.InvalidWorker("%v", err)
 	}
 
 	query := iOpts.Query
@@ -57,11 +57,11 @@ func (o *options) NewWorker(info string) task.Worker {
 	if iOpts.Query == "" && iOpts.QueryFile != "" {
 		r, err := file.NewReader(iOpts.QueryFile, o.FOpts)
 		if err != nil {
-			return task.InvalidWorker(err.Error())
+			return task.InvalidWorker("%v", err)
 		}
 		b, err := ioutil.ReadAll(r)
 		if err != nil {
-			return task.InvalidWorker(err.Error())
+			return task.InvalidWorker("%v", err)
 		}
 		query = string(b)
 	}

@@ -62,7 +62,7 @@ func (c *options) newWorker(info string) task.Worker {
 	// validate
 	err = iOpt.validate()
 	if err != nil {
-		return task.InvalidWorker(err.Error())
+		return task.InvalidWorker("%v", err)
 	}
 	fileDay := tmpl.PathTime(iOpt.SrcPath)
 	readPath := tmpl.Parse(iOpt.SrcPath, fileDay)
@@ -105,7 +105,7 @@ func (w *worker) DoTask(ctx context.Context) (task.Result, string) {
 		log.Printf("could not publish to %s", w.fileTopic)
 	}
 
-	return task.Completed("Completed, wrote file " + stats.Path)
+	return task.Completed("Completed, wrote file %s", stats.Path)
 }
 
 // parseTmpl is a one-time tmpl parsing that supports the
