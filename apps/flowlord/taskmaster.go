@@ -203,10 +203,10 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 		for {
 			select {
 			case <-DBTick.C:
-				if i, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention)); err != nil {
+				if s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention)); err != nil {
 					log.Println("task cache recycle:", err)
 				} else {
-					log.Printf("task cache recycled %d old records", i)
+					log.Println(s)
 				}
 			case <-workflowTick.C:
 				if _, err := tm.refreshCache(); err != nil {

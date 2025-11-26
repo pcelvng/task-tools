@@ -276,11 +276,19 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	v := struct {
 		Files   []string `json:",omitempty"`
+		Cache string 
 		Updated time.Time
 	}{
 		Files:   files,
+		Cache: s, 
 		Updated: tm.lastUpdate.UTC(),
 	}
 	b, _ := json.MarshalIndent(v, "", "  ")
