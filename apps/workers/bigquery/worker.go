@@ -48,7 +48,7 @@ func (o *options) NewWorker(info string) task.Worker {
 	}
 	err := uri.Unmarshal(info, w)
 	if err != nil {
-		return task.InvalidWorker(err.Error())
+		return task.InvalidWorker("%v", err)
 	}
 
 	// verify options

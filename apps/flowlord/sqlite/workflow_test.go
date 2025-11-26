@@ -107,7 +107,7 @@ template = "{meta:file}?time={yyyy}-{mm}-{dd}"
 	w := &Workflow{}
 
 	if _, err := toml.Decode(v, w); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	if len(w.Phases) != 2 {
 		t.Errorf("Expected 2 phases got %d", len(w.Phases))

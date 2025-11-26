@@ -3,7 +3,7 @@ version: 2.1
 executors:
   go-executor:
     docker:
-      - image: cimg/go:1.23
+      - image: cimg/go:1.25
     working_directory: ~/task-tools 
 
 jobs:

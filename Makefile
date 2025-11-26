@@ -53,8 +53,7 @@ docker: linux_build
 
 # run unit tests
 test:
-	go test -cover ./...
-	go test -cover ./apps/...
+	go test  ./... ./apps/...
 
 .PHONY: install clean docker all flowlord
 .PHONY: $(APPS) $(TOOLS)

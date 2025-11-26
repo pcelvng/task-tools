@@ -67,13 +67,13 @@ func (o *options) newWorker(info string) task.Worker {
 	// parse info
 	iOpt, err := newInfoOptions(info)
 	if err != nil {
-		return task.InvalidWorker(err.Error())
+		return task.InvalidWorker("%v", err)
 	}
 
 	// validate
 	err = iOpt.validate()
 	if err != nil {
-		return task.InvalidWorker(err.Error())
+		return task.InvalidWorker("%v", err)
 	}
 
 	// all paths (if pth is directory)
@@ -107,7 +107,7 @@ func (o *options) newWorker(info string) task.Worker {
 	// writer
 	w, err := file.NewWriter(destPth, &o.FOpts)
 	if err != nil {
-		return task.InvalidWorker(err.Error())
+		return task.InvalidWorker("%v", err)
 	}
 
 	// csv index fields

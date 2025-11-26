@@ -67,7 +67,7 @@ func (o *options) newWorker(info string) task.Worker {
 	// validate
 	err := iOpt.validate()
 	if err != nil {
-		return task.InvalidWorker(err.Error())
+		return task.InvalidWorker("%v", err)
 	}
 
 	// date extractor
@@ -106,7 +106,7 @@ func (o *options) newWorker(info string) task.Worker {
 		sr := &statsReader{sts: &sts}
 		sr.r, err = file.NewReader(sts.Path, &o.Fopt)
 		if err != nil {
-			return task.InvalidWorker(err.Error())
+			return task.InvalidWorker("%v", err)
 		}
 		stsRdrs = append(stsRdrs, sr)
 	}
