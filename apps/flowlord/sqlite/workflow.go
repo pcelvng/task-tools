@@ -90,7 +90,7 @@ func (s *SQLite) IsDir() bool {
 // Search the all workflows within the cache and return the first
 // matching phase with the specific task and job (optional)
 func (s *SQLite) Search(taskType, job string) PhaseDB {
-	return s.Get(task.Task{Type: taskType, Job: job}) 
+	return s.Get(task.Task{Type: taskType, Job: job})
 }
 
 // Get the Phase associated with the task

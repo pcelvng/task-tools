@@ -113,7 +113,7 @@ func (s *DurationStats) String() string {
 
 func (stats *Stats) Add(tsk task.Task) {
 	tm := tmpl.TaskTime(tsk)
-	
+
 	// Handle different result types
 	switch tsk.Result {
 	case task.ErrResult:
@@ -180,7 +180,7 @@ func (ts TaskStats) UniqueTypes() []string {
 			typeSet[key] = struct{}{}
 		}
 	}
-	
+
 	types := make([]string, 0, len(typeSet))
 	for t := range typeSet {
 		types = append(types, t)
@@ -192,7 +192,7 @@ func (ts TaskStats) UniqueTypes() []string {
 // JobsByType returns jobs organized by type
 func (ts TaskStats) JobsByType() map[string][]string {
 	jobsByType := make(map[string][]string)
-	
+
 	for key := range ts {
 		// Split key into type and job
 		parts := strings.SplitN(key, ":", 2)
@@ -204,19 +204,19 @@ func (ts TaskStats) JobsByType() map[string][]string {
 			}
 		}
 	}
-	
+
 	// Sort jobs for each type
 	for typ := range jobsByType {
 		sort.Strings(jobsByType[typ])
 	}
-	
+
 	return jobsByType
 }
 
 // TotalCounts returns aggregate result counts across all tasks
 func (ts TaskStats) TotalCounts() TaskCounts {
 	var counts TaskCounts
-	
+
 	for _, stats := range ts {
 		counts.Total += stats.CompletedCount + stats.ErrorCount + stats.AlertCount + stats.WarnCount + stats.RunningCount
 		counts.Completed += stats.CompletedCount
@@ -225,6 +225,6 @@ func (ts TaskStats) TotalCounts() TaskCounts {
 		counts.Warn += stats.WarnCount
 		counts.Running += stats.RunningCount
 	}
-	
+
 	return counts
 }

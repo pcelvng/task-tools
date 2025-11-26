@@ -78,8 +78,7 @@ func TestValidatePhase(t *testing.T) {
 		"cron 6": {
 			Input: Phase{Rule: "cron=1 2 3 4 5 6"},
 		},
-		"cron complex": 
-		{
+		"cron complex": {
 			Input: Phase{Rule: "cron=20 */6 * * SUN"},
 		},
 		"parse_err": {

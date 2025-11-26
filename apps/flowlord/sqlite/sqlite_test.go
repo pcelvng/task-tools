@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/pcelvng/task"
+
 	"github.com/pcelvng/task-tools/file/stat"
 )
 
@@ -40,15 +41,15 @@ func TestDatesByType(t *testing.T) {
 		VALUES (?, ?, ?, ?, ?, ?),
 		       (?, ?, ?, ?, ?, ?)
 	`, "alert1", "2024-01-15T11:00:00Z", "data-validation", "check", "Validation error", "2024-01-15T11:00:00Z",
-	   "alert2", "2024-01-17T11:00:00Z", "data-validation", "check", "Validation error", "2024-01-17T11:00:00Z")
+		"alert2", "2024-01-17T11:00:00Z", "data-validation", "check", "Validation error", "2024-01-17T11:00:00Z")
 	if err != nil {
 		t.Fatalf("Failed to insert alerts: %v", err)
 	}
 
 	// Add sample file messages
 	fileMsg1 := stat.Stats{
-		Path: "gs://bucket/file1.json", 
-		Size: 1024, 
+		Path: "gs://bucket/file1.json",
+		Size: 1024,
 	}
 	db.AddFileMessage(fileMsg1, []string{}, []string{})
 
