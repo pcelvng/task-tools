@@ -186,6 +186,14 @@ func (s *SQLite) Recycle(t time.Time) (int, error) {
 	rowsAffected, _ = result.RowsAffected()
 	totalDeleted += int(rowsAffected)
 
+	// Delete old date index entries
+	result, err = s.db.Exec("DELETE FROM date_index WHERE date < ?", day)
+	if err != nil {
+		return totalDeleted, fmt.Errorf("error deleting old date index: %w", err)
+	}
+	rowsAffected, _ = result.RowsAffected()
+	totalDeleted += int(rowsAffected)
+
 	return totalDeleted, nil
 }
 
