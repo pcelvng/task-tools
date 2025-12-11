@@ -156,37 +156,48 @@ func (s *SQLite) GetTask(id string) TaskJob {
 }
 
 // Recycle cleans up any records older than day in the DB tables: files, alerts and tasks.
-func (s *SQLite) Recycle(t time.Time) (int, error) {
+func (s *SQLite) Recycle(t time.Time) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	d := struct {
+		tasks int64 
+		alerts int64 
+		files int64 
+		days int64 
+	}{}
 	day := t.Format("2006-01-02")
-	totalDeleted := 0
+
 
 	// Delete old task records
 	result, err := s.db.Exec("DELETE FROM task_records WHERE created < ?", day)
 	if err != nil {
-		return totalDeleted, fmt.Errorf("error deleting old task records: %w", err)
+		return "", fmt.Errorf("error deleting old task records: %w", err)
 	}
-	rowsAffected, _ := result.RowsAffected()
-	totalDeleted += int(rowsAffected)
+	d.tasks, _ = result.RowsAffected()
 
 	// Delete old alert records
 	result, err = s.db.Exec("DELETE FROM alert_records WHERE created_at < ?", day)
 	if err != nil {
-		return totalDeleted, fmt.Errorf("error deleting old alert records: %w", err)
+		return "", fmt.Errorf("error deleting old alert records: %w", err)
 	}
-	rowsAffected, _ = result.RowsAffected()
-	totalDeleted += int(rowsAffected)
+	d.alerts, _ = result.RowsAffected()
 
 	// Delete old file messages
 	result, err = s.db.Exec("DELETE FROM file_messages WHERE received_at < ?", day)
 	if err != nil {
-		return totalDeleted, fmt.Errorf("error deleting old file messages: %w", err)
+		return "", fmt.Errorf("error deleting old file messages: %w", err)
 	}
-	rowsAffected, _ = result.RowsAffected()
-	totalDeleted += int(rowsAffected)
+	d.files, _ = result.RowsAffected()
 
-	return totalDeleted, nil
+
+	// Delete old date index entries
+	result, err = s.db.Exec("DELETE FROM date_index WHERE date < ?", day)
+	if err != nil {
+		return "", fmt.Errorf("error deleting old date index: %w", err)
+	}
+	d.days, _ = result.RowsAffected()
+
+	return fmt.Sprintf("tasks: %d alerts:%d files: %d days: %d", d.tasks, d.alerts, d.files, d.days), nil
 }
 
 // CheckIncompleteTasks checks for tasks that have not completed within the TTL period
