@@ -542,8 +542,11 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	prevDate := date.AddDate(0, 0, -1)
 	nextDate := date.AddDate(0, 0, 1)
 
-	// Get aggregate counts from TaskStats
-	counts := taskStats.TotalCounts()
+	// Get unfiltered counts for summary section (always show full day stats)
+	unfilteredCounts := taskStats.TotalCounts()
+
+	// Get filtered hourly breakdown (respects filters)
+	_, hourlyStats := taskStats.GetCountsWithHourlyFiltered(filter)
 
 	// Get unique types and jobs from TaskStats for filter dropdowns
 	types := taskStats.UniqueTypes()
@@ -564,12 +567,13 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	}
 
 	data := map[string]interface{}{
-		"Date":          date.Format("Monday, January 2, 2006"),
-		"DateValue":     date.Format("2006-01-02"),
-		"PrevDate":      prevDate.Format("2006-01-02"),
-		"NextDate":      nextDate.Format("2006-01-02"),
-		"Tasks":         tasks,
-		"Counts":        counts,
+		"Date":         date.Format("Monday, January 2, 2006"),
+		"DateValue":    date.Format("2006-01-02"),
+		"PrevDate":     prevDate.Format("2006-01-02"),
+		"NextDate":     nextDate.Format("2006-01-02"),
+		"Tasks":        tasks,
+		"Counts":       unfilteredCounts,
+		"HourlyStats":  hourlyStats,
 		"Filter":        filter,
 		"CurrentPage":   "task",
 		"PageTitle":     "Task Dashboard",
@@ -603,7 +607,7 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	// Single consolidated log with all metrics
 	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
 		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result,
-		counts.Total, totalCount, filter.Page, totalPages,
+		unfilteredCounts.Total, totalCount, filter.Page, totalPages,
 		queryTime, renderTime, float64(htmlSize)/(1024*1024))
 
 	return buf.Bytes()

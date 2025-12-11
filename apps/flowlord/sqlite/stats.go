@@ -228,3 +228,96 @@ func (ts TaskStats) TotalCounts() TaskCounts {
 
 	return counts
 }
+
+// GetCountsWithHourly returns both total and hourly task counts in a single iteration
+// The hourly array contains 24 TaskCounts where index represents the hour (0-23)
+func (ts TaskStats) GetCountsWithHourly() (TaskCounts, [24]TaskCounts) {
+	return ts.GetCountsWithHourlyFiltered(nil)
+}
+
+// GetCountsWithHourlyFiltered returns total and hourly counts with optional filtering by type, job, and result
+// The hourly array contains 24 TaskCounts where index represents the hour (0-23)
+func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts, [24]TaskCounts) {
+	var total TaskCounts
+	var hourly [24]TaskCounts
+
+	for key, stats := range ts {
+		// Apply type and job filters
+		if filter != nil {
+			// Parse key format "type:job"
+			parts := strings.SplitN(key, ":", 2)
+			taskType := parts[0]
+			taskJob := ""
+			if len(parts) == 2 {
+				taskJob = parts[1]
+			}
+
+			// Skip if type filter doesn't match
+			if filter.Type != "" && taskType != filter.Type {
+				continue
+			}
+
+			// Skip if job filter doesn't match
+			if filter.Job != "" && taskJob != filter.Job {
+				continue
+			}
+		}
+
+		// Process completed tasks
+		if filter == nil || filter.Result == "" || filter.Result == "complete" {
+			for _, t := range stats.CompletedTimes {
+				hour := t.Hour()
+				hourly[hour].Completed++
+				hourly[hour].Total++
+				total.Completed++
+				total.Total++
+			}
+		}
+
+		// Process error tasks
+		if filter == nil || filter.Result == "" || filter.Result == "error" {
+			for _, t := range stats.ErrorTimes {
+				hour := t.Hour()
+				hourly[hour].Error++
+				hourly[hour].Total++
+				total.Error++
+				total.Total++
+			}
+		}
+
+		// Process alert tasks
+		if filter == nil || filter.Result == "" || filter.Result == "alert" {
+			for _, t := range stats.AlertTimes {
+				hour := t.Hour()
+				hourly[hour].Alert++
+				hourly[hour].Total++
+				total.Alert++
+				total.Total++
+			}
+		}
+
+		// Process warn tasks
+		if filter == nil || filter.Result == "" || filter.Result == "warn" {
+			for _, t := range stats.WarnTimes {
+				hour := t.Hour()
+				hourly[hour].Warn++
+				hourly[hour].Total++
+				total.Warn++
+				total.Total++
+			}
+		}
+
+		// Process running tasks
+		if filter == nil || filter.Result == "" || filter.Result == "running" {
+			for _, t := range stats.RunningTimes {
+				hour := t.Hour()
+				hourly[hour].Running++
+				hourly[hour].Total++
+				total.Running++
+				total.Total++
+			}
+		}
+	}
+
+	return total, hourly
+}
