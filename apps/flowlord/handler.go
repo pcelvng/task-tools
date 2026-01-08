@@ -47,6 +47,9 @@ var HeaderTemplate string
 //go:embed handler/about.tmpl
 var AboutTemplate string
 
+//go:embed handler/backload.tmpl
+var BackloadTemplate string
+
 //go:embed handler/static/*
 var StaticFiles embed.FS
 
@@ -128,6 +131,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/web/files", tm.htmlFiles)
 	router.Get("/web/task", tm.htmlTask)
 	router.Get("/web/workflow", tm.htmlWorkflow)
+	router.Get("/web/backload", tm.htmlBackload)
 	router.Get("/web/about", tm.htmlAbout)
 
 	if tm.port == 0 {
@@ -705,6 +709,65 @@ func (tm *taskMaster) aboutHTML() []byte {
 
 	// Parse and execute template using the shared funcMap
 	tmpl, err := template.New("about").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + AboutTemplate)
+	if err != nil {
+		return []byte("Error parsing template: " + err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte("Error executing template: " + err.Error())
+	}
+
+	return buf.Bytes()
+}
+
+// htmlBackload handles GET /web/backload - displays the backload form
+func (tm *taskMaster) htmlBackload(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(backloadHTML(tm.taskCache))
+}
+
+// backloadHTML renders the backload form HTML page
+func backloadHTML(tCache *sqlite.SQLite) []byte {
+	// Get all phases grouped by workflow file
+	phasesByWorkflow := tCache.GetAllPhasesGrouped()
+
+	// Create flat list of phases for JSON encoding
+	type phaseJSON struct {
+		Workflow  string `json:"workflow"`
+		Task      string `json:"task"`
+		Job       string `json:"job"`
+		Template  string `json:"template"`
+		Rule      string `json:"rule"`
+		DependsOn string `json:"dependsOn"`
+	}
+	var allPhases []phaseJSON
+	for workflow, phases := range phasesByWorkflow {
+		for _, p := range phases {
+			allPhases = append(allPhases, phaseJSON{
+				Workflow:  workflow,
+				Task:      p.Topic(),
+				Job:       p.Job(),
+				Template:  p.Template,
+				Rule:      p.Rule,
+				DependsOn: p.DependsOn,
+			})
+		}
+	}
+	phasesJSON, _ := json.Marshal(allPhases)
+
+	data := map[string]interface{}{
+		"PhasesByWorkflow": phasesByWorkflow,
+		"PhasesJSON":       template.JS(phasesJSON),
+		"CurrentPage":      "backload",
+		"PageTitle":        "Backload Tasks",
+		"isLocal":          isLocal,
+		"DatesWithData":    []string{}, // Backload page doesn't use date picker with highlights
+	}
+
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("backload").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + BackloadTemplate)
 	if err != nil {
 		return []byte("Error parsing template: " + err.Error())
 	}

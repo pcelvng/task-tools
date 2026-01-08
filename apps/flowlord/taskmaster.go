@@ -176,7 +176,7 @@ func (tm *taskMaster) refreshCache() ([]string, error) {
 	if len(files) > 0 {
 		log.Println("reloading workflow changes")
 		tcron := tm.cron
-		tm.cron = cron.New(cron.WithSeconds())
+		tm.cron = cron.New(cron.WithParser(cronParser))
 		if err := tm.schedule(); err != nil {
 			tm.cron = tcron // revert to old cron schedule
 			return files, fmt.Errorf("cron schedule: %w", err)
