@@ -1656,3 +1656,33 @@ select.form-control:disabled {
     font-style: italic;
     text-align: center;
 }
+
+.search-dropdown-item.selected {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+/* ===== LOADING SPINNER STYLES ===== */
+.loading-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+.btn-loading {
+    pointer-events: none;
+    opacity: 0.7;
+    cursor: wait;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
