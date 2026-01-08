@@ -682,6 +682,7 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"AppName":          sts.AppName,
 		"Version":          sts.Version,
 		"RunTime":          sts.RunTime,
+		"StartTime":        tm.initTime.Format(time.RFC3339),
 		"LastUpdate":       sts.LastUpdate,
 		"NextUpdate":       sts.NextUpdate,
 		"TotalDBSize":      dbSize.TotalSize,

@@ -25,8 +25,9 @@
                     </div>
                     <div class="info-item">
                         <span class="info-label">Runtime</span>
-                        <span class="info-value">{{.RunTime}}</span>
+                        <span class="info-value" id="uptime">{{.RunTime}}</span>
                     </div>
+                    <input type="hidden" id="startTime" value="{{.StartTime}}">
                 </div>
                 
                 <div class="info-card">
@@ -112,7 +113,7 @@
                             {{range .TableStats}}
                             <tr>
                                 <td>{{.Name}}</td>
-                                <td>{{.RowCount}}</td>
+                                <td class="row-count">{{.RowCount}}</td>
                                 <td class="size-cell">{{.TableHuman}}</td>
                                 <td class="size-cell">{{.IndexHuman}}</td>
                                 <td class="size-cell">{{.TotalHuman}}</td>
@@ -127,12 +128,46 @@
     </div>
     
     <script>
-        // Auto-refresh every 30 seconds
-        if (window.location.search.indexOf('norefresh') === -1) {
-            setTimeout(function() {
-                location.reload();
-            }, 30000);
-        }
+        // Format numbers with commas for readability
+        document.querySelectorAll('.row-count').forEach(function(cell) {
+            const num = parseInt(cell.textContent, 10);
+            if (!isNaN(num)) {
+                cell.textContent = num.toLocaleString();
+            }
+        });
+
+        // Calculate and update uptime dynamically
+        (function() {
+            const startTimeStr = document.getElementById('startTime').value;
+            if (!startTimeStr) return;
+            
+            const startTime = new Date(startTimeStr);
+            const uptimeEl = document.getElementById('uptime');
+            
+            function formatDuration(ms) {
+                const seconds = Math.floor(ms / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+                
+                const parts = [];
+                if (days > 0) parts.push(days + 'd');
+                if (hours % 24 > 0) parts.push((hours % 24) + 'h');
+                if (minutes % 60 > 0) parts.push((minutes % 60) + 'm');
+                if (seconds % 60 > 0 || parts.length === 0) parts.push((seconds % 60) + 's');
+                
+                return parts.join(' ');
+            }
+            
+            function updateUptime() {
+                const now = new Date();
+                const diff = now - startTime;
+                uptimeEl.textContent = formatDuration(diff);
+            }
+            
+            updateUptime();
+            setInterval(updateUptime, 1000);
+        })();
     </script>
 </body>
 </html>
