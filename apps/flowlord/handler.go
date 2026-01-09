@@ -288,11 +288,11 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 	v := struct {
 		Files   []string `json:",omitempty"`
-		Cache string 
+		Cache   string
 		Updated time.Time
 	}{
 		Files:   files,
-		Cache: s, 
+		Cache:   s,
 		Updated: tm.lastUpdate.UTC(),
 	}
 	b, _ := json.MarshalIndent(v, "", "  ")
@@ -395,7 +395,6 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	// Get dates with alerts for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("alerts")
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(alertHTML(alerts, dt, datesWithData))
 }
@@ -417,7 +416,6 @@ func (tm *taskMaster) htmlFiles(w http.ResponseWriter, r *http.Request) {
 	// Get dates with file messages for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("files")
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(filesHTML(files, dt, datesWithData))
 }
@@ -468,7 +466,6 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	// Get dates with tasks for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("tasks")
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime)
 	w.Write(htmlBytes)
@@ -476,14 +473,13 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 
 // htmlWorkflow handles GET /web/workflow - displays workflow phases from database
 func (tm *taskMaster) htmlWorkflow(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(workflowHTML(tm.taskCache))
 }
 
 // htmlAbout handles GET /web/about - displays system information and cache statistics
 func (tm *taskMaster) htmlAbout(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
+
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(tm.aboutHTML())
 }
@@ -571,13 +567,13 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	}
 
 	data := map[string]interface{}{
-		"Date":         date.Format("Monday, January 2, 2006"),
-		"DateValue":    date.Format("2006-01-02"),
-		"PrevDate":     prevDate.Format("2006-01-02"),
-		"NextDate":     nextDate.Format("2006-01-02"),
-		"Tasks":        tasks,
-		"Counts":       unfilteredCounts,
-		"HourlyStats":  hourlyStats,
+		"Date":          date.Format("Monday, January 2, 2006"),
+		"DateValue":     date.Format("2006-01-02"),
+		"PrevDate":      prevDate.Format("2006-01-02"),
+		"NextDate":      nextDate.Format("2006-01-02"),
+		"Tasks":         tasks,
+		"Counts":        unfilteredCounts,
+		"HourlyStats":   hourlyStats,
 		"Filter":        filter,
 		"CurrentPage":   "task",
 		"PageTitle":     "Task Dashboard",
@@ -761,7 +757,7 @@ func backloadHTML(tCache *sqlite.SQLite) []byte {
 		"PhasesByWorkflow": phasesByWorkflow,
 		"PhasesJSON":       template.JS(phasesJSON),
 		"CurrentPage":      "backload",
-		"PageTitle":        "Backload Tasks",
+		"PageTitle":        "Backload",
 		"isLocal":          isLocal,
 		"DatesWithData":    []string{}, // Backload page doesn't use date picker with highlights
 	}

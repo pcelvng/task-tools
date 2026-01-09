@@ -185,6 +185,15 @@
         elements.taskSelect.value = task;
         elements.taskDropdown.style.display = 'none';
         selectedDropdownIndex = -1;
+        
+        // Set workflow filter to the task's workflow if not already filtered
+        if (!elements.workflowFilter.value) {
+            const phase = allPhases.find(p => p.task === task);
+            if (phase && phase.workflow) {
+                elements.workflowFilter.value = phase.workflow;
+            }
+        }
+        
         onTaskSelected(task);
     }
 
