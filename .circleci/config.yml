@@ -8,7 +8,18 @@ executors:
 
 jobs:
   test:
-    executor: go-executor 
+    docker:
+      - image: cimg/go:1.25
+      - image: minio/minio
+        command: server /data
+        environment:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+    working_directory: ~/task-tools
+    environment:
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
     steps:
       - checkout
       - run: go install github.com/jstemmer/go-junit-report/v2@latest
