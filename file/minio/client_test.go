@@ -12,19 +12,23 @@ import (
 )
 
 var (
-	// minio test server credentials
-	//
-	// see:
-	// https://docs.minio.io/docs/golang-client-api-reference
 	testBucket = "task-tools-test"
 	testClient *minio.Client
-	testOption = Option{
-		Host:      "play.minio.io:9000",
-		AccessKey: "Q3AM3UQ867SPQQA43P2F",
-		SecretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
-		Secure:    true,
-	}
 )
+
+var testOption = Option{
+	Host:      getEnv("MINIO_ENDPOINT", "localhost:9000"),
+	AccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+	SecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
+	Secure:    false, // local Docker instance uses HTTP
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
 
 func TestMain(m *testing.M) {
 	var err error
@@ -33,35 +37,54 @@ func TestMain(m *testing.M) {
 	// test client
 	testClient, err = newTestClient()
 	if err != nil {
-		log.Printf("SKIP: error with test minio client %v %v", testClient, err)
+		fmt.Println("\033[34mSKIP: Minio server not available - run 'docker run -p 9000:9000 minio/minio server /data' for local testing\033[0m")
 		return
 	}
 
 	// make test bucket
 	if err := createBucket(testBucket); err != nil {
-		log.Printf("SKIP: error with create bucket %v", err)
-	}
-
-	// create two test files for reading
-	pth := fmt.Sprintf("mc://%v/read/test.txt", testBucket)
-	if err := createTestFile(pth); err != nil {
-		log.Printf("SKIP: error with create test.txt: %v", err)
+		fmt.Printf("\033[34mSKIP: error creating bucket: %v\033[0m\n", err)
 		return
 	}
 
-	// compressed read test file
-	gzPth := fmt.Sprintf("mc://%v/read/test.gz", testBucket)
-	if err := createTestFile(gzPth); err != nil {
-		log.Printf("SKIP: error with test.gz %v", err)
-		return
+	// create test files for reading
+	readFiles := []string{
+		fmt.Sprintf("mc://%v/read/test.txt", testBucket),
+		fmt.Sprintf("mc://%v/read/test.gz", testBucket),
+	}
+	for _, pth := range readFiles {
+		if err := createTestFile(pth); err != nil {
+			fmt.Printf("\033[34mSKIP: error creating %s: %v\033[0m\n", pth, err)
+			return
+		}
+	}
+
+	// create test files for glob testing
+	globFiles := []string{
+		fmt.Sprintf("mc://%v/glob/file-1.txt", testBucket),
+		fmt.Sprintf("mc://%v/glob/file2.txt", testBucket),
+		fmt.Sprintf("mc://%v/glob/file3.gz", testBucket),
+		fmt.Sprintf("mc://%v/glob/f1/file4.gz", testBucket),
+		fmt.Sprintf("mc://%v/glob/f3/file5.txt", testBucket),
+		fmt.Sprintf("mc://%v/glob/f5/file-6.txt", testBucket),
+	}
+	for _, pth := range globFiles {
+		if err := createTestFile(pth); err != nil {
+			fmt.Printf("\033[34mSKIP: error creating %s: %v\033[0m\n", pth, err)
+			return
+		}
 	}
 
 	// run
 	runRslt := m.Run()
 
-	// remove read objects
-	rmTestFile(pth)
-	rmTestFile(gzPth)
+	// remove test objects
+	for _, pth := range readFiles {
+		rmTestFile(pth)
+	}
+	for _, pth := range globFiles {
+		rmTestFile(pth)
+	}
 
 	// remove test bucket
 	rmBucket(testBucket)
