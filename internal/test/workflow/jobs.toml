@@ -1,6 +1,6 @@
 [[phase]]
 task = "worker"
-rule = "cron=0 */5 * * *?job=parent_job"
+rule = "cron=0 */5 * * *&job=parent_job"
 retry = 3
 template = "?date={yyyy}-{mm}-{dd}T{hh}"
 

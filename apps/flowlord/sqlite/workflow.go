@@ -364,6 +364,22 @@ func (s *SQLite) GetWorkflowFiles() []string {
 	return files
 }
 
+// GetAllPhasesGrouped returns all phases grouped by workflow file
+func (s *SQLite) GetAllPhasesGrouped() map[string][]PhaseDB {
+	result := make(map[string][]PhaseDB)
+
+	workflowFiles := s.GetWorkflowFiles()
+	for _, filePath := range workflowFiles {
+		phases, err := s.GetPhasesForWorkflow(filePath)
+		if err != nil {
+			continue
+		}
+		result[filePath] = phases
+	}
+
+	return result
+}
+
 // GetPhasesForWorkflow returns all phases for a specific workflow file
 func (s *SQLite) GetPhasesForWorkflow(filePath string) ([]PhaseDB, error) {
 	rows, err := s.db.Query(`

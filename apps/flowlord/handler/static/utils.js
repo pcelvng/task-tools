@@ -2,8 +2,25 @@
 (function() {
     'use strict';
 
+    // Escape HTML for safe display in innerHTML
+    function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
+    // Escape text for use in inline JavaScript attributes
+    function escapeJsString(text) {
+        if (text === null || text === undefined) return '';
+        return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+
     // Context menu functionality
     function showContextMenu(event, text) {
+        event.preventDefault();
+        event.stopPropagation();
+        
         // Remove any existing context menu
         const existingMenu = document.querySelector('.context-menu');
         if (existingMenu) {
@@ -13,11 +30,16 @@
         // Create context menu
         const contextMenu = document.createElement('div');
         contextMenu.className = 'context-menu';
-        contextMenu.innerHTML = `
-            <div class="context-menu-item" onclick="window.FlowlordUtils.copyToClipboard('${escapeHtml(text)}')">
-                📋 Copy
-            </div>
-        `;
+        
+        const menuItem = document.createElement('div');
+        menuItem.className = 'context-menu-item';
+        menuItem.innerHTML = '📋 Copy';
+        menuItem.addEventListener('click', function() {
+            copyToClipboard(text);
+            contextMenu.remove();
+        });
+        
+        contextMenu.appendChild(menuItem);
         
         // Position the context menu
         contextMenu.style.left = event.pageX + 'px';
@@ -36,11 +58,6 @@
         setTimeout(() => {
             document.addEventListener('click', closeMenu);
         }, 100);
-    }
-
-    // Escape HTML for safe insertion
-    function escapeHtml(text) {
-        return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
     }
 
     // Copy to clipboard functionality with enhanced feedback
@@ -72,9 +89,11 @@
     }
 
     // Show copy feedback with animation
-    function showCopyFeedback(element, message, isError = false) {
+    function showCopyFeedback(element, message, isError) {
+        isError = isError || false;
+        
         // Remove any existing feedback
-        const existingFeedback = element.querySelector('.copy-feedback');
+        const existingFeedback = document.querySelector('.copy-feedback');
         if (existingFeedback) {
             existingFeedback.remove();
         }
@@ -92,7 +111,7 @@
         feedback.style.top = (rect.top - 10) + 'px';
         feedback.style.transform = 'translateX(-50%)';
         
-        element.appendChild(feedback);
+        document.body.appendChild(feedback);
         
         // Remove feedback after animation
         setTimeout(() => {
@@ -104,27 +123,35 @@
 
     // Toggle field expansion
     function toggleField(element, fullText) {
-        if (element.classList.contains('truncated')) {
-            element.classList.remove('truncated');
-            element.classList.add('expanded');
-            element.textContent = fullText;
-        } else {
-            element.classList.add('truncated');
+        // Prevent event bubbling to avoid conflicts with sorting
+        if (event) {
+            event.stopPropagation();
+        }
+        
+        if (element.classList.contains('expanded')) {
+            // Collapse the field
             element.classList.remove('expanded');
+            element.classList.add('truncated');
             // Reset to truncated text if available in data attribute
             const truncatedText = element.getAttribute('data-truncated-text');
             if (truncatedText) {
                 element.textContent = truncatedText;
             }
+        } else {
+            // Expand the field
+            element.classList.remove('truncated');
+            element.classList.add('expanded');
+            element.textContent = fullText;
         }
     }
 
     // Export to global scope
     window.FlowlordUtils = {
+        escapeHtml: escapeHtml,
+        escapeJsString: escapeJsString,
         showContextMenu: showContextMenu,
         copyToClipboard: copyToClipboard,
         showCopyFeedback: showCopyFeedback,
         toggleField: toggleField
     };
 })();
-

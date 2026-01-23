@@ -588,6 +588,32 @@ func generateSummary(tasks []sqlite.TaskView) sqlite.TaskStats {
 	return sqlite.TaskStats(data)
 }
 
+func TestBackloadHTML(t *testing.T) {
+	// Load workflow files 
+	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}
+	if err := taskCache.Open(testPath+"/workflow/", nil); err != nil {
+		t.Fatalf("Failed to create test cache: %v", err)
+	}
+
+	// Test with no filters - summary will be generated from tasks data
+	html := backloadHTML(taskCache)
+
+	// Validate HTML using the new function
+	if err := validateHTML(html); err != nil {
+		t.Errorf("HTML validation failed: %v", err)
+	}
+
+	// Write HTML to a file for easy viewing
+	outputFile := "handler/backload_preview.html"
+	err := os.WriteFile(outputFile, html, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write HTML file: %v", err)
+	}
+
+	t.Logf("backload preview generated and saved to: ./%s", outputFile)
+
+}
+
 func TestWorkflowHTML(t *testing.T) {
 	// Load workflow files 
 	taskCache := &sqlite.SQLite{LocalPath: ":memory:"}

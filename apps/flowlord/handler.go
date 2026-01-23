@@ -47,6 +47,9 @@ var HeaderTemplate string
 //go:embed handler/about.tmpl
 var AboutTemplate string
 
+//go:embed handler/backload.tmpl
+var BackloadTemplate string
+
 //go:embed handler/static/*
 var StaticFiles embed.FS
 
@@ -128,6 +131,7 @@ func (tm *taskMaster) StartHandler() {
 	router.Get("/web/files", tm.htmlFiles)
 	router.Get("/web/task", tm.htmlTask)
 	router.Get("/web/workflow", tm.htmlWorkflow)
+	router.Get("/web/backload", tm.htmlBackload)
 	router.Get("/web/about", tm.htmlAbout)
 
 	if tm.port == 0 {
@@ -284,11 +288,11 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 	v := struct {
 		Files   []string `json:",omitempty"`
-		Cache string 
+		Cache   string
 		Updated time.Time
 	}{
 		Files:   files,
-		Cache: s, 
+		Cache:   s,
 		Updated: tm.lastUpdate.UTC(),
 	}
 	b, _ := json.MarshalIndent(v, "", "  ")
@@ -391,7 +395,6 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	// Get dates with alerts for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("alerts")
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(alertHTML(alerts, dt, datesWithData))
 }
@@ -413,7 +416,6 @@ func (tm *taskMaster) htmlFiles(w http.ResponseWriter, r *http.Request) {
 	// Get dates with file messages for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("files")
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(filesHTML(files, dt, datesWithData))
 }
@@ -464,7 +466,6 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	// Get dates with tasks for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("tasks")
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime)
 	w.Write(htmlBytes)
@@ -472,14 +473,13 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 
 // htmlWorkflow handles GET /web/workflow - displays workflow phases from database
 func (tm *taskMaster) htmlWorkflow(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(workflowHTML(tm.taskCache))
 }
 
 // htmlAbout handles GET /web/about - displays system information and cache statistics
 func (tm *taskMaster) htmlAbout(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
+
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(tm.aboutHTML())
 }
@@ -542,8 +542,11 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	prevDate := date.AddDate(0, 0, -1)
 	nextDate := date.AddDate(0, 0, 1)
 
-	// Get aggregate counts from TaskStats
-	counts := taskStats.TotalCounts()
+	// Get unfiltered counts for summary section (always show full day stats)
+	unfilteredCounts := taskStats.TotalCounts()
+
+	// Get filtered hourly breakdown (respects filters)
+	_, hourlyStats := taskStats.GetCountsWithHourlyFiltered(filter)
 
 	// Get unique types and jobs from TaskStats for filter dropdowns
 	types := taskStats.UniqueTypes()
@@ -569,7 +572,8 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 		"PrevDate":      prevDate.Format("2006-01-02"),
 		"NextDate":      nextDate.Format("2006-01-02"),
 		"Tasks":         tasks,
-		"Counts":        counts,
+		"Counts":        unfilteredCounts,
+		"HourlyStats":   hourlyStats,
 		"Filter":        filter,
 		"CurrentPage":   "task",
 		"PageTitle":     "Task Dashboard",
@@ -603,7 +607,7 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	// Single consolidated log with all metrics
 	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
 		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result,
-		counts.Total, totalCount, filter.Page, totalPages,
+		unfilteredCounts.Total, totalCount, filter.Page, totalPages,
 		queryTime, renderTime, float64(htmlSize)/(1024*1024))
 
 	return buf.Bytes()
@@ -678,6 +682,7 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"AppName":          sts.AppName,
 		"Version":          sts.Version,
 		"RunTime":          sts.RunTime,
+		"StartTime":        tm.initTime.Format(time.RFC3339),
 		"LastUpdate":       sts.LastUpdate,
 		"NextUpdate":       sts.NextUpdate,
 		"TotalDBSize":      dbSize.TotalSize,
@@ -700,6 +705,65 @@ func (tm *taskMaster) aboutHTML() []byte {
 
 	// Parse and execute template using the shared funcMap
 	tmpl, err := template.New("about").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + AboutTemplate)
+	if err != nil {
+		return []byte("Error parsing template: " + err.Error())
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return []byte("Error executing template: " + err.Error())
+	}
+
+	return buf.Bytes()
+}
+
+// htmlBackload handles GET /web/backload - displays the backload form
+func (tm *taskMaster) htmlBackload(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(backloadHTML(tm.taskCache))
+}
+
+// backloadHTML renders the backload form HTML page
+func backloadHTML(tCache *sqlite.SQLite) []byte {
+	// Get all phases grouped by workflow file
+	phasesByWorkflow := tCache.GetAllPhasesGrouped()
+
+	// Create flat list of phases for JSON encoding
+	type phaseJSON struct {
+		Workflow  string `json:"workflow"`
+		Task      string `json:"task"`
+		Job       string `json:"job"`
+		Template  string `json:"template"`
+		Rule      string `json:"rule"`
+		DependsOn string `json:"dependsOn"`
+	}
+	var allPhases []phaseJSON
+	for workflow, phases := range phasesByWorkflow {
+		for _, p := range phases {
+			allPhases = append(allPhases, phaseJSON{
+				Workflow:  workflow,
+				Task:      p.Topic(),
+				Job:       p.Job(),
+				Template:  p.Template,
+				Rule:      p.Rule,
+				DependsOn: p.DependsOn,
+			})
+		}
+	}
+	phasesJSON, _ := json.Marshal(allPhases)
+
+	data := map[string]interface{}{
+		"PhasesByWorkflow": phasesByWorkflow,
+		"PhasesJSON":       template.JS(phasesJSON),
+		"CurrentPage":      "backload",
+		"PageTitle":        "Backload",
+		"isLocal":          isLocal,
+		"DatesWithData":    []string{}, // Backload page doesn't use date picker with highlights
+	}
+
+	// Parse and execute template using the shared funcMap
+	tmpl, err := template.New("backload").Funcs(getBaseFuncMap()).Parse(HeaderTemplate + BackloadTemplate)
 	if err != nil {
 		return []byte("Error parsing template: " + err.Error())
 	}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowlord: Backload</title>
+    <link rel="icon" type="image/svg+xml" href="{{if .isLocal}}./static{{else}}/static{{end}}/favicon.svg">
+    <link rel="stylesheet" href="{{if .isLocal}}./static{{else}}/static{{end}}/style.css">
+</head>
+<body>
+    {{template "header" .}}
+    <div class="container">
+        <div class="content">
+            <div class="backload-form">
+                <div class="info-grid">
+                    <!-- Task Selection Section -->
+                    <div class="info-card">
+                        <h3>Task Selection</h3>
+                        <div class="form-group">
+                            <label for="taskSearch">Task</label>
+                            <div class="search-select-container">
+                                <input type="text" id="taskSearch" class="form-control" placeholder="Type to search or click to browse..." autocomplete="off">
+                                <div id="taskDropdown" class="search-dropdown"></div>
+                            </div>
+                            <input type="hidden" id="taskSelect" value="">
+                        </div>
+                        <div class="form-group">
+                            <label for="jobSelect">Job</label>
+                            <select id="jobSelect" class="form-control" disabled>
+                                <option value="">Select a job...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="workflowFilter">Filter by Workflow</label>
+                            <select id="workflowFilter" class="form-control">
+                                <option value="">All Workflows</option>
+                                {{range $file, $phases := .PhasesByWorkflow}}
+                                <option value="{{$file}}">{{$file}}</option>
+                                {{end}}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Date Section -->
+                    <div class="info-card">
+                        <h3>Date</h3>
+                        <div class="form-group">
+                            <label>Date Mode</label>
+                            <div class="toggle-group">
+                                <button type="button" class="toggle-btn active" data-mode="single">At</button>
+                                <button type="button" class="toggle-btn" data-mode="range">Range</button>
+                            </div>
+                        </div>
+                        <div id="singleDateInput">
+                            <div class="form-group">
+                                <label for="atDate">Date</label>
+                                <input type="date" id="atDate" class="form-control">
+                            </div>
+                        </div>
+                        <div id="dateRangeInputs" style="display: none;">
+                            <div class="form-group">
+                                <label for="fromDate">From</label>
+                                <input type="date" id="fromDate" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label for="toDate">To</label>
+                                <input type="date" id="toDate" class="form-control">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="bySelect">By</label>
+                            <select id="bySelect" class="form-control">
+                                <option value="hour">Hour</option>
+                                <option value="day" selected>Day</option>
+                                <option value="week">Week</option>
+                                <option value="month">Month</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meta Fields Section -->
+                <div class="info-card" id="metaSection" style="display: none;">
+                    <h3>Meta Fields</h3>
+                    <p class="meta-hint">The selected task template requires the following meta fields:</p>
+                    <div id="metaFieldsContainer"></div>
+                </div>
+
+                <!-- Meta File Section -->
+                <div class="info-card" id="metaFileSection" style="display: none;">
+                    <h3>Meta File</h3>
+                    <p class="meta-hint">Provide a path to a JSON/CSV file for meta data (each row creates a task):</p>
+                    <div class="form-group">
+                        <label for="metaFileInput">Meta File Path</label>
+                        <input type="text" id="metaFileInput" class="form-control" placeholder="s3://bucket/path/to/meta.json">
+                    </div>
+                </div>
+
+                <!-- Template Info Section -->
+                <div class="info-card template-section" id="templateSection" style="display: none;">
+                    <h3>Template Details</h3>
+                    <div class="template-info">
+                        <div class="form-group">
+                            <label>Template</label>
+                            <div class="template-display" id="templateDisplay"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Rule</label>
+                            <div class="template-display" id="ruleDisplay"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button type="button" id="previewBtn" class="btn btn-primary" disabled>
+                        Preview (Dry Run)
+                    </button>
+                    <button type="button" id="executeBtn" class="btn btn-success" disabled style="display: none;">
+                        Execute Backload
+                    </button>
+                    <button type="button" id="resetBtn" class="btn btn-secondary">
+                        Reset
+                    </button>
+                </div>
+
+                <!-- Request Body Display -->
+                <div class="info-card" id="requestBodySection" style="display: none;">
+                    <h3>Request Body</h3>
+                    <pre class="request-body-display" id="requestBodyDisplay"></pre>
+                </div>
+
+                <!-- Preview Results Section -->
+                <div class="info-card" id="previewSection" style="display: none;">
+                    <h3>Preview Results</h3>
+                    <div id="previewStatus" class="preview-status"></div>
+                    <div class="table-container">
+                        <table id="previewTable">
+                            <thead>
+                                <tr>
+                                    <th class="num-column">#</th>
+                                    <th class="type-column">Type</th>
+                                    <th class="job-column">Job</th>
+                                    <th class="info-column">Info</th>
+                                    <th class="meta-column">Meta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="previewCount" class="stats"></div>
+                </div>
+
+                <!-- Execution Result Section -->
+                <div class="info-card" id="executionSection" style="display: none;">
+                    <h3>Execution Result</h3>
+                    <div id="executionStatus" class="execution-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{if .isLocal}}./static{{else}}/static{{end}}/backload.js"></script>
+    <script>
+        // Initialize the backload form with server-provided data
+        document.addEventListener('DOMContentLoaded', function() {
+            const phasesData = {{.PhasesJSON}};
+            const apiEndpoint = '/backload';
+            window.FlowlordBackload.init(phasesData, apiEndpoint);
+        });
+    </script>
+</body>
+</html>

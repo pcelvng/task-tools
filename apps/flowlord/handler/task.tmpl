@@ -12,32 +12,45 @@
     <div class="container full-width">
 
         <div class="summary-section">
-            <h3>Task Summary</h3>
-            <div class="summary-stats">
-                <div class="stat-card{{if not .Filter.Result}} active{{end}}" data-filter="all" onclick="filterByResult('all')">
-                    <div class="stat-number">{{.Counts.Total}}</div>
-                    <div class="stat-label">Total Tasks</div>
+            <h3>Summary</h3>
+            {{if .HourlyStats}}
+            <div class="collapsible-section">
+                <div class="collapsible-header" onclick="toggleCollapsible('hourlyChart')">
+                    <h3>Hourly Task Breakdown</h3>
+                    <span class="collapsible-toggle" id="hourlyChart-toggle">▼</span>
                 </div>
-                <div class="stat-card{{if eq .Filter.Result "complete"}} active{{end}}" data-filter="complete" onclick="filterByResult('complete')">
-                    <div class="stat-number">{{.Counts.Completed}}</div>
-                    <div class="stat-label">Completed</div>
+                <div class="collapsible-content" id="hourlyChart-content">
+                    <div class="chart-container">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
                 </div>
-                <div class="stat-card{{if eq .Filter.Result "error"}} active{{end}}" data-filter="error" onclick="filterByResult('error')">
-                    <div class="stat-number">{{.Counts.Error}}</div>
-                    <div class="stat-label">Errors</div>
-                </div>
-                <div class="stat-card{{if eq .Filter.Result "alert"}} active{{end}}" data-filter="alert" onclick="filterByResult('alert')">
-                    <div class="stat-number">{{.Counts.Alert}}</div>
-                    <div class="stat-label">Alerts</div>
-                </div>
-                <div class="stat-card{{if eq .Filter.Result "warn"}} active{{end}}" data-filter="warn" onclick="filterByResult('warn')">
-                    <div class="stat-number">{{.Counts.Warn}}</div>
-                    <div class="stat-label">Warnings</div>
-                </div>
-                <div class="stat-card{{if eq .Filter.Result "running"}} active{{end}}" data-filter="running" onclick="filterByResult('running')">
-                    <div class="stat-number">{{.Counts.Running}}</div>
-                    <div class="stat-label">Running</div>
-                </div>
+            </div>
+            {{end}}
+            <div class="summary-stats-text">
+                <span class="summary-stat-item">
+                    <span class="stat-color-box stat-total"></span>
+                    Total: {{.Counts.Total}}
+                </span>
+                <span class="summary-stat-item">
+                    <span class="stat-color-box stat-completed"></span>
+                    Completed: {{.Counts.Completed}}
+                </span>
+                <span class="summary-stat-item">
+                    <span class="stat-color-box stat-error"></span>
+                    Errors: {{.Counts.Error}}
+                </span>
+                <span class="summary-stat-item">
+                    <span class="stat-color-box stat-alert"></span>
+                    Alerts: {{.Counts.Alert}}
+                </span>
+                <span class="summary-stat-item">
+                    <span class="stat-color-box stat-warn"></span>
+                    Warnings: {{.Counts.Warn}}
+                </span>
+                <span class="summary-stat-item">
+                    <span class="stat-color-box stat-running"></span>
+                    Running: {{.Counts.Running}}
+                </span>
             </div>
         </div>
 
@@ -73,6 +86,17 @@
                     <label for="jobFilter">Job</label>
                     <select id="jobFilter"{{if .Filter.ID}} disabled{{end}}>
                         <option value="">All Jobs</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="resultFilter">Result</label>
+                    <select id="resultFilter"{{if .Filter.ID}} disabled{{end}}>
+                        <option value="">All Results</option>
+                        <option value="complete"{{if eq .Filter.Result "complete"}} selected{{end}}>Completed</option>
+                        <option value="error"{{if eq .Filter.Result "error"}} selected{{end}}>Errors</option>
+                        <option value="alert"{{if eq .Filter.Result "alert"}} selected{{end}}>Alerts</option>
+                        <option value="warn"{{if eq .Filter.Result "warn"}} selected{{end}}>Warnings</option>
+                        <option value="running"{{if eq .Filter.Result "running"}} selected{{end}}>Running</option>
                     </select>
                 </div>
                 <div class="filter-buttons">
@@ -176,7 +200,184 @@
                     }
                 });
             }
+
+            // Render hourly task chart
+            {{if .HourlyStats}}
+            renderHourlyChart();
+            
+            // Re-render chart on window resize with debouncing
+            let resizeTimeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(function() {
+                    renderHourlyChart();
+                }, 150);
+            });
+            {{end}}
         });
+
+        function renderHourlyChart() {
+            const canvas = document.getElementById('hourlyChart');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            
+            // Get hourly data from template
+            const hourlyData = [
+                {{range $i, $stats := .HourlyStats}}
+                {
+                    hour: {{$i}},
+                    completed: {{$stats.Completed}},
+                    error: {{$stats.Error}},
+                    alert: {{$stats.Alert}},
+                    warn: {{$stats.Warn}},
+                    running: {{$stats.Running}},
+                    total: {{$stats.Total}}
+                },
+                {{end}}
+            ];
+
+            // Chart dimensions and styling
+            const padding = { top: 20, right: 40, bottom: 60, left: 60 };
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Set canvas size
+            canvas.style.width = '100%';
+            canvas.style.height = '400px';
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+
+            const width = rect.width;
+            const height = rect.height;
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            // Calculate nice round max value with buffer
+            function getNiceMax(value) {
+                if (value === 0) return 20;
+                
+                // Add 12% buffer for visual spacing
+                const buffered = value * 1.12;
+                
+                // Try nice intervals that divide evenly by 4
+                // This gives us 5 grid lines with clean tick marks
+                // intervals of: 5, 10, 25, 50, 75, 100, 125, 250, etc.
+                const niceIntervals = [
+                    5, 10, 25, 50, 75, 100, 125, 250, 500, 750, 
+                    1000, 1250, 2500, 5000, 7500, 10000, 25000, 50000
+                ];
+                
+                for (let interval of niceIntervals) {
+                    const maxValue = interval * 4; // 4 intervals = 5 grid lines
+                    if (maxValue >= buffered) {
+                        return maxValue;
+                    }
+                }
+                
+                // For very large numbers, round up to nearest multiple of 100000
+                return Math.ceil(buffered / 100000) * 100000;
+            }
+            
+            // Find max total and round to nice number
+            const actualMax = Math.max(...hourlyData.map(d => d.total), 1);
+            const maxTotal = getNiceMax(actualMax);
+            
+            // Color scheme matching the summary cards
+            const colors = {
+                completed: '#4caf50',
+                error: '#f44336',
+                alert: '#ff9800',
+                warn: '#ffc107',
+                running: '#2196f3'
+            };
+
+            // Draw grid lines and y-axis labels
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#666';
+            ctx.font = '12px system-ui, -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            
+            // Use 4 intervals (5 lines including 0)
+            const numIntervals = 4;
+            const tickInterval = maxTotal / numIntervals;
+            
+            for (let i = 0; i <= numIntervals; i++) {
+                const value = Math.round(tickInterval * i);
+                const y = padding.top + chartHeight - (chartHeight / numIntervals) * i;
+                
+                // Draw grid line
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(padding.left + chartWidth, y);
+                ctx.stroke();
+                
+                // Draw y-axis label
+                ctx.fillText(value.toString(), padding.left - 10, y + 4);
+            }
+
+            // Calculate bar width
+            const barWidth = chartWidth / 24;
+            const barPadding = barWidth * 0.1;
+            const actualBarWidth = barWidth - barPadding;
+
+            // Draw bars for each hour
+            hourlyData.forEach((data, index) => {
+                if (data.total === 0) return;
+
+                const x = padding.left + (index * barWidth) + (barPadding / 2);
+                const scale = chartHeight / maxTotal;
+                
+                let currentY = padding.top + chartHeight;
+
+                // Stack the bars from bottom to top
+                const segments = [
+                    { value: data.completed, color: colors.completed },
+                    { value: data.error, color: colors.error },
+                    { value: data.alert, color: colors.alert },
+                    { value: data.warn, color: colors.warn },
+                    { value: data.running, color: colors.running }
+                ];
+
+                segments.forEach(segment => {
+                    if (segment.value > 0) {
+                        const segmentHeight = segment.value * scale;
+                        currentY -= segmentHeight;
+                        
+                        ctx.fillStyle = segment.color;
+                        ctx.fillRect(x, currentY, actualBarWidth, segmentHeight);
+                    }
+                });
+            });
+
+            // Draw x-axis labels (hours)
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'center';
+            ctx.font = '11px system-ui, -apple-system, sans-serif';
+            
+            for (let i = 0; i < 24; i++) {
+                const x = padding.left + (i * barWidth) + (barWidth / 2);
+                const label = i.toString().padStart(2, '0');
+                ctx.fillText(label, x, padding.top + chartHeight + 20);
+            }
+
+            // Draw axis labels
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+            
+            // X-axis label
+            ctx.textAlign = 'center';
+            ctx.fillText('Hour of Day', width / 2, height - 10);
+            
+            // Y-axis label
+            ctx.save();
+            ctx.translate(15, height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Number of Tasks', 0, 0);
+            ctx.restore();
+        }
 
         // Search by task ID - resets other filters
         function searchById() {

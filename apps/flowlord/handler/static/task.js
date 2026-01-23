@@ -4,6 +4,9 @@
 
     // Initialize task page with configuration
     function initTaskPage(config) {
+        // Always initialize filters, even if there's no table
+        initializeFilters(config);
+        
         const table = document.getElementById('taskTable');
         if (!table) {
             return;
@@ -136,9 +139,6 @@
             });
         });
 
-        // Initialize filters
-        initializeFilters(config);
-
         // Event delegation for expand/collapse on click
         if (tbody) {
             tbody.addEventListener('click', function(e) {
@@ -182,9 +182,8 @@
     function initializeFilters(config) {
         const typeFilter = document.getElementById('typeFilter');
         const jobFilter = document.getElementById('jobFilter');
-        const table = document.getElementById('taskTable');
         
-        if (!table || !config) return;
+        if (!typeFilter || !jobFilter || !config) return;
         
         const taskTypes = config.taskTypes || [];
         const jobMap = new Map(config.jobsByType || []);
@@ -243,18 +242,28 @@
         jobFilter.addEventListener('change', function() {
             applyFilters();
         });
+
+        // Handle result change - reload page with filter
+        const resultFilter = document.getElementById('resultFilter');
+        if (resultFilter) {
+            resultFilter.addEventListener('change', function() {
+                applyFilters();
+            });
+        }
     }
     
     // Apply filters by reloading page with query parameters
     function applyFilters() {
         const typeFilter = document.getElementById('typeFilter');
         const jobFilter = document.getElementById('jobFilter');
+        const resultFilter = document.getElementById('resultFilter');
         
         const url = new URL(window.location);
         url.searchParams.delete('page'); // Reset to page 1 when filtering
         
         const selectedType = typeFilter ? typeFilter.value : '';
         const selectedJob = jobFilter ? jobFilter.value : '';
+        const selectedResult = resultFilter ? resultFilter.value : '';
         
         if (selectedType) {
             url.searchParams.set('type', selectedType);
@@ -266,6 +275,12 @@
             url.searchParams.set('job', selectedJob);
         } else {
             url.searchParams.delete('job');
+        }
+        
+        if (selectedResult) {
+            url.searchParams.set('result', selectedResult);
+        } else {
+            url.searchParams.delete('result');
         }
         
         window.location.href = url.toString();
@@ -306,24 +321,6 @@
         url.searchParams.delete('job');
         url.searchParams.delete('result');
         url.searchParams.delete('page');
-        window.location.href = url.toString();
-    };
-
-    // Filter by result type using stat-cards
-    window.filterByResult = function(resultType) {
-        const url = new URL(window.location);
-        url.searchParams.delete('page'); // Reset to page 1
-        
-        // Reset task type and job filters when clicking on stat cards
-        url.searchParams.delete('type');
-        url.searchParams.delete('job');
-        
-        if (resultType === 'all') {
-            url.searchParams.delete('result');
-        } else {
-            url.searchParams.set('result', resultType);
-        }
-        
         window.location.href = url.toString();
     };
 

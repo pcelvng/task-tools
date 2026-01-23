@@ -2,7 +2,7 @@
 <div class="nav-header">
     <div class="nav-container">
         <div class="nav-controls">
-            {{if and (ne .CurrentPage "workflow") (ne .CurrentPage "about")}}
+            {{if and (ne .CurrentPage "workflow") (ne .CurrentPage "about") (ne .CurrentPage "backload")}}
             <div class="date-picker-container">
                 <label for="datePicker" class="date-picker-label">Date:</label>
                 <input type="text" id="datePicker" class="date-picker" value="{{.DateValue}}" readonly>
@@ -16,7 +16,12 @@
         <div class="nav-brand">
             <h1>{{if .PageTitle}}{{.PageTitle}}{{else}}Flowlord Dashboard{{end}}</h1>
         </div>
-        <nav class="nav-menu">
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+            <span class="nav-toggle-bar"></span>
+            <span class="nav-toggle-bar"></span>
+            <span class="nav-toggle-bar"></span>
+        </button>
+        <nav class="nav-menu" id="navMenu">
             {{if .isLocal}}
             <a href="./alert_preview.html{{if .DateValue}}?date={{.DateValue}}{{end}}" class="nav-link {{if eq .CurrentPage "alert"}}active{{end}}">
                 <span class="nav-icon">🚨</span>
@@ -33,6 +38,10 @@
             <a href="./workflow_preview.html" class="nav-link {{if eq .CurrentPage "workflow"}}active{{end}}">
                 <span class="nav-icon">🌳</span>
                 Workflow
+            </a>
+            <a href="./backload_preview.html" class="nav-link {{if eq .CurrentPage "backload"}}active{{end}}">
+                <span class="nav-icon">🔄</span>
+                Backload
             </a>
             <a href="./about_preview.html" class="nav-link {{if eq .CurrentPage "about"}}active{{end}}">
                 <span class="nav-icon">ℹ️</span>
@@ -55,6 +64,10 @@
                 <span class="nav-icon">🌳</span>
                 Workflow
             </a>
+            <a href="/web/backload" class="nav-link {{if eq .CurrentPage "backload"}}active{{end}}">
+                <span class="nav-icon">🔄</span>
+                Backload
+            </a>
             <a href="/web/about" class="nav-link {{if eq .CurrentPage "about"}}active{{end}}">
                 <span class="nav-icon">ℹ️</span>
                 About
@@ -72,6 +85,32 @@
         if (window.FlowlordCalendar) {
             const datesWithData = [{{range $index, $date := .DatesWithData}}{{if $index}},{{end}}"{{$date}}"{{end}}];
             window.FlowlordCalendar.init(datesWithData);
+        }
+
+        // Mobile nav toggle
+        const navToggle = document.getElementById('navToggle');
+        const navMenu = document.getElementById('navMenu');
+        if (navToggle && navMenu) {
+            navToggle.addEventListener('click', function() {
+                navToggle.classList.toggle('active');
+                navMenu.classList.toggle('open');
+            });
+
+            // Close menu when clicking a link
+            navMenu.querySelectorAll('.nav-link').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    navToggle.classList.remove('active');
+                    navMenu.classList.remove('open');
+                });
+            });
+
+            // Close menu when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!navToggle.contains(e.target) && !navMenu.contains(e.target)) {
+                    navToggle.classList.remove('active');
+                    navMenu.classList.remove('open');
+                }
+            });
         }
     });
 </script>
