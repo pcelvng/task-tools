@@ -1457,6 +1457,219 @@ select.form-control:disabled {
     color: white;
 }
 
+/* Date + Hour inline group */
+.date-hour-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.date-hour-group .form-control {
+    flex: 1;
+}
+
+.date-hour-group .hour-select {
+    width: 90px;
+    flex-shrink: 0;
+}
+
+/* By selector - match datetime picker width */
+#bySelectContainer .form-control {
+    max-width: 280px;
+}
+
+/* Custom DateTime Picker */
+.datetime-picker-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    max-width: 280px;
+}
+
+.datetime-picker-container .form-control {
+    padding-right: 36px;
+}
+
+.datetime-picker-btn {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.datetime-picker-btn:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.datetime-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    padding: 16px;
+    margin-top: 4px;
+}
+
+.datetime-dropdown-content {
+    display: flex;
+    gap: 16px;
+}
+
+/* Left side: Calendar section */
+.datetime-calendar-section {
+    flex-shrink: 0;
+}
+
+.datetime-calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.datetime-month-label {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1f2937;
+}
+
+.datetime-month-nav {
+    background: #f3f4f6;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.datetime-month-nav:hover {
+    background: #e5e7eb;
+}
+
+.datetime-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.datetime-day-header {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    padding: 6px 4px;
+}
+
+.datetime-day-cell {
+    text-align: center;
+    padding: 6px 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: all 0.15s;
+    min-width: 28px;
+}
+
+.datetime-day-cell:not(.empty):hover {
+    background: #e3f2fd;
+}
+
+.datetime-day-cell.selected {
+    background: #3498db;
+    color: white;
+    font-weight: 600;
+}
+
+.datetime-day-cell.today {
+    border: 1px solid #3498db;
+}
+
+.datetime-day-cell.empty {
+    cursor: default;
+}
+
+.datetime-calendar-footer {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #e1e5e9;
+}
+
+.datetime-today-btn {
+    width: 100%;
+}
+
+/* Right side: Hour section */
+.datetime-hour-section {
+    border-left: 1px solid #e1e5e9;
+    padding-left: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.datetime-hour-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.datetime-hour-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    flex: 1;
+}
+
+.datetime-hour-cell {
+    text-align: center;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    transition: all 0.15s;
+}
+
+.datetime-hour-cell:hover {
+    background: #e3f2fd;
+    border-color: #3498db;
+}
+
+.datetime-hour-cell.selected {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+    font-weight: 600;
+}
+
+.datetime-hour-cell.no-hour {
+    margin-top: 8px;
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.datetime-hour-cell.no-hour.selected {
+    background: #ffc107;
+    color: #212529;
+}
+
 .template-section {
     background: #f8f9fa;
 }
