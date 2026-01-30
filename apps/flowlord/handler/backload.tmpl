@@ -53,21 +53,28 @@
                         </div>
                         <div id="singleDateInput">
                             <div class="form-group">
-                                <label for="atDate">Date</label>
-                                <input type="date" id="atDate" class="form-control">
+                                <label for="atPicker">Date</label>
+                                <div class="datetime-picker-wrapper">
+                                    <input type="text" id="atPicker" class="form-control" placeholder="yyyy-mm-dd or yyyy-mm-ddThh" autocomplete="off">
+                                </div>
+                                <small class="form-hint">Type or click calendar to pick date and hour</small>
                             </div>
                         </div>
                         <div id="dateRangeInputs" style="display: none;">
                             <div class="form-group">
-                                <label for="fromDate">From</label>
-                                <input type="date" id="fromDate" class="form-control">
+                                <label for="fromPicker">From</label>
+                                <div class="datetime-picker-wrapper">
+                                    <input type="text" id="fromPicker" class="form-control" placeholder="yyyy-mm-dd or yyyy-mm-ddThh" autocomplete="off">
+                                </div>
                             </div>
                             <div class="form-group">
-                                <label for="toDate">To</label>
-                                <input type="date" id="toDate" class="form-control">
+                                <label for="toPicker">To</label>
+                                <div class="datetime-picker-wrapper">
+                                    <input type="text" id="toPicker" class="form-control" placeholder="yyyy-mm-dd or yyyy-mm-ddThh" autocomplete="off">
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group">
+                        <div id="bySelectContainer" class="form-group" style="display: none;">
                             <label for="bySelect">By</label>
                             <select id="bySelect" class="form-control">
                                 <option value="hour">Hour</option>
@@ -161,6 +168,7 @@
         </div>
     </div>
 
+    <script src="{{if .isLocal}}./static{{else}}/static{{end}}/datetime-picker.js"></script>
     <script src="{{if .isLocal}}./static{{else}}/static{{end}}/backload.js"></script>
     <script>
         // Initialize the backload form with server-provided data

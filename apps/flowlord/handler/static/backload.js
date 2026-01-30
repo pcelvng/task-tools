@@ -11,6 +11,13 @@
 
     // DOM element references (cached on init)
     const elements = {};
+    
+    // DateTime picker instances
+    let pickers = {
+        at: null,
+        from: null,
+        to: null
+    };
 
     // Initialize the backload form
     function init(phasesData, apiEndpoint) {
@@ -40,21 +47,37 @@
         elements.executionStatus = document.getElementById('executionStatus');
         elements.requestBodySection = document.getElementById('requestBodySection');
         elements.requestBodyDisplay = document.getElementById('requestBodyDisplay');
-        elements.fromDate = document.getElementById('fromDate');
-        elements.toDate = document.getElementById('toDate');
-        elements.atDate = document.getElementById('atDate');
         elements.bySelect = document.getElementById('bySelect');
+        elements.bySelectContainer = document.getElementById('bySelectContainer');
         elements.singleDateInput = document.getElementById('singleDateInput');
         elements.dateRangeInputs = document.getElementById('dateRangeInputs');
 
         // Store API endpoint
         elements.apiEndpoint = apiEndpoint || '/backload';
 
+        // Initialize datetime pickers
+        initializePickers();
+
         // Setup event listeners
         setupEventListeners();
 
         // Initialize date inputs with today's date
         initializeDates();
+    }
+
+    // Initialize datetime picker instances
+    function initializePickers() {
+        if (window.FlowlordDateTimePicker) {
+            pickers.at = window.FlowlordDateTimePicker.create('atPicker', {
+                onChange: updatePreviewButton
+            });
+            pickers.from = window.FlowlordDateTimePicker.create('fromPicker', {
+                onChange: updatePreviewButton
+            });
+            pickers.to = window.FlowlordDateTimePicker.create('toPicker', {
+                onChange: updatePreviewButton
+            });
+        }
     }
 
     // Get unique tasks from phases
@@ -92,11 +115,6 @@
         // Job selection
         elements.jobSelect.addEventListener('change', handleJobSelectChange);
 
-        // Date inputs
-        ['fromDate', 'toDate', 'atDate'].forEach(id => {
-            document.getElementById(id).addEventListener('change', updatePreviewButton);
-        });
-
         // Buttons
         elements.previewBtn.addEventListener('click', handlePreviewClick);
         elements.executeBtn.addEventListener('click', handleExecuteClick);
@@ -111,9 +129,11 @@
         if (this.dataset.mode === 'range') {
             elements.dateRangeInputs.style.display = 'block';
             elements.singleDateInput.style.display = 'none';
+            elements.bySelectContainer.style.display = 'block';
         } else {
             elements.dateRangeInputs.style.display = 'none';
             elements.singleDateInput.style.display = 'block';
+            elements.bySelectContainer.style.display = 'none';
         }
         updatePreviewButton();
     }
@@ -387,9 +407,12 @@
         let hasDate = false;
         
         if (dateMode === 'range') {
-            hasDate = elements.fromDate.value || elements.toDate.value;
+            const fromValue = pickers.from ? pickers.from.getValue() : null;
+            const toValue = pickers.to ? pickers.to.getValue() : null;
+            hasDate = (fromValue && fromValue.date) || (toValue && toValue.date);
         } else {
-            hasDate = elements.atDate.value;
+            const atValue = pickers.at ? pickers.at.getValue() : null;
+            hasDate = atValue && atValue.date;
         }
         
         elements.previewBtn.disabled = !task || !hasDate;
@@ -417,10 +440,25 @@
         }
         
         if (dateMode === 'range') {
-            if (elements.fromDate.value) request.From = elements.fromDate.value;
-            if (elements.toDate.value) request.To = elements.toDate.value;
+            if (pickers.from) {
+                const fromValue = pickers.from.getValue();
+                if (fromValue.date) {
+                    request.From = fromValue.formatted;
+                }
+            }
+            if (pickers.to) {
+                const toValue = pickers.to.getValue();
+                if (toValue.date) {
+                    request.To = toValue.formatted;
+                }
+            }
         } else {
-            if (elements.atDate.value) request.At = elements.atDate.value;
+            if (pickers.at) {
+                const atValue = pickers.at.getValue();
+                if (atValue.date) {
+                    request.At = atValue.formatted;
+                }
+            }
         }
         
         // Collect meta fields
@@ -567,15 +605,18 @@
         elements.workflowFilter.value = '';
         elements.jobSelect.innerHTML = '<option value="">Select a job...</option>';
         elements.jobSelect.disabled = true;
-        elements.fromDate.value = '';
-        elements.toDate.value = '';
-        elements.atDate.value = '';
         elements.bySelect.value = 'day';
+        
+        // Reset pickers
+        if (pickers.at) pickers.at.setValue('', '');
+        if (pickers.from) pickers.from.setValue('', '');
+        if (pickers.to) pickers.to.setValue('', '');
         
         document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
         document.querySelector('.toggle-btn[data-mode="single"]').classList.add('active');
         elements.singleDateInput.style.display = 'block';
         elements.dateRangeInputs.style.display = 'none';
+        elements.bySelectContainer.style.display = 'none';
         
         hideTemplateInfo();
         initializeDates();
@@ -623,9 +664,12 @@
     // Initialize date inputs with today's date
     function initializeDates() {
         const today = new Date().toISOString().split('T')[0];
-        elements.fromDate.value = today;
-        elements.toDate.value = today;
-        elements.atDate.value = today;
+        
+        // Initialize pickers with today's date
+        if (pickers.at) pickers.at.setValue(today, '');
+        if (pickers.from) pickers.from.setValue(today, '');
+        if (pickers.to) pickers.to.setValue(today, '');
+        
         updatePreviewButton();
     }
 
