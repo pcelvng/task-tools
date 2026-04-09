@@ -652,7 +652,7 @@ func TestAboutHTML(t *testing.T) {
 		MinFrequency: 5 * time.Minute,
 		MaxFrequency: 30 * time.Minute,
 	}
-	notification.currentDuration.Store(int64(10 * time.Minute))
+	notification.alertFrequency.Store(int64(10 * time.Minute))
 
 	// Create a mock taskMaster with test data
 	tm := &taskMaster{
@@ -660,7 +660,7 @@ func TestAboutHTML(t *testing.T) {
 		nextUpdate: time.Now().Add(30 * time.Minute),  // 30 minutes from now
 		lastUpdate: time.Now().Add(-15 * time.Minute), // 15 minutes ago
 		taskCache:  taskCache,
-		slack:      notification,
+		notify:      notification,
 	}
 
 	// Generate HTML using the aboutHTML method

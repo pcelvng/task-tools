@@ -36,7 +36,7 @@ func TestTaskMaster_Process(t *testing.T) {
 	fn := func(tsk task.Task) ([]task.Task, error) {
 		var alerts int64
 
-		tm := taskMaster{doneConsumer: consumer, taskCache: taskCache, failedTopic: "failed-topic", alerts: make(chan task.Task), slack: &Notification{}}
+		tm := taskMaster{doneConsumer: consumer, taskCache: taskCache, failedTopic: "failed-topic", alerts: make(chan task.Task), notify: &Notification{}}
 		producer, _ := nop.NewProducer("")
 		tm.producer = producer
 		nop.FakeMsg = tsk.JSONBytes()
