@@ -73,8 +73,8 @@ func (n *Notification) GetAlertFrequency() time.Duration {
 	return time.Duration(n.alertFrequency.Load())
 }
 
-// setCurrentDuration atomically sets the current notification duration
-func (n *Notification) setCurrentDuration(d time.Duration) {
+// setAlertFrequency atomically sets the current notification duration
+func (n *Notification) setAlertFrequency(d time.Duration) {
 	n.alertFrequency.Store(int64(d))
 }
 
@@ -83,7 +83,7 @@ func (n *Notification) initAlertLoopState() {
 	now := time.Now()
 	n.lastAlertTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	n.lastRun = time.Now()
-	n.setCurrentDuration(n.MinFrequency)
+	n.setAlertFrequency(n.MinFrequency)
 }
 
 // Tick runs one poll: incomplete tasks, optional summary via sendSummary, then adjust backoff from new rows since lastRun.
@@ -127,7 +127,7 @@ func (n *Notification) Tick(taskCache *sqlite.SQLite, sendSummary func([]sqlite.
 		}
 		log.Println("escalate waitTime ", waitTime)
 	}
-	n.setCurrentDuration(waitTime)
+	n.setAlertFrequency(waitTime)
 	n.lastRun = time.Now()
 }
 
@@ -175,7 +175,7 @@ func New(opts *options) *taskMaster {
 
 	opts.Slack.file = opts.File
 	// Initialize current duration to MinFrequency
-	opts.Slack.setCurrentDuration(opts.Slack.MinFrequency)
+	opts.Slack.setAlertFrequency(opts.Slack.MinFrequency)
 	tm := &taskMaster{
 		initTime:     time.Now(),
 		taskCache:    opts.DB,
