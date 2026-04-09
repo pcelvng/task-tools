@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -49,7 +50,8 @@ type taskMaster struct {
 	slack         *Notification
 	files         []fileRule
 
-	alerts chan task.Task
+	alerts     chan task.Task
+	httpServer *http.Server
 }
 
 type Notification struct {
@@ -197,16 +199,20 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() { // auto refresh cache after set duration
+	go func() {
 		workflowTick := time.NewTicker(tm.dur)
 		DBTick := time.NewTicker(24 * time.Hour)
+		defer workflowTick.Stop()
+		defer DBTick.Stop()
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-DBTick.C:
-				if s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention)); err != nil {
-					log.Println("task cache recycle:", err)
-				} else {
-					log.Println(s)
+				s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention))
+				log.Printf(" cache recycle:%s %s", s, err.Error())
+				if err := tm.taskCache.Sync(); err != nil {
+					log.Println("DB sync", err)
 				}
 			case <-workflowTick.C:
 				if _, err := tm.refreshCache(); err != nil {
@@ -227,6 +233,14 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	go tm.handleNotifications(tm.alerts, ctx)
 	<-ctx.Done()
 	log.Println("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if tm.httpServer != nil {
+		if err := tm.httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
+	}
+	tm.cron.Stop()
 	return tm.taskCache.Close()
 }
 
@@ -553,7 +567,7 @@ func (tm *taskMaster) sendAlertSummary(alerts []sqlite.AlertRecord) error {
 	// build compact summary using existing logic
 	summary := sqlite.BuildCompactSummary(alerts)
 
-	// format message similar to current Slack format  
+	// format message similar to current Slack format
 	var message strings.Builder
 	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n", tm.HostName, tm.port, time.Now().Format("2006-01-02")))
 

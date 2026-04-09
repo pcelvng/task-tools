@@ -250,12 +250,10 @@ func (o *SQLite) Close() error {
 	if err := o.db.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	if o.BackupPath != "" {
-		log.Printf("Backing up DB to %s", o.BackupPath)
-		if err := o.Sync(); err != nil {
-			errs = append(errs, err)
-		}
+	if err := o.Sync(); err != nil {
+		errs = append(errs, err)
 	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("close errors: %v", errs)
 	}
@@ -264,8 +262,9 @@ func (o *SQLite) Close() error {
 
 // Sync the local DB to the backup location
 func (o *SQLite) Sync() error {
+	if o == nil || o.BackupPath == "" {
+		// no cache to backup
+		return nil
+	}
 	return copyFiles(o.LocalPath, o.BackupPath, o.fOpts)
 }
-
-
-
