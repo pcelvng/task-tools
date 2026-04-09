@@ -1,9 +1,10 @@
 package dedup
 
 import (
-	"github.com/buger/jsonparser"
 	"strings"
 	"sync"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 func New() *Dedup {
@@ -50,8 +51,10 @@ func (w *Dedup) Lines() [][]byte {
 func KeyFromJSON(b []byte, fields []string) string {
 	var key string
 	for _, field := range fields {
-		s, _ := jsonparser.GetString(b, field)
-		key += s
+		val := jsoniter.Get(b, field)
+		if val.ValueType() == jsoniter.StringValue {
+			key += val.ToString()
+		}
 	}
 	return key
 }
