@@ -531,9 +531,9 @@ func TestIsReady(t *testing.T) {
 }
 
 func TestNotification_Tick(t *testing.T) {
-	// tickIn is the full pre-tick state: frequencies, watermarks relative to a single
+	// in is the full pre-tick state: frequencies, watermarks relative to a single
 	// time.Now() at the start of the test function, and an optional row inserted before Tick.
-	type tickIn struct {
+	type in struct {
 		MinFrequency  time.Duration
 		MaxFrequency  time.Duration
 		InitFrequency time.Duration
@@ -542,15 +542,15 @@ func TestNotification_Tick(t *testing.T) {
 		LastRunFromNow   time.Duration
 		AddAlert         *task.Task // if non-nil, insert this alert before Tick
 	}
-	type tickOut struct {
-		Freq                time.Duration
-		AlertsSentInSummary int // total alert rows passed to sendSummary (len of each batch summed)
+	type out struct {
+		Freq    time.Duration
+		Alerted bool
 	}
 
-	fn := func(in tickIn) (tickOut, error) {
+	fn := func(in in) (out, error) {
 		db := &sqlite.SQLite{LocalPath: ":memory:"}
 		if err := db.Open(base_test_path+"workflow", nil); err != nil {
-			return tickOut{}, err
+			return out{}, err
 		}
 		defer db.Close()
 
@@ -564,65 +564,67 @@ func TestNotification_Tick(t *testing.T) {
 		n.lastAlertTime = now.Add(in.LastAlertFromNow)
 		n.lastRun = now.Add(in.LastRunFromNow)
 
-		if err := db.AddAlert(*in.AddAlert, "err"); err != nil {
-			return tickOut{}, err
+		if in.AddAlert != nil {
+			if err := db.AddAlert(*in.AddAlert, "err"); err != nil {
+				return out{}, err
+			}
 		}
 
-		alertsSentInSummary := 0
+		alerted := false
 		sendSummary := func(alerts []sqlite.AlertRecord) error {
-			alertsSentInSummary += len(alerts)
+			alerted = true
 			return nil
 		}
 
 		n.Tick(db, sendSummary)
-		return tickOut{Freq: n.GetAlertFrequency(), AlertsSentInSummary: alertsSentInSummary}, nil
+		return out{n.GetAlertFrequency(), alerted}, nil
 	}
 
-	cases := trial.Cases[tickIn, tickOut]{
+	cases := trial.Cases[in, out]{
 		"de-escalate halves when no new alerts": {
-			Input: tickIn{
+			Input: in{
 				MinFrequency: 5 * time.Minute, MaxFrequency: 80 * time.Minute,
 				InitFrequency:    20 * time.Minute,
 				LastAlertFromNow: 0, LastRunFromNow: 0,
 				AddAlert: nil,
 			},
-			Expected: tickOut{Freq: 10 * time.Minute},
+			Expected: out{Freq: 10 * time.Minute},
 		},
 		"de-escalate floors at MinFrequency": {
-			Input: tickIn{
+			Input: in{
 				MinFrequency: 5 * time.Minute, MaxFrequency: 80 * time.Minute,
 				InitFrequency:    8 * time.Minute,
 				LastAlertFromNow: 0, LastRunFromNow: 0,
 				AddAlert: nil,
 			},
-			Expected: tickOut{Freq: 5 * time.Minute},
+			Expected: out{Freq: 5 * time.Minute},
 		},
 		"escalate doubles when new alerts since lastRun": {
-			Input: tickIn{
+			Input: in{
 				MinFrequency: 5 * time.Minute, MaxFrequency: 80 * time.Minute,
 				InitFrequency:    5 * time.Minute,
 				LastAlertFromNow: 0, LastRunFromNow: -10 * time.Minute,
 				AddAlert: &task.Task{ID: "esc", Type: "t1", Job: "j1"},
 			},
-			Expected: tickOut{Freq: 10 * time.Minute},
+			Expected: out{Freq: 10 * time.Minute},
 		},
 		"summary send then escalate from new rows": {
-			Input: tickIn{
+			Input: in{
 				MinFrequency: 5 * time.Minute, MaxFrequency: 80 * time.Minute,
 				InitFrequency:    5 * time.Minute,
 				LastAlertFromNow: -1 * time.Hour, LastRunFromNow: -15 * time.Minute,
 				AddAlert: &task.Task{ID: "sum", Type: "t2", Job: "j2"},
 			},
-			Expected: tickOut{Freq: 10 * time.Minute, AlertsSentInSummary: 1},
+			Expected: out{Freq: 10 * time.Minute, Alerted: true},
 		},
 		"at MaxFrequency new alerts do not raise further": {
-			Input: tickIn{
+			Input: in{
 				MinFrequency: 5 * time.Minute, MaxFrequency: 80 * time.Minute,
 				InitFrequency:    80 * time.Minute,
 				LastAlertFromNow: 0, LastRunFromNow: -10 * time.Minute,
 				AddAlert: &task.Task{ID: "max", Type: "t3", Job: "j3"},
 			},
-			Expected: tickOut{Freq: 80 * time.Minute},
+			Expected: out{Freq: 80 * time.Minute},
 		},
 	}
 

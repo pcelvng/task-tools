@@ -267,7 +267,7 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 				return
 			case <-DBTick.C:
 				s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention))
-				log.Printf(" cache recycle:%s %s", s, err.Error())
+				log.Printf(" cache recycle:%s err:%v", s, err)
 				if err := tm.taskCache.Sync(); err != nil {
 					log.Println("DB sync", err)
 				}
