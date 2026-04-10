@@ -3,7 +3,6 @@ module github.com/pcelvng/task-tools
 go 1.24.0
 
 require (
-	github.com/buger/jsonparser v1.1.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/google/go-cmp v0.7.0
@@ -15,6 +14,7 @@ require (
 	github.com/jbsmith7741/go-tools v0.4.1
 	github.com/jbsmith7741/uri v0.6.1
 	github.com/jmoiron/sqlx v1.3.5
+	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.9
 	github.com/minio/minio-go/v7 v7.0.26
 	github.com/nsqio/go-nsq v1.1.0
@@ -41,7 +41,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/iancoleman/strcase v0.3.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect

@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/buger/jsonparser"
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/pcelvng/task-tools/file/stat"
 	"github.com/pcelvng/task-tools/tmpl"
@@ -264,10 +264,13 @@ type jsonDateExtractor struct {
 // b bytes to be a single json object.
 func (p *jsonDateExtractor) ExtractDate(b []byte) (time.Time, error) {
 	var t time.Time
-	s, err := jsonparser.GetString(b, p.fieldName)
-	if err != nil {
+	val := jsoniter.Get(b, p.fieldName)
+	if err := val.LastError(); err != nil {
+		return t, fmt.Errorf(`field "%v" not in '%v'`, p.fieldName, string(b))
+	}
+	if val.ValueType() != jsoniter.StringValue {
 		return t, fmt.Errorf(`field "%v" not in '%v'`, p.fieldName, string(b))
 	}
 
-	return time.Parse(p.format, s)
+	return time.Parse(p.format, val.ToString())
 }
