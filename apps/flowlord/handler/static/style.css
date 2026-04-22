@@ -23,6 +23,11 @@ body {
     overflow: hidden;
 }
 
+/* Lets popovers (e.g. datetime picker on /backload) extend past the card edge */
+.container.container--overflow-visible {
+    overflow: visible;
+}
+
 /* ===== HEADER STYLES - removed unused classes ===== */
 
 /* ===== NAVIGATION STYLES ===== */
