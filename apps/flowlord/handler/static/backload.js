@@ -40,6 +40,7 @@
         elements.executeBtn = document.getElementById('executeBtn');
         elements.resetBtn = document.getElementById('resetBtn');
         elements.previewSection = document.getElementById('previewSection');
+        elements.previewResultsHeading = document.getElementById('previewResultsHeading');
         elements.previewStatus = document.getElementById('previewStatus');
         elements.previewTableBody = document.getElementById('previewTableBody');
         elements.previewCount = document.getElementById('previewCount');
@@ -549,12 +550,22 @@
         }
     }
 
+    // Parse API error body: JSON Status or raw text
+    function messageFromApiResponse(responseText, fallback) {
+        if (responseText == null || responseText === '') {
+            return fallback || 'Request failed';
+        }
+        try {
+            const j = JSON.parse(responseText);
+            if (j && typeof j.Status === 'string' && j.Status.length > 0) {
+                return j.Status;
+            }
+        } catch (e) { /* use raw */ }
+        return responseText;
+    }
+
     // Execute button click handler
     async function handleExecuteClick() {
-        if (!confirm('Are you sure you want to execute this backload? This will create ' + previewTasks.length + ' tasks.')) {
-            return;
-        }
-        
         const request = buildRequest(true);
         elements.requestBodyDisplay.textContent = JSON.stringify(request, null, 2);
         
@@ -568,31 +579,36 @@
             });
             
             const responseText = await response.text();
-            let data;
-            
+            let data = null;
             try {
                 data = JSON.parse(responseText);
             } catch (e) {
-                throw new Error(responseText || 'Execution failed');
+                data = null;
             }
             
             if (!response.ok) {
-                throw new Error(data.Status || responseText || 'Execution failed');
+                const msg = messageFromApiResponse(responseText, 'Execution failed');
+                elements.executionSection.style.display = 'block';
+                elements.executionStatus.className = 'execution-status error';
+                elements.executionStatus.textContent = msg;
+                return;
             }
             
-            elements.executionSection.style.display = 'block';
-            elements.executionStatus.className = 'execution-status success';
-            elements.executionStatus.innerHTML = `
-                <strong>Success!</strong><br>
-                ${escapeHtml(data.Status)}<br>
-                Created ${data.Count} tasks.
-            `;
+            if (!data) {
+                elements.executionSection.style.display = 'block';
+                elements.executionStatus.className = 'execution-status error';
+                elements.executionStatus.textContent = responseText || 'Invalid JSON response';
+                return;
+            }
+            
+            showExecutionResults(data);
+            elements.executionSection.style.display = 'none';
             elements.executeBtn.style.display = 'none';
             
         } catch (error) {
             elements.executionSection.style.display = 'block';
             elements.executionStatus.className = 'execution-status error';
-            elements.executionStatus.textContent = 'Error: ' + error.message;
+            elements.executionStatus.textContent = error.message || String(error);
         } finally {
             setButtonLoading(elements.executeBtn, false, 'Execute Backload');
         }
@@ -620,19 +636,16 @@
         
         hideTemplateInfo();
         initializeDates();
+        if (elements.previewResultsHeading) {
+            elements.previewResultsHeading.textContent = 'Preview Results';
+        }
         updatePreviewButton();
     }
 
-    // Show preview results
-    function showPreviewResults(data) {
-        elements.previewSection.style.display = 'block';
-        elements.previewStatus.className = 'preview-status info';
-        elements.previewStatus.textContent = data.Status || 'Dry run complete';
-        
+    function renderTasksIntoPreviewTable(tasks, emptyRowHtml) {
         elements.previewTableBody.innerHTML = '';
-        
-        if (data.Tasks && data.Tasks.length > 0) {
-            data.Tasks.forEach((task, index) => {
+        if (tasks && tasks.length > 0) {
+            tasks.forEach((task, index) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="num-cell num-column">${index + 1}</td>
@@ -643,22 +656,49 @@
                 `;
                 elements.previewTableBody.appendChild(row);
             });
-            
-            elements.previewCount.textContent = `Total tasks to be created: ${data.Count}`;
-            elements.executeBtn.style.display = 'inline-block';
-            elements.executeBtn.disabled = false;
         } else {
-            elements.previewTableBody.innerHTML = '<tr><td colspan="5" class="no-tasks">No tasks would be created</td></tr>';
-            elements.previewCount.textContent = '';
-            elements.executeBtn.style.display = 'none';
+            elements.previewTableBody.innerHTML = emptyRowHtml || '<tr><td colspan="5" class="no-tasks">No tasks</td></tr>';
         }
-        
-        // Add expand/collapse functionality to cells
         document.querySelectorAll('#previewTableBody .expandable').forEach(cell => {
             cell.addEventListener('click', function() {
                 this.classList.toggle('expanded');
             });
         });
+    }
+
+    // Show preview results
+    function showPreviewResults(data) {
+        if (elements.previewResultsHeading) {
+            elements.previewResultsHeading.textContent = 'Preview Results';
+        }
+        elements.previewSection.style.display = 'block';
+        elements.previewStatus.className = 'preview-status info';
+        elements.previewStatus.textContent = data.Status || 'Dry run complete';
+        
+        renderTasksIntoPreviewTable(data.Tasks, '<tr><td colspan="5" class="no-tasks">No tasks would be created</td></tr>');
+        
+        if (data.Tasks && data.Tasks.length > 0) {
+            elements.previewCount.textContent = `Total tasks to be created: ${data.Count}`;
+            elements.executeBtn.style.display = 'inline-block';
+            elements.executeBtn.disabled = false;
+        } else {
+            elements.previewCount.textContent = '';
+            elements.executeBtn.style.display = 'none';
+        }
+    }
+
+    function showExecutionResults(data) {
+        if (elements.previewResultsHeading) {
+            elements.previewResultsHeading.textContent = 'Execution results';
+        }
+        elements.previewSection.style.display = 'block';
+        elements.previewStatus.className = 'preview-status execution-success';
+        elements.previewStatus.innerHTML =
+            '<strong>Executed (not a dry run)</strong><br>' +
+            escapeHtml(data.Status || '');
+        renderTasksIntoPreviewTable(data.Tasks, '<tr><td colspan="5" class="no-tasks">No tasks were sent</td></tr>');
+        const n = typeof data.Count === 'number' ? data.Count : (data.Tasks && data.Tasks.length) || 0;
+        elements.previewCount.textContent = `Created ${n} task(s). Jobs were sent to the task bus.`;
     }
 
     // Initialize date inputs with today's date

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -46,30 +47,88 @@ type taskMaster struct {
 	HostName      string
 	port          int
 	cron          *cron.Cron
-	slack         *Notification
+	notify        *Notification `toml:"slack"`
 	files         []fileRule
 
-	alerts chan task.Task
+	alerts     chan task.Task
+	httpServer *http.Server
 }
 
 type Notification struct {
 	slack.Slack
 	//ReportPath   string
-	MinFrequency    time.Duration
-	MaxFrequency    time.Duration
-	currentDuration atomic.Int64 // Current notification duration (atomically updated)
+	MinFrequency   time.Duration
+	MaxFrequency   time.Duration
+	alertFrequency atomic.Int64 // summary backoff; same value as used in Tick (GetAlertFrequency)
+
+	// Alert loop state (owned by handleNotifications goroutine)
+	lastAlertTime time.Time // batch watermark: alerts with created_at after this are candidates
+	lastRun       time.Time // watermark for new rows since last Tick (backoff churn)
 
 	file *file.Options
 }
 
-// GetCurrentDuration returns the current notification duration
-func (n *Notification) GetCurrentDuration() time.Duration {
-	return time.Duration(n.currentDuration.Load())
+// GetAlertFrequency returns the current notification duration
+func (n *Notification) GetAlertFrequency() time.Duration {
+	return time.Duration(n.alertFrequency.Load())
 }
 
-// setCurrentDuration atomically sets the current notification duration
-func (n *Notification) setCurrentDuration(d time.Duration) {
-	n.currentDuration.Store(int64(d))
+// setAlertFrequency atomically sets the current notification duration
+func (n *Notification) setAlertFrequency(d time.Duration) {
+	n.alertFrequency.Store(int64(d))
+}
+
+// initAlertLoopState resets watermarks for a new notification loop (local start-of-day batch anchor, tick anchor now).
+func (n *Notification) initAlertLoopState() {
+	now := time.Now()
+	n.lastAlertTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	n.lastRun = time.Now()
+	n.setAlertFrequency(n.MinFrequency)
+}
+
+// Tick runs one poll: incomplete tasks, optional summary via sendSummary, then adjust backoff from new rows since lastRun.
+func (n *Notification) Tick(taskCache *sqlite.SQLite, sendSummary func([]sqlite.AlertRecord) error) {
+	taskCache.CheckIncompleteTasks()
+
+	pending, err := taskCache.GetAlertsAfterTime(n.lastAlertTime)
+	if err != nil {
+		log.Printf("failed to retrieve alerts: %v", err)
+		return
+	}
+	waitTime := n.GetAlertFrequency()
+	if len(pending) > 0 && time.Since(n.lastAlertTime) >= waitTime {
+		if err := sendSummary(pending); err != nil {
+			log.Println(err)
+		}
+		n.lastAlertTime = time.Now()
+	}
+
+	newAlerts, err := taskCache.GetAlertsAfterTime(n.lastRun)
+	if err != nil {
+		log.Printf("failed to retrieve alerts since last tick: %v", err)
+		n.lastRun = time.Now()
+		return
+	}
+
+	if len(newAlerts) == 0 && waitTime > n.MinFrequency {
+		next := waitTime / 2
+		if next < n.MinFrequency {
+			waitTime = n.MinFrequency
+		} else {
+			waitTime = next
+		}
+		log.Println("de-escalate waitTime ", waitTime)
+	} else if len(newAlerts) > 0 && waitTime < n.MaxFrequency {
+		next := waitTime * 2
+		if next > n.MaxFrequency {
+			waitTime = n.MaxFrequency
+		} else {
+			waitTime = next
+		}
+		log.Println("escalate waitTime ", waitTime)
+	}
+	n.setAlertFrequency(waitTime)
+	n.lastRun = time.Now()
 }
 
 type stats struct {
@@ -116,7 +175,7 @@ func New(opts *options) *taskMaster {
 
 	opts.Slack.file = opts.File
 	// Initialize current duration to MinFrequency
-	opts.Slack.setCurrentDuration(opts.Slack.MinFrequency)
+	opts.Slack.setAlertFrequency(opts.Slack.MinFrequency)
 	tm := &taskMaster{
 		initTime:     time.Now(),
 		taskCache:    opts.DB,
@@ -130,7 +189,7 @@ func New(opts *options) *taskMaster {
 		HostName:     opts.Host,
 		cron:         cron.New(cron.WithParser(cronParser)),
 		dur:          opts.Refresh,
-		slack:        opts.Slack,
+		notify:       opts.Slack,
 		alerts:       make(chan task.Task, 20),
 	}
 	if opts.FileTopic != "" {
@@ -197,16 +256,20 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() { // auto refresh cache after set duration
+	go func() {
 		workflowTick := time.NewTicker(tm.dur)
 		DBTick := time.NewTicker(24 * time.Hour)
+		defer workflowTick.Stop()
+		defer DBTick.Stop()
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-DBTick.C:
-				if s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention)); err != nil {
-					log.Println("task cache recycle:", err)
-				} else {
-					log.Println(s)
+				s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention))
+				log.Printf(" cache recycle:%s err:%v", s, err)
+				if err := tm.taskCache.Sync(); err != nil {
+					log.Println("DB sync", err)
 				}
 			case <-workflowTick.C:
 				if _, err := tm.refreshCache(); err != nil {
@@ -227,6 +290,14 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	go tm.handleNotifications(tm.alerts, ctx)
 	<-ctx.Done()
 	log.Println("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if tm.httpServer != nil {
+		if err := tm.httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
+	}
+	tm.cron.Stop()
 	return tm.taskCache.Close()
 }
 
@@ -473,57 +544,26 @@ func (tm *taskMaster) readFiles(ctx context.Context) {
 }
 
 // handleNotifications gathers all 'failed' tasks and incomplete tasks
-// sends a summary message every X minutes
-// It uses an exponential backoff to limit the number of messages
-// ie, (min) 5 -> 10 -> 20 -> 40 -> 80 -> 160 (max)
-// The backoff is cleared after no failed tasks occur within the window
+// and sends a Slack summary when there is pending work and waitTime has elapsed.
+// Polling runs at MinFrequency; waitTime is the exponential backoff between
+// summary sends (min → max: e.g. 5 → 10 → 20 …), descalated when no new alert
+// rows appear since lastRun, escalated when any do.
 func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.Context) {
-	sendChan := make(chan struct{})
-	var alerts []sqlite.AlertRecord
+	tm.notify.initAlertLoopState()
 
-	// Initialize lastAlertTime to today at 00:00:00 (zero hour)
-	now := time.Now()
-	lastAlertTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tm.notify.Tick(tm.taskCache, tm.sendAlertSummary)
+	ticker := time.NewTicker(tm.notify.MinFrequency)
+	defer ticker.Stop()
 
-	go func() {
-		dur := tm.slack.MinFrequency
-		for ; ; time.Sleep(dur) {
-			var err error
-
-			// Check for incomplete tasks and add them to alerts
-			tm.taskCache.CheckIncompleteTasks()
-
-			// Get NEW alerts only - those after the last time we sent
-			alerts, err = tm.taskCache.GetAlertsAfterTime(lastAlertTime)
-			if err != nil {
-				log.Printf("failed to retrieve alerts: %v", err)
-				continue
-			}
-
-			if len(alerts) > 0 {
-				sendChan <- struct{}{}
-				// Update lastAlertTime to now (before we send, so we don't miss any)
-				lastAlertTime = time.Now()
-				if dur *= 2; dur > tm.slack.MaxFrequency {
-					dur = tm.slack.MaxFrequency
-				}
-				tm.slack.setCurrentDuration(dur) // Update current duration atomically
-				log.Println("wait time ", dur)
-			} else if dur != tm.slack.MinFrequency {
-				// No NEW alerts - reset to minimum frequency
-				dur = tm.slack.MinFrequency
-				tm.slack.setCurrentDuration(dur) // Update current duration atomically
-				log.Println("Reset ", dur)
-			}
-		}
-	}()
 	for {
 		select {
+		case <-ticker.C:
+			tm.notify.Tick(tm.taskCache, tm.sendAlertSummary)
 		case tsk := <-taskChan:
 			// if the task result is an alert result, send a slack notification now
 			if tsk.Result == task.AlertResult {
 				b, _ := json.MarshalIndent(tsk, "", " ")
-				if err := tm.slack.Slack.Notify(string(b), slack.Critical); err != nil {
+				if err := tm.notify.Slack.Notify(string(b), slack.Critical); err != nil {
 					log.Println(err)
 				}
 			} else { // if the task result is not an alert result add to the tasks list summary
@@ -531,16 +571,10 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 					log.Printf("failed to store alert: %v", err)
 				}
 			}
-		case <-sendChan:
-			// prepare message
-			if err := tm.sendAlertSummary(alerts); err != nil {
-				log.Println(err)
-			}
 		case <-ctx.Done():
 			return
 		}
 	}
-
 }
 
 // sendAlertSummary sends a formatted alert summary to Slack
@@ -553,7 +587,7 @@ func (tm *taskMaster) sendAlertSummary(alerts []sqlite.AlertRecord) error {
 	// build compact summary using existing logic
 	summary := sqlite.BuildCompactSummary(alerts)
 
-	// format message similar to current Slack format  
+	// format message similar to current Slack format
 	var message strings.Builder
 	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n", tm.HostName, tm.port, time.Now().Format("2006-01-02")))
 
@@ -564,8 +598,8 @@ func (tm *taskMaster) sendAlertSummary(alerts []sqlite.AlertRecord) error {
 
 	// send to Slack if configured
 	log.Println(message.String())
-	if tm.slack != nil {
-		if err := tm.slack.Notify(message.String(), slack.Critical); err != nil {
+	if tm.notify != nil {
+		if err := tm.notify.Notify(message.String(), slack.Critical); err != nil {
 			return fmt.Errorf("failed to send alert summary to Slack: %w", err)
 		}
 	}

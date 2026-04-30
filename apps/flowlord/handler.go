@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
@@ -118,7 +119,7 @@ func (tm *taskMaster) StartHandler() {
 			RunTime: gtools.PrintDuration(time.Since(tm.initTime)),
 		}
 		b, _ := json.Marshal(sts)
-		if err := tm.slack.Notify(string(b), slack.OK); err != nil {
+		if err := tm.notify.Notify(string(b), slack.OK); err != nil {
 			w.Write([]byte(err.Error()))
 		}
 	})
@@ -140,7 +141,15 @@ func (tm *taskMaster) StartHandler() {
 	}
 
 	log.Printf("starting handler on :%v", tm.port)
-	http.ListenAndServe(":"+strconv.Itoa(tm.port), router)
+	tm.httpServer = &http.Server{
+		Addr:    ":" + strconv.Itoa(tm.port),
+		Handler: router,
+	}
+	go func() {
+		if err := tm.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Println("http server:", err)
+		}
+	}()
 }
 
 func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
@@ -284,6 +293,10 @@ func (tm *taskMaster) refreshHandler(w http.ResponseWriter, _ *http.Request) {
 	s, err := tm.taskCache.Recycle(time.Now().Add(-tm.taskCache.Retention))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := tm.taskCache.Sync(); err != nil {
+		http.Error(w, "sqlite backup: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	v := struct {
@@ -693,9 +706,9 @@ func (tm *taskMaster) aboutHTML() []byte {
 		"SchemaVersion":    tm.taskCache.GetSchemaVersion(),
 		"Retention":        gtools.PrintDuration(tm.taskCache.Retention),
 		"TaskTTL":          gtools.PrintDuration(tm.taskCache.TaskTTL),
-		"MinFrequency":     gtools.PrintDuration(tm.slack.MinFrequency),
-		"MaxFrequency":     gtools.PrintDuration(tm.slack.MaxFrequency),
-		"CurrentFrequency": gtools.PrintDuration(tm.slack.GetCurrentDuration()),
+		"MinFrequency":     gtools.PrintDuration(tm.notify.MinFrequency),
+		"MaxFrequency":     gtools.PrintDuration(tm.notify.MaxFrequency),
+		"CurrentFrequency": gtools.PrintDuration(tm.notify.GetAlertFrequency()),
 		"CurrentPage":      "about",
 		"DateValue":        "", // About page doesn't need date
 		"PageTitle":        "System Information",
@@ -843,13 +856,31 @@ func (tm *taskMaster) Backloader(w http.ResponseWriter, r *http.Request) {
 
 	if req.Execute {
 		resp.Status = "Executed: " + resp.Status
+		attempted := len(resp.Tasks)
 		errs := appenderr.New()
+		failed := 0
 		for _, t := range resp.Tasks {
 			tm.taskCache.Add(t)
-			errs.Add(tm.producer.Send(t.Type, t.JSONBytes()))
+			if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
+				failed++
+				errs.Add(err)
+			}
 		}
 		if errs.ErrOrNil() != nil {
-			http.Error(w, "issue writing to producer "+errs.Error(), http.StatusInternalServerError)
+			// Sent vs attempted must come from the loop: appenderr merges duplicate messages,
+			// so it has no total count of failed sends.
+			sent := attempted - failed
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"Status": fmt.Sprintf(
+					"%d/%d messages sent: %s",
+					sent,
+					attempted,
+					strings.TrimSpace(errs.Error()),
+				),
+			})
+			return
 		}
 	} else {
 		resp.Status = "DRY RUN ONLY: " + resp.Status

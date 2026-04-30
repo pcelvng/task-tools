@@ -247,25 +247,36 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 // Close the DB connection and copy the current file to the backup location
 func (o *SQLite) Close() error {
 	var errs []error
-	if err := o.db.Close(); err != nil {
+	if err := o.Sync(); err != nil {
 		errs = append(errs, err)
 	}
-	if o.BackupPath != "" {
-		log.Printf("Backing up DB to %s", o.BackupPath)
-		if err := o.Sync(); err != nil {
+	if o.db != nil {
+		if err := o.db.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("close errors: %v", errs)
 	}
 	return nil
 }
 
-// Sync the local DB to the backup location
+// Sync checkpoints WAL into the main DB file (so a plain file copy is consistent), then
+// copies LocalPath to BackupPath. Holds o.mu for the duration so backups do not interleave
+// with other cache operations that also take o.mu.
 func (o *SQLite) Sync() error {
+	if o == nil || o.BackupPath == "" {
+		// no cache to backup
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	if o.db != nil {
+		if _, err := o.db.Exec("PRAGMA wal_checkpoint(TRUNCATE);"); err != nil {
+			return fmt.Errorf("wal checkpoint: %w", err)
+		}
+	}
 	return copyFiles(o.LocalPath, o.BackupPath, o.fOpts)
 }
-
-
-

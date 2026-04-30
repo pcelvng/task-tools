@@ -23,6 +23,11 @@ body {
     overflow: hidden;
 }
 
+/* Lets popovers (e.g. datetime picker on /backload) extend past the card edge */
+.container.container--overflow-visible {
+    overflow: visible;
+}
+
 /* ===== HEADER STYLES - removed unused classes ===== */
 
 /* ===== NAVIGATION STYLES ===== */
@@ -1755,6 +1760,12 @@ select.form-control:disabled {
 }
 
 .execution-status.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.preview-status.execution-success {
     background: #d4edda;
     color: #155724;
     border: 1px solid #c3e6cb;
