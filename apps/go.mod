@@ -9,7 +9,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/dustinevan/chron v1.0.0
-	github.com/go-chi/chi/v5 v5.2.2
+	github.com/go-chi/chi/v5 v5.2.4
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/google/go-cmp v0.7.0
 	github.com/hydronica/go-config v0.3.0
