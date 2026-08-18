@@ -148,30 +148,7 @@
                     cell.classList.toggle('expanded');
                 }
             });
-        }
-
-        // Event delegation for copy on double-click
-        if (tbody) {
-            tbody.addEventListener('dblclick', function(e) {
-                const cell = e.target.closest('.expandable');
-                if (cell) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    window.FlowlordUtils.copyToClipboard(cell.textContent.trim());
-                }
-            });
-        }
-
-        // Event delegation for context menu  
-        if (tbody) {
-            tbody.addEventListener('contextmenu', function(e) {
-                const cell = e.target.closest('.expandable');
-                if (cell) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.FlowlordUtils.showContextMenu(e, cell.textContent.trim());
-                }
-            });
+            window.FlowlordUtils.enableCopyableCells(tbody);
         }
 
         // Initialize the page

@@ -126,18 +126,18 @@
                 <tbody>
                     {{range .Tasks}}
                     <tr>
-                        <td class="id-cell id-column expandable" title="Click to expand">{{.ID}}</td>
-                        <td class="type-cell type-column">{{.Type}}</td>
-                        <td class="job-cell job-column">{{.Job}}</td>
-                        <td class="message-cell message-column expandable" title="Click to expand">{{.Msg}}</td>
-                        <td class="result-cell result-column {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}">
+                        <td class="id-cell id-column expandable copyable" title="Click to expand, right-click to copy">{{.ID}}</td>
+                        <td class="type-cell type-column copyable" title="Right-click to copy">{{.Type}}</td>
+                        <td class="job-cell job-column copyable" title="Right-click to copy">{{.Job}}</td>
+                        <td class="message-cell message-column expandable copyable" title="Click to expand, right-click to copy">{{.Msg}}</td>
+                        <td class="result-cell result-column copyable {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}" title="Right-click to copy">
                             {{if .Result}}{{.Result}}{{else}}Running{{end}}
                         </td>
-                        <td class="info-cell info-column expandable" title="Click to expand">{{.Info}}</td>
-                        <td class="meta-cell meta-column expandable" title="Click to expand">{{.Meta}}</td>
-                        <td class="time-cell created-column">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
-                        <td class="time-cell queue-column">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
-                        <td class="time-cell process-column">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
+                        <td class="info-cell info-column expandable copyable" title="Click to expand, right-click to copy">{{.Info}}</td>
+                        <td class="meta-cell meta-column expandable copyable" title="Click to expand, right-click to copy">{{.Meta}}</td>
+                        <td class="time-cell created-column copyable" title="Right-click to copy">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
+                        <td class="time-cell queue-column copyable" title="Right-click to copy">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
+                        <td class="time-cell process-column copyable" title="Right-click to copy">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
                     </tr>
                     {{end}}
                 </tbody>

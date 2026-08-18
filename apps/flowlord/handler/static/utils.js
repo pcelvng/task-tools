@@ -16,48 +16,73 @@
         return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
     }
 
+    let dismissContextMenu = null;
+
+    function hideContextMenu() {
+        if (dismissContextMenu) {
+            dismissContextMenu();
+        }
+    }
+
     // Context menu functionality
     function showContextMenu(event, text) {
         event.preventDefault();
         event.stopPropagation();
-        
-        // Remove any existing context menu
-        const existingMenu = document.querySelector('.context-menu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
-        
-        // Create context menu
+
+        hideContextMenu();
+
         const contextMenu = document.createElement('div');
         contextMenu.className = 'context-menu';
-        
+
         const menuItem = document.createElement('div');
         menuItem.className = 'context-menu-item';
         menuItem.innerHTML = '📋 Copy';
+
+        contextMenu.appendChild(menuItem);
+        document.body.appendChild(contextMenu);
+
+        // position:fixed uses viewport coords (clientX/Y), not document coords (pageX/Y)
+        const menuWidth = contextMenu.offsetWidth;
+        const menuHeight = contextMenu.offsetHeight;
+        const left = Math.min(event.clientX, window.innerWidth - menuWidth - 8);
+        const top = Math.min(event.clientY, window.innerHeight - menuHeight - 8);
+        contextMenu.style.left = Math.max(8, left) + 'px';
+        contextMenu.style.top = Math.max(8, top) + 'px';
+
+        function onClick(e) {
+            if (!contextMenu.contains(e.target)) {
+                close();
+            }
+        }
+
+        function onKey(e) {
+            if (e.key === 'Escape') {
+                close();
+            }
+        }
+
+        function close() {
+            contextMenu.remove();
+            document.removeEventListener('click', onClick);
+            document.removeEventListener('scroll', close, true);
+            document.removeEventListener('keydown', onKey);
+            if (dismissContextMenu === close) {
+                dismissContextMenu = null;
+            }
+        }
+
         menuItem.addEventListener('click', function() {
             copyToClipboard(text);
-            contextMenu.remove();
+            close();
         });
-        
-        contextMenu.appendChild(menuItem);
-        
-        // Position the context menu
-        contextMenu.style.left = event.pageX + 'px';
-        contextMenu.style.top = event.pageY + 'px';
-        
-        document.body.appendChild(contextMenu);
-        
-        // Close context menu when clicking elsewhere
-        const closeMenu = (e) => {
-            if (!contextMenu.contains(e.target)) {
-                contextMenu.remove();
-                document.removeEventListener('click', closeMenu);
-            }
-        };
-        
-        setTimeout(() => {
-            document.addEventListener('click', closeMenu);
+
+        dismissContextMenu = close;
+        // Delay click-away so the opening gesture does not dismiss immediately
+        setTimeout(function() {
+            document.addEventListener('click', onClick);
         }, 100);
+        document.addEventListener('scroll', close, true);
+        document.addEventListener('keydown', onKey);
     }
 
     // Copy to clipboard functionality with enhanced feedback
@@ -121,6 +146,25 @@
         }, 2000);
     }
 
+    function copyableText(cell) {
+        if (!cell) return '';
+        return (cell.getAttribute('data-full-text') || cell.textContent || '').trim();
+    }
+
+    // Right-click copy for any .copyable cell. Call once per table body (or table).
+    function enableCopyableCells(root) {
+        const el = typeof root === 'string' ? document.querySelector(root) : root;
+        if (!el) return;
+
+        el.addEventListener('contextmenu', function(e) {
+            const cell = e.target.closest('.copyable');
+            if (!cell || !el.contains(cell)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            showContextMenu(e, copyableText(cell));
+        });
+    }
+
     // Toggle field expansion
     function toggleField(element, fullText) {
         // Prevent event bubbling to avoid conflicts with sorting
@@ -151,6 +195,8 @@
         escapeJsString: escapeJsString,
         showContextMenu: showContextMenu,
         copyToClipboard: copyToClipboard,
+        copyableText: copyableText,
+        enableCopyableCells: enableCopyableCells,
         showCopyFeedback: showCopyFeedback,
         toggleField: toggleField
     };

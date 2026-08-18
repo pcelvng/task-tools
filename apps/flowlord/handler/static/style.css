@@ -481,6 +481,13 @@ tr:hover {
     max-width: 100px;
 }
 
+.id-cell.truncated .task-id-link {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .rule-cell.truncated, .template-cell.truncated {
     max-width: 300px;
     white-space: nowrap;
@@ -508,13 +515,23 @@ tr:hover {
     word-wrap: break-word;
 }
 
-.id-cell.copyable, .info-cell.copyable, .meta-cell.copyable, .rule-cell.copyable, .template-cell.copyable, .message-cell.copyable {
+.id-cell.copyable, .info-cell.copyable, .meta-cell.copyable, .rule-cell.copyable, .template-cell.copyable, .message-cell.copyable, .type-cell.copyable, .job-cell.copyable, .time-cell.copyable, .result-cell.copyable {
     position: relative;
     cursor: pointer;
 }
 
-.rule-cell.copyable:hover, .template-cell.copyable:hover, .message-cell.copyable:hover {
+.rule-cell.copyable:hover, .template-cell.copyable:hover, .message-cell.copyable:hover, .type-cell.copyable:hover, .job-cell.copyable:hover, .time-cell.copyable:hover, .result-cell.copyable:hover {
     background-color: #f8f9fa;
+}
+
+.task-id-link {
+    color: #0d6efd;
+    text-decoration: none;
+}
+
+.task-id-link:hover {
+    color: #0a58ca;
+    text-decoration: underline;
 }
 
 .type-cell {
