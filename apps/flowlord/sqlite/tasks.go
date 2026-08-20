@@ -21,58 +21,6 @@ type TaskJob struct {
 	Events     []task.Task
 }
 
-// TaskFilter contains options for filtering and paginating task queries.
-// Empty string fields are ignored in the query.
-type TaskFilter struct {
-	ID        string // Filter by task ID (resets other filters)
-	Type      string // Filter by task type
-	Job       string // Filter by job name
-	Result    string // Filter by result status (complete, error, alert, warn, or "running" for empty)
-	Sort      string // Column to sort by (must match a tasks view column)
-	Direction string // Sort direction: "asc" or "desc"
-	Page      int    // Page number (1-based, default: 1)
-	Limit     int    // Number of results per page (default: 100)
-}
-
-// taskSortColumns is the set of safe column names allowed in ORDER BY.
-var taskSortColumns = map[string]bool{
-	"id": true, "type": true, "job": true, "msg": true, "result": true,
-	"info": true, "meta": true, "created": true,
-	"queue_seconds": true, "task_seconds": true,
-}
-
-// NormalizeSort validates Sort/Direction against the whitelist.
-// Unknown sort keys are cleared (query uses default created DESC).
-// Direction is normalized to "asc" or "desc".
-func (f *TaskFilter) NormalizeSort() {
-	if f == nil {
-		return
-	}
-	if !taskSortColumns[f.Sort] {
-		f.Sort = ""
-		f.Direction = ""
-		return
-	}
-	if strings.EqualFold(f.Direction, "desc") {
-		f.Direction = "desc"
-	} else {
-		f.Direction = "asc"
-	}
-}
-
-// orderByClause returns a safe ORDER BY clause from the filter sort fields.
-// Unknown columns fall back to created DESC (the historical default).
-func (f *TaskFilter) orderByClause() string {
-	if f == nil || !taskSortColumns[f.Sort] {
-		return "ORDER BY created DESC"
-	}
-	dir := "ASC"
-	if f.Direction == "desc" {
-		dir = "DESC"
-	}
-	return "ORDER BY " + f.Sort + " " + dir
-}
-
 // TaskView represents a task with calculated times from the tasks view
 type TaskView struct {
 	ID           string `json:"id"`
@@ -201,13 +149,12 @@ func (s *SQLite) Recycle(t time.Time) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d := struct {
-		tasks int64 
-		alerts int64 
-		files int64 
-		days int64 
+		tasks  int64
+		alerts int64
+		files  int64
+		days   int64
 	}{}
 	day := t.Format("2006-01-02")
-
 
 	// Delete old task records
 	result, err := s.db.Exec("DELETE FROM task_records WHERE created < ?", day)
@@ -229,7 +176,6 @@ func (s *SQLite) Recycle(t time.Time) (string, error) {
 		return "", fmt.Errorf("error deleting old file messages: %w", err)
 	}
 	d.files, _ = result.RowsAffected()
-
 
 	// Delete old date index entries
 	result, err = s.db.Exec("DELETE FROM date_index WHERE date < ?", day)
@@ -369,7 +315,7 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	if filter == nil {
 		filter = &TaskFilter{}
 	}
-	filter.NormalizeSort()
+	filter.Normalize()
 	if filter.Limit <= 0 {
 		filter.Limit = DefaultPageSize
 	}
@@ -379,36 +325,14 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 
 	dateStr := date.Format("2006-01-02")
 
-	// Build WHERE clause with filters
-	whereClause := "WHERE DATE(created) = ?"
-	args := []interface{}{dateStr}
-
-	// If ID is specified, only filter by ID (ignores other filters)
-	if filter.ID != "" {
-		whereClause += " AND id = ?"
-		args = append(args, filter.ID)
-	} else {
-		// Apply other filters only when ID is not specified
-		if filter.Type != "" {
-			whereClause += " AND type = ?"
-			args = append(args, filter.Type)
-		}
-
-		if filter.Job != "" {
-			whereClause += " AND job = ?"
-			args = append(args, filter.Job)
-		}
-
-		if filter.Result != "" {
-			// Handle "running" as empty result
-			if filter.Result == "running" {
-				whereClause += " AND result = ''"
-			} else {
-				whereClause += " AND result = ?"
-				args = append(args, filter.Result)
-			}
-		}
-	}
+	// Build WHERE clause with filters (all filters AND together; multi-value is OR within a column)
+	w := &whereBuilder{}
+	w.And("DATE(created) = ?", dateStr)
+	w.In("id", filter.ID)
+	w.In("type", filter.Type)
+	w.In("job", filter.Job)
+	w.Result(filter.Result)
+	whereClause, args := w.SQL()
 
 	// Get total count of filtered results
 	countQuery := "SELECT COUNT(*) FROM tasks " + whereClause

@@ -59,71 +59,111 @@
             <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
         </div>
         {{end}}
 
-        <div class="filters">
-            <h3>Filters</h3>
-            <div class="filter-row">
-                <div class="filter-group">
-                    <label for="idFilter">Task ID</label>
-                    <input type="text" id="idFilter" placeholder="Search by ID..." value="{{.Filter.ID}}">
-                </div>
-                <div class="filter-group">
-                    <label for="typeFilter">Task Type</label>
-                    <select id="typeFilter"{{if .Filter.ID}} disabled{{end}}>
-                        <option value="">All Types</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="jobFilter">Job</label>
-                    <select id="jobFilter"{{if .Filter.ID}} disabled{{end}}>
-                        <option value="">All Jobs</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="resultFilter">Result</label>
-                    <select id="resultFilter"{{if .Filter.ID}} disabled{{end}}>
-                        <option value="">All Results</option>
-                        <option value="complete"{{if eq .Filter.Result "complete"}} selected{{end}}>Completed</option>
-                        <option value="error"{{if eq .Filter.Result "error"}} selected{{end}}>Errors</option>
-                        <option value="alert"{{if eq .Filter.Result "alert"}} selected{{end}}>Alerts</option>
-                        <option value="warn"{{if eq .Filter.Result "warn"}} selected{{end}}>Warnings</option>
-                        <option value="running"{{if eq .Filter.Result "running"}} selected{{end}}>Running</option>
-                    </select>
-                </div>
-                <div class="filter-buttons">
-                    <button type="button" class="btn btn-primary" onclick="searchById()">Search ID</button>
-                    <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
-                </div>
-            </div>
+        {{if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result .Filter.Sort}}
+        <div class="filter-summary" id="filterSummary">
+            <span class="filter-summary-label">Filters:</span>
+            {{range .Filter.ID}}
+            <span class="filter-chip" data-clear="id" data-value="{{.}}" title="{{.}}">
+                <span class="filter-chip-text">ID: {{.}}</span>
+                <button type="button" class="filter-chip-clear" aria-label="Clear ID {{.}}">&times;</button>
+            </span>
+            {{end}}
+            {{range .Filter.Type}}
+            <span class="filter-chip" data-clear="type" data-value="{{.}}" title="{{.}}">
+                <span class="filter-chip-text">Type: {{.}}</span>
+                <button type="button" class="filter-chip-clear" aria-label="Clear Type {{.}}">&times;</button>
+            </span>
+            {{end}}
+            {{range .Filter.Job}}
+            <span class="filter-chip" data-clear="job" data-value="{{.}}" title="{{.}}">
+                <span class="filter-chip-text">Job: {{.}}</span>
+                <button type="button" class="filter-chip-clear" aria-label="Clear Job {{.}}">&times;</button>
+            </span>
+            {{end}}
+            {{range .Filter.Result}}
+            <span class="filter-chip" data-clear="result" data-value="{{.}}" title="{{.}}">
+                <span class="filter-chip-text">Result: {{.}}</span>
+                <button type="button" class="filter-chip-clear" aria-label="Clear Result {{.}}">&times;</button>
+            </span>
+            {{end}}
+            {{if .Filter.Sort}}
+            <span class="filter-chip filter-chip-sort" data-clear="sort" title="{{.Filter.Sort}} {{.Filter.Direction}}">
+                <span class="filter-chip-text">Sort: {{.Filter.Sort}} {{if eq .Filter.Direction "desc"}}↓{{else}}↑{{end}}</span>
+                <button type="button" class="filter-chip-clear" aria-label="Clear sort">&times;</button>
+            </span>
+            {{end}}
+            <button type="button" class="btn btn-secondary btn-sm" id="clearAllFilters">Clear all</button>
         </div>
+        {{end}}
 
-        {{if .Tasks}}
         <div class="table-container">
             <table id="taskTable">
                 <thead>
                     <tr>
-                        <th class="sortable id-column{{if eq .Filter.Sort "id"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="id">ID</th>
-                        <th class="sortable type-column{{if eq .Filter.Sort "type"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="type">Type</th>
-                        <th class="sortable job-column{{if eq .Filter.Sort "job"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="job">Job</th>
-                        <th class="sortable message-column{{if eq .Filter.Sort "msg"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="msg">Message</th>
-                        <th class="sortable result-column{{if eq .Filter.Sort "result"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="result">Result</th>
-                        <th class="sortable info-column{{if eq .Filter.Sort "info"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="info">Info</th>
-                        <th class="sortable meta-column{{if eq .Filter.Sort "meta"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="meta">Meta</th>
-                        <th class="sortable created-column{{if eq .Filter.Sort "created"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="created">Created</th>
-                        <th class="sortable queue-column{{if eq .Filter.Sort "queue_seconds"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="queue_seconds">Queue</th>
-                        <th class="sortable process-column{{if eq .Filter.Sort "task_seconds"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="task_seconds">Process</th>
+                        <th class="sortable filterable id-column{{if eq .Filter.Sort "id"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}{{if .Filter.ID}} has-filter{{end}}" data-sort="id" data-filter="id">
+                            <div class="th-inner">
+                                <button type="button" class="th-sort">ID</button>
+                                <button type="button" class="th-filter" aria-label="Filter ID"{{if .Filter.ID}} title="{{join .Filter.ID ", "}}"{{end}}>
+                                    <svg class="filter-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M1.5 2h13l-5 5.5V14l-3-1.5V7.5L1.5 2z"/></svg>
+                                </button>
+                            </div>
+                        </th>
+                        <th class="sortable filterable type-column{{if eq .Filter.Sort "type"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}{{if .Filter.Type}} has-filter{{end}}" data-sort="type" data-filter="type">
+                            <div class="th-inner">
+                                <button type="button" class="th-sort">Type</button>
+                                <button type="button" class="th-filter" aria-label="Filter Type"{{if .Filter.Type}} title="{{join .Filter.Type ", "}}"{{end}}>
+                                    <svg class="filter-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M1.5 2h13l-5 5.5V14l-3-1.5V7.5L1.5 2z"/></svg>
+                                </button>
+                            </div>
+                        </th>
+                        <th class="sortable filterable job-column{{if eq .Filter.Sort "job"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}{{if .Filter.Job}} has-filter{{end}}" data-sort="job" data-filter="job">
+                            <div class="th-inner">
+                                <button type="button" class="th-sort">Job</button>
+                                <button type="button" class="th-filter" aria-label="Filter Job"{{if .Filter.Job}} title="{{join .Filter.Job ", "}}"{{end}}>
+                                    <svg class="filter-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M1.5 2h13l-5 5.5V14l-3-1.5V7.5L1.5 2z"/></svg>
+                                </button>
+                            </div>
+                        </th>
+                        <th class="sortable message-column{{if eq .Filter.Sort "msg"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="msg">
+                            <button type="button" class="th-sort">Message</button>
+                        </th>
+                        <th class="sortable filterable result-column{{if eq .Filter.Sort "result"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}{{if .Filter.Result}} has-filter{{end}}" data-sort="result" data-filter="result">
+                            <div class="th-inner">
+                                <button type="button" class="th-sort">Result</button>
+                                <button type="button" class="th-filter" aria-label="Filter Result"{{if .Filter.Result}} title="{{join .Filter.Result ", "}}"{{end}}>
+                                    <svg class="filter-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M1.5 2h13l-5 5.5V14l-3-1.5V7.5L1.5 2z"/></svg>
+                                </button>
+                            </div>
+                        </th>
+                        <th class="sortable info-column{{if eq .Filter.Sort "info"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="info">
+                            <button type="button" class="th-sort">Info</button>
+                        </th>
+                        <th class="sortable meta-column{{if eq .Filter.Sort "meta"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="meta">
+                            <button type="button" class="th-sort">Meta</button>
+                        </th>
+                        <th class="sortable created-column{{if eq .Filter.Sort "created"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="created">
+                            <button type="button" class="th-sort">Created</button>
+                        </th>
+                        <th class="sortable queue-column{{if eq .Filter.Sort "queue_seconds"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="queue_seconds">
+                            <button type="button" class="th-sort">Queue</button>
+                        </th>
+                        <th class="sortable process-column{{if eq .Filter.Sort "task_seconds"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="task_seconds">
+                            <button type="button" class="th-sort">Process</button>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
+                    {{if .Tasks}}
                     {{range .Tasks}}
                     <tr>
                         <td class="id-cell id-column expandable copyable" title="Click to expand, right-click to copy">{{.ID}}</td>
@@ -138,6 +178,14 @@
                         <td class="time-cell created-column copyable" title="Right-click to copy">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
                         <td class="time-cell queue-column copyable" title="Right-click to copy">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
                         <td class="time-cell process-column copyable" title="Right-click to copy">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
+                    </tr>
+                    {{end}}
+                    {{else}}
+                    <tr>
+                        <td colspan="10" class="no-tasks-cell">
+                            <h3>No tasks found</h3>
+                            <p>No tasks were found for {{.Date}} with the current filters.</p>
+                        </td>
                     </tr>
                     {{end}}
                 </tbody>
@@ -156,19 +204,13 @@
             <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
-        </div>
-        {{end}}
-        {{else}}
-        <div class="no-tasks">
-            <h3>No tasks found</h3>
-            <p>No tasks were found for {{.Date}} with the current filters.</p>
         </div>
         {{end}}
     </div>
@@ -185,20 +227,14 @@
                         ["{{$type}}", [{{range $j, $job := $jobs}}{{if $j}},{{end}}"{{$job}}"{{end}}]],
                         {{end}}
                     ],
-                    currentType: "{{.Filter.Type}}",
-                    currentJob: "{{.Filter.Job}}"
+                    filters: {
+                        id: [{{range $i, $id := .Filter.ID}}{{if $i}},{{end}}"{{$id}}"{{end}}],
+                        type: [{{range $i, $t := .Filter.Type}}{{if $i}},{{end}}"{{$t}}"{{end}}],
+                        job: [{{range $i, $j := .Filter.Job}}{{if $i}},{{end}}"{{$j}}"{{end}}],
+                        result: [{{range $i, $r := .Filter.Result}}{{if $i}},{{end}}"{{$r}}"{{end}}]
+                    }
                 };
                 window.FlowlordTask.init(config);
-            }
-
-            // Enable Enter key for ID search
-            const idFilter = document.getElementById('idFilter');
-            if (idFilter) {
-                idFilter.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        searchById();
-                    }
-                });
             }
 
             // Render hourly task chart
@@ -377,14 +413,6 @@
             ctx.rotate(-Math.PI / 2);
             ctx.fillText('Number of Tasks', 0, 0);
             ctx.restore();
-        }
-
-        // Search by task ID - resets other filters
-        function searchById() {
-            const idValue = document.getElementById('idFilter').value.trim();
-            if (idValue) {
-                window.location.href = '?date={{.DateValue}}&id=' + encodeURIComponent(idValue);
-            }
         }
     </script>
 </body>

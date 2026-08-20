@@ -252,19 +252,19 @@ func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts,
 				taskJob = parts[1]
 			}
 
-			// Skip if type filter doesn't match
-			if filter.Type != "" && taskType != filter.Type {
+			if len(filter.Type) > 0 && !sliceContains(filter.Type, taskType) {
 				continue
 			}
 
-			// Skip if job filter doesn't match
-			if filter.Job != "" && taskJob != filter.Job {
+			if len(filter.Job) > 0 && !sliceContains(filter.Job, taskJob) {
 				continue
 			}
 		}
 
+		allowAllResults := filter == nil || len(filter.Result) == 0
+
 		// Process completed tasks
-		if filter == nil || filter.Result == "" || filter.Result == "complete" {
+		if allowAllResults || sliceContains(filter.Result, "complete") {
 			for _, t := range stats.CompletedTimes {
 				hour := t.Hour()
 				hourly[hour].Completed++
@@ -275,7 +275,7 @@ func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts,
 		}
 
 		// Process error tasks
-		if filter == nil || filter.Result == "" || filter.Result == "error" {
+		if allowAllResults || sliceContains(filter.Result, "error") {
 			for _, t := range stats.ErrorTimes {
 				hour := t.Hour()
 				hourly[hour].Error++
@@ -286,7 +286,7 @@ func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts,
 		}
 
 		// Process alert tasks
-		if filter == nil || filter.Result == "" || filter.Result == "alert" {
+		if allowAllResults || sliceContains(filter.Result, "alert") {
 			for _, t := range stats.AlertTimes {
 				hour := t.Hour()
 				hourly[hour].Alert++
@@ -297,7 +297,7 @@ func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts,
 		}
 
 		// Process warn tasks
-		if filter == nil || filter.Result == "" || filter.Result == "warn" {
+		if allowAllResults || sliceContains(filter.Result, "warn") {
 			for _, t := range stats.WarnTimes {
 				hour := t.Hour()
 				hourly[hour].Warn++
@@ -308,7 +308,7 @@ func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts,
 		}
 
 		// Process running tasks
-		if filter == nil || filter.Result == "" || filter.Result == "running" {
+		if allowAllResults || sliceContains(filter.Result, "running") {
 			for _, t := range stats.RunningTimes {
 				hour := t.Hour()
 				hourly[hour].Running++

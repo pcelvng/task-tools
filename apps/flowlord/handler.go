@@ -85,9 +85,17 @@ func getBaseFuncMap() template.FuncMap {
 			}
 			return s[start:end]
 		},
+		"join": strings.Join,
 		// Math functions
 		"add": func(a, b int) int {
 			return a + b
+		},
+		// Task filter query string for pagination (type=a,b&job=x)
+		"filterQS": func(f *sqlite.TaskFilter) template.URL {
+			if f == nil {
+				return ""
+			}
+			return template.URL(f.QueryString())
 		},
 	}
 }
@@ -440,25 +448,14 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 		dt = time.Now()
 	}
 
-	// Get filter parameters from query string
-	page := 1
-	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	// Parse filter/sort/page from query (uri supports comma-separated and repeated params for slices)
+	filter := &sqlite.TaskFilter{}
+	_ = uri.UnmarshalQuery(r.URL.RawQuery, filter)
+	filter.Normalize()
+	filter.Limit = sqlite.DefaultPageSize
+	if filter.Page <= 0 {
+		filter.Page = 1
 	}
-
-	filter := &sqlite.TaskFilter{
-		ID:        r.URL.Query().Get("id"),
-		Type:      r.URL.Query().Get("type"),
-		Job:       r.URL.Query().Get("job"),
-		Result:    r.URL.Query().Get("result"),
-		Sort:      r.URL.Query().Get("sort"),
-		Direction: r.URL.Query().Get("direction"),
-		Page:      page,
-		Limit:     sqlite.DefaultPageSize,
-	}
-	filter.NormalizeSort()
 
 	// Get task summary statistics for the date
 	summaryStart := time.Now()
@@ -621,7 +618,7 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	renderTime := time.Since(renderStart)
 
 	// Single consolidated log with all metrics
-	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q sort=%q/%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
+	log.Printf("Task page: date=%s filters=[id=%q type=%v job=%v result=%v sort=%q/%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
 		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result, filter.Sort, filter.Direction,
 		unfilteredCounts.Total, totalCount, filter.Page, totalPages,
 		queryTime, renderTime, float64(htmlSize)/(1024*1024))
