@@ -449,13 +449,16 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := &sqlite.TaskFilter{
-		ID:     r.URL.Query().Get("id"),
-		Type:   r.URL.Query().Get("type"),
-		Job:    r.URL.Query().Get("job"),
-		Result: r.URL.Query().Get("result"),
-		Page:   page,
-		Limit:  sqlite.DefaultPageSize,
+		ID:        r.URL.Query().Get("id"),
+		Type:      r.URL.Query().Get("type"),
+		Job:       r.URL.Query().Get("job"),
+		Result:    r.URL.Query().Get("result"),
+		Sort:      r.URL.Query().Get("sort"),
+		Direction: r.URL.Query().Get("direction"),
+		Page:      page,
+		Limit:     sqlite.DefaultPageSize,
 	}
+	filter.NormalizeSort()
 
 	// Get task summary statistics for the date
 	summaryStart := time.Now()
@@ -618,8 +621,8 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	renderTime := time.Since(renderStart)
 
 	// Single consolidated log with all metrics
-	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
-		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result,
+	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q sort=%q/%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
+		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result, filter.Sort, filter.Direction,
 		unfilteredCounts.Total, totalCount, filter.Page, totalPages,
 		queryTime, renderTime, float64(htmlSize)/(1024*1024))
 

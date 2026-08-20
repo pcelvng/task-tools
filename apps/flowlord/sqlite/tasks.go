@@ -24,12 +24,53 @@ type TaskJob struct {
 // TaskFilter contains options for filtering and paginating task queries.
 // Empty string fields are ignored in the query.
 type TaskFilter struct {
-	ID     string // Filter by task ID (resets other filters)
-	Type   string // Filter by task type
-	Job    string // Filter by job name
-	Result string // Filter by result status (complete, error, alert, warn, or "running" for empty)
-	Page   int    // Page number (1-based, default: 1)
-	Limit  int    // Number of results per page (default: 100)
+	ID        string // Filter by task ID (resets other filters)
+	Type      string // Filter by task type
+	Job       string // Filter by job name
+	Result    string // Filter by result status (complete, error, alert, warn, or "running" for empty)
+	Sort      string // Column to sort by (must match a tasks view column)
+	Direction string // Sort direction: "asc" or "desc"
+	Page      int    // Page number (1-based, default: 1)
+	Limit     int    // Number of results per page (default: 100)
+}
+
+// taskSortColumns is the set of safe column names allowed in ORDER BY.
+var taskSortColumns = map[string]bool{
+	"id": true, "type": true, "job": true, "msg": true, "result": true,
+	"info": true, "meta": true, "created": true,
+	"queue_seconds": true, "task_seconds": true,
+}
+
+// NormalizeSort validates Sort/Direction against the whitelist.
+// Unknown sort keys are cleared (query uses default created DESC).
+// Direction is normalized to "asc" or "desc".
+func (f *TaskFilter) NormalizeSort() {
+	if f == nil {
+		return
+	}
+	if !taskSortColumns[f.Sort] {
+		f.Sort = ""
+		f.Direction = ""
+		return
+	}
+	if strings.EqualFold(f.Direction, "desc") {
+		f.Direction = "desc"
+	} else {
+		f.Direction = "asc"
+	}
+}
+
+// orderByClause returns a safe ORDER BY clause from the filter sort fields.
+// Unknown columns fall back to created DESC (the historical default).
+func (f *TaskFilter) orderByClause() string {
+	if f == nil || !taskSortColumns[f.Sort] {
+		return "ORDER BY created DESC"
+	}
+	dir := "ASC"
+	if f.Direction == "desc" {
+		dir = "DESC"
+	}
+	return "ORDER BY " + f.Sort + " " + dir
 }
 
 // TaskView represents a task with calculated times from the tasks view
@@ -328,6 +369,7 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	if filter == nil {
 		filter = &TaskFilter{}
 	}
+	filter.NormalizeSort()
 	if filter.Limit <= 0 {
 		filter.Limit = DefaultPageSize
 	}
@@ -379,7 +421,7 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	// Build main query with pagination
 	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
 		FROM tasks ` + whereClause + `
-		ORDER BY created DESC
+		` + filter.orderByClause() + `
 		LIMIT ? OFFSET ?`
 
 	// Calculate offset from page number

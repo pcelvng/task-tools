@@ -59,11 +59,11 @@
             <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
         </div>
@@ -111,16 +111,16 @@
             <table id="taskTable">
                 <thead>
                     <tr>
-                        <th class="sortable id-column" data-sort="id">ID</th>
-                        <th class="sortable type-column" data-sort="type">Type</th>
-                        <th class="sortable job-column" data-sort="job">Job</th>
-                        <th class="sortable message-column" data-sort="message">Message</th>
-                        <th class="sortable result-column" data-sort="result">Result</th>
-                        <th class="sortable info-column" data-sort="info">Info</th>
-                        <th class="sortable meta-column" data-sort="meta">Meta</th>
-                        <th class="sortable created-column" data-sort="created">Created</th>
-                        <th class="sortable queue-column" data-sort="queue_time">Queue</th>
-                        <th class="sortable process-column" data-sort="task_time">Process</th>
+                        <th class="sortable id-column{{if eq .Filter.Sort "id"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="id">ID</th>
+                        <th class="sortable type-column{{if eq .Filter.Sort "type"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="type">Type</th>
+                        <th class="sortable job-column{{if eq .Filter.Sort "job"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="job">Job</th>
+                        <th class="sortable message-column{{if eq .Filter.Sort "msg"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="msg">Message</th>
+                        <th class="sortable result-column{{if eq .Filter.Sort "result"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="result">Result</th>
+                        <th class="sortable info-column{{if eq .Filter.Sort "info"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="info">Info</th>
+                        <th class="sortable meta-column{{if eq .Filter.Sort "meta"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="meta">Meta</th>
+                        <th class="sortable created-column{{if eq .Filter.Sort "created"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="created">Created</th>
+                        <th class="sortable queue-column{{if eq .Filter.Sort "queue_seconds"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="queue_seconds">Queue</th>
+                        <th class="sortable process-column{{if eq .Filter.Sort "task_seconds"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}" data-sort="task_seconds">Process</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -156,11 +156,11 @@
             <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{if .Filter.Type}}&type={{.Filter.Type}}{{end}}{{if .Filter.Job}}&job={{.Filter.Job}}{{end}}{{if .Filter.Result}}&result={{.Filter.Result}}{{end}}{{if .Filter.Sort}}&sort={{.Filter.Sort}}&direction={{.Filter.Direction}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
         </div>

@@ -30,7 +30,7 @@
             };
         }
 
-        // Update URL with new parameters
+        // Update URL with new parameters (server applies sort on reload)
         function updateUrl(date, type, job, result, sort, direction) {
             const url = new URL(window.location);
             
@@ -53,77 +53,44 @@
                 url.searchParams.delete('sort');
                 url.searchParams.delete('direction');
             }
+
+            // Reset to first page when sort changes
+            url.searchParams.delete('page');
+
+            // Keep viewport on the table after reload
+            try {
+                sessionStorage.setItem('flowlordTaskScrollY', String(window.scrollY));
+            } catch (e) { /* ignore quota / private mode */ }
             
-            // Reload page with new URL
             window.location.href = url.toString();
         }
 
-        // Initialize sorting from URL
+        // Restore scroll position after a sort reload
+        function restoreScrollAfterSort() {
+            let y = null;
+            try {
+                y = sessionStorage.getItem('flowlordTaskScrollY');
+                sessionStorage.removeItem('flowlordTaskScrollY');
+            } catch (e) {
+                return;
+            }
+            if (y === null) return;
+            const top = parseInt(y, 10);
+            if (!isNaN(top)) {
+                window.scrollTo(0, top);
+            }
+        }
+
+        // Initialize sorting state from URL (indicators come from server-rendered classes)
         function initializeSorting() {
             const params = getUrlParams();
             
             if (params.sort) {
                 currentSort = { column: params.sort, direction: params.direction };
-                updateSortIndicators(params.sort, params.direction);
             }
         }
 
-        function sortTable(column, direction) {
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            const columnIndex = Array.from(headers).findIndex(th => th.dataset.sort === column);
-            
-            rows.sort((a, b) => {
-                const aVal = a.cells[columnIndex].textContent.trim();
-                const bVal = b.cells[columnIndex].textContent.trim();
-                
-                let comparison = 0;
-                
-                // Check if this is a datetime column
-                if (column === 'created' || column === 'started' || column === 'ended') {
-                    const aDate = new Date(aVal);
-                    const bDate = new Date(bVal);
-                    
-                    if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
-                        comparison = aDate - bDate;
-                    } else {
-                        comparison = aVal.localeCompare(bVal);
-                    }
-                } else if (column === 'duration') {
-                    // Parse duration strings like "1h2m3s" or "N/A"
-                    if (aVal === 'N/A' && bVal === 'N/A') comparison = 0;
-                    else if (aVal === 'N/A') comparison = 1;
-                    else if (bVal === 'N/A') comparison = -1;
-                    else comparison = aVal.localeCompare(bVal);
-                } else {
-                    // Try to parse as numbers first
-                    const aNum = parseFloat(aVal);
-                    const bNum = parseFloat(bVal);
-                    
-                    if (!isNaN(aNum) && !isNaN(bNum)) {
-                        comparison = aNum - bNum;
-                    } else {
-                        comparison = aVal.localeCompare(bVal);
-                    }
-                }
-                
-                return direction === 'asc' ? comparison : -comparison;
-            });
-            
-            // Clear tbody and re-append sorted rows
-            tbody.innerHTML = '';
-            rows.forEach(row => tbody.appendChild(row));
-        }
-
-        function updateSortIndicators(activeColumn, direction) {
-            headers.forEach(th => {
-                th.classList.remove('sort-asc', 'sort-desc');
-                if (th.dataset.sort === activeColumn) {
-                    th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                }
-            });
-        }
-
-        // Column sorting event listeners
+        // Column sorting event listeners — reload with sort params for server-side ordering
         headers.forEach(header => {
             header.addEventListener('click', function() {
                 const column = this.dataset.sort;
@@ -153,6 +120,7 @@
 
         // Initialize the page
         initializeSorting();
+        restoreScrollAfterSort();
     }
 
     // Initialize responsive filters
