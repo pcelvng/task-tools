@@ -74,18 +74,18 @@
                         <td class="workflow-file-cell">{{.FilePath}}</td>
                         <td class="task-cell">{{.Topic}}</td>
                         <td class="job-cell">{{.Job}}</td>
-                        <td class="rule-cell truncated copyable" 
+                        <td class="rule-cell truncated" 
                             data-full-text="{{.Rule}}" 
                             data-truncated-text="{{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}"
-                            title="Click for actions">
+                            title="{{.Rule}}">
                             {{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}
                         </td>
                         <td class="depends-on-cell">{{.DependsOn}}</td>
                         <td class="retry-cell">{{.Retry}}</td>
-                        <td class="template-cell truncated copyable" 
+                        <td class="template-cell truncated" 
                             data-full-text="{{.Template}}" 
                             data-truncated-text="{{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}"
-                            title="Click for actions">
+                            title="{{.Template}}">
                             {{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}
                         </td>
                         <td class="status-cell">
@@ -121,11 +121,6 @@
 
             // Initialize filters
             initializeFilters();
-
-            const tbody = document.querySelector('#workflowTable tbody');
-            if (tbody && window.FlowlordUtils) {
-                window.FlowlordUtils.enableCellActions(tbody);
-            }
         });
 
         // Initialize responsive filters

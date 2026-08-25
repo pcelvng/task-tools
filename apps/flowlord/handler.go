@@ -486,8 +486,19 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	// Get dates with tasks for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("tasks")
 
+	var hourlyStats [24]sqlite.TaskCounts
+	if len(filter.ID) > 0 {
+		if _, stats, err := tm.taskCache.GetHourlyCountsByDate(dt, filter); err != nil {
+			log.Printf("Error getting hourly counts: %v", err)
+		} else {
+			hourlyStats = stats
+		}
+	} else {
+		_, hourlyStats = taskStats.HourlyCounts(filter)
+	}
+
 	w.Header().Set("Content-Type", "text/html")
-	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime)
+	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime, hourlyStats)
 	w.Write(htmlBytes)
 }
 
@@ -555,7 +566,7 @@ func filesHTML(files []sqlite.FileMessage, date time.Time, datesWithData []strin
 }
 
 // taskHTML renders the task summary and table HTML page
-func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration) []byte {
+func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration, hourlyStats [24]sqlite.TaskCounts) []byte {
 	renderStart := time.Now()
 
 	// Calculate navigation dates
@@ -564,9 +575,6 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 
 	// Get unfiltered counts for summary section (always show full day stats)
 	unfilteredCounts := taskStats.TotalCounts()
-
-	// Get filtered hourly breakdown (respects filters)
-	_, hourlyStats := taskStats.GetCountsWithHourlyFiltered(filter)
 
 	// Get unique types and jobs from TaskStats for filter dropdowns
 	types := taskStats.UniqueTypes()

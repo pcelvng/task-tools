@@ -496,6 +496,26 @@ th.sort-desc::after {
     display: block;
 }
 
+.icon-filter {
+    display: block;
+    width: 12px;
+    height: 12px;
+    background-color: currentColor;
+    mask-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='black' d='M1.5 2h13l-5 5.5V14l-3-1.5V7.5L1.5 2z'/%3e%3c/svg%3e");
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='black' d='M1.5 2h13l-5 5.5V14l-3-1.5V7.5L1.5 2z'/%3e%3c/svg%3e");
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+}
+
+.cell-action-icon.icon-filter {
+    width: 14px;
+    height: 14px;
+}
+
 .column-filter-popup {
     position: fixed;
     z-index: 1000;

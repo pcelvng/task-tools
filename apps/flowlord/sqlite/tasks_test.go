@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
 )
 
@@ -102,4 +103,119 @@ func TestGetTasksByDate(t *testing.T) {
 			t.Fatalf("expected 1 zebra shared task, got count=%d tasks=%v", count, tasks)
 		}
 	})
+}
+
+func TestGetHourlyCountsByDate(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	day := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	db.Add(task.Task{
+		ID: "a", Type: "alpha", Job: "load",
+		Created: "2024-01-15T10:00:00Z", Meta: "cron=2024-01-15T10",
+		Result: task.CompleteResult,
+	})
+	db.Add(task.Task{
+		ID: "b", Type: "alpha", Job: "load",
+		Created: "2024-01-15T11:00:00Z", Meta: "cron=2024-01-15T11",
+		Result: task.ErrResult,
+	})
+	db.Add(task.Task{
+		ID: "c", Type: "beta", Job: "check",
+		Created: "2024-01-15T12:00:00Z", Meta: "cron=2024-01-15T12",
+		Result: task.CompleteResult,
+	})
+
+	type input struct {
+		filter TaskFilter
+	}
+	type expect struct {
+		total  TaskCounts
+		hour10 TaskCounts
+		hour11 TaskCounts
+		hour12 TaskCounts
+	}
+
+	fn := func(in input) (expect, error) {
+		total, hourly, err := db.GetHourlyCountsByDate(day, &in.filter)
+		if err != nil {
+			return expect{}, err
+		}
+		return expect{
+			total:  total,
+			hour10: hourly[10],
+			hour11: hourly[11],
+			hour12: hourly[12],
+		}, nil
+	}
+
+	cases := trial.Cases[input, expect]{
+		"id only": {
+			Input: input{filter: TaskFilter{ID: []string{"a"}}},
+			Expected: expect{
+				total:  TaskCounts{Total: 1, Completed: 1},
+				hour10: TaskCounts{Total: 1, Completed: 1},
+			},
+		},
+		"id and result": {
+			Input: input{filter: TaskFilter{
+				ID: []string{"a", "b"}, Result: []string{"error"},
+			}},
+			Expected: expect{
+				total:  TaskCounts{Total: 1, Error: 1},
+				hour11: TaskCounts{Total: 1, Error: 1},
+			},
+		},
+		"id and type": {
+			Input: input{filter: TaskFilter{
+				ID: []string{"c"}, Type: []string{"beta"},
+			}},
+			Expected: expect{
+				total:  TaskCounts{Total: 1, Completed: 1},
+				hour12: TaskCounts{Total: 1, Completed: 1},
+			},
+		},
+		"id and type mismatch": {
+			Input: input{filter: TaskFilter{
+				ID: []string{"c"}, Type: []string{"alpha"},
+			}},
+			Expected: expect{},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestAddStoresRunningForEmptyResult(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	created := "2024-01-15T10:00:00Z"
+	db.Add(task.Task{ID: "1", Type: "alpha", Job: "load", Created: created})
+
+	var result string
+	err := db.db.QueryRow(`SELECT result FROM task_records WHERE id = ?`, "1").Scan(&result)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if result != ResultRunning {
+		t.Errorf("result = %q, want %q", result, ResultRunning)
+	}
+
+	db.Add(task.Task{
+		ID: "1", Type: "alpha", Job: "load", Created: created,
+		Result: task.CompleteResult,
+	})
+	err = db.db.QueryRow(`SELECT result FROM task_records WHERE id = ?`, "1").Scan(&result)
+	if err != nil {
+		t.Fatalf("query after update: %v", err)
+	}
+	if result != string(task.CompleteResult) {
+		t.Errorf("result after complete = %q, want %q", result, task.CompleteResult)
+	}
 }

@@ -3,6 +3,16 @@ package sqlite
 import (
 	"net/url"
 	"strings"
+	"time"
+)
+
+// Task result values stored in task_records.result and used in filters.
+const (
+	ResultComplete = "complete"
+	ResultError    = "error"
+	ResultAlert    = "alert"
+	ResultWarn     = "warn"
+	ResultRunning  = "running"
 )
 
 // TaskFilter contains options for filtering and paginating task queries.
@@ -13,7 +23,7 @@ type TaskFilter struct {
 	ID        []string `uri:"id"`
 	Type      []string `uri:"type"`
 	Job       []string `uri:"job"`
-	Result    []string `uri:"result"` // complete, error, alert, warn, or "running" for empty
+	Result    []string `uri:"result"` // complete, error, alert, warn, or running
 	Sort      string   `uri:"sort"`
 	Direction string   `uri:"direction"` // "asc" or "desc"
 	Page      int      `uri:"page"`      // 1-based, default: 1
@@ -87,6 +97,20 @@ func (f *TaskFilter) orderByClause() string {
 	return "ORDER BY " + f.Sort + " " + dir
 }
 
+// whereForDate builds a WHERE clause for tasks on a given date with optional ID/type/job/result filters.
+func (f *TaskFilter) whereForDate(date time.Time) (string, []any) {
+	if f == nil {
+		f = &TaskFilter{}
+	}
+	w := &whereBuilder{}
+	w.And("DATE(created) = ?", date.Format("2006-01-02"))
+	w.In("id", f.ID)
+	w.In("type", f.Type)
+	w.In("job", f.Job)
+	w.Result(f.Result)
+	return w.SQL()
+}
+
 func sliceContains(vals []string, want string) bool {
 	for _, v := range vals {
 		if v == want {
@@ -120,29 +144,9 @@ func (w *whereBuilder) In(column string, values []string) {
 	w.clauses = append(w.clauses, column+" IN ("+strings.Join(placeholders, ",")+")")
 }
 
-// Result handles multi-select results, including "running" (empty result).
+// Result adds a multi-select result filter.
 func (w *whereBuilder) Result(results []string) {
-	if len(results) == 0 {
-		return
-	}
-	var parts []string
-	var inVals []string
-	for _, r := range results {
-		if r == "running" {
-			parts = append(parts, "result = ''")
-		} else {
-			inVals = append(inVals, r)
-		}
-	}
-	if len(inVals) > 0 {
-		placeholders := make([]string, len(inVals))
-		for i, v := range inVals {
-			placeholders[i] = "?"
-			w.args = append(w.args, v)
-		}
-		parts = append(parts, "result IN ("+strings.Join(placeholders, ",")+")")
-	}
-	w.clauses = append(w.clauses, "("+strings.Join(parts, " OR ")+")")
+	w.In("result", results)
 }
 
 func (w *whereBuilder) SQL() (string, []any) {

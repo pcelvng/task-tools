@@ -26,7 +26,8 @@ const (
 // Increment this when making schema changes that require migration.
 // Version 1: Initial schema
 // Version 2: Added date_index table for performance optimization
-const currentSchemaVersion = 2
+// Version 3: Store 'running' for in-progress tasks (was empty string)
+const currentSchemaVersion = 3
 
 type SQLite struct {
 	LocalPath  string
@@ -230,6 +231,20 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 		}
 
 		log.Println("Successfully migrated to schema version 2")
+	}
+
+	// Version 2 → 3: Store 'running' for in-progress tasks
+	if currentVersion < 3 {
+		log.Println("Migrating schema from version 2 to 3 (normalizing running result)")
+
+		_, err := o.db.Exec(`
+			UPDATE task_records SET result = 'running' WHERE result = '' OR result IS NULL
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to normalize running results: %w", err)
+		}
+
+		log.Println("Successfully migrated to schema version 3")
 	}
 
 	// Add future migrations here as needed:

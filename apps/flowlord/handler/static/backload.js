@@ -230,7 +230,7 @@
         
         if (matches.length > 0) {
             elements.taskDropdown.innerHTML = matches.map(task => 
-                `<div class="search-dropdown-item" data-task="${escapeHtml(task)}">${query ? highlightMatch(task, query) : escapeHtml(task)}</div>`
+                `<div class="search-dropdown-item" data-task="${window.FlowlordUtils.escapeHtml(task)}">${query ? highlightMatch(task, query) : window.FlowlordUtils.escapeHtml(task)}</div>`
             ).join('');
             elements.taskDropdown.style.display = 'block';
         } else {
@@ -242,8 +242,8 @@
     // Highlight matching text in search results
     function highlightMatch(text, query) {
         const idx = text.toLowerCase().indexOf(query.toLowerCase());
-        if (idx === -1) return escapeHtml(text);
-        return escapeHtml(text.slice(0, idx)) + '<strong>' + escapeHtml(text.slice(idx, idx + query.length)) + '</strong>' + escapeHtml(text.slice(idx + query.length));
+        if (idx === -1) return window.FlowlordUtils.escapeHtml(text);
+        return window.FlowlordUtils.escapeHtml(text.slice(0, idx)) + '<strong>' + window.FlowlordUtils.escapeHtml(text.slice(idx, idx + query.length)) + '</strong>' + window.FlowlordUtils.escapeHtml(text.slice(idx + query.length));
     }
 
     // Handle dropdown item click
@@ -649,10 +649,10 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="num-cell num-column">${index + 1}</td>
-                    <td class="type-cell type-column copyable" title="Click for actions">${escapeHtml(task.type || '')}</td>
-                    <td class="job-cell job-column copyable" title="Click for actions">${escapeHtml(task.job || '')}</td>
-                    <td class="info-cell info-column expandable copyable" title="Click for actions">${escapeHtml(task.info || '')}</td>
-                    <td class="meta-cell meta-column expandable copyable" title="Click for actions">${escapeHtml(task.meta || '')}</td>
+                    <td class="type-cell type-column copyable" title="Click for actions">${window.FlowlordUtils.escapeHtml(task.type || '')}</td>
+                    <td class="job-cell job-column copyable" title="Click for actions">${window.FlowlordUtils.escapeHtml(task.job || '')}</td>
+                    <td class="info-cell info-column expandable copyable" title="Click for actions">${window.FlowlordUtils.escapeHtml(task.info || '')}</td>
+                    <td class="meta-cell meta-column expandable copyable" title="Click for actions">${window.FlowlordUtils.escapeHtml(task.meta || '')}</td>
                 `;
                 elements.previewTableBody.appendChild(row);
             });
@@ -693,7 +693,7 @@
         elements.previewStatus.className = 'preview-status execution-success';
         elements.previewStatus.innerHTML =
             '<strong>Executed (not a dry run)</strong><br>' +
-            escapeHtml(data.Status || '');
+            window.FlowlordUtils.escapeHtml(data.Status || '');
         renderTasksIntoPreviewTable(data.Tasks, '<tr><td colspan="5" class="no-tasks">No tasks were sent</td></tr>');
         const n = typeof data.Count === 'number' ? data.Count : (data.Tasks && data.Tasks.length) || 0;
         elements.previewCount.textContent = `Created ${n} task(s). Jobs were sent to the task bus.`;
@@ -709,14 +709,6 @@
         if (pickers.to) pickers.to.setValue(today, '');
         
         updatePreviewButton();
-    }
-
-    // Escape HTML for safe display
-    function escapeHtml(text) {
-        if (text === null || text === undefined) return '';
-        const div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
     }
 
     // Export to global scope

@@ -61,6 +61,19 @@
             };
         }
 
+        function currentFilterState() {
+            var params = getUrlParams();
+            return {
+                date: params.date,
+                id: params.id.slice(),
+                type: params.type.slice(),
+                job: params.job.slice(),
+                result: params.result.slice(),
+                sort: params.sort,
+                direction: params.direction
+            };
+        }
+
         function saveScroll() {
             try {
                 sessionStorage.setItem('flowlordTaskScrollY', String(window.scrollY));
@@ -117,16 +130,7 @@
         }
 
         function applyFilter(column, value) {
-            var params = getUrlParams();
-            var updates = {
-                date: params.date,
-                id: params.id.slice(),
-                type: params.type.slice(),
-                job: params.job.slice(),
-                result: params.result.slice(),
-                sort: params.sort,
-                direction: params.direction
-            };
+            var updates = currentFilterState();
 
             if (column === 'id') {
                 updates.id = toArray(value);
@@ -169,16 +173,7 @@
         }
 
         function clearFilter(column, value) {
-            var params = getUrlParams();
-            var updates = {
-                date: params.date,
-                id: params.id.slice(),
-                type: params.type.slice(),
-                job: params.job.slice(),
-                result: params.result.slice(),
-                sort: params.sort,
-                direction: params.direction
-            };
+            var updates = currentFilterState();
 
             if (column === 'all') {
                 updates.id = [];
@@ -264,8 +259,8 @@
                         var li = document.createElement('li');
                         li.className = 'token';
                         li.innerHTML =
-                            '<span class="token-text">' + escapeHtml(id) + '</span>' +
-                            '<button type="button" class="token-remove" aria-label="Remove ' + escapeAttr(id) + '" data-index="' + idx + '">&times;</button>';
+                            '<span class="token-text">' + window.FlowlordUtils.escapeHtml(id) + '</span>' +
+                            '<button type="button" class="token-remove" aria-label="Remove ' + window.FlowlordUtils.escapeAttr(id) + '" data-index="' + idx + '">&times;</button>';
                         tokenList.appendChild(li);
                     });
                 }
@@ -372,8 +367,8 @@
                         var checked = current.has(opt.value) ? ' checked' : '';
                         html += '<li class="column-filter-option">' +
                             '<label class="column-filter-check">' +
-                            '<input type="checkbox" value="' + escapeAttr(opt.value) + '"' + checked + '>' +
-                            '<span>' + escapeHtml(opt.label) + '</span>' +
+                            '<input type="checkbox" value="' + window.FlowlordUtils.escapeAttr(opt.value) + '"' + checked + '>' +
+                            '<span>' + window.FlowlordUtils.escapeHtml(opt.label) + '</span>' +
                             '</label></li>';
                     });
                     html += '</ul>';
@@ -448,23 +443,6 @@
             document.addEventListener('keydown', onKey);
         }
 
-        function escapeHtml(text) {
-            if (window.FlowlordUtils && window.FlowlordUtils.escapeHtml) {
-                return window.FlowlordUtils.escapeHtml(text);
-            }
-            var div = document.createElement('div');
-            div.textContent = String(text);
-            return div.innerHTML;
-        }
-
-        function escapeAttr(text) {
-            return String(text)
-                .replace(/&/g, '&amp;')
-                .replace(/"/g, '&quot;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-        }
-
         var params = getUrlParams();
         if (params.sort) {
             currentSort = { column: params.sort, direction: params.direction };
@@ -478,7 +456,6 @@
                 var th = btn.closest('th.sortable');
                 if (!th) return;
                 var column = th.dataset.sort;
-                var p = getUrlParams();
                 var sort = column;
                 var direction = 'asc';
 
@@ -493,15 +470,10 @@
                 }
 
                 currentSort = sort ? { column: sort, direction: direction } : { column: null, direction: 'asc' };
-                navigate({
-                    date: p.date,
-                    id: p.id,
-                    type: p.type,
-                    job: p.job,
-                    result: p.result,
-                    sort: sort,
-                    direction: direction
-                });
+                var updates = currentFilterState();
+                updates.sort = sort;
+                updates.direction = direction;
+                navigate(updates);
             });
         });
 

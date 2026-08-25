@@ -14,6 +14,16 @@
         return div.innerHTML;
     }
 
+    // Escape text for use in HTML attributes
+    function escapeAttr(text) {
+        if (text === null || text === undefined) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     // Escape text for use in inline JavaScript attributes
     function escapeJsString(text) {
         if (text === null || text === undefined) return '';
@@ -187,10 +197,6 @@
         '<path fill="currentColor" fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1H2z"/>' +
         '</svg>';
 
-    const FILTER_ICON_SVG = '<svg class="cell-action-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">' +
-        '<path fill="currentColor" d="M1.5 2h13l-5 5.5V14l-3-1.5V7.5L1.5 2z"/>' +
-        '</svg>';
-
     function showActionBar(cell, options) {
         removeActionBar();
 
@@ -218,7 +224,7 @@
             const filterBtn = document.createElement('button');
             filterBtn.type = 'button';
             filterBtn.className = 'cell-action-btn cell-action-filter';
-            filterBtn.innerHTML = FILTER_ICON_SVG;
+            filterBtn.innerHTML = '<span class="cell-action-icon icon-filter" aria-hidden="true"></span>';
             filterBtn.setAttribute('aria-label', 'Filter to this value');
             filterBtn.setAttribute('title', 'Filter to');
             filterBtn.addEventListener('click', function(e) {
@@ -244,7 +250,6 @@
 
     function activateCell(cell, options) {
         if (activeCell === cell) {
-            deactivateCell();
             return;
         }
         deactivateCell();
@@ -266,6 +271,12 @@
             if (!activeCell) return;
             if (e.target.closest('.cell-actions')) return;
             if (e.target.closest('.copyable') === activeCell) return;
+
+            const table = activeCell.closest('table');
+            if (table && table.contains(e.target) && e.target.closest('.copyable')) {
+                return;
+            }
+
             deactivateCell();
         });
 
@@ -303,34 +314,14 @@
         });
     }
 
-    // Toggle field expansion (legacy helper for templates that still reference it)
-    function toggleField(element, fullText, sourceEvent) {
-        if (sourceEvent) {
-            sourceEvent.stopPropagation();
-        }
-
-        if (element.classList.contains('expanded')) {
-            element.classList.remove('expanded');
-            element.classList.add('truncated');
-            const truncatedText = element.getAttribute('data-truncated-text');
-            if (truncatedText) {
-                element.textContent = truncatedText;
-            }
-        } else {
-            element.classList.remove('truncated');
-            element.classList.add('expanded');
-            element.textContent = fullText;
-        }
-    }
-
     window.FlowlordUtils = {
         escapeHtml: escapeHtml,
+        escapeAttr: escapeAttr,
         escapeJsString: escapeJsString,
         copyToClipboard: copyToClipboard,
         copyableText: copyableText,
         enableCellActions: enableCellActions,
         showCopyFeedback: showCopyFeedback,
-        toggleField: toggleField,
         deactivateCell: deactivateCell,
         copyCell: copyCell
     };

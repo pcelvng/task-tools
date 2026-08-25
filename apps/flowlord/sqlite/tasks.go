@@ -43,6 +43,9 @@ func (s *SQLite) Add(t task.Task) {
 	if t.ID == "" {
 		return
 	}
+	if t.Result == "" {
+		t.Result = ResultRunning
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -118,7 +121,7 @@ func (s *SQLite) GetTask(id string) TaskJob {
 		events = append(events, t)
 
 		// Track completion status and last update time
-		if t.Result != "" {
+		if t.Result != ResultRunning {
 			completed = true
 			if ended, err := time.Parse(time.RFC3339, t.Ended); err == nil {
 				if ended.After(lastUpdate) {
@@ -210,9 +213,9 @@ func (s *SQLite) CheckIncompleteTasks() int {
 			ar.msg LIKE 'INCOMPLETE:%'
 		)
 		WHERE tr.created < ? 
-		AND tr.result = '' 
+		AND tr.result = ?
 		AND ar.id IS NULL
-	`, t.Add(-s.TaskTTL))
+	`, t.Add(-s.TaskTTL), ResultRunning)
 	if err != nil {
 		return 0
 	}
@@ -323,16 +326,7 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 		filter.Page = 1 // default to first page
 	}
 
-	dateStr := date.Format("2006-01-02")
-
-	// Build WHERE clause with filters (all filters AND together; multi-value is OR within a column)
-	w := &whereBuilder{}
-	w.And("DATE(created) = ?", dateStr)
-	w.In("id", filter.ID)
-	w.In("type", filter.Type)
-	w.In("job", filter.Job)
-	w.Result(filter.Result)
-	whereClause, args := w.SQL()
+	whereClause, args := filter.whereForDate(date)
 
 	// Get total count of filtered results
 	countQuery := "SELECT COUNT(*) FROM tasks " + whereClause
@@ -374,6 +368,44 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	}
 
 	return tasks, totalCount, nil
+}
+
+// GetHourlyCountsByDate returns hourly task counts for a date, querying tasks directly so ID
+// filters (and all other filter fields) are applied per task.
+func (s *SQLite) GetHourlyCountsByDate(date time.Time, filter *TaskFilter) (TaskCounts, [24]TaskCounts, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if filter == nil {
+		filter = &TaskFilter{}
+	}
+	filter.Normalize()
+
+	whereClause, args := filter.whereForDate(date)
+
+	query := `SELECT id, type, job, info, result, meta, created, started, ended
+		FROM tasks ` + whereClause
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return TaskCounts{}, [24]TaskCounts{}, err
+	}
+	defer rows.Close()
+
+	var total TaskCounts
+	var hourly [24]TaskCounts
+	for rows.Next() {
+		var t task.Task
+		if err := rows.Scan(
+			&t.ID, &t.Type, &t.Job, &t.Info, &t.Result, &t.Meta,
+			&t.Created, &t.Started, &t.Ended,
+		); err != nil {
+			continue
+		}
+		addTaskHourlyCounts(t, filter, &total, &hourly)
+	}
+
+	return total, hourly, rows.Err()
 }
 
 // GetTaskRecapByDate creates a recap of tasks for a specific date

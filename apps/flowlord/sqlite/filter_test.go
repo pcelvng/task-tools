@@ -181,8 +181,8 @@ func TestWhereBuilder(t *testing.T) {
 				result: []string{"running", "error"},
 			},
 			Expected: output{
-				SQL:  "WHERE DATE(created) = ? AND (result = '' OR result IN (?))",
-				Args: []any{"2024-01-15", "error"},
+				SQL:  "WHERE DATE(created) = ? AND result IN (?,?)",
+				Args: []any{"2024-01-15", "running", "error"},
 			},
 		},
 		"empty": {

@@ -111,32 +111,62 @@ func (s *DurationStats) String() string {
 		s.Min, s.Max, s.Average())
 }
 
-func (stats *Stats) Add(tsk task.Task) {
-	tm := tmpl.TaskTime(tsk)
+func resultAllowed(result string, filter *TaskFilter) bool {
+	if filter == nil || len(filter.Result) == 0 {
+		return true
+	}
+	return sliceContains(filter.Result, result)
+}
 
-	// Handle different result types
-	switch tsk.Result {
-	case task.ErrResult:
+func (stats *Stats) recordTime(result string, tm time.Time) {
+	switch result {
+	case ResultError:
 		stats.ErrorCount++
 		stats.ErrorTimes = append(stats.ErrorTimes, tm)
-		return
-	case "alert":
+	case ResultAlert:
 		stats.AlertCount++
 		stats.AlertTimes = append(stats.AlertTimes, tm)
-		return
-	case "warn":
+	case ResultWarn:
 		stats.WarnCount++
 		stats.WarnTimes = append(stats.WarnTimes, tm)
-		return
-	case "":
-		// Empty result means task is running
+	case ResultRunning:
 		stats.RunningCount++
 		stats.RunningTimes = append(stats.RunningTimes, tm)
-		return
 	default:
-		// Assume "complete" or any other result is a completion
 		stats.CompletedCount++
 		stats.CompletedTimes = append(stats.CompletedTimes, tm)
+	}
+}
+
+func incrementHourly(result string, hour int, total *TaskCounts, hourly *[24]TaskCounts) {
+	switch result {
+	case ResultError:
+		hourly[hour].Error++
+		total.Error++
+	case ResultAlert:
+		hourly[hour].Alert++
+		total.Alert++
+	case ResultWarn:
+		hourly[hour].Warn++
+		total.Warn++
+	case ResultRunning:
+		hourly[hour].Running++
+		total.Running++
+	default:
+		hourly[hour].Completed++
+		total.Completed++
+	}
+	hourly[hour].Total++
+	total.Total++
+}
+
+func (stats *Stats) Add(tsk task.Task) {
+	tm := tmpl.TaskTime(tsk)
+	result := string(tsk.Result)
+	stats.recordTime(result, tm)
+
+	if result != ResultComplete {
+		return
 	}
 
 	// Track execution time for completed tasks
@@ -229,15 +259,10 @@ func (ts TaskStats) TotalCounts() TaskCounts {
 	return counts
 }
 
-// GetCountsWithHourly returns both total and hourly task counts in a single iteration
-// The hourly array contains 24 TaskCounts where index represents the hour (0-23)
-func (ts TaskStats) GetCountsWithHourly() (TaskCounts, [24]TaskCounts) {
-	return ts.GetCountsWithHourlyFiltered(nil)
-}
-
-// GetCountsWithHourlyFiltered returns total and hourly counts with optional filtering by type, job, and result
-// The hourly array contains 24 TaskCounts where index represents the hour (0-23)
-func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts, [24]TaskCounts) {
+// HourlyCounts returns total and hourly counts with optional filtering by type, job, and result.
+// ID filtering is not supported here; use SQLite.GetHourlyCountsByDate when filter.ID is set.
+// The hourly array contains 24 TaskCounts where index represents the hour (0-23).
+func (ts TaskStats) HourlyCounts(filter *TaskFilter) (TaskCounts, [24]TaskCounts) {
 	var total TaskCounts
 	var hourly [24]TaskCounts
 
@@ -261,63 +286,29 @@ func (ts TaskStats) GetCountsWithHourlyFiltered(filter *TaskFilter) (TaskCounts,
 			}
 		}
 
-		allowAllResults := filter == nil || len(filter.Result) == 0
-
-		// Process completed tasks
-		if allowAllResults || sliceContains(filter.Result, "complete") {
-			for _, t := range stats.CompletedTimes {
-				hour := t.Hour()
-				hourly[hour].Completed++
-				hourly[hour].Total++
-				total.Completed++
-				total.Total++
-			}
-		}
-
-		// Process error tasks
-		if allowAllResults || sliceContains(filter.Result, "error") {
-			for _, t := range stats.ErrorTimes {
-				hour := t.Hour()
-				hourly[hour].Error++
-				hourly[hour].Total++
-				total.Error++
-				total.Total++
-			}
-		}
-
-		// Process alert tasks
-		if allowAllResults || sliceContains(filter.Result, "alert") {
-			for _, t := range stats.AlertTimes {
-				hour := t.Hour()
-				hourly[hour].Alert++
-				hourly[hour].Total++
-				total.Alert++
-				total.Total++
-			}
-		}
-
-		// Process warn tasks
-		if allowAllResults || sliceContains(filter.Result, "warn") {
-			for _, t := range stats.WarnTimes {
-				hour := t.Hour()
-				hourly[hour].Warn++
-				hourly[hour].Total++
-				total.Warn++
-				total.Total++
-			}
-		}
-
-		// Process running tasks
-		if allowAllResults || sliceContains(filter.Result, "running") {
-			for _, t := range stats.RunningTimes {
-				hour := t.Hour()
-				hourly[hour].Running++
-				hourly[hour].Total++
-				total.Running++
-				total.Total++
-			}
-		}
+		addTimesToHourly(stats.CompletedTimes, ResultComplete, filter, &total, &hourly)
+		addTimesToHourly(stats.ErrorTimes, ResultError, filter, &total, &hourly)
+		addTimesToHourly(stats.AlertTimes, ResultAlert, filter, &total, &hourly)
+		addTimesToHourly(stats.WarnTimes, ResultWarn, filter, &total, &hourly)
+		addTimesToHourly(stats.RunningTimes, ResultRunning, filter, &total, &hourly)
 	}
 
 	return total, hourly
+}
+
+func addTimesToHourly(times []time.Time, result string, filter *TaskFilter, total *TaskCounts, hourly *[24]TaskCounts) {
+	if !resultAllowed(result, filter) {
+		return
+	}
+	for _, t := range times {
+		incrementHourly(result, t.Hour(), total, hourly)
+	}
+}
+
+func addTaskHourlyCounts(tsk task.Task, filter *TaskFilter, total *TaskCounts, hourly *[24]TaskCounts) {
+	result := string(tsk.Result)
+	if !resultAllowed(result, filter) {
+		return
+	}
+	incrementHourly(result, tmpl.TaskTime(tsk).Hour(), total, hourly)
 }
