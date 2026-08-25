@@ -77,10 +77,7 @@
                         <td class="rule-cell truncated copyable" 
                             data-full-text="{{.Rule}}" 
                             data-truncated-text="{{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}"
-                            onclick="window.FlowlordUtils.toggleField(this, '{{.Rule}}')" 
-                            oncontextmenu="window.FlowlordUtils.showContextMenu(event, '{{.Rule}}')"
-                            ondblclick="window.FlowlordUtils.copyToClipboard('{{.Rule}}')"
-                            title="Click to expand/collapse, double-click or right-click to copy">
+                            title="Click for actions">
                             {{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}
                         </td>
                         <td class="depends-on-cell">{{.DependsOn}}</td>
@@ -88,10 +85,7 @@
                         <td class="template-cell truncated copyable" 
                             data-full-text="{{.Template}}" 
                             data-truncated-text="{{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}"
-                            onclick="window.FlowlordUtils.toggleField(this, '{{.Template}}')" 
-                            oncontextmenu="window.FlowlordUtils.showContextMenu(event, '{{.Template}}')"
-                            ondblclick="window.FlowlordUtils.copyToClipboard('{{.Template}}')"
-                            title="Click to expand/collapse, double-click or right-click to copy">
+                            title="Click for actions">
                             {{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}
                         </td>
                         <td class="status-cell">
@@ -127,6 +121,11 @@
 
             // Initialize filters
             initializeFilters();
+
+            const tbody = document.querySelector('#workflowTable tbody');
+            if (tbody && window.FlowlordUtils) {
+                window.FlowlordUtils.enableCellActions(tbody);
+            }
         });
 
         // Initialize responsive filters

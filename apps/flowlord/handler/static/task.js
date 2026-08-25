@@ -533,17 +533,12 @@
         }
 
         if (tbody) {
-            tbody.addEventListener('click', function(e) {
-                var cell = e.target.closest('.expandable');
-                if (cell) {
-                    e.stopPropagation();
-                    cell.classList.toggle('expanded');
-                }
-            });
             if (window.FlowlordUtils) {
-                window.FlowlordUtils.enableCopyableCells(tbody);
+                window.FlowlordUtils.enableCellActions(tbody, { onFilter: applyFilter });
             }
         }
+
+        window.FlowlordTask.applyFilter = applyFilter;
 
         restoreScroll();
     }
@@ -574,6 +569,7 @@
     };
 
     window.FlowlordTask = {
-        init: initTaskPage
+        init: initTaskPage,
+        applyFilter: null
     };
 })();

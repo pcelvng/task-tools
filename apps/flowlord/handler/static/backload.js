@@ -649,21 +649,19 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="num-cell num-column">${index + 1}</td>
-                    <td class="type-cell type-column">${escapeHtml(task.type || '')}</td>
-                    <td class="job-cell job-column">${escapeHtml(task.job || '')}</td>
-                    <td class="info-cell info-column expandable" title="Click to expand">${escapeHtml(task.info || '')}</td>
-                    <td class="meta-cell meta-column expandable" title="Click to expand">${escapeHtml(task.meta || '')}</td>
+                    <td class="type-cell type-column copyable" title="Click for actions">${escapeHtml(task.type || '')}</td>
+                    <td class="job-cell job-column copyable" title="Click for actions">${escapeHtml(task.job || '')}</td>
+                    <td class="info-cell info-column expandable copyable" title="Click for actions">${escapeHtml(task.info || '')}</td>
+                    <td class="meta-cell meta-column expandable copyable" title="Click for actions">${escapeHtml(task.meta || '')}</td>
                 `;
                 elements.previewTableBody.appendChild(row);
             });
         } else {
             elements.previewTableBody.innerHTML = emptyRowHtml || '<tr><td colspan="5" class="no-tasks">No tasks</td></tr>';
         }
-        document.querySelectorAll('#previewTableBody .expandable').forEach(cell => {
-            cell.addEventListener('click', function() {
-                this.classList.toggle('expanded');
-            });
-        });
+        if (window.FlowlordUtils) {
+            window.FlowlordUtils.enableCellActions(elements.previewTableBody);
+        }
     }
 
     // Show preview results

@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -100,7 +101,7 @@ func getBaseFuncMap() template.FuncMap {
 	}
 }
 
-func (tm *taskMaster) StartHandler() {
+func (tm *taskMaster) StartHandler() error {
 	router := chi.NewRouter()
 
 	// Enable gzip compression for all responses
@@ -145,19 +146,25 @@ func (tm *taskMaster) StartHandler() {
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
-		return
+		return nil
 	}
 
-	log.Printf("starting handler on :%v", tm.port)
+	addr := ":" + strconv.Itoa(tm.port)
+	log.Printf("starting handler on %s", addr)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("http server: %w", err)
+	}
+
 	tm.httpServer = &http.Server{
-		Addr:    ":" + strconv.Itoa(tm.port),
 		Handler: router,
 	}
 	go func() {
-		if err := tm.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Println("http server:", err)
+		if err := tm.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("http server: %v", err)
 		}
 	}()
+	return nil
 }
 
 func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {

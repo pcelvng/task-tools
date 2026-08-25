@@ -166,18 +166,18 @@
                     {{if .Tasks}}
                     {{range .Tasks}}
                     <tr>
-                        <td class="id-cell id-column expandable copyable" title="Click to expand, right-click to copy">{{.ID}}</td>
-                        <td class="type-cell type-column copyable" title="Right-click to copy">{{.Type}}</td>
-                        <td class="job-cell job-column copyable" title="Right-click to copy">{{.Job}}</td>
-                        <td class="message-cell message-column expandable copyable" title="Click to expand, right-click to copy">{{.Msg}}</td>
-                        <td class="result-cell result-column copyable {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}" title="Right-click to copy">
+                        <td class="id-cell id-column expandable copyable" data-filter-key="id" title="Click for actions">{{.ID}}</td>
+                        <td class="type-cell type-column copyable" data-filter-key="type" title="Click for actions">{{.Type}}</td>
+                        <td class="job-cell job-column copyable" data-filter-key="job" title="Click for actions">{{.Job}}</td>
+                        <td class="message-cell message-column expandable copyable" title="Click for actions">{{.Msg}}</td>
+                        <td class="result-cell result-column copyable {{if eq .Result "complete"}}result-complete{{else if eq .Result "error"}}result-error{{else if eq .Result "alert"}}result-alert{{else if eq .Result "warn"}}result-warn{{else}}result-running{{end}}" data-filter-key="result" data-filter-value="{{if .Result}}{{.Result}}{{else}}running{{end}}" title="Click for actions">
                             {{if .Result}}{{.Result}}{{else}}Running{{end}}
                         </td>
-                        <td class="info-cell info-column expandable copyable" title="Click to expand, right-click to copy">{{.Info}}</td>
-                        <td class="meta-cell meta-column expandable copyable" title="Click to expand, right-click to copy">{{.Meta}}</td>
-                        <td class="time-cell created-column copyable" title="Right-click to copy">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
-                        <td class="time-cell queue-column copyable" title="Right-click to copy">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
-                        <td class="time-cell process-column copyable" title="Right-click to copy">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
+                        <td class="info-cell info-column expandable copyable" title="Click for actions">{{.Info}}</td>
+                        <td class="meta-cell meta-column expandable copyable" title="Click for actions">{{.Meta}}</td>
+                        <td class="time-cell created-column copyable" title="Click for actions">{{if .Created}}{{.Created}}{{else}}N/A{{end}}</td>
+                        <td class="time-cell queue-column copyable" title="Click for actions">{{if .QueueTime}}{{.QueueTime}}{{else}}N/A{{end}}</td>
+                        <td class="time-cell process-column copyable" title="Click for actions">{{if .TaskTime}}{{.TaskTime}}{{else}}N/A{{end}}</td>
                     </tr>
                     {{end}}
                     {{else}}

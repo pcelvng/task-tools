@@ -1668,28 +1668,60 @@ th.status-cell, td.status-cell {
     display: inline-block;
 }
 
-/* ===== CONTEXT MENU STYLES ===== */
-.context-menu {
+/* ===== CELL ACTION BAR STYLES ===== */
+.copyable.cell-active {
+    outline: 2px solid #0d6efd;
+    outline-offset: -2px;
+    background-color: #f0f7ff;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.cell-actions {
     position: fixed;
+    display: flex;
+    gap: 4px;
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 1000;
-    min-width: 120px;
-    padding: 4px 0;
+    padding: 4px;
 }
 
-.context-menu-item {
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 14px;
+.cell-action-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
     color: #495057;
-    transition: background-color 0.2s ease;
+    cursor: pointer;
+    white-space: nowrap;
 }
 
-.context-menu-item:hover {
+.cell-action-btn:hover {
     background-color: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.cell-action-copy {
+    color: #0d6efd;
+    border-color: #b6d4fe;
+    padding: 4px 6px;
+    line-height: 0;
+}
+
+.cell-action-icon {
+    display: block;
+}
+
+.cell-action-filter {
+    color: #198754;
+    border-color: #badbcc;
+    padding: 4px 6px;
+    line-height: 0;
 }
 
 /* ===== COPY FEEDBACK STYLES ===== */

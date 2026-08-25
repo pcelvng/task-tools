@@ -286,7 +286,9 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 	go tm.readDone(ctx)
 	go tm.readFiles(ctx)
 
-	go tm.StartHandler()
+	if err := tm.StartHandler(); err != nil {
+		return err
+	}
 	go tm.handleNotifications(tm.alerts, ctx)
 	<-ctx.Done()
 	log.Println("shutting down")

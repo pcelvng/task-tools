@@ -39,24 +39,25 @@
                 <tbody>
                     {{range .Alerts}}
                     <tr>
-                        <td class="id-cell id-column truncated copyable" 
+                        <td class="id-cell id-column truncated copyable"
                             data-full-text="{{.TaskID}}"
-                            title="{{if and .TaskID (ne .TaskID "unknown")}}Click to view tasks, right-click to copy{{else}}Right-click to copy{{end}}">
+                            title="{{if and .TaskID (ne .TaskID "unknown")}}Click link to view tasks, or click cell for actions{{else}}Click for actions{{end}}">
                             {{if and .TaskID (ne .TaskID "unknown")}}
                             <a class="task-id-link" href="{{if $.isLocal}}./task_preview.html{{else}}/web/task{{end}}?date={{if .TaskTime.IsZero}}{{.CreatedAt.Format "2006-01-02"}}{{else}}{{.TaskTime.Format "2006-01-02"}}{{end}}&id={{.TaskID}}">{{.TaskID}}</a>
                             {{else}}
                             {{.TaskID}}
                             {{end}}
                         </td>
-                        <td class="type-cell type-column copyable" title="Right-click to copy">{{.Type}}</td>
-                        <td class="job-cell job-column copyable" title="Right-click to copy">{{.Job}}</td>
-                        <td class="message-cell message-column truncated copyable" 
+                        <td class="type-cell type-column copyable" title="Click for actions">{{.Type}}</td>
+                        <td class="job-cell job-column copyable" title="Click for actions">{{.Job}}</td>
+                        <td class="message-cell message-column truncated expandable copyable"
                             data-full-text="{{.Msg}}"
-                            title="Click to expand/collapse, right-click to copy">
-                            {{.Msg}}
+                            data-truncated-text="{{if ge (len .Msg) 120}}{{slice .Msg 0 120}}...{{else}}{{.Msg}}{{end}}"
+                            title="Click for actions">
+                            {{if ge (len .Msg) 120}}{{slice .Msg 0 120}}...{{else}}{{.Msg}}{{end}}
                         </td>
-                        <td class="time-cell alerted-column copyable" title="Right-click to copy">{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}</td>
-                        <td class="time-cell tasktime-column copyable" title="Right-click to copy">{{if .TaskTime.IsZero}}N/A{{else}}{{.TaskTime.Format "2006-01-02T15"}}{{end}}</td>
+                        <td class="time-cell alerted-column copyable" title="Click for actions">{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}</td>
+                        <td class="time-cell tasktime-column copyable" title="Click for actions">{{if .TaskTime.IsZero}}N/A{{else}}{{.TaskTime.Format "2006-01-02T15"}}{{end}}</td>
                     </tr>
                     {{end}}
                 </tbody>
@@ -81,16 +82,9 @@
             const tbody = document.querySelector('#alertTable tbody');
             if (!tbody) return;
 
-            window.FlowlordUtils.enableCopyableCells(tbody);
-
-            tbody.addEventListener('click', function(e) {
-                if (e.target.closest('a.task-id-link')) return;
-                const messageCell = e.target.closest('.message-cell.copyable');
-                if (messageCell) {
-                    e.stopPropagation();
-                    window.FlowlordUtils.toggleField(messageCell, window.FlowlordUtils.copyableText(messageCell));
-                }
-            });
+            if (window.FlowlordUtils) {
+                window.FlowlordUtils.enableCellActions(tbody);
+            }
         });
     </script>
 </body>
