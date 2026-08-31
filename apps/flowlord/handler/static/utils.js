@@ -5,6 +5,7 @@
     let activeCell = null;
     let activeActionBar = null;
     let documentListenersBound = false;
+    const cellActionRoots = new WeakMap();
 
     // Escape HTML for safe display in innerHTML
     function escapeHtml(text) {
@@ -294,6 +295,7 @@
     }
 
     // Click-to-expand with inline Copy / Filter action bar for .copyable cells.
+    // Idempotent per root: repeated calls update options without adding listeners.
     function enableCellActions(root, options) {
         const el = typeof root === 'string' ? document.querySelector(root) : root;
         if (!el) return;
@@ -302,7 +304,14 @@
 
         bindDocumentListeners();
 
-        el.addEventListener('click', function(e) {
+        const existing = cellActionRoots.get(el);
+        if (existing) {
+            existing.options = options;
+            return;
+        }
+
+        const entry = { options: options };
+        function onCellClick(e) {
             if (e.target.closest('.cell-action-btn')) return;
             if (e.target.closest('a')) return;
 
@@ -310,8 +319,11 @@
             if (!cell || !el.contains(cell)) return;
 
             e.stopPropagation();
-            activateCell(cell, options);
-        });
+            activateCell(cell, entry.options);
+        }
+
+        cellActionRoots.set(el, entry);
+        el.addEventListener('click', onCellClick);
     }
 
     window.FlowlordUtils = {

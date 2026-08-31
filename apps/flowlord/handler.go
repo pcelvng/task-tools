@@ -101,7 +101,7 @@ func getBaseFuncMap() template.FuncMap {
 	}
 }
 
-func (tm *taskMaster) StartHandler() error {
+func (tm *taskMaster) StartHandler(serveErr chan<- error) error {
 	router := chi.NewRouter()
 
 	// Enable gzip compression for all responses
@@ -111,7 +111,7 @@ func (tm *taskMaster) StartHandler() error {
 	// Create a sub-filesystem that strips the "handler/" prefix
 	staticFS, err := fs.Sub(StaticFiles, "handler/static")
 	if err != nil {
-		log.Fatal("Failed to create static filesystem:", err)
+		return fmt.Errorf("static filesystem: %w", err)
 	}
 	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
@@ -160,8 +160,9 @@ func (tm *taskMaster) StartHandler() error {
 		Handler: router,
 	}
 	go func() {
-		if err := tm.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("http server: %v", err)
+		err := tm.httpServer.Serve(ln)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- err
 		}
 	}()
 	return nil

@@ -62,6 +62,10 @@
         // Setup event listeners
         setupEventListeners();
 
+        if (window.FlowlordUtils && elements.previewTableBody) {
+            window.FlowlordUtils.enableCellActions(elements.previewTableBody);
+        }
+
         // Initialize date inputs with today's date
         initializeDates();
     }
@@ -658,9 +662,6 @@
             });
         } else {
             elements.previewTableBody.innerHTML = emptyRowHtml || '<tr><td colspan="5" class="no-tasks">No tasks</td></tr>';
-        }
-        if (window.FlowlordUtils) {
-            window.FlowlordUtils.enableCellActions(elements.previewTableBody);
         }
     }
 

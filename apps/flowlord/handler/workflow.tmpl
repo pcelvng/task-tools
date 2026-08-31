@@ -71,24 +71,24 @@
                 <tbody>
                     {{range .Phases}}
                     <tr>
-                        <td class="workflow-file-cell">{{.FilePath}}</td>
-                        <td class="task-cell">{{.Topic}}</td>
-                        <td class="job-cell">{{.Job}}</td>
-                        <td class="rule-cell truncated" 
-                            data-full-text="{{.Rule}}" 
+                        <td class="workflow-file-cell copyable" title="Click for actions">{{.FilePath}}</td>
+                        <td class="task-cell copyable" title="Click for actions">{{.Topic}}</td>
+                        <td class="job-cell copyable" title="Click for actions">{{.Job}}</td>
+                        <td class="rule-cell truncated expandable copyable"
+                            data-full-text="{{.Rule}}"
                             data-truncated-text="{{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}"
-                            title="{{.Rule}}">
+                            title="Click for actions">
                             {{if ge (len .Rule) 120}}{{slice .Rule 0 120}}...{{else}}{{.Rule}}{{end}}
                         </td>
-                        <td class="depends-on-cell">{{.DependsOn}}</td>
-                        <td class="retry-cell">{{.Retry}}</td>
-                        <td class="template-cell truncated" 
-                            data-full-text="{{.Template}}" 
+                        <td class="depends-on-cell copyable" title="Click for actions">{{.DependsOn}}</td>
+                        <td class="retry-cell copyable" title="Click for actions">{{.Retry}}</td>
+                        <td class="template-cell truncated expandable copyable"
+                            data-full-text="{{.Template}}"
                             data-truncated-text="{{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}"
-                            title="{{.Template}}">
+                            title="Click for actions">
                             {{if ge (len .Template) 120}}{{slice .Template 0 120}}...{{else}}{{.Template}}{{end}}
                         </td>
-                        <td class="status-cell">
+                        <td class="status-cell copyable" title="Click for actions">
                             <span class="{{if .Status}}result-error{{else}}result-complete{{end}}">
                                 {{if .Status}}{{.Status}}{{else}}OK{{end}}
                             </span>
@@ -118,6 +118,11 @@
                     'retry': 'number'
                 }
             });
+
+            const tbody = document.querySelector('#workflowTable tbody');
+            if (tbody && window.FlowlordUtils) {
+                window.FlowlordUtils.enableCellActions(tbody);
+            }
 
             // Initialize filters
             initializeFilters();
