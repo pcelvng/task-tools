@@ -12,11 +12,10 @@
     <div class="container full-width">
 
         <div class="summary-section">
-            <h3>Summary</h3>
             {{if .HourlyStats}}
             <div class="collapsible-section">
                 <div class="collapsible-header" onclick="toggleCollapsible('hourlyChart')">
-                    <h3>Hourly Task Breakdown</h3>
+                    <h3>Tasks by Hour</h3>
                     <span class="collapsible-toggle" id="hourlyChart-toggle">▼</span>
                 </div>
                 <div class="collapsible-content" id="hourlyChart-content">
