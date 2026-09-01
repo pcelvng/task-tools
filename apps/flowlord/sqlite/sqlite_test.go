@@ -111,3 +111,32 @@ func TestDatesByType(t *testing.T) {
 		t.Error("GetDatesWithFiles() should return same results as DatesByType('files')")
 	}
 }
+
+func TestMigrationNormalizesEmptyResult(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	_, err := db.db.Exec(`
+		INSERT INTO task_records (id, type, job, info, result, meta, msg, created, started, ended)
+		VALUES ('legacy', 'alpha', 'load', '', '', '', '', '2024-01-15T10:00:00Z', '', '')
+	`)
+	if err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+
+	if err := db.migrateSchema(2); err != nil {
+		t.Fatalf("migrateSchema: %v", err)
+	}
+
+	var result string
+	err = db.db.QueryRow(`SELECT result FROM task_records WHERE id = 'legacy'`).Scan(&result)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if result != ResultRunning {
+		t.Errorf("result = %q, want %q", result, ResultRunning)
+	}
+}

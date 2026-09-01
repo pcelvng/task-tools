@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -85,14 +86,22 @@ func getBaseFuncMap() template.FuncMap {
 			}
 			return s[start:end]
 		},
+		"join": strings.Join,
 		// Math functions
 		"add": func(a, b int) int {
 			return a + b
 		},
+		// Task filter query string for pagination (type=a,b&job=x)
+		"filterQS": func(f *sqlite.TaskFilter) template.URL {
+			if f == nil {
+				return ""
+			}
+			return template.URL(f.QueryString())
+		},
 	}
 }
 
-func (tm *taskMaster) StartHandler() {
+func (tm *taskMaster) StartHandler(serveErr chan<- error) error {
 	router := chi.NewRouter()
 
 	// Enable gzip compression for all responses
@@ -102,7 +111,7 @@ func (tm *taskMaster) StartHandler() {
 	// Create a sub-filesystem that strips the "handler/" prefix
 	staticFS, err := fs.Sub(StaticFiles, "handler/static")
 	if err != nil {
-		log.Fatal("Failed to create static filesystem:", err)
+		return fmt.Errorf("static filesystem: %w", err)
 	}
 	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
@@ -137,19 +146,26 @@ func (tm *taskMaster) StartHandler() {
 
 	if tm.port == 0 {
 		log.Println("flowlord router disabled")
-		return
+		return nil
 	}
 
-	log.Printf("starting handler on :%v", tm.port)
+	addr := ":" + strconv.Itoa(tm.port)
+	log.Printf("starting handler on %s", addr)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("http server: %w", err)
+	}
+
 	tm.httpServer = &http.Server{
-		Addr:    ":" + strconv.Itoa(tm.port),
 		Handler: router,
 	}
 	go func() {
-		if err := tm.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Println("http server:", err)
+		err := tm.httpServer.Serve(ln)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- err
 		}
 	}()
+	return nil
 }
 
 func (tm *taskMaster) Info(w http.ResponseWriter, r *http.Request) {
@@ -440,21 +456,13 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 		dt = time.Now()
 	}
 
-	// Get filter parameters from query string
-	page := 1
-	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	filter := &sqlite.TaskFilter{
-		ID:     r.URL.Query().Get("id"),
-		Type:   r.URL.Query().Get("type"),
-		Job:    r.URL.Query().Get("job"),
-		Result: r.URL.Query().Get("result"),
-		Page:   page,
-		Limit:  sqlite.DefaultPageSize,
+	// Parse filter/sort/page from query (uri supports comma-separated and repeated params for slices)
+	filter := &sqlite.TaskFilter{}
+	_ = uri.UnmarshalQuery(r.URL.RawQuery, filter)
+	filter.Normalize()
+	filter.Limit = sqlite.DefaultPageSize
+	if filter.Page <= 0 {
+		filter.Page = 1
 	}
 
 	// Get task summary statistics for the date
@@ -479,8 +487,19 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	// Get dates with tasks for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("tasks")
 
+	var hourlyStats [24]sqlite.TaskCounts
+	if len(filter.ID) > 0 {
+		if _, stats, err := tm.taskCache.GetHourlyCountsByDate(dt, filter); err != nil {
+			log.Printf("Error getting hourly counts: %v", err)
+		} else {
+			hourlyStats = stats
+		}
+	} else {
+		_, hourlyStats = taskStats.HourlyCounts(filter)
+	}
+
 	w.Header().Set("Content-Type", "text/html")
-	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime)
+	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime, hourlyStats)
 	w.Write(htmlBytes)
 }
 
@@ -548,7 +567,7 @@ func filesHTML(files []sqlite.FileMessage, date time.Time, datesWithData []strin
 }
 
 // taskHTML renders the task summary and table HTML page
-func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration) []byte {
+func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration, hourlyStats [24]sqlite.TaskCounts) []byte {
 	renderStart := time.Now()
 
 	// Calculate navigation dates
@@ -557,9 +576,6 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 
 	// Get unfiltered counts for summary section (always show full day stats)
 	unfilteredCounts := taskStats.TotalCounts()
-
-	// Get filtered hourly breakdown (respects filters)
-	_, hourlyStats := taskStats.GetCountsWithHourlyFiltered(filter)
 
 	// Get unique types and jobs from TaskStats for filter dropdowns
 	types := taskStats.UniqueTypes()
@@ -618,8 +634,8 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	renderTime := time.Since(renderStart)
 
 	// Single consolidated log with all metrics
-	log.Printf("Task page: date=%s filters=[id=%q type=%q job=%q result=%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
-		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result,
+	log.Printf("Task page: date=%s filters=[id=%q type=%v job=%v result=%v sort=%q/%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
+		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result, filter.Sort, filter.Direction,
 		unfilteredCounts.Total, totalCount, filter.Page, totalPages,
 		queryTime, renderTime, float64(htmlSize)/(1024*1024))
 

@@ -39,26 +39,25 @@
                 <tbody>
                     {{range .Alerts}}
                     <tr>
-                        <td class="id-cell id-column truncated copyable" 
-                            data-full-text="{{.TaskID}}" 
-                            onclick="window.FlowlordUtils.toggleField(this, '{{.TaskID}}')" 
-                            oncontextmenu="window.FlowlordUtils.showContextMenu(event, '{{.TaskID}}')"
-                            ondblclick="window.FlowlordUtils.copyToClipboard('{{.TaskID}}')"
-                            title="Click to expand/collapse, double-click or right-click to copy">
+                        <td class="id-cell id-column truncated copyable"
+                            data-full-text="{{.TaskID}}"
+                            title="{{if and .TaskID (ne .TaskID "unknown")}}Click link to view tasks, or click cell for actions{{else}}Click for actions{{end}}">
+                            {{if and .TaskID (ne .TaskID "unknown")}}
+                            <a class="task-id-link" href="{{if $.isLocal}}./task_preview.html{{else}}/web/task{{end}}?date={{if .TaskTime.IsZero}}{{.CreatedAt.Format "2006-01-02"}}{{else}}{{.TaskTime.Format "2006-01-02"}}{{end}}&id={{.TaskID}}">{{.TaskID}}</a>
+                            {{else}}
                             {{.TaskID}}
+                            {{end}}
                         </td>
-                        <td class="type-cell type-column">{{.Type}}</td>
-                        <td class="job-cell job-column">{{.Job}}</td>
-                        <td class="message-cell message-column truncated copyable" 
-                            data-full-text="{{.Msg}}" 
-                            onclick="window.FlowlordUtils.toggleField(this, '{{.Msg}}')" 
-                            oncontextmenu="window.FlowlordUtils.showContextMenu(event, '{{.Msg}}')"
-                            ondblclick="window.FlowlordUtils.copyToClipboard('{{.Msg}}')"
-                            title="Click to expand/collapse, double-click or right-click to copy">
-                            {{.Msg}}
+                        <td class="type-cell type-column copyable" title="Click for actions">{{.Type}}</td>
+                        <td class="job-cell job-column copyable" title="Click for actions">{{.Job}}</td>
+                        <td class="message-cell message-column truncated expandable copyable"
+                            data-full-text="{{.Msg}}"
+                            data-truncated-text="{{if ge (len .Msg) 120}}{{slice .Msg 0 120}}...{{else}}{{.Msg}}{{end}}"
+                            title="Click for actions">
+                            {{if ge (len .Msg) 120}}{{slice .Msg 0 120}}...{{else}}{{.Msg}}{{end}}
                         </td>
-                        <td class="time-cell alerted-column">{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}</td>
-                        <td class="time-cell tasktime-column">{{if .TaskTime.IsZero}}N/A{{else}}{{.TaskTime.Format "2006-01-02T15"}}{{end}}</td>
+                        <td class="time-cell alerted-column copyable" title="Click for actions">{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}</td>
+                        <td class="time-cell tasktime-column copyable" title="Click for actions">{{if .TaskTime.IsZero}}N/A{{else}}{{.TaskTime.Format "2006-01-02T15"}}{{end}}</td>
                     </tr>
                     {{end}}
                 </tbody>
@@ -79,6 +78,13 @@
                     'tasktime': 'datetime'
                 }
             });
+
+            const tbody = document.querySelector('#alertTable tbody');
+            if (!tbody) return;
+
+            if (window.FlowlordUtils) {
+                window.FlowlordUtils.enableCellActions(tbody);
+            }
         });
     </script>
 </body>

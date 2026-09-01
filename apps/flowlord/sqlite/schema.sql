@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS task_records (
     type TEXT,
     job TEXT,
     info TEXT,
-    result TEXT,               -- NULL if not completed
+    result TEXT,               -- 'running' while in progress
     meta TEXT,
     msg TEXT,                  -- NULL if not completed
     created TIMESTAMP,

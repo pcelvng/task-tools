@@ -248,14 +248,47 @@ func (tm *taskMaster) refreshCache() ([]string, error) {
 	return files, nil
 }
 
-func (tm *taskMaster) Run(ctx context.Context) (err error) {
-	// The SQLite struct now implements the workflow.Cache interface directly
-
-	// check for alerts from today on startup	// refresh the workflow if the file(s) have been changed
-	_, err = tm.refreshCache()
-	if err != nil {
-		log.Fatal(err)
+func (tm *taskMaster) shutdown() error {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if tm.httpServer != nil {
+		if err := tm.httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("http shutdown: %v", err)
+			if closeErr := tm.httpServer.Close(); closeErr != nil {
+				log.Printf("http close: %v", closeErr)
+			}
+		}
 	}
+	if tm.cron != nil {
+		tm.cron.Stop()
+	}
+	return tm.taskCache.Close()
+}
+
+func (tm *taskMaster) Run(ctx context.Context) (err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		cancel()
+		if shutdownErr := tm.shutdown(); shutdownErr != nil {
+			if err == nil {
+				err = shutdownErr
+			} else {
+				err = fmt.Errorf("%w (shutdown: %v)", err, shutdownErr)
+			}
+		}
+	}()
+
+	// check for alerts from today on startup; refresh the workflow if the file(s) have been changed
+	if _, err = tm.refreshCache(); err != nil {
+		return fmt.Errorf("refresh cache: %w", err)
+	}
+
+	serveErr := make(chan error, 1)
+
+	if err := tm.StartHandler(serveErr); err != nil {
+		return err
+	}
+
 	go func() {
 		workflowTick := time.NewTicker(tm.dur)
 		DBTick := time.NewTicker(24 * time.Hour)
@@ -279,26 +312,26 @@ func (tm *taskMaster) Run(ctx context.Context) (err error) {
 		}
 	}()
 
-	if err := tm.schedule(); err != nil {
-		return fmt.Errorf("cron schedule %w", err)
+	if err = tm.schedule(); err != nil {
+		return fmt.Errorf("cron schedule: %w", err)
 	}
 
 	go tm.readDone(ctx)
 	go tm.readFiles(ctx)
-
-	go tm.StartHandler()
 	go tm.handleNotifications(tm.alerts, ctx)
-	<-ctx.Done()
-	log.Println("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if tm.httpServer != nil {
-		if err := tm.httpServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("http shutdown: %v", err)
+
+	select {
+	case <-ctx.Done():
+		log.Println("shutting down")
+	case serveErrVal := <-serveErr:
+		if serveErrVal != nil {
+			log.Printf("http server: %v", serveErrVal)
+			return fmt.Errorf("http server: %w", serveErrVal)
 		}
+		log.Println("shutting down")
 	}
-	tm.cron.Stop()
-	return tm.taskCache.Close()
+
+	return nil
 }
 
 // schedule the tasks and refresh the schedule when updated

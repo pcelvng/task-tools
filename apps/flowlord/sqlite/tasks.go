@@ -21,17 +21,6 @@ type TaskJob struct {
 	Events     []task.Task
 }
 
-// TaskFilter contains options for filtering and paginating task queries.
-// Empty string fields are ignored in the query.
-type TaskFilter struct {
-	ID     string // Filter by task ID (resets other filters)
-	Type   string // Filter by task type
-	Job    string // Filter by job name
-	Result string // Filter by result status (complete, error, alert, warn, or "running" for empty)
-	Page   int    // Page number (1-based, default: 1)
-	Limit  int    // Number of results per page (default: 100)
-}
-
 // TaskView represents a task with calculated times from the tasks view
 type TaskView struct {
 	ID           string `json:"id"`
@@ -53,6 +42,9 @@ type TaskView struct {
 func (s *SQLite) Add(t task.Task) {
 	if t.ID == "" {
 		return
+	}
+	if t.Result == "" {
+		t.Result = ResultRunning
 	}
 
 	s.mu.Lock()
@@ -129,7 +121,7 @@ func (s *SQLite) GetTask(id string) TaskJob {
 		events = append(events, t)
 
 		// Track completion status and last update time
-		if t.Result != "" {
+		if t.Result != ResultRunning {
 			completed = true
 			if ended, err := time.Parse(time.RFC3339, t.Ended); err == nil {
 				if ended.After(lastUpdate) {
@@ -160,13 +152,12 @@ func (s *SQLite) Recycle(t time.Time) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d := struct {
-		tasks int64 
-		alerts int64 
-		files int64 
-		days int64 
+		tasks  int64
+		alerts int64
+		files  int64
+		days   int64
 	}{}
 	day := t.Format("2006-01-02")
-
 
 	// Delete old task records
 	result, err := s.db.Exec("DELETE FROM task_records WHERE created < ?", day)
@@ -188,7 +179,6 @@ func (s *SQLite) Recycle(t time.Time) (string, error) {
 		return "", fmt.Errorf("error deleting old file messages: %w", err)
 	}
 	d.files, _ = result.RowsAffected()
-
 
 	// Delete old date index entries
 	result, err = s.db.Exec("DELETE FROM date_index WHERE date < ?", day)
@@ -223,9 +213,9 @@ func (s *SQLite) CheckIncompleteTasks() int {
 			ar.msg LIKE 'INCOMPLETE:%'
 		)
 		WHERE tr.created < ? 
-		AND tr.result = '' 
+		AND tr.result = ?
 		AND ar.id IS NULL
-	`, t.Add(-s.TaskTTL))
+	`, t.Add(-s.TaskTTL), ResultRunning)
 	if err != nil {
 		return 0
 	}
@@ -328,6 +318,7 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	if filter == nil {
 		filter = &TaskFilter{}
 	}
+	filter.Normalize()
 	if filter.Limit <= 0 {
 		filter.Limit = DefaultPageSize
 	}
@@ -335,38 +326,7 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 		filter.Page = 1 // default to first page
 	}
 
-	dateStr := date.Format("2006-01-02")
-
-	// Build WHERE clause with filters
-	whereClause := "WHERE DATE(created) = ?"
-	args := []interface{}{dateStr}
-
-	// If ID is specified, only filter by ID (ignores other filters)
-	if filter.ID != "" {
-		whereClause += " AND id = ?"
-		args = append(args, filter.ID)
-	} else {
-		// Apply other filters only when ID is not specified
-		if filter.Type != "" {
-			whereClause += " AND type = ?"
-			args = append(args, filter.Type)
-		}
-
-		if filter.Job != "" {
-			whereClause += " AND job = ?"
-			args = append(args, filter.Job)
-		}
-
-		if filter.Result != "" {
-			// Handle "running" as empty result
-			if filter.Result == "running" {
-				whereClause += " AND result = ''"
-			} else {
-				whereClause += " AND result = ?"
-				args = append(args, filter.Result)
-			}
-		}
-	}
+	whereClause, args := filter.whereForDate(date)
 
 	// Get total count of filtered results
 	countQuery := "SELECT COUNT(*) FROM tasks " + whereClause
@@ -379,7 +339,7 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	// Build main query with pagination
 	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
 		FROM tasks ` + whereClause + `
-		ORDER BY created DESC
+		` + filter.orderByClause() + `
 		LIMIT ? OFFSET ?`
 
 	// Calculate offset from page number
@@ -408,6 +368,44 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	}
 
 	return tasks, totalCount, nil
+}
+
+// GetHourlyCountsByDate returns hourly task counts for a date, querying tasks directly so ID
+// filters (and all other filter fields) are applied per task.
+func (s *SQLite) GetHourlyCountsByDate(date time.Time, filter *TaskFilter) (TaskCounts, [24]TaskCounts, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if filter == nil {
+		filter = &TaskFilter{}
+	}
+	filter.Normalize()
+
+	whereClause, args := filter.whereForDate(date)
+
+	query := `SELECT id, type, job, info, result, meta, created, started, ended
+		FROM tasks ` + whereClause
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return TaskCounts{}, [24]TaskCounts{}, err
+	}
+	defer rows.Close()
+
+	var total TaskCounts
+	var hourly [24]TaskCounts
+	for rows.Next() {
+		var t task.Task
+		if err := rows.Scan(
+			&t.ID, &t.Type, &t.Job, &t.Info, &t.Result, &t.Meta,
+			&t.Created, &t.Started, &t.Ended,
+		); err != nil {
+			continue
+		}
+		addTaskHourlyCounts(t, filter, &total, &hourly)
+	}
+
+	return total, hourly, rows.Err()
 }
 
 // GetTaskRecapByDate creates a recap of tasks for a specific date
