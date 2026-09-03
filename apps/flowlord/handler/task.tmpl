@@ -109,6 +109,7 @@
             <table id="taskTable">
                 <thead>
                     <tr>
+                        <th class="row-action-col" aria-hidden="true"></th>
                         <th class="sortable filterable id-column{{if eq .Filter.Sort "id"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}{{if .Filter.ID}} has-filter{{end}}" data-sort="id" data-filter="id">
                             <div class="th-inner">
                                 <button type="button" class="th-sort">ID</button>
@@ -165,6 +166,14 @@
                     {{if .Tasks}}
                     {{range .Tasks}}
                     <tr>
+                        <td class="row-action-col">
+                            <button type="button" class="row-action-btn row-action-replay" aria-label="Rerun" title="Rerun">
+                                <svg class="row-action-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                    <path d="M3 3v5h5"/>
+                                </svg>
+                            </button>
+                        </td>
                         <td class="id-cell id-column expandable copyable" data-filter-key="id" title="Click for actions">{{.ID}}</td>
                         <td class="type-cell type-column copyable" data-filter-key="type" title="Click for actions">{{.Type}}</td>
                         <td class="job-cell job-column copyable" data-filter-key="job" title="Click for actions">{{.Job}}</td>
@@ -181,7 +190,7 @@
                     {{end}}
                     {{else}}
                     <tr>
-                        <td colspan="10" class="no-tasks-cell">
+                        <td colspan="11" class="no-tasks-cell">
                             <h3>No tasks found</h3>
                             <p>No tasks were found for {{.Date}} with the current filters.</p>
                         </td>

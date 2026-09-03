@@ -506,7 +506,10 @@
 
         if (tbody) {
             if (window.FlowlordUtils) {
-                window.FlowlordUtils.enableCellActions(tbody, { onFilter: applyFilter });
+                window.FlowlordUtils.enableCellActions(tbody, {
+                    onFilter: applyFilter
+                });
+                window.FlowlordUtils.enableRowBackloadActions(tbody, window.FlowlordUtils.taskRowDataFromRow);
             }
         }
 

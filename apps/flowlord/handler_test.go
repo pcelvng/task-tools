@@ -92,6 +92,19 @@ func TestBackloader(t *testing.T) {
 				Tasks: []task.Task{{Type: "task1", Info: "?date=2022-06-12", Meta: "cron=2022-06-12T00&workflow=f3.toml"}},
 			},
 		},
+		"from_cache_with_workflow": {
+			Input: request{
+				Batch: Batch{
+					Task:     "task1",
+					Workflow: "f3.toml",
+				},
+				At: "2022-06-12",
+			},
+			Expected: response{
+				Count: 1,
+				Tasks: []task.Task{{Type: "task1", Info: "?date=2022-06-12", Meta: "cron=2022-06-12T00&workflow=f3.toml"}},
+			},
+		},
 		"hourly": {
 			Input: request{
 				Batch: Batch{
