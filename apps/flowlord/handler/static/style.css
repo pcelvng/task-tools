@@ -958,10 +958,13 @@ th.job-column, td.job-column {
     max-width: 80px;
 }
 
-/* Message column - takes remaining space with generous width */
+/* Message column - flexible width within viewport */
 th.message-column, td.message-column {
     width: auto;
-    min-width: 400px;
+    min-width: 0;
+    max-width: none;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 /* Result/Status column - compact for status */
@@ -1063,22 +1066,35 @@ th.status-cell, td.status-cell {
 #workflowTable {
     table-layout: fixed;
     width: 100%;
+    max-width: 100%;
+}
+
+#taskTable {
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
+}
+
+.table-container:has(#taskTable),
+.table-container:has(#workflowTable) {
+    overflow-x: hidden;
+    max-width: 100%;
+    width: 100%;
 }
 
 #workflowTable th,
 #workflowTable td {
     padding: 12px 8px;
     vertical-align: top;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
-/* Ensure workflow table doesn't overflow horizontally */
-.table-container {
-    overflow-x: auto;
-    max-width: 100%;
-    width: 100%;
+#taskTable th,
+#taskTable td {
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
-
-/* Better responsive handling for workflow table */
 @media (max-width: 1200px) {
     th.rule-column, td.rule-column,
     th.template-column, td.template-column {
@@ -1743,6 +1759,101 @@ th.status-cell, td.status-cell {
     border-color: #badbcc;
     padding: 4px 6px;
     line-height: 0;
+}
+
+th.row-action-col,
+td.row-action-col {
+    border: none;
+    background: transparent;
+    padding: 4px 2px;
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    white-space: nowrap;
+    vertical-align: middle;
+    text-align: center;
+    cursor: default;
+}
+
+th.row-action-col:hover {
+    background: transparent;
+}
+
+.row-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+    line-height: 0;
+}
+
+.row-action-icon {
+    display: block;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.row-action-replay .row-action-icon,
+.row-action-play .row-action-icon {
+    width: 17px;
+    height: 17px;
+}
+
+#workflowTable th.workflow-file-cell,
+#workflowTable td.workflow-file-cell,
+#workflowTable th.task-cell,
+#workflowTable td.task-cell,
+#workflowTable th.job-cell,
+#workflowTable td.job-cell,
+#workflowTable th.rule-cell,
+#workflowTable td.rule-cell,
+#workflowTable th.depends-on-cell,
+#workflowTable td.depends-on-cell,
+#workflowTable th.retry-cell,
+#workflowTable td.retry-cell,
+#workflowTable th.template-cell,
+#workflowTable td.template-cell,
+#workflowTable th.status-cell,
+#workflowTable td.status-cell {
+    width: auto;
+    max-width: none;
+}
+
+#workflowTable th.row-action-col,
+#workflowTable td.row-action-col {
+    width: 21px;
+    padding: 4px 0;
+    vertical-align: middle;
+    overflow: hidden;
+}
+
+#workflowTable .row-action-btn {
+    width: 19px;
+    height: 19px;
+    min-width: 19px;
+}
+
+.row-action-replay {
+    color: #6f42c1;
+}
+
+.row-action-replay:hover {
+    background-color: #f3ebff;
+}
+
+.row-action-play {
+    color: #198754;
+}
+
+.row-action-play:hover {
+    background-color: #e8f5ee;
 }
 
 /* ===== COPY FEEDBACK STYLES ===== */

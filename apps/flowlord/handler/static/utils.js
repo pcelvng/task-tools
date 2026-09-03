@@ -198,6 +198,79 @@
         '<path fill="currentColor" fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1H2z"/>' +
         '</svg>';
 
+    function parseMetaString(metaStr) {
+        const out = {};
+        if (!metaStr) return out;
+        metaStr.split('&').forEach(pair => {
+            const eq = pair.indexOf('=');
+            if (eq === -1) return;
+            const key = decodeURIComponent(pair.slice(0, eq));
+            const val = decodeURIComponent(pair.slice(eq + 1));
+            if (key) out[key] = val;
+        });
+        return out;
+    }
+
+    function buildBackloadUrl(taskRow) {
+        const params = new URLSearchParams();
+        if (taskRow.type) params.set('task', taskRow.type);
+        if (taskRow.job) params.set('job', taskRow.job);
+
+        const meta = parseMetaString(taskRow.meta || '');
+        const workflow = taskRow.workflow || meta.workflow;
+        if (workflow) params.set('workflow', workflow);
+        if (meta.cron) params.set('at', meta.cron);
+
+        const skip = { cron: true, workflow: true, job: true };
+        Object.keys(meta).forEach(k => {
+            if (!skip[k]) params.set('meta.' + k, meta[k]);
+        });
+
+        params.set('preview', '1');
+
+        const base = window.location.pathname.includes('_preview') ? './backload_preview.html' : '/web/backload';
+        return base + '?' + params.toString();
+    }
+
+    function taskRowDataFromRow(row) {
+        if (!row) return null;
+        return {
+            type: ((row.querySelector('.type-cell') || {}).textContent || '').trim(),
+            job: ((row.querySelector('.job-cell') || {}).textContent || '').trim(),
+            meta: ((row.querySelector('.meta-cell') || {}).textContent || '').trim()
+        };
+    }
+
+    function workflowPhaseDataFromRow(row) {
+        if (!row) return null;
+        return {
+            type: ((row.querySelector('.task-cell') || {}).textContent || '').trim(),
+            job: ((row.querySelector('.job-cell') || {}).textContent || '').trim(),
+            workflow: ((row.querySelector('.workflow-file-cell') || {}).textContent || '').trim()
+        };
+    }
+
+    function taskRowDataFromCell(cell) {
+        return taskRowDataFromRow(cell && cell.closest('tr'));
+    }
+
+    function navigateToBackload(rowData) {
+        if (!rowData || !rowData.type) return;
+        window.location.href = buildBackloadUrl(rowData);
+    }
+
+    function enableRowBackloadActions(root, getRowData) {
+        const el = typeof root === 'string' ? document.querySelector(root) : root;
+        if (!el || !getRowData) return;
+
+        el.addEventListener('click', function(e) {
+            const btn = e.target.closest('.row-action-btn');
+            if (!btn || !el.contains(btn)) return;
+            e.stopPropagation();
+            navigateToBackload(getRowData(btn.closest('tr')));
+        });
+    }
+
     function showActionBar(cell, options) {
         removeActionBar();
 
@@ -335,6 +408,13 @@
         enableCellActions: enableCellActions,
         showCopyFeedback: showCopyFeedback,
         deactivateCell: deactivateCell,
-        copyCell: copyCell
+        copyCell: copyCell,
+        parseMetaString: parseMetaString,
+        buildBackloadUrl: buildBackloadUrl,
+        navigateToBackload: navigateToBackload,
+        taskRowDataFromRow: taskRowDataFromRow,
+        taskRowDataFromCell: taskRowDataFromCell,
+        workflowPhaseDataFromRow: workflowPhaseDataFromRow,
+        enableRowBackloadActions: enableRowBackloadActions
     };
 })();

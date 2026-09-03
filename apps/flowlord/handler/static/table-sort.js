@@ -55,9 +55,11 @@
         // Perform the sort
         function sortTable(column, direction) {
             const rows = Array.from(tbody.querySelectorAll('tr'));
-            const columnIndex = Array.from(headers).findIndex(th => th.dataset.sort === column);
-            
-            if (columnIndex === -1) return;
+            const header = Array.from(headers).find(th => th.dataset.sort === column);
+
+            if (!header) return;
+
+            const columnIndex = header.cellIndex;
 
             const columnType = columnTypes[column] || 'string';
 

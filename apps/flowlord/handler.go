@@ -945,7 +945,12 @@ func (tm *taskMaster) backload(req request) response {
 		end = at
 	}
 
-	phase := tm.taskCache.Search(req.Task, req.Job)
+	var phase sqlite.PhaseDB
+	if req.Workflow != "" {
+		phase = tm.taskCache.GetPhase(req.Workflow, req.Task, req.Job)
+	} else {
+		phase = tm.taskCache.Search(req.Task, req.Job)
+	}
 	if phase.FilePath != "" {
 		msg = append(msg, "phase found in "+phase.FilePath)
 		req.Template = phase.Template

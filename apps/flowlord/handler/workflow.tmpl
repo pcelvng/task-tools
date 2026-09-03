@@ -56,8 +56,20 @@
         {{if .Phases}}
         <div class="table-container">
             <table id="workflowTable">
+                <colgroup>
+                    <col style="width: 21px">
+                    <col style="width: 9%">
+                    <col style="width: 9%">
+                    <col style="width: 9%">
+                    <col style="width: 22%">
+                    <col style="width: 11%">
+                    <col style="width: 5%">
+                    <col style="width: 22%">
+                    <col style="width: 13%">
+                </colgroup>
                 <thead>
                     <tr>
+                        <th class="row-action-col" aria-hidden="true"></th>
                         <th class="sortable workflow-file-cell" data-sort="workflow_file">Workflow</th>
                         <th class="sortable task-cell" data-sort="task">Topic</th>
                         <th class="sortable job-cell" data-sort="job">Job</th>
@@ -71,6 +83,13 @@
                 <tbody>
                     {{range .Phases}}
                     <tr>
+                        <td class="row-action-col">
+                            <button type="button" class="row-action-btn row-action-play" aria-label="Run" title="Run">
+                                <svg class="row-action-icon" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                                    <path d="M7 4.5v15l13-7.5z"/>
+                                </svg>
+                            </button>
+                        </td>
                         <td class="workflow-file-cell copyable" title="Click for actions">{{.FilePath}}</td>
                         <td class="task-cell copyable" title="Click for actions">{{.Topic}}</td>
                         <td class="job-cell copyable" title="Click for actions">{{.Job}}</td>
@@ -122,6 +141,7 @@
             const tbody = document.querySelector('#workflowTable tbody');
             if (tbody && window.FlowlordUtils) {
                 window.FlowlordUtils.enableCellActions(tbody);
+                window.FlowlordUtils.enableRowBackloadActions(tbody, window.FlowlordUtils.workflowPhaseDataFromRow);
             }
 
             // Initialize filters
@@ -146,9 +166,9 @@
             const jobMap = new Map(); // task -> Set of jobs
             
             rows.forEach(row => {
-                const workflowCell = row.cells[0];
-                const taskCell = row.cells[1];
-                const jobCell = row.cells[2];
+                const workflowCell = row.querySelector('.workflow-file-cell');
+                const taskCell = row.querySelector('.task-cell');
+                const jobCell = row.querySelector('.job-cell');
                 
                 if (workflowCell && taskCell && jobCell) {
                     const workflow = workflowCell.textContent.trim();
@@ -229,9 +249,9 @@
             const rows = Array.from(table.querySelectorAll('tbody tr'));
             
             rows.forEach(row => {
-                const workflowCell = row.cells[0];
-                const taskCell = row.cells[1];
-                const jobCell = row.cells[2];
+                const workflowCell = row.querySelector('.workflow-file-cell');
+                const taskCell = row.querySelector('.task-cell');
+                const jobCell = row.querySelector('.job-cell');
                 
                 if (workflowCell && taskCell && jobCell) {
                     const workflow = workflowCell.textContent.trim();

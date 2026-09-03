@@ -330,3 +330,47 @@ func TestCache_FilePath(t *testing.T) {
 	}
 	trial.New(fn, cases).SubTest(t)
 }
+
+func TestGetPhase(t *testing.T) {
+	cache := MockSQLite()
+	if err := cache.updateWorkflowInDB("a.toml", "NA", []Phase{
+		{Task: "daily:load", Template: "?a={YYYY}-{MM}-{DD}", Rule: ""},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.updateWorkflowInDB("b.toml", "NA", []Phase{
+		{Task: "daily:load", Template: "?b={YYYY}-{MM}-{DD}", Rule: ""},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	type input struct {
+		file string
+		task string
+		job  string
+	}
+
+	fn := func(in input) (string, error) {
+		ph := cache.GetPhase(in.file, in.task, in.job)
+		if ph.FilePath == "" {
+			return "", errors.New(ph.Status)
+		}
+		return ph.Template, nil
+	}
+
+	cases := trial.Cases[input, string]{
+		"workflow a": {
+			Input:    input{file: "a.toml", task: "daily", job: "load"},
+			Expected: "?a={YYYY}-{MM}-{DD}",
+		},
+		"workflow b": {
+			Input:    input{file: "b.toml", task: "daily", job: "load"},
+			Expected: "?b={YYYY}-{MM}-{DD}",
+		},
+		"missing workflow": {
+			Input:       input{file: "missing.toml", task: "daily", job: "load"},
+			ExpectedErr: errors.New("not found"),
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
