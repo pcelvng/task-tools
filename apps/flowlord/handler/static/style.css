@@ -1848,6 +1848,98 @@ th.row-action-col:hover {
     background-color: #f3ebff;
 }
 
+.row-action-replay:disabled,
+.row-action-replay.row-action-loading {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.rerun-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.rerun-modal[hidden] {
+    display: none;
+}
+
+.rerun-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.rerun-modal-dialog {
+    position: relative;
+    width: min(560px, 100%);
+    max-height: min(80vh, 640px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+    padding: 20px;
+}
+
+.rerun-modal-title {
+    margin: 0 0 8px;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #212529;
+}
+
+.rerun-modal-lead {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: #495057;
+    line-height: 1.45;
+}
+
+.rerun-modal-details {
+    margin: 0 0 16px;
+    padding: 12px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    overflow: auto;
+    max-height: min(42vh, 360px);
+}
+
+.rerun-modal-details dt {
+    margin: 10px 0 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+}
+
+.rerun-modal-details dt:first-child {
+    margin-top: 0;
+}
+
+.rerun-modal-details dd {
+    margin: 0;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    color: #212529;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.rerun-modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
 .row-action-play {
     color: #198754;
 }

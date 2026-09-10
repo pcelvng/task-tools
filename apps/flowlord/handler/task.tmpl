@@ -165,7 +165,7 @@
                 <tbody>
                     {{if .Tasks}}
                     {{range .Tasks}}
-                    <tr>
+                    <tr data-rerun-type="{{.Type}}" data-rerun-job="{{.Job}}" data-rerun-id="{{.ID}}" data-rerun-created="{{.Created}}" data-rerun-result="{{.Result}}">
                         <td class="row-action-col">
                             <button type="button" class="row-action-btn row-action-replay" aria-label="Rerun" title="Rerun">
                                 <svg class="row-action-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -223,12 +223,26 @@
         {{end}}
     </div>
 
+    <div id="rerunModal" class="rerun-modal" hidden aria-hidden="true">
+        <div class="rerun-modal-backdrop" data-rerun-dismiss></div>
+        <div class="rerun-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="rerunModalTitle">
+            <h2 id="rerunModalTitle" class="rerun-modal-title">Rerun task</h2>
+            <p class="rerun-modal-lead">This task will have the same ID, info and metadata as the original</p>
+            <dl class="rerun-modal-details" id="rerunModalDetails"></dl>
+            <div class="rerun-modal-actions">
+                <button type="button" class="btn btn-secondary" id="rerunModalCancel">No</button>
+                <button type="button" class="btn btn-primary" id="rerunModalConfirm">Yes, rerun</button>
+            </div>
+        </div>
+    </div>
+
     <script src="{{if .isLocal}}./static{{else}}/static{{end}}/task.js"></script>
     <script>
         // Initialize task page with server-provided configuration
         document.addEventListener('DOMContentLoaded', function() {
             if (window.FlowlordTask) {
                 const config = {
+                    rerunEndpoint: '/rerun',
                     taskTypes: [{{range $i, $t := .UniqueTypes}}{{if $i}},{{end}}"{{$t}}"{{end}}],
                     jobsByType: [
                         {{range $type, $jobs := .JobsByType}}

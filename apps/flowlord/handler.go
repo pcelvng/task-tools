@@ -119,6 +119,7 @@ func (tm *taskMaster) StartHandler(serveErr chan<- error) error {
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
+	router.Post("/rerun", tm.rerunHandler)
 	router.Get("/workflow/*", tm.workflowFiles)
 	router.Get("/workflow", tm.workflowFiles)
 	router.Get("/notify", func(w http.ResponseWriter, r *http.Request) {

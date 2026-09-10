@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/url"
@@ -145,6 +146,29 @@ func (s *SQLite) GetTask(id string) TaskJob {
 	}
 
 	return tj
+}
+
+// GetTaskRecord returns a single task record by its primary key (type, job, id, created).
+func (s *SQLite) GetTaskRecord(taskType, job, id, created string) (task.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var t task.Task
+	err := s.db.QueryRow(`
+		SELECT id, type, job, info, result, meta, msg, created, started, ended
+		FROM task_records
+		WHERE type = ? AND job = ? AND id = ? AND created = ?
+	`, taskType, job, id, created).Scan(
+		&t.ID, &t.Type, &t.Job, &t.Info, &t.Result, &t.Meta, &t.Msg,
+		&t.Created, &t.Started, &t.Ended,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return task.Task{}, sql.ErrNoRows
+		}
+		return task.Task{}, err
+	}
+	return t, nil
 }
 
 // Recycle cleans up any records older than day in the DB tables: files, alerts and tasks.
