@@ -219,3 +219,37 @@ func TestAddStoresRunningForEmptyResult(t *testing.T) {
 		t.Errorf("result after complete = %q, want %q", result, task.CompleteResult)
 	}
 }
+
+func TestGetTaskRecord(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	created := "2024-01-15T10:00:00Z"
+	want := task.Task{
+		ID:      "pipeline-1",
+		Type:    "alpha",
+		Job:     "load",
+		Info:    "?date=2024-01-15",
+		Meta:    "workflow=f1.toml",
+		Result:  task.ErrResult,
+		Msg:     "boom",
+		Created: created,
+	}
+	db.Add(want)
+
+	got, err := db.GetTaskRecord("alpha", "load", "pipeline-1", created)
+	if err != nil {
+		t.Fatalf("GetTaskRecord: %v", err)
+	}
+	if got.Info != want.Info || got.Meta != want.Meta || got.ID != want.ID {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+
+	_, err = db.GetTaskRecord("alpha", "load", "pipeline-1", "2024-01-15T11:00:00Z")
+	if err == nil {
+		t.Fatal("expected error for wrong created")
+	}
+}

@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -10,6 +14,7 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus/nop"
 
 	"github.com/pcelvng/task-tools/apps/flowlord/sqlite"
 )
@@ -704,5 +709,95 @@ func TestAboutHTML(t *testing.T) {
 	}
 	if !strings.Contains(htmlStr, "Table Breakdown") {
 		t.Error("Expected 'Table Breakdown' in HTML output")
+	}
+}
+
+func TestRerun(t *testing.T) {
+	sqlDB := &sqlite.SQLite{LocalPath: ":memory:"}
+	if err := sqlDB.Open(testPath+"/workflow/f3.toml", nil); err != nil {
+		t.Fatal(err)
+	}
+	created := "2024-01-15T10:00:00Z"
+	sqlDB.Add(task.Task{
+		ID:      "rerun-src",
+		Type:    "task1",
+		Job:     "",
+		Info:    "?date=2024-01-15",
+		Meta:    "retry=2&delayed=50ms&workflow=f3.toml",
+		Result:  task.ErrResult,
+		Created: created,
+	})
+
+	producer, err := nop.NewProducer("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm := &taskMaster{
+		taskCache: sqlDB,
+		producer:  producer,
+	}
+
+	doRerun := func(req rerunRequest) (*httptest.ResponseRecorder, rerunResponse) {
+		body, _ := json.Marshal(req)
+		r := httptest.NewRequest(http.MethodPost, "/rerun", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		tm.rerunHandler(w, r)
+		var resp rerunResponse
+		if w.Code == http.StatusOK {
+			_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		}
+		return w, resp
+	}
+
+	w, resp := doRerun(rerunRequest{
+		Type:    "task1",
+		ID:      "rerun-src",
+		Created: created,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("happy path status = %d, body = %s", w.Code, w.Body.String())
+	}
+	if resp.Status != "Rerun queued" {
+		t.Errorf("Status = %q, want Rerun queued", resp.Status)
+	}
+	if resp.Task.Info != "?date=2024-01-15" {
+		t.Errorf("Info = %q", resp.Task.Info)
+	}
+	if resp.Task.ID != "rerun-src" {
+		t.Errorf("ID = %q", resp.Task.ID)
+	}
+	if resp.Task.Created == created {
+		t.Error("expected new created timestamp")
+	}
+	if !strings.Contains(resp.Task.Meta, "rerun=manual") {
+		t.Errorf("Meta = %q, want rerun=manual", resp.Task.Meta)
+	}
+	if strings.Contains(resp.Task.Meta, "retry=") || strings.Contains(resp.Task.Meta, "delayed=") {
+		t.Errorf("retry meta not stripped: %q", resp.Task.Meta)
+	}
+	if len(producer.Messages["task1"]) != 1 {
+		t.Fatalf("messages sent = %d, want 1", len(producer.Messages["task1"]))
+	}
+
+	w, _ = doRerun(rerunRequest{
+		Type:    "task1",
+		ID:      "missing",
+		Created: created,
+	})
+	if w.Code != http.StatusNotFound {
+		t.Errorf("missing task status = %d, want 404", w.Code)
+	}
+
+	w, _ = doRerun(rerunRequest{
+		Type: "task1",
+		ID:   "rerun-src",
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("missing created status = %d, want 400", w.Code)
+	}
+
+	_, err = sqlDB.GetTaskRecord("task1", "", "rerun-src", "2024-01-15T11:00:00Z")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("wrong created lookup err = %v, want ErrNoRows", err)
 	}
 }
