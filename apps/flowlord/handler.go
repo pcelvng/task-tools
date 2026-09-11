@@ -119,6 +119,7 @@ func (tm *taskMaster) StartHandler(serveErr chan<- error) error {
 	router.Get("/info", tm.Info)
 	router.Get("/refresh", tm.refreshHandler)
 	router.Post("/backload", tm.Backloader)
+	router.Post("/rerun", tm.rerunHandler)
 	router.Get("/workflow/*", tm.workflowFiles)
 	router.Get("/workflow", tm.workflowFiles)
 	router.Get("/notify", func(w http.ResponseWriter, r *http.Request) {
@@ -945,7 +946,12 @@ func (tm *taskMaster) backload(req request) response {
 		end = at
 	}
 
-	phase := tm.taskCache.Search(req.Task, req.Job)
+	var phase sqlite.PhaseDB
+	if req.Workflow != "" {
+		phase = tm.taskCache.GetPhase(req.Workflow, req.Task, req.Job)
+	} else {
+		phase = tm.taskCache.Search(req.Task, req.Job)
+	}
 	if phase.FilePath != "" {
 		msg = append(msg, "phase found in "+phase.FilePath)
 		req.Template = phase.Template

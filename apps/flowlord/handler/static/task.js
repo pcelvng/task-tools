@@ -10,6 +10,27 @@
         { value: 'running', label: 'Running' }
     ];
 
+    function saveTaskPageScroll() {
+        try {
+            sessionStorage.setItem('flowlordTaskScrollY', String(window.scrollY));
+        } catch (e) { /* ignore */ }
+    }
+
+    function restoreTaskPageScroll() {
+        var y = null;
+        try {
+            y = sessionStorage.getItem('flowlordTaskScrollY');
+            sessionStorage.removeItem('flowlordTaskScrollY');
+        } catch (e) {
+            return;
+        }
+        if (y === null) return;
+        var top = parseInt(y, 10);
+        if (!isNaN(top)) {
+            window.scrollTo(0, top);
+        }
+    }
+
     function initTaskPage(config) {
         config = config || {};
         var table = document.getElementById('taskTable');
@@ -74,27 +95,6 @@
             };
         }
 
-        function saveScroll() {
-            try {
-                sessionStorage.setItem('flowlordTaskScrollY', String(window.scrollY));
-            } catch (e) { /* ignore */ }
-        }
-
-        function restoreScroll() {
-            var y = null;
-            try {
-                y = sessionStorage.getItem('flowlordTaskScrollY');
-                sessionStorage.removeItem('flowlordTaskScrollY');
-            } catch (e) {
-                return;
-            }
-            if (y === null) return;
-            var top = parseInt(y, 10);
-            if (!isNaN(top)) {
-                window.scrollTo(0, top);
-            }
-        }
-
         function setListParam(url, key, values) {
             url.searchParams.delete(key);
             values = toArray(values);
@@ -125,7 +125,7 @@
             }
 
             url.searchParams.delete('page');
-            saveScroll();
+            saveTaskPageScroll();
             window.location.href = url.toString();
         }
 
@@ -506,13 +506,223 @@
 
         if (tbody) {
             if (window.FlowlordUtils) {
-                window.FlowlordUtils.enableCellActions(tbody, { onFilter: applyFilter });
+                window.FlowlordUtils.enableCellActions(tbody, {
+                    onFilter: applyFilter
+                });
+                enableRowRerunActions(tbody, config.rerunEndpoint || '/rerun');
             }
         }
 
         window.FlowlordTask.applyFilter = applyFilter;
 
-        restoreScroll();
+        restoreTaskPageScroll();
+    }
+
+    var rerunModalPending = null;
+
+    function taskPageBase() {
+        return window.location.pathname.includes('_preview') ? './task_preview.html' : '/web/task';
+    }
+
+    function rerunCellText(row, selector) {
+        const cell = row.querySelector(selector);
+        if (!cell) return '';
+        if (window.FlowlordUtils && window.FlowlordUtils.copyableText) {
+            return window.FlowlordUtils.copyableText(cell).trim();
+        }
+        return (cell.textContent || '').trim();
+    }
+
+    function rerunTaskLabel(details) {
+        const type = details.type || '';
+        const job = details.job || '';
+        return job ? type + ':' + job : type;
+    }
+
+    function rerunPayloadFromDetails(details) {
+        return {
+            type: details.type || '',
+            job: details.job || '',
+            id: details.id || '',
+            created: details.created || ''
+        };
+    }
+
+    function rerunDetailsFromRow(row) {
+        return {
+            type: row.getAttribute('data-rerun-type') || '',
+            job: row.getAttribute('data-rerun-job') || '',
+            id: row.getAttribute('data-rerun-id') || '',
+            created: row.getAttribute('data-rerun-created') || '',
+            result: row.getAttribute('data-rerun-result') || '',
+            info: rerunCellText(row, '.info-cell'),
+            meta: rerunCellText(row, '.meta-cell'),
+            msg: rerunCellText(row, '.message-cell')
+        };
+    }
+
+    function rerunTasksHref(task) {
+        const id = task && task.id;
+        if (!id) return taskPageBase();
+        let date = '';
+        if (task.created) {
+            date = String(task.created).slice(0, 10);
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            date = new Date().toISOString().split('T')[0];
+        }
+        return taskPageBase() + '?date=' + encodeURIComponent(date) + '&id=' + encodeURIComponent(id);
+    }
+
+    function messageFromRerunResponse(responseText, status) {
+        if (responseText) {
+            try {
+                const j = JSON.parse(responseText);
+                if (j && typeof j.Status === 'string' && j.Status.length > 0) {
+                    return j.Status;
+                }
+            } catch (e) { /* use raw */ }
+            const trimmed = String(responseText).trim();
+            if (trimmed) {
+                return trimmed;
+            }
+        }
+        if (status === 404) {
+            return 'Task not found — refresh the page';
+        }
+        return 'Rerun failed';
+    }
+
+    function appendRerunDetail(container, label, value) {
+        if (!value) return;
+        const dt = document.createElement('dt');
+        dt.textContent = label;
+        const dd = document.createElement('dd');
+        dd.textContent = value;
+        container.appendChild(dt);
+        container.appendChild(dd);
+    }
+
+    function closeRerunModal() {
+        const modal = document.getElementById('rerunModal');
+        if (!modal) return;
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+        rerunModalPending = null;
+        document.removeEventListener('keydown', onRerunModalKeydown);
+    }
+
+    function onRerunModalKeydown(e) {
+        if (e.key === 'Escape') {
+            closeRerunModal();
+        }
+    }
+
+    function openRerunModal(details, onConfirm) {
+        const modal = document.getElementById('rerunModal');
+        const detailsEl = document.getElementById('rerunModalDetails');
+        const confirmBtn = document.getElementById('rerunModalConfirm');
+        const cancelBtn = document.getElementById('rerunModalCancel');
+        if (!modal || !detailsEl || !confirmBtn || !cancelBtn) {
+            return;
+        }
+
+        detailsEl.innerHTML = '';
+        appendRerunDetail(detailsEl, 'Task', rerunTaskLabel(details));
+        appendRerunDetail(detailsEl, 'ID', details.id);
+        appendRerunDetail(detailsEl, 'Result', details.result);
+        appendRerunDetail(detailsEl, 'Created', details.created);
+        appendRerunDetail(detailsEl, 'Info', details.info);
+        appendRerunDetail(detailsEl, 'Meta', details.meta);
+        appendRerunDetail(detailsEl, 'Message', details.msg);
+
+        const title = document.getElementById('rerunModalTitle');
+        if (title) {
+            title.textContent = 'Rerun ' + rerunTaskLabel(details);
+        }
+
+        rerunModalPending = { onConfirm: onConfirm };
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        document.addEventListener('keydown', onRerunModalKeydown);
+        confirmBtn.focus();
+
+        function handleConfirm() {
+            const pending = rerunModalPending;
+            closeRerunModal();
+            if (pending && pending.onConfirm) {
+                pending.onConfirm();
+            }
+        }
+
+        confirmBtn.onclick = handleConfirm;
+        cancelBtn.onclick = closeRerunModal;
+        modal.querySelectorAll('[data-rerun-dismiss]').forEach(function(el) {
+            el.onclick = closeRerunModal;
+        });
+    }
+
+    function executeRerun(btn, payload, apiEndpoint) {
+        btn.disabled = true;
+        btn.classList.add('row-action-loading');
+
+        fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(function(response) {
+            return response.text().then(function(text) {
+                if (!response.ok) {
+                    const errMsg = messageFromRerunResponse(text, response.status);
+                    if (window.FlowlordUtils && window.FlowlordUtils.showCopyFeedback) {
+                        window.FlowlordUtils.showCopyFeedback(btn, errMsg, true);
+                    }
+                    btn.disabled = false;
+                    btn.classList.remove('row-action-loading');
+                    return;
+                }
+
+                let task = null;
+                try {
+                    const data = JSON.parse(text);
+                    task = data && data.Task;
+                } catch (e) { /* ignore */ }
+
+                saveTaskPageScroll();
+                window.location.href = rerunTasksHref(task || { id: payload.id });
+            });
+        }).catch(function(err) {
+            const errMsg = err && err.message ? err.message : 'Rerun failed';
+            if (window.FlowlordUtils && window.FlowlordUtils.showCopyFeedback) {
+                window.FlowlordUtils.showCopyFeedback(btn, errMsg, true);
+            }
+            btn.disabled = false;
+            btn.classList.remove('row-action-loading');
+        });
+    }
+
+    function enableRowRerunActions(root, apiEndpoint) {
+        const el = typeof root === 'string' ? document.querySelector(root) : root;
+        if (!el) return;
+
+        el.addEventListener('click', function(e) {
+            const btn = e.target.closest('.row-action-replay');
+            if (!btn || !el.contains(btn) || btn.disabled) return;
+            e.stopPropagation();
+
+            const row = btn.closest('tr');
+            if (!row) return;
+
+            const details = rerunDetailsFromRow(row);
+            const payload = rerunPayloadFromDetails(details);
+            if (!payload.type || !payload.id || !payload.created) {
+                return;
+            }
+
+            openRerunModal(details, function() {
+                executeRerun(btn, payload, apiEndpoint);
+            });
+        });
     }
 
     window.clearFilters = function() {

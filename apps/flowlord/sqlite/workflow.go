@@ -93,6 +93,40 @@ func (s *SQLite) Search(taskType, job string) PhaseDB {
 	return s.Get(task.Task{Type: taskType, Job: job})
 }
 
+// GetPhase returns the phase for a specific workflow file, task type, and job.
+func (s *SQLite) GetPhase(filePath, taskType, job string) PhaseDB {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := taskType
+	if job != "" {
+		key += ":" + job
+	}
+
+	query := `
+		SELECT file_path, task, depends_on, rule, template, retry
+		FROM workflow_phases 
+		WHERE file_path = ? AND task = ?
+		LIMIT 1
+	`
+	rows, err := s.db.Query(query, filePath, key)
+	if err != nil {
+		return PhaseDB{Status: err.Error()}
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		ph := PhaseDB{}
+		err := rows.Scan(&ph.FilePath, &ph.Task, &ph.DependsOn, &ph.Rule, &ph.Template, &ph.Retry)
+		if err != nil {
+			return PhaseDB{Status: err.Error()}
+		}
+		ph.Status = ph.Phase.Validate()
+		return ph
+	}
+	return PhaseDB{Status: "not found"}
+}
+
 // Get the Phase associated with the task
 // looks for matching phases within a workflow defined in meta
 // that matches the task Type and job.

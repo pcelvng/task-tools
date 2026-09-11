@@ -6,6 +6,7 @@ import (
 
 	"github.com/hydronica/trial"
 	"github.com/pcelvng/task"
+	"github.com/pcelvng/task/bus/nop"
 )
 
 func TestGetTasksByDate(t *testing.T) {
@@ -217,5 +218,112 @@ func TestAddStoresRunningForEmptyResult(t *testing.T) {
 	}
 	if result != string(task.CompleteResult) {
 		t.Errorf("result after complete = %q, want %q", result, task.CompleteResult)
+	}
+}
+
+func TestSendFunc(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	created := "2024-01-15T10:00:00Z"
+	tsk := task.Task{
+		ID:      "send-1",
+		Type:    "alpha",
+		Job:     "load",
+		Info:    "?date=2024-01-15",
+		Created: created,
+	}
+
+	t.Run("success", func(t *testing.T) {
+		producer, err := nop.NewProducer("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		send := db.SendFunc(producer)
+		if err := send("alpha", &tsk); err != nil {
+			t.Fatalf("SendFunc: %v", err)
+		}
+		if len(producer.Messages["alpha"]) != 1 {
+			t.Fatalf("messages sent = %d, want 1", len(producer.Messages["alpha"]))
+		}
+		got, err := db.GetTaskRecord("alpha", "load", "send-1", created)
+		if err != nil {
+			t.Fatalf("GetTaskRecord: %v", err)
+		}
+		if got.Result != ResultRunning {
+			t.Errorf("result = %q, want %q", got.Result, ResultRunning)
+		}
+	})
+
+	t.Run("producer failure: no running record remains", func(t *testing.T) {
+		failCreated := "2024-01-15T11:00:00Z"
+		failTask := task.Task{
+			ID:      "send-fail",
+			Type:    "alpha",
+			Job:     "load",
+			Info:    "?date=2024-01-15",
+			Created: failCreated,
+		}
+		producer, err := nop.NewProducer("send_err")
+		if err != nil {
+			t.Fatal(err)
+		}
+		send := db.SendFunc(producer)
+		if err := send("alpha", &failTask); err == nil {
+			t.Fatal("expected send error")
+		}
+		got, err := db.GetTaskRecord("alpha", "load", "send-fail", failCreated)
+		if err != nil {
+			t.Fatalf("GetTaskRecord: %v", err)
+		}
+		if got.Result == ResultRunning {
+			t.Errorf("result = %q, want non-running after send failure", got.Result)
+		}
+		if got.Result != task.ErrResult {
+			t.Errorf("result = %q, want %q", got.Result, task.ErrResult)
+		}
+		if got.Msg != "send_err" {
+			t.Errorf("msg = %q, want send_err", got.Msg)
+		}
+		if len(producer.Messages["alpha"]) != 0 {
+			t.Errorf("messages sent = %d, want 0", len(producer.Messages["alpha"]))
+		}
+	})
+}
+
+func TestGetTaskRecord(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	created := "2024-01-15T10:00:00Z"
+	want := task.Task{
+		ID:      "pipeline-1",
+		Type:    "alpha",
+		Job:     "load",
+		Info:    "?date=2024-01-15",
+		Meta:    "workflow=f1.toml",
+		Result:  task.ErrResult,
+		Msg:     "boom",
+		Created: created,
+	}
+	db.Add(want)
+
+	got, err := db.GetTaskRecord("alpha", "load", "pipeline-1", created)
+	if err != nil {
+		t.Fatalf("GetTaskRecord: %v", err)
+	}
+	if got.Info != want.Info || got.Meta != want.Meta || got.ID != want.ID {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+
+	_, err = db.GetTaskRecord("alpha", "load", "pipeline-1", "2024-01-15T11:00:00Z")
+	if err == nil {
+		t.Fatal("expected error for wrong created")
 	}
 }

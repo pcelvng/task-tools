@@ -108,6 +108,10 @@
                     <h3>Template Details</h3>
                     <div class="template-info">
                         <div class="form-group">
+                            <label>Workflow</label>
+                            <div class="template-display" id="workflowDisplay"></div>
+                        </div>
+                        <div class="form-group">
                             <label>Template</label>
                             <div class="template-display" id="templateDisplay"></div>
                         </div>
@@ -146,6 +150,7 @@
                             <thead>
                                 <tr>
                                     <th class="num-column">#</th>
+                                    <th class="id-column" id="previewIdHeader" style="display: none;">ID</th>
                                     <th class="type-column">Type</th>
                                     <th class="job-column">Job</th>
                                     <th class="info-column">Info</th>

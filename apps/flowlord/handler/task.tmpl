@@ -109,6 +109,7 @@
             <table id="taskTable">
                 <thead>
                     <tr>
+                        <th class="row-action-col" aria-hidden="true"></th>
                         <th class="sortable filterable id-column{{if eq .Filter.Sort "id"}}{{if eq .Filter.Direction "desc"}} sort-desc{{else}} sort-asc{{end}}{{end}}{{if .Filter.ID}} has-filter{{end}}" data-sort="id" data-filter="id">
                             <div class="th-inner">
                                 <button type="button" class="th-sort">ID</button>
@@ -164,7 +165,15 @@
                 <tbody>
                     {{if .Tasks}}
                     {{range .Tasks}}
-                    <tr>
+                    <tr data-rerun-type="{{.Type}}" data-rerun-job="{{.Job}}" data-rerun-id="{{.ID}}" data-rerun-created="{{.Created}}" data-rerun-result="{{.Result}}">
+                        <td class="row-action-col">
+                            <button type="button" class="row-action-btn row-action-replay" aria-label="Rerun" title="Rerun">
+                                <svg class="row-action-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                    <path d="M3 3v5h5"/>
+                                </svg>
+                            </button>
+                        </td>
                         <td class="id-cell id-column expandable copyable" data-filter-key="id" title="Click for actions">{{.ID}}</td>
                         <td class="type-cell type-column copyable" data-filter-key="type" title="Click for actions">{{.Type}}</td>
                         <td class="job-cell job-column copyable" data-filter-key="job" title="Click for actions">{{.Job}}</td>
@@ -181,7 +190,7 @@
                     {{end}}
                     {{else}}
                     <tr>
-                        <td colspan="10" class="no-tasks-cell">
+                        <td colspan="11" class="no-tasks-cell">
                             <h3>No tasks found</h3>
                             <p>No tasks were found for {{.Date}} with the current filters.</p>
                         </td>
@@ -214,12 +223,26 @@
         {{end}}
     </div>
 
+    <div id="rerunModal" class="rerun-modal" hidden aria-hidden="true">
+        <div class="rerun-modal-backdrop" data-rerun-dismiss></div>
+        <div class="rerun-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="rerunModalTitle">
+            <h2 id="rerunModalTitle" class="rerun-modal-title">Rerun task</h2>
+            <p class="rerun-modal-lead">This task will have the same ID, info and metadata as the original</p>
+            <dl class="rerun-modal-details" id="rerunModalDetails"></dl>
+            <div class="rerun-modal-actions">
+                <button type="button" class="btn btn-secondary" id="rerunModalCancel">No</button>
+                <button type="button" class="btn btn-primary" id="rerunModalConfirm">Yes, rerun</button>
+            </div>
+        </div>
+    </div>
+
     <script src="{{if .isLocal}}./static{{else}}/static{{end}}/task.js"></script>
     <script>
         // Initialize task page with server-provided configuration
         document.addEventListener('DOMContentLoaded', function() {
             if (window.FlowlordTask) {
                 const config = {
+                    rerunEndpoint: '/rerun',
                     taskTypes: [{{range $i, $t := .UniqueTypes}}{{if $i}},{{end}}"{{$t}}"{{end}}],
                     jobsByType: [
                         {{range $type, $jobs := .JobsByType}}
