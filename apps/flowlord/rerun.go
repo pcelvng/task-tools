@@ -22,11 +22,7 @@ func sanitizeRerunMeta(meta string) (string, error) {
 		vals.Del(k)
 	}
 	vals.Set("rerun", "manual")
-	s, err := url.QueryUnescape(vals.Encode())
-	if err != nil {
-		return "", err
-	}
-	return s, nil
+	return vals.Encode(), nil
 }
 
 func taskForRerun(orig task.Task) (*task.Task, error) {
@@ -80,8 +76,8 @@ func (tm *taskMaster) rerunHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tm.taskCache.Add(*t)
-	if err := tm.producer.Send(t.Type, t.JSONBytes()); err != nil {
+	sendFunc := tm.taskCache.SendFunc(tm.producer)
+	if err := sendFunc(t.Type, t); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

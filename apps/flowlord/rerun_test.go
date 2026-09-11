@@ -30,6 +30,18 @@ func TestSanitizeRerunMeta(t *testing.T) {
 			Input:       "%",
 			ExpectedErr: errors.New("invalid URL escape \"%\""),
 		},
+		"encoded ampersand in value": {
+			Input:    "key=a%26b&workflow=f1.toml&retry=1",
+			Expected: "key=a%26b&rerun=manual&workflow=f1.toml",
+		},
+		"encoded plus in value": {
+			Input:    "key=a%2Bb&workflow=f1.toml&retry=1",
+			Expected: "key=a%2Bb&rerun=manual&workflow=f1.toml",
+		},
+		"encoded percent in value": {
+			Input:    "key=100%25&workflow=f1.toml&retry=1",
+			Expected: "key=100%25&rerun=manual&workflow=f1.toml",
+		},
 	}
 	trial.New(fn, cases).SubTest(t)
 }
