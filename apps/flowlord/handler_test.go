@@ -801,3 +801,59 @@ func TestRerun(t *testing.T) {
 		t.Errorf("wrong created lookup err = %v, want ErrNoRows", err)
 	}
 }
+
+func TestRerunProducerFailure(t *testing.T) {
+	sqlDB := &sqlite.SQLite{LocalPath: ":memory:"}
+	if err := sqlDB.Open(testPath+"/workflow/f3.toml", nil); err != nil {
+		t.Fatal(err)
+	}
+	created := "2024-01-15T10:00:00Z"
+	sqlDB.Add(task.Task{
+		ID:      "rerun-src",
+		Type:    "task1",
+		Job:     "",
+		Info:    "?date=2024-01-15",
+		Meta:    "retry=2&delayed=50ms&workflow=f3.toml",
+		Result:  task.ErrResult,
+		Created: created,
+	})
+
+	failProducer, err := nop.NewProducer("send_err")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm := &taskMaster{
+		taskCache: sqlDB,
+		producer:  failProducer,
+	}
+
+	body, _ := json.Marshal(rerunRequest{
+		Type:    "task1",
+		ID:      "rerun-src",
+		Created: created,
+	})
+	r := httptest.NewRequest(http.MethodPost, "/rerun", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	tm.rerunHandler(w, r)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", w.Code)
+	}
+
+	tj := sqlDB.GetTask("rerun-src")
+	var newAttempts int
+	for _, evt := range tj.Events {
+		if evt.Created <= created {
+			continue
+		}
+		newAttempts++
+		if evt.Result == sqlite.ResultRunning {
+			t.Errorf("found running record after producer failure: %+v", evt)
+		}
+		if evt.Result != task.ErrResult {
+			t.Errorf("result = %q, want %q", evt.Result, task.ErrResult)
+		}
+	}
+	if newAttempts != 1 {
+		t.Fatalf("rerun attempts after failure = %d, want 1", newAttempts)
+	}
+}

@@ -232,15 +232,6 @@
         return base + '?' + params.toString();
     }
 
-    function taskRowDataFromRow(row) {
-        if (!row) return null;
-        return {
-            type: ((row.querySelector('.type-cell') || {}).textContent || '').trim(),
-            job: ((row.querySelector('.job-cell') || {}).textContent || '').trim(),
-            meta: ((row.querySelector('.meta-cell') || {}).textContent || '').trim()
-        };
-    }
-
     function workflowPhaseDataFromRow(row) {
         if (!row) return null;
         return {
@@ -248,10 +239,6 @@
             job: ((row.querySelector('.job-cell') || {}).textContent || '').trim(),
             workflow: ((row.querySelector('.workflow-file-cell') || {}).textContent || '').trim()
         };
-    }
-
-    function taskRowDataFromCell(cell) {
-        return taskRowDataFromRow(cell && cell.closest('tr'));
     }
 
     function navigateToBackload(rowData) {
@@ -412,8 +399,6 @@
         parseMetaString: parseMetaString,
         buildBackloadUrl: buildBackloadUrl,
         navigateToBackload: navigateToBackload,
-        taskRowDataFromRow: taskRowDataFromRow,
-        taskRowDataFromCell: taskRowDataFromCell,
         workflowPhaseDataFromRow: workflowPhaseDataFromRow,
         enableRowBackloadActions: enableRowBackloadActions
     };

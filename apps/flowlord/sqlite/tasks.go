@@ -329,7 +329,20 @@ func (s *SQLite) Recap(day time.Time) TaskStats {
 func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
 	return func(topic string, tsk *task.Task) error {
 		s.Add(*tsk)
-		return p.Send(topic, tsk.JSONBytes())
+		if err := p.Send(topic, tsk.JSONBytes()); err != nil {
+			s.mu.Lock()
+			_, dbErr := s.db.Exec(`
+				UPDATE task_records SET result = ?, msg = ?
+				WHERE type = ? AND job = ? AND id = ? AND created = ?
+			`, string(task.ErrResult), err.Error(), tsk.Type, tsk.Job, tsk.ID, tsk.Created)
+			s.mu.Unlock()
+			if dbErr != nil {
+				log.Printf("ERROR: Failed to mark send failure for task %s:%s:%s at %s: %v",
+					tsk.Type, tsk.Job, tsk.ID, tsk.Created, dbErr)
+			}
+			return err
+		}
+		return nil
 	}
 }
 
