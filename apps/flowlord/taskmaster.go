@@ -593,21 +593,41 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 		case <-ticker.C:
 			tm.notify.Tick(tm.taskCache, tm.sendAlertSummary)
 		case tsk := <-taskChan:
-			// if the task result is an alert result, send a slack notification now
+			// Always persist to alert_records (dashboard + batch summary)
+			if err := tm.taskCache.AddAlert(tsk, tsk.Msg); err != nil {
+				log.Printf("failed to store alert: %v", err)
+			}
+			// AlertResult also gets an immediate Slack notification
 			if tsk.Result == task.AlertResult {
-				b, _ := json.MarshalIndent(tsk, "", " ")
-				if err := tm.notify.Slack.Notify(string(b), slack.Critical); err != nil {
+				if err := tm.notify.Slack.Notify(tm.formatImmediateAlert(tsk), slack.Critical); err != nil {
 					log.Println(err)
-				}
-			} else { // if the task result is not an alert result add to the tasks list summary
-				if err := tm.taskCache.AddAlert(tsk, tsk.Msg); err != nil {
-					log.Printf("failed to store alert: %v", err)
 				}
 			}
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+// formatImmediateAlert builds a Slack message for a single AlertResult task.
+// Matches the batch summary header plus one "task:job | message" line.
+func (tm *taskMaster) formatImmediateAlert(tsk task.Task) string {
+	var message strings.Builder
+	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n",
+		tm.HostName, tm.port, time.Now().Format("2006-01-02")))
+
+	key := tsk.Type
+	job := tsk.Job
+	if job == "" {
+		if meta, err := url.ParseQuery(tsk.Meta); err == nil {
+			job = meta.Get("job")
+		}
+	}
+	if job != "" {
+		key += ":" + job
+	}
+	message.WriteString(fmt.Sprintf("%s | %s\n", key, tsk.Msg))
+	return message.String()
 }
 
 // sendAlertSummary sends a formatted alert summary to Slack
