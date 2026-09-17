@@ -1,5 +1,5 @@
 # task-tools
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/pcelvng/task-tools/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/pcelvng/task-tools/tree/main)
+[![CI](https://github.com/pcelvng/task-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/pcelvng/task-tools/actions/workflows/ci.yml)
 
 A set of tools and apps used in the [task](https://github.com/pcelvng/task) ecosystem
 
