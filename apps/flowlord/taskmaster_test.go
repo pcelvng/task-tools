@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -628,5 +629,29 @@ func TestNotification_Tick(t *testing.T) {
 		},
 	}
 
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestFormatImmediateAlert(t *testing.T) {
+	tsk := task.Task{Type: "fetch", Job: "daily", Msg: "timeout"}
+	today := time.Now().Format("2006-01-02")
+
+	type in struct {
+		port int
+	}
+	fn := func(in in) (string, error) {
+		tm := &taskMaster{HostName: "flowlord", port: in.port}
+		return tm.formatImmediateAlert(tsk), nil
+	}
+	cases := trial.Cases[in, string]{
+		"dashboard enabled": {
+			Input:    in{port: 8080},
+			Expected: fmt.Sprintf("see report at flowlord:8080/web/alert?date=%s\nfetch:daily | timeout\n", today),
+		},
+		"dashboard disabled": {
+			Input:    in{port: 0},
+			Expected: "fetch:daily | timeout\n",
+		},
+	}
 	trial.New(fn, cases).SubTest(t)
 }

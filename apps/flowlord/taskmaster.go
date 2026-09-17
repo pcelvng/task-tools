@@ -613,8 +613,10 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 // Matches the batch summary header plus one "task:job | message" line.
 func (tm *taskMaster) formatImmediateAlert(tsk task.Task) string {
 	var message strings.Builder
-	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n",
-		tm.HostName, tm.port, time.Now().Format("2006-01-02")))
+	if tm.port != 0 {
+		message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n",
+			tm.HostName, tm.port, time.Now().Format("2006-01-02")))
+	}
 
 	key := tsk.Type
 	job := tsk.Job
@@ -642,7 +644,10 @@ func (tm *taskMaster) sendAlertSummary(alerts []sqlite.AlertRecord) error {
 
 	// format message similar to current Slack format
 	var message strings.Builder
-	message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n", tm.HostName, tm.port, time.Now().Format("2006-01-02")))
+	if tm.port != 0 {
+		message.WriteString(fmt.Sprintf("see report at %v:%d/web/alert?date=%s\n",
+			tm.HostName, tm.port, time.Now().Format("2006-01-02")))
+	}
 
 	for _, line := range summary {
 		message.WriteString(fmt.Sprintf("%-35s%5d  %s\n",
