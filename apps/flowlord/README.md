@@ -53,7 +53,7 @@ Built-in web UI for monitoring workflows and troubleshooting. Uses Go templates 
 - Workflow phase visualization
 - System statistics
 
-Access at `http://localhost:8080/` (or configured port)
+Access at `http://localhost:8080/` by default (`status_port = 8080`). Set `status_port = 0` to run headless with orchestration only — the dashboard, backload API, and other HTTP endpoints are disabled.
 
 | Files View | Tasks View | Alerts View | Workflow View |
 |:----------:|:----------:|:-----------:|:-------------:|
