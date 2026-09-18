@@ -5,13 +5,14 @@
     // Module state
     let allPhases = [];
     let currentPhase = null;
+    let selectedWorkflow = '';
     let previewTasks = [];
     let searchTimeout = null;
     let selectedDropdownIndex = -1;
 
     // DOM element references (cached on init)
     const elements = {};
-    
+
     // DateTime picker instances
     let pickers = {
         at: null,
@@ -19,10 +20,57 @@
         to: null
     };
 
+    function taskPageBase() {
+        return window.location.pathname.includes('_preview') ? './task_preview.html' : '/web/task';
+    }
+
+    function findPhase(task, job, workflow) {
+        return allPhases.find(p =>
+            p.task === task &&
+            (p.job === job || (!job && !p.job)) &&
+            (!workflow || p.workflow === workflow)
+        );
+    }
+
+    function setSelectedWorkflow(workflow) {
+        selectedWorkflow = workflow || '';
+    }
+
+    function parseMetaString(metaStr) {
+        if (window.FlowlordUtils && window.FlowlordUtils.parseMetaString) {
+            return window.FlowlordUtils.parseMetaString(metaStr);
+        }
+        const out = {};
+        if (!metaStr) return out;
+        metaStr.split('&').forEach(pair => {
+            const eq = pair.indexOf('=');
+            if (eq === -1) return;
+            const key = decodeURIComponent(pair.slice(0, eq));
+            const val = decodeURIComponent(pair.slice(eq + 1));
+            if (key) out[key] = val;
+        });
+        return out;
+    }
+
+    function taskCreatedDate(task) {
+        if (task && task.created) {
+            const d = task.created.slice(0, 10);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+        }
+        return new Date().toISOString().split('T')[0];
+    }
+
+    function buildViewAllTasksHref(tasks) {
+        const ids = (tasks || []).map(t => t.id).filter(Boolean);
+        if (ids.length === 0) return '';
+        const date = taskCreatedDate(tasks[0]);
+        return taskPageBase() + '?date=' + encodeURIComponent(date) + '&id=' + ids.map(encodeURIComponent).join(',');
+    }
+
     // Initialize the backload form
     function init(phasesData, apiEndpoint) {
         allPhases = phasesData || [];
-        
+
         // Cache DOM elements
         elements.taskSearch = document.getElementById('taskSearch');
         elements.taskDropdown = document.getElementById('taskDropdown');
@@ -30,6 +78,7 @@
         elements.workflowFilter = document.getElementById('workflowFilter');
         elements.jobSelect = document.getElementById('jobSelect');
         elements.templateSection = document.getElementById('templateSection');
+        elements.workflowDisplay = document.getElementById('workflowDisplay');
         elements.templateDisplay = document.getElementById('templateDisplay');
         elements.ruleDisplay = document.getElementById('ruleDisplay');
         elements.metaSection = document.getElementById('metaSection');
@@ -43,6 +92,7 @@
         elements.previewResultsHeading = document.getElementById('previewResultsHeading');
         elements.previewStatus = document.getElementById('previewStatus');
         elements.previewTableBody = document.getElementById('previewTableBody');
+        elements.previewIdHeader = document.getElementById('previewIdHeader');
         elements.previewCount = document.getElementById('previewCount');
         elements.executionSection = document.getElementById('executionSection');
         elements.executionStatus = document.getElementById('executionStatus');
@@ -53,24 +103,19 @@
         elements.singleDateInput = document.getElementById('singleDateInput');
         elements.dateRangeInputs = document.getElementById('dateRangeInputs');
 
-        // Store API endpoint
         elements.apiEndpoint = apiEndpoint || '/backload';
 
-        // Initialize datetime pickers
         initializePickers();
-
-        // Setup event listeners
         setupEventListeners();
 
         if (window.FlowlordUtils && elements.previewTableBody) {
             window.FlowlordUtils.enableCellActions(elements.previewTableBody);
         }
 
-        // Initialize date inputs with today's date
         initializeDates();
+        applyQueryParams();
     }
 
-    // Initialize datetime picker instances
     function initializePickers() {
         if (window.FlowlordDateTimePicker) {
             pickers.at = window.FlowlordDateTimePicker.create('atPicker', {
@@ -85,7 +130,6 @@
         }
     }
 
-    // Get unique tasks from phases
     function getUniqueTasks(workflowFilterValue) {
         const taskSet = new Set();
         allPhases.forEach(p => {
@@ -96,41 +140,27 @@
         return Array.from(taskSet).sort();
     }
 
-    // Setup all event listeners
     function setupEventListeners() {
-        // Date mode toggle
         document.querySelectorAll('.toggle-btn').forEach(btn => {
             btn.addEventListener('click', handleDateModeToggle);
         });
 
-        // Task search
         elements.taskSearch.addEventListener('input', handleTaskSearchInput);
         elements.taskSearch.addEventListener('focus', handleTaskSearchFocus);
         elements.taskSearch.addEventListener('keydown', handleTaskSearchKeydown);
-
-        // Task dropdown
         elements.taskDropdown.addEventListener('click', handleDropdownClick);
-
-        // Close dropdown when clicking outside
         document.addEventListener('click', handleDocumentClick);
-
-        // Workflow filter
         elements.workflowFilter.addEventListener('change', handleWorkflowFilterChange);
-
-        // Job selection
         elements.jobSelect.addEventListener('change', handleJobSelectChange);
-
-        // Buttons
         elements.previewBtn.addEventListener('click', handlePreviewClick);
         elements.executeBtn.addEventListener('click', handleExecuteClick);
         elements.resetBtn.addEventListener('click', handleResetClick);
     }
 
-    // Date mode toggle handler
     function handleDateModeToggle() {
         document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
-        
+
         if (this.dataset.mode === 'range') {
             elements.dateRangeInputs.style.display = 'block';
             elements.singleDateInput.style.display = 'none';
@@ -143,17 +173,15 @@
         updatePreviewButton();
     }
 
-    // Task search input handler
     function handleTaskSearchInput() {
         clearTimeout(searchTimeout);
         const query = this.value.trim();
-        
+
         searchTimeout = setTimeout(() => {
             showTaskDropdown(query);
         }, 100);
     }
 
-    // Task search focus handler
     function handleTaskSearchFocus() {
         this.value = '';
         elements.taskSelect.value = '';
@@ -161,12 +189,11 @@
         showTaskDropdown('');
     }
 
-    // Task search keydown handler for keyboard navigation
     function handleTaskSearchKeydown(e) {
         const items = elements.taskDropdown.querySelectorAll('.search-dropdown-item');
         if (items.length === 0) return;
 
-        switch(e.key) {
+        switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
                 selectedDropdownIndex = Math.min(selectedDropdownIndex + 1, items.length - 1);
@@ -180,8 +207,7 @@
             case 'Enter':
                 e.preventDefault();
                 if (selectedDropdownIndex >= 0 && items[selectedDropdownIndex]) {
-                    const task = items[selectedDropdownIndex].dataset.task;
-                    selectTask(task);
+                    selectTask(items[selectedDropdownIndex].dataset.task);
                 }
                 break;
             case 'Escape':
@@ -192,7 +218,6 @@
         }
     }
 
-    // Update dropdown selection highlight
     function updateDropdownSelection(items) {
         items.forEach((item, index) => {
             if (index === selectedDropdownIndex) {
@@ -204,36 +229,25 @@
         });
     }
 
-    // Select a task
     function selectTask(task) {
         elements.taskSearch.value = task;
         elements.taskSelect.value = task;
         elements.taskDropdown.style.display = 'none';
         selectedDropdownIndex = -1;
-        
-        // Set workflow filter to the task's workflow if not already filtered
-        if (!elements.workflowFilter.value) {
-            const phase = allPhases.find(p => p.task === task);
-            if (phase && phase.workflow) {
-                elements.workflowFilter.value = phase.workflow;
-            }
-        }
-        
         onTaskSelected(task);
     }
 
-    // Show task dropdown with optional filtering
     function showTaskDropdown(query) {
         const workflow = elements.workflowFilter.value;
         const tasks = getUniqueTasks(workflow);
-        const matches = query 
+        const matches = query
             ? tasks.filter(t => t.toLowerCase().includes(query.toLowerCase()))
             : tasks;
-        
+
         selectedDropdownIndex = -1;
-        
+
         if (matches.length > 0) {
-            elements.taskDropdown.innerHTML = matches.map(task => 
+            elements.taskDropdown.innerHTML = matches.map(task =>
                 `<div class="search-dropdown-item" data-task="${window.FlowlordUtils.escapeHtml(task)}">${query ? highlightMatch(task, query) : window.FlowlordUtils.escapeHtml(task)}</div>`
             ).join('');
             elements.taskDropdown.style.display = 'block';
@@ -243,23 +257,19 @@
         }
     }
 
-    // Highlight matching text in search results
     function highlightMatch(text, query) {
         const idx = text.toLowerCase().indexOf(query.toLowerCase());
         if (idx === -1) return window.FlowlordUtils.escapeHtml(text);
         return window.FlowlordUtils.escapeHtml(text.slice(0, idx)) + '<strong>' + window.FlowlordUtils.escapeHtml(text.slice(idx, idx + query.length)) + '</strong>' + window.FlowlordUtils.escapeHtml(text.slice(idx + query.length));
     }
 
-    // Handle dropdown item click
     function handleDropdownClick(e) {
         const item = e.target.closest('.search-dropdown-item');
         if (item) {
-            const task = item.dataset.task;
-            selectTask(task);
+            selectTask(item.dataset.task);
         }
     }
 
-    // Close dropdown when clicking outside
     function handleDocumentClick(e) {
         if (!elements.taskSearch.contains(e.target) && !elements.taskDropdown.contains(e.target)) {
             elements.taskDropdown.style.display = 'none';
@@ -267,78 +277,111 @@
         }
     }
 
-    // Workflow filter change handler
     function handleWorkflowFilterChange() {
         elements.taskSearch.value = '';
         elements.taskSelect.value = '';
         elements.jobSelect.innerHTML = '<option value="">Select a job...</option>';
         elements.jobSelect.disabled = true;
+        setSelectedWorkflow('');
         hideTemplateInfo();
         updatePreviewButton();
     }
 
-    // Handle task selection
+    function populateJobOptions(phases) {
+        elements.jobSelect.innerHTML = '<option value="">Select a job...</option>';
+        const withJobs = phases.filter(p => p.job);
+        if (withJobs.length === 0) {
+            elements.jobSelect.disabled = true;
+            return false;
+        }
+
+        const jobNames = [...new Set(withJobs.map(p => p.job))].sort();
+        jobNames.forEach(job => {
+            const jobPhases = withJobs.filter(p => p.job === job);
+            const showWorkflowInLabel = jobPhases.length > 1;
+            jobPhases.forEach(phase => {
+                const option = document.createElement('option');
+                option.value = job;
+                option.dataset.workflow = phase.workflow || '';
+                if (showWorkflowInLabel && phase.workflow) {
+                    option.textContent = job + ' (' + phase.workflow + ')';
+                } else {
+                    option.textContent = job;
+                }
+                elements.jobSelect.appendChild(option);
+            });
+        });
+        elements.jobSelect.disabled = false;
+        return true;
+    }
+
     function onTaskSelected(task) {
         const workflow = elements.workflowFilter.value;
         elements.jobSelect.innerHTML = '<option value="">Select a job...</option>';
         elements.jobSelect.disabled = true;
         hideTemplateInfo();
-        
-        // Find phases matching this task (optionally filtered by workflow)
-        const phases = allPhases.filter(p => 
+        setSelectedWorkflow('');
+
+        const phases = allPhases.filter(p =>
             p.task === task && (!workflow || p.workflow === workflow)
         );
-        const jobs = [...new Set(phases.map(p => p.job).filter(j => j))];
-        
-        if (jobs.length > 0) {
-            jobs.sort().forEach(job => {
-                const option = document.createElement('option');
-                option.value = job;
-                option.textContent = job;
-                elements.jobSelect.appendChild(option);
-            });
-            elements.jobSelect.disabled = false;
-        } else {
-            // No job needed, use first phase
-            const phase = phases[0];
-            if (phase) {
-                showTemplateInfo(phase);
-            }
+
+        if (populateJobOptions(phases)) {
+            updatePreviewButton();
+            return;
+        }
+
+        const phase = phases[0];
+        if (phase) {
+            setSelectedWorkflow(phase.workflow || '');
+            showTemplateInfo(phase);
         }
         updatePreviewButton();
     }
 
-    // Job selection change handler
     function handleJobSelectChange() {
         const task = elements.taskSelect.value;
         const job = this.value;
-        const workflow = elements.workflowFilter.value;
-        
-        const phase = allPhases.find(p => 
-            p.task === task && 
-            (p.job === job || (!job && !p.job)) &&
-            (!workflow || p.workflow === workflow)
-        );
+        const selectedOption = this.options[this.selectedIndex];
+        const optionWorkflow = selectedOption && selectedOption.dataset ? selectedOption.dataset.workflow : '';
+        const workflow = optionWorkflow || elements.workflowFilter.value;
+
+        setSelectedWorkflow(workflow);
+
+        const phase = findPhase(task, job, workflow);
         if (phase) {
             showTemplateInfo(phase);
         }
         updatePreviewButton();
     }
 
-    // Format rule string for better readability
+    function selectJobOption(job, workflow) {
+        if (!job) return;
+        for (let i = 0; i < elements.jobSelect.options.length; i++) {
+            const opt = elements.jobSelect.options[i];
+            if (opt.value !== job) continue;
+            if (workflow && opt.dataset.workflow && opt.dataset.workflow !== workflow) continue;
+            elements.jobSelect.selectedIndex = i;
+            handleJobSelectChange.call(elements.jobSelect);
+            return;
+        }
+    }
+
     function formatRule(str) {
         if (!str) return '(no rule)';
         return str.split('&').join('\n');
     }
 
-    // Show template information and detect meta fields
     function showTemplateInfo(phase) {
         currentPhase = phase;
+        setSelectedWorkflow(phase.workflow || selectedWorkflow);
         elements.templateSection.style.display = 'block';
+        if (elements.workflowDisplay) {
+            elements.workflowDisplay.textContent = phase.workflow || '(unknown workflow)';
+        }
         elements.templateDisplay.textContent = phase.template || '(no template)';
         elements.ruleDisplay.textContent = formatRule(phase.rule);
-        
-        // Parse template for meta fields
+
         const metaRegex = /\{meta:(\w+)\}/g;
         const metaKeys = [];
         let match;
@@ -347,15 +390,13 @@
                 metaKeys.push(match[1]);
             }
         }
-        
-        // Check if rule has meta-file
+
         const hasMetaFile = phase.rule && phase.rule.includes('meta-file=');
-        
-        // Show meta fields section if template has meta placeholders and no meta-file in rule
+
         if (metaKeys.length > 0 && !hasMetaFile) {
             elements.metaSection.style.display = 'block';
             elements.metaFieldsContainer.innerHTML = '';
-            
+
             metaKeys.forEach(key => {
                 const formGroup = document.createElement('div');
                 formGroup.className = 'form-group';
@@ -370,8 +411,7 @@
         } else {
             elements.metaSection.style.display = 'none';
         }
-        
-        // Show meta file section if rule has meta-file
+
         if (hasMetaFile) {
             elements.metaFileSection.style.display = 'block';
             const metaFileMatch = phase.rule.match(/meta-file=([^&]+)/);
@@ -384,9 +424,9 @@
         }
     }
 
-    // Hide template information
     function hideTemplateInfo() {
         currentPhase = null;
+        setSelectedWorkflow('');
         elements.templateSection.style.display = 'none';
         elements.metaSection.style.display = 'none';
         elements.metaFileSection.style.display = 'none';
@@ -394,23 +434,20 @@
         elements.executionSection.style.display = 'none';
         elements.executeBtn.style.display = 'none';
         elements.requestBodySection.style.display = 'none';
-        
         elements.metaFieldsContainer.innerHTML = '';
         elements.metaFileInput.value = '';
     }
 
-    // Get current date mode from toggle
     function getDateMode() {
         const activeBtn = document.querySelector('.toggle-btn.active');
-        return activeBtn ? activeBtn.dataset.mode : 'range';
+        return activeBtn ? activeBtn.dataset.mode : 'single';
     }
 
-    // Update preview button state
     function updatePreviewButton() {
         const task = elements.taskSelect.value;
         const dateMode = getDateMode();
         let hasDate = false;
-        
+
         if (dateMode === 'range') {
             const fromValue = pickers.from ? pickers.from.getValue() : null;
             const toValue = pickers.to ? pickers.to.getValue() : null;
@@ -419,31 +456,34 @@
             const atValue = pickers.at ? pickers.at.getValue() : null;
             hasDate = atValue && atValue.date;
         }
-        
+
         elements.previewBtn.disabled = !task || !hasDate;
     }
 
-    // Build request object
     function buildRequest(execute) {
         const dateMode = getDateMode();
         const request = {
             Task: elements.taskSelect.value,
         };
-        
+
         if (execute) {
             request.Execute = true;
         }
-        
+
         const job = elements.jobSelect.value;
         if (job) {
             request.Job = job;
         }
-        
+
+        if (selectedWorkflow) {
+            request.Workflow = selectedWorkflow;
+        }
+
         const by = elements.bySelect.value;
         if (by && by !== 'day') {
             request.By = by;
         }
-        
+
         if (dateMode === 'range') {
             if (pickers.from) {
                 const fromValue = pickers.from.getValue();
@@ -457,16 +497,13 @@
                     request.To = toValue.formatted;
                 }
             }
-        } else {
-            if (pickers.at) {
-                const atValue = pickers.at.getValue();
-                if (atValue.date) {
-                    request.At = atValue.formatted;
-                }
+        } else if (pickers.at) {
+            const atValue = pickers.at.getValue();
+            if (atValue.date) {
+                request.At = atValue.formatted;
             }
         }
-        
-        // Collect meta fields
+
         if (elements.metaSection.style.display !== 'none') {
             const metaInputs = document.querySelectorAll('.meta-input');
             if (metaInputs.length > 0) {
@@ -483,19 +520,17 @@
                 }
             }
         }
-        
-        // Collect meta file
+
         if (elements.metaFileSection.style.display !== 'none') {
             const metaFile = elements.metaFileInput.value.trim();
             if (metaFile) {
                 request['meta-file'] = metaFile;
             }
         }
-        
+
         return request;
     }
 
-    // Set button loading state
     function setButtonLoading(btn, loading, originalText) {
         if (loading) {
             btn.disabled = true;
@@ -508,39 +543,35 @@
         }
     }
 
-    // Preview button click handler
     async function handlePreviewClick() {
         const request = buildRequest(false);
-        const requestBody = JSON.stringify(request, null, 2);
-        
         elements.requestBodySection.style.display = 'block';
-        elements.requestBodyDisplay.textContent = requestBody;
-        
+        elements.requestBodyDisplay.textContent = JSON.stringify(request, null, 2);
+
         setButtonLoading(elements.previewBtn, true, 'Preview (Dry Run)');
-        
+
         try {
             const response = await fetch(elements.apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request),
             });
-            
+
             const responseText = await response.text();
             let data;
-            
+
             try {
                 data = JSON.parse(responseText);
             } catch (e) {
                 throw new Error(responseText || 'Request failed');
             }
-            
+
             if (!response.ok) {
                 throw new Error(data.Status || responseText || 'Request failed');
             }
-            
+
             previewTasks = data.Tasks || [];
             showPreviewResults(data);
-            
         } catch (error) {
             elements.previewStatus.className = 'preview-status error';
             elements.previewStatus.textContent = 'Error: ' + error.message;
@@ -554,7 +585,6 @@
         }
     }
 
-    // Parse API error body: JSON Status or raw text
     function messageFromApiResponse(responseText, fallback) {
         if (responseText == null || responseText === '') {
             return fallback || 'Request failed';
@@ -568,20 +598,19 @@
         return responseText;
     }
 
-    // Execute button click handler
     async function handleExecuteClick() {
         const request = buildRequest(true);
         elements.requestBodyDisplay.textContent = JSON.stringify(request, null, 2);
-        
+
         setButtonLoading(elements.executeBtn, true, 'Execute Backload');
-        
+
         try {
             const response = await fetch(elements.apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request),
             });
-            
+
             const responseText = await response.text();
             let data = null;
             try {
@@ -589,26 +618,24 @@
             } catch (e) {
                 data = null;
             }
-            
+
             if (!response.ok) {
-                const msg = messageFromApiResponse(responseText, 'Execution failed');
                 elements.executionSection.style.display = 'block';
                 elements.executionStatus.className = 'execution-status error';
-                elements.executionStatus.textContent = msg;
+                elements.executionStatus.textContent = messageFromApiResponse(responseText, 'Execution failed');
                 return;
             }
-            
+
             if (!data) {
                 elements.executionSection.style.display = 'block';
                 elements.executionStatus.className = 'execution-status error';
                 elements.executionStatus.textContent = responseText || 'Invalid JSON response';
                 return;
             }
-            
+
             showExecutionResults(data);
             elements.executionSection.style.display = 'none';
             elements.executeBtn.style.display = 'none';
-            
         } catch (error) {
             elements.executionSection.style.display = 'block';
             elements.executionStatus.className = 'execution-status error';
@@ -618,7 +645,6 @@
         }
     }
 
-    // Reset button click handler
     function handleResetClick() {
         elements.taskSearch.value = '';
         elements.taskSelect.value = '';
@@ -626,18 +652,18 @@
         elements.jobSelect.innerHTML = '<option value="">Select a job...</option>';
         elements.jobSelect.disabled = true;
         elements.bySelect.value = 'day';
-        
-        // Reset pickers
+        setSelectedWorkflow('');
+
         if (pickers.at) pickers.at.setValue('', '');
         if (pickers.from) pickers.from.setValue('', '');
         if (pickers.to) pickers.to.setValue('', '');
-        
+
         document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
         document.querySelector('.toggle-btn[data-mode="single"]').classList.add('active');
         elements.singleDateInput.style.display = 'block';
         elements.dateRangeInputs.style.display = 'none';
         elements.bySelectContainer.style.display = 'none';
-        
+
         hideTemplateInfo();
         initializeDates();
         if (elements.previewResultsHeading) {
@@ -646,13 +672,26 @@
         updatePreviewButton();
     }
 
-    function renderTasksIntoPreviewTable(tasks, emptyRowHtml) {
+    function renderTasksIntoPreviewTable(tasks, emptyRowHtml, options) {
+        options = options || {};
+        const showIds = !!options.showIds;
+        const colCount = showIds ? 6 : 5;
+
         elements.previewTableBody.innerHTML = '';
         if (tasks && tasks.length > 0) {
             tasks.forEach((task, index) => {
                 const row = document.createElement('tr');
+                let idCell = '';
+                if (showIds && task.id) {
+                    const date = taskCreatedDate(task);
+                    const href = taskPageBase() + '?date=' + encodeURIComponent(date) + '&id=' + encodeURIComponent(task.id);
+                    idCell = `<td class="id-cell id-column"><a class="task-id-link" href="${window.FlowlordUtils.escapeAttr(href)}">${window.FlowlordUtils.escapeHtml(task.id)}</a></td>`;
+                } else if (showIds) {
+                    idCell = '<td class="id-cell id-column"></td>';
+                }
                 row.innerHTML = `
                     <td class="num-cell num-column">${index + 1}</td>
+                    ${idCell}
                     <td class="type-cell type-column copyable" title="Click for actions">${window.FlowlordUtils.escapeHtml(task.type || '')}</td>
                     <td class="job-cell job-column copyable" title="Click for actions">${window.FlowlordUtils.escapeHtml(task.job || '')}</td>
                     <td class="info-cell info-column expandable copyable" title="Click for actions">${window.FlowlordUtils.escapeHtml(task.info || '')}</td>
@@ -660,22 +699,31 @@
                 `;
                 elements.previewTableBody.appendChild(row);
             });
+            if (window.FlowlordUtils) {
+                window.FlowlordUtils.enableCellActions(elements.previewTableBody);
+            }
         } else {
-            elements.previewTableBody.innerHTML = emptyRowHtml || '<tr><td colspan="5" class="no-tasks">No tasks</td></tr>';
+            elements.previewTableBody.innerHTML = emptyRowHtml || `<tr><td colspan="${colCount}" class="no-tasks">No tasks</td></tr>`;
         }
     }
 
-    // Show preview results
+    function setPreviewIdColumnVisible(visible) {
+        if (elements.previewIdHeader) {
+            elements.previewIdHeader.style.display = visible ? '' : 'none';
+        }
+    }
+
     function showPreviewResults(data) {
         if (elements.previewResultsHeading) {
             elements.previewResultsHeading.textContent = 'Preview Results';
         }
+        setPreviewIdColumnVisible(false);
         elements.previewSection.style.display = 'block';
         elements.previewStatus.className = 'preview-status info';
         elements.previewStatus.textContent = data.Status || 'Dry run complete';
-        
+
         renderTasksIntoPreviewTable(data.Tasks, '<tr><td colspan="5" class="no-tasks">No tasks would be created</td></tr>');
-        
+
         if (data.Tasks && data.Tasks.length > 0) {
             elements.previewCount.textContent = `Total tasks to be created: ${data.Count}`;
             elements.executeBtn.style.display = 'inline-block';
@@ -690,30 +738,104 @@
         if (elements.previewResultsHeading) {
             elements.previewResultsHeading.textContent = 'Execution results';
         }
+        setPreviewIdColumnVisible(true);
         elements.previewSection.style.display = 'block';
         elements.previewStatus.className = 'preview-status execution-success';
         elements.previewStatus.innerHTML =
             '<strong>Executed (not a dry run)</strong><br>' +
             window.FlowlordUtils.escapeHtml(data.Status || '');
-        renderTasksIntoPreviewTable(data.Tasks, '<tr><td colspan="5" class="no-tasks">No tasks were sent</td></tr>');
+
+        renderTasksIntoPreviewTable(
+            data.Tasks,
+            '<tr><td colspan="6" class="no-tasks">No tasks were sent</td></tr>',
+            { showIds: true }
+        );
+
         const n = typeof data.Count === 'number' ? data.Count : (data.Tasks && data.Tasks.length) || 0;
-        elements.previewCount.textContent = `Created ${n} task(s). Jobs were sent to the task bus.`;
+        const viewAllHref = buildViewAllTasksHref(data.Tasks);
+        let countHtml = `Created ${n} task(s). Jobs were sent to the task bus.`;
+        if (viewAllHref && n > 0) {
+            countHtml += ` <a class="task-id-link" href="${window.FlowlordUtils.escapeAttr(viewAllHref)}">View all ${n} created tasks</a>`;
+        }
+        elements.previewCount.innerHTML = countHtml;
     }
 
-    // Initialize date inputs with today's date
     function initializeDates() {
         const today = new Date().toISOString().split('T')[0];
-        
-        // Initialize pickers with today's date
         if (pickers.at) pickers.at.setValue(today, '');
         if (pickers.from) pickers.from.setValue(today, '');
         if (pickers.to) pickers.to.setValue(today, '');
-        
         updatePreviewButton();
     }
 
-    // Export to global scope
+    function setMetaFieldValue(key, value) {
+        const input = document.querySelector('.meta-input[data-meta-key="' + key + '"]');
+        if (input) {
+            input.value = value;
+        }
+    }
+
+    function applyQueryParams() {
+        const params = new URLSearchParams(window.location.search);
+        const task = params.get('task');
+        if (!task) return;
+
+        const workflow = params.get('workflow') || '';
+        const job = params.get('job') || '';
+        const at = params.get('at') || '';
+
+        if (workflow) {
+            elements.workflowFilter.value = workflow;
+        }
+
+        selectTask(task);
+
+        if (job) {
+            selectJobOption(job, workflow);
+        } else if (workflow) {
+            const phase = findPhase(task, '', workflow);
+            if (phase) {
+                setSelectedWorkflow(workflow);
+                showTemplateInfo(phase);
+            }
+        }
+
+        if (at && pickers.at) {
+            document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+            const singleBtn = document.querySelector('.toggle-btn[data-mode="single"]');
+            if (singleBtn) singleBtn.classList.add('active');
+            elements.dateRangeInputs.style.display = 'none';
+            elements.singleDateInput.style.display = 'block';
+            elements.bySelectContainer.style.display = 'none';
+            pickers.at.setValue(at, '');
+        }
+
+        params.forEach((value, key) => {
+            if (key.startsWith('meta.')) {
+                setMetaFieldValue(key.slice(5), value);
+            }
+        });
+
+        updatePreviewButton();
+
+        if (params.get('preview') === '1') {
+            setTimeout(function() {
+                if (!elements.previewBtn.disabled) {
+                    handlePreviewClick();
+                }
+            }, 0);
+        }
+    }
+
+    function buildBackloadUrl(taskRow) {
+        if (window.FlowlordUtils && window.FlowlordUtils.buildBackloadUrl) {
+            return window.FlowlordUtils.buildBackloadUrl(taskRow);
+        }
+        return '/web/backload';
+    }
+
     window.FlowlordBackload = {
-        init: init
+        init: init,
+        buildBackloadUrl: buildBackloadUrl
     };
 })();
