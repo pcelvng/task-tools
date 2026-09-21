@@ -348,8 +348,8 @@
         });
 
         document.addEventListener('scroll', function() {
-            if (activeCell) {
-                deactivateCell();
+            if (activeCell && activeActionBar) {
+                positionActionBar(activeActionBar, activeCell);
             }
         }, true);
     }
