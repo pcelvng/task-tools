@@ -211,6 +211,8 @@
         return out;
     }
 
+    // Prefill /web/backload from phase or task-shaped data. Used by workflow row
+    // actions only; the tasks page reruns via POST /rerun and does not navigate here.
     function buildBackloadUrl(taskRow) {
         const params = new URLSearchParams();
         if (taskRow.type) params.set('task', taskRow.type);
@@ -246,6 +248,7 @@
         window.location.href = buildBackloadUrl(rowData);
     }
 
+    // Listens for .row-action-btn clicks (workflow play button). Not used on /web/task.
     function enableRowBackloadActions(root, getRowData) {
         const el = typeof root === 'string' ? document.querySelector(root) : root;
         if (!el || !getRowData) return;

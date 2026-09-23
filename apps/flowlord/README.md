@@ -13,7 +13,7 @@
 - **Alerting** - Slack notifications for failed tasks and incomplete jobs with smart frequency management
 - **RESTful API** - Web UI and API for monitoring workflows, viewing task history, and managing alerts
 
-[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](https://github.com/pcelvng/task-tools/wiki/Flowlord-API)
+[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](API.md)
 
 <br clear="all"/>
 
@@ -54,6 +54,21 @@ Built-in web UI for monitoring workflows and troubleshooting. Uses Go templates 
 - System statistics
 
 Access at `http://localhost:8080/` by default (`status_port = 8080`). Set `status_port = 0` to run headless with orchestration only — the dashboard, backload API, and other HTTP endpoints are disabled.
+
+### Row actions (Tasks vs Workflow)
+
+The tasks and workflow tables both expose a leading action column, but the behavior is different:
+
+| View | Row control | What it does |
+|------|-------------|----------------|
+| **Tasks** (`/web/task`) | Rerun (replay icon) | Opens a confirmation modal, then [`POST /rerun`](API.md#post-rerun) to re-queue **that same task** (same ID and info; retry-related meta is stripped and `rerun=manual` is set). Does **not** open the backload form. |
+| **Workflow** (`/web/workflow`) | Run (play icon) | Navigates to `/web/backload` with query parameters prefilled from the phase row (task type, job, workflow file). Optional `preview=1` triggers a dry-run preview on the backload page. |
+
+Use **backload** when you want to generate tasks from phase rules and templates (single time, date range, or batch). Use **rerun** on the tasks page when you want another attempt of an **existing** task record without leaving the task history view.
+
+**Rerun vs automatic retry:** When a task finishes with `error`, Flowlord may retry it automatically according to the phase `retry` count and `retry_delay` rule—each retry reuses the **same task ID** and info and updates retry metadata (`retry`, `delayed`, etc.). A manual rerun does the same ID/info reuse for operators but clears automatic retry fields, tags `rerun=manual`, and sends immediately without waiting for `retry_delay`. See [POST `/rerun`](API.md#post-rerun) in the API doc.
+
+The shared helper `buildBackloadUrl` in `handler/static/utils.js` is wired on the workflow page only (`enableRowBackloadActions` in `workflow.tmpl`). The tasks page registers `enableRowRerunActions` in `task.js` instead.
 
 | Files View | Tasks View | Alerts View | Workflow View |
 |:----------:|:----------:|:-----------:|:-------------:|
