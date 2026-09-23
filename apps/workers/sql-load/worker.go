@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -339,16 +340,41 @@ func (w *worker) QuerySchema() (err error) {
 // ReadFiles uses a files list and file.Options to read files and process data into a Dataset
 // it will build the cols and rows for each file
 func (ds *TableMeta) ReadFiles(ctx context.Context, files file.Reader, rowChan chan Row, skipErrors bool) {
-	errChan := make(chan error, 2)
+	errChan := make(chan error, 256)
 	dataIn := make(chan []byte, 20)
 	var header []string
 	var hBytes []byte
-	var activeThreads int32
+	var wg sync.WaitGroup
+
+	handleReadErr := func(err error) {
+		if err == nil {
+			return
+		}
+		if skipErrors {
+			ds.skipCount++
+		} else if ds.err == nil {
+			ds.err = err
+		}
+	}
+
+	drainReadErrs := func() {
+		for {
+			select {
+			case err := <-errChan:
+				if skipErrors {
+					log.Println(err)
+				}
+				handleReadErr(err)
+			default:
+				return
+			}
+		}
+	}
 
 	for i := 0; i < 20; i++ {
-		activeThreads++
+		wg.Add(1)
 		go func() { // process row function
-			defer func() { atomic.AddInt32(&activeThreads, -1) }()
+			defer wg.Done()
 			for b := range dataIn {
 				if ds.csv { // csv data parsing
 					if bytes.Equal(b, hBytes) {
@@ -365,7 +391,7 @@ func (ds *TableMeta) ReadFiles(ctx context.Context, files file.Reader, rowChan c
 					var j JsonData
 					if e := json.Unmarshal(b, &j); e != nil {
 						errChan <- fmt.Errorf("json unmarshal error %w %q", e, string(b))
-						return
+						continue
 					}
 
 					if row, err := MakeRow(ds.dbSchema, j); err != nil {
@@ -401,17 +427,13 @@ loop:
 		select {
 		case <-ctx.Done():
 			break loop
-		case err := <-errChan:
-			if skipErrors {
-				ds.skipCount++
-				//log.Println(err)
-			} else {
-				//log.Println(err)
-				ds.err = err
-				break loop
-			}
 		default:
-			dataIn <- scanner.Bytes()
+		}
+
+		dataIn <- scanner.Bytes()
+		drainReadErrs()
+		if ds.err != nil && !skipErrors {
+			break loop
 		}
 	}
 	if scanner.Err() != nil {
@@ -423,21 +445,8 @@ loop:
 	log.Printf("processed %d files at %s, size %s", sts.Files, sts.Path, b.String())
 
 	close(dataIn)
-	for {
-		select {
-		case e := <-errChan:
-			if skipErrors {
-				log.Println(e)
-				ds.skipCount++
-			} else {
-				ds.err = e
-			}
-		default:
-		}
-		if i := atomic.LoadInt32(&activeThreads); i == 0 {
-			break
-		}
-	}
+	wg.Wait()
+	drainReadErrs()
 	close(rowChan)
 	close(errChan)
 }
