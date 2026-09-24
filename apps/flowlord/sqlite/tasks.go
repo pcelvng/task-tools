@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"net/url"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/pcelvng/task/bus"
 
 	"github.com/pcelvng/task-tools/tmpl"
+	"github.com/pcelvng/task-tools/workflow"
 )
 
 // TaskJob describes info about completed tasks that are within the cache
@@ -44,6 +44,7 @@ func (s *SQLite) Add(t task.Task) {
 	if t.ID == "" {
 		return
 	}
+	workflow.NormalizeJob(&t)
 	if t.Result == "" {
 		t.Result = ResultRunning
 	}
@@ -477,12 +478,8 @@ func (s *SQLite) GetTaskRecapByDate(date time.Time) (TaskStats, error) {
 			continue
 		}
 
-		job := t.Job
-		if job == "" {
-			v, _ := url.ParseQuery(t.Meta)
-			job = v.Get("job")
-		}
-		key := strings.TrimRight(t.Type+":"+job, ":")
+		workflow.NormalizeJob(&t)
+		key := strings.TrimRight(t.Type+":"+t.Job, ":")
 		stat, found := data[key]
 		if !found {
 			stat = &Stats{
@@ -499,15 +496,4 @@ func (s *SQLite) GetTaskRecapByDate(date time.Time) (TaskStats, error) {
 	}
 
 	return TaskStats(data), nil
-}
-
-// extractJobFromTask is a helper function to get job from task
-func extractJobFromTask(t task.Task) string {
-	job := t.Job
-	if job == "" {
-		if meta, err := url.ParseQuery(t.Meta); err == nil {
-			job = meta.Get("job")
-		}
-	}
-	return job
 }

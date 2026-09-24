@@ -204,15 +204,15 @@ func TestGet(t *testing.T) {
 			Expected: Phase{Task: "task2", DependsOn: "task1"},
 		},
 		"task=t2 with job=j1": {
-			Input:    task.Task{Type: "t2", Meta: "workflow=w2job.toml&job=j1"},
+			Input:    task.Task{Type: "t2", Job: "j1", Meta: "workflow=w2job.toml"},
 			Expected: Phase{Task: "t2", Rule: "job=j1"},
 		},
 		"job does not exist": {
-			Input:    task.Task{Type: "t2", Meta: "workflow=w2job.toml&job=invalid"},
+			Input:    task.Task{Type: "t2", Job: "invalid", Meta: "workflow=w2job.toml"},
 			Expected: Phase{},
 		},
 		"wildcard search": {
-			Input:    task.Task{Type: "t2", Meta: "workflow=*&job=j3"},
+			Input:    task.Task{Type: "t2", Job: "j3", Meta: "workflow=*"},
 			Expected: Phase{Task: "t2:j3"},
 		},
 		"wildcard with same task in different files": { // picks first match, results will vary
@@ -264,7 +264,7 @@ func TestChildren(t *testing.T) {
 			Expected: []Phase{},
 		},
 		"task1:j4": {
-			Input: task.Task{Type: "task1", Meta: "workflow=workflow.toml&job=j4"},
+			Input: task.Task{Type: "task1", Job: "j4", Meta: "workflow=workflow.toml"},
 			Expected: []Phase{
 				{Task: "task2", DependsOn: "task1"},
 				{Task: "task5", DependsOn: "task1:j4"},
@@ -305,6 +305,28 @@ func TestCache_FilePath(t *testing.T) {
 		"embedded sub": {
 			Input:    trial.Args("./path", "root/path/sub/file.toml"),
 			Expected: "sub/file.toml",
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestNormalizeJob(t *testing.T) {
+	fn := func(in task.Task) (string, error) {
+		NormalizeJob(&in)
+		return in.Job, nil
+	}
+	cases := trial.Cases[task.Task, string]{
+		"keeps existing Job": {
+			Input:    task.Task{Job: "keep", Meta: "job=meta"},
+			Expected: "keep",
+		},
+		"copies job from Meta": {
+			Input:    task.Task{Meta: "workflow=w.toml&job=from-meta"},
+			Expected: "from-meta",
+		},
+		"empty when neither set": {
+			Input:    task.Task{Meta: "workflow=w.toml"},
+			Expected: "",
 		},
 	}
 	trial.New(fn, cases).SubTest(t)
