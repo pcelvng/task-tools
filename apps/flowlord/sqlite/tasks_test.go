@@ -106,6 +106,75 @@ func TestGetTasksByDate(t *testing.T) {
 	})
 }
 
+func TestGetTasks_idHistory(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	day15 := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-15T10:00:00Z", Result: task.ErrResult})
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-16T09:00:00Z", Result: task.CompleteResult})
+	db.Add(task.Task{ID: "other", Type: "alpha", Job: "load", Created: "2024-01-15T11:00:00Z", Result: task.CompleteResult})
+
+	type input struct {
+		date   *time.Time
+		filter TaskFilter
+	}
+	type output struct {
+		Count int
+		IDs   []string
+	}
+	fn := func(in input) (output, error) {
+		f := in.filter
+		f.Page = 1
+		f.Limit = 10
+		tasks, count, err := db.GetTasks(in.date, &f)
+		if err != nil {
+			return output{}, err
+		}
+		ids := make([]string, len(tasks))
+		for i, tv := range tasks {
+			ids[i] = tv.ID + "@" + tv.Created[:10]
+		}
+		return output{Count: count, IDs: ids}, nil
+	}
+	cases := trial.Cases[input, output]{
+		"nil date returns all attempts for id": {
+			Input: input{
+				date:   nil,
+				filter: TaskFilter{ID: []string{"pipe-1"}},
+			},
+			Expected: output{
+				Count: 2,
+				IDs:   []string{"pipe-1@2024-01-16", "pipe-1@2024-01-15"},
+			},
+		},
+		"date scope still day-bounded without id": {
+			Input: input{
+				date:   &day15,
+				filter: TaskFilter{},
+			},
+			Expected: output{
+				Count: 2,
+				IDs:   []string{"other@2024-01-15", "pipe-1@2024-01-15"},
+			},
+		},
+		"date scope with id stays on that day": {
+			Input: input{
+				date:   &day15,
+				filter: TaskFilter{ID: []string{"pipe-1"}},
+			},
+			Expected: output{
+				Count: 1,
+				IDs:   []string{"pipe-1@2024-01-15"},
+			},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
 func TestGetHourlyCountsByDate(t *testing.T) {
 	db := &SQLite{LocalPath: ":memory:"}
 	if err := db.initDB(); err != nil {

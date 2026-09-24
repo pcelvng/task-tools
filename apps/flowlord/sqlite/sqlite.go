@@ -27,7 +27,8 @@ const (
 // Version 1: Initial schema
 // Version 2: Added date_index table for performance optimization
 // Version 3: Store 'running' for in-progress tasks (was empty string)
-const currentSchemaVersion = 3
+// Version 4: Index on (id, created) for cross-date ID history lookups
+const currentSchemaVersion = 4
 
 type SQLite struct {
 	LocalPath  string
@@ -247,14 +248,20 @@ func (o *SQLite) migrateSchema(currentVersion int) error {
 		log.Println("Successfully migrated to schema version 3")
 	}
 
-	// Add future migrations here as needed:
-	// Example:
-	// if currentVersion < 3 {
-	//     db := o.db
-	//     // Drop column by recreating table (since data loss is OK)
-	//     db.Exec("DROP TABLE IF EXISTS task_records")
-	//     // schema.sql will recreate it with correct structure
-	// }
+	// Version 3 → 4: Index on (id, created) for cross-date ID history
+	if currentVersion < 4 {
+		log.Println("Migrating schema from version 3 to 4 (adding id,created index)")
+
+		_, err := o.db.Exec(`
+			CREATE INDEX IF NOT EXISTS idx_task_records_id_created
+			ON task_records (id, created)
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to create idx_task_records_id_created: %w", err)
+		}
+
+		log.Println("Successfully migrated to schema version 4")
+	}
 
 	return nil
 }

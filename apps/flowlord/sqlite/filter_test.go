@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"testing"
+	"time"
 
 	"github.com/hydronica/trial"
 	"github.com/jbsmith7741/uri"
@@ -188,6 +189,66 @@ func TestWhereBuilder(t *testing.T) {
 		"empty": {
 			Input:    input{},
 			Expected: output{},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
+func TestTaskFilter_whereForFilter(t *testing.T) {
+	day := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	type input struct {
+		withDate bool
+		filter   TaskFilter
+	}
+	type output struct {
+		SQL  string
+		Args []any
+	}
+	fn := func(in input) (output, error) {
+		var date *time.Time
+		if in.withDate {
+			date = &day
+		}
+		sql, args := in.filter.whereForFilter(date)
+		return output{SQL: sql, Args: args}, nil
+	}
+	cases := trial.Cases[input, output]{
+		"day scope with date": {
+			Input:    input{withDate: true},
+			Expected: output{SQL: "WHERE DATE(created) = ?", Args: []any{"2024-01-15"}},
+		},
+		"id history omits date": {
+			Input: input{
+				withDate: false,
+				filter:   TaskFilter{ID: []string{"pipe-1"}},
+			},
+			Expected: output{
+				SQL:  "WHERE id IN (?)",
+				Args: []any{"pipe-1"},
+			},
+		},
+		"id history with type still omits date": {
+			Input: input{
+				withDate: false,
+				filter: TaskFilter{
+					ID:   []string{"pipe-1"},
+					Type: []string{"alpha"},
+				},
+			},
+			Expected: output{
+				SQL:  "WHERE id IN (?) AND type IN (?)",
+				Args: []any{"pipe-1", "alpha"},
+			},
+		},
+		"day scope with id still includes date": {
+			Input: input{
+				withDate: true,
+				filter:   TaskFilter{ID: []string{"pipe-1"}},
+			},
+			Expected: output{
+				SQL:  "WHERE DATE(created) = ? AND id IN (?)",
+				Args: []any{"2024-01-15", "pipe-1"},
+			},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

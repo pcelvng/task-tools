@@ -428,6 +428,14 @@ func TestAlertHTML(t *testing.T) {
 	datesWithData := []string{"2024-01-14", "2024-01-15", "2024-01-16"}
 	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"), datesWithData)
 
+	html := string(htmlContent)
+	if !strings.Contains(html, `class="task-id-link" href="./task_preview.html?id=task-001"`) {
+		t.Error("alert task link should use id-only history URL")
+	}
+	if strings.Contains(html, `class="task-id-link" href="./task_preview.html?date=`) {
+		t.Error("alert task link should not include date from task_time")
+	}
+
 	// Validate HTML using the new function
 	if err := validateHTML(htmlContent); err != nil {
 		t.Errorf("HTML validation failed: %v", err)
@@ -548,7 +556,7 @@ func TestTaskHTML(t *testing.T) {
 	// Pass sample dates with data for calendar highlighting
 	datesWithData := []string{"2024-01-15"}
 	_, hourlyStats := taskStats.HourlyCounts(filter)
-	html := taskHTML(testTasks, taskStats, len(testTasks), date, filter, datesWithData, 0, hourlyStats)
+	html := taskHTML(testTasks, taskStats, len(testTasks), date, filter, datesWithData, 0, hourlyStats, false)
 
 	// Validate HTML using the new function
 	if err := validateHTML(html); err != nil {

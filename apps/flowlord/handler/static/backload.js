@@ -52,19 +52,10 @@
         return out;
     }
 
-    function taskCreatedDate(task) {
-        if (task && task.created) {
-            const d = task.created.slice(0, 10);
-            if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-        }
-        return new Date().toISOString().split('T')[0];
-    }
-
     function buildViewAllTasksHref(tasks) {
         const ids = (tasks || []).map(t => t.id).filter(Boolean);
         if (ids.length === 0) return '';
-        const date = taskCreatedDate(tasks[0]);
-        return taskPageBase() + '?date=' + encodeURIComponent(date) + '&id=' + ids.map(encodeURIComponent).join(',');
+        return taskPageBase() + '?id=' + ids.map(encodeURIComponent).join(',');
     }
 
     // Initialize the backload form
@@ -683,8 +674,7 @@
                 const row = document.createElement('tr');
                 let idCell = '';
                 if (showIds && task.id) {
-                    const date = taskCreatedDate(task);
-                    const href = taskPageBase() + '?date=' + encodeURIComponent(date) + '&id=' + encodeURIComponent(task.id);
+                    const href = taskPageBase() + '?id=' + encodeURIComponent(task.id);
                     idCell = `<td class="id-cell id-column"><a class="task-id-link" href="${window.FlowlordUtils.escapeAttr(href)}">${window.FlowlordUtils.escapeHtml(task.id)}</a></td>`;
                 } else if (showIds) {
                     idCell = '<td class="id-cell id-column"></td>';

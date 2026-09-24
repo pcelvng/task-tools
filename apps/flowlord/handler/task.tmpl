@@ -12,6 +12,14 @@
     <div class="container full-width">
 
         <div class="summary-section">
+            {{if .HistoryMode}}
+            <div class="summary-stats-text">
+                <span class="summary-stat-item">
+                    <span class="stat-color-box stat-total"></span>
+                    Matching attempts: {{.FilteredCount}} (all dates)
+                </span>
+            </div>
+            {{else}}
             {{if .HourlyStats}}
             <div class="collapsible-section">
                 <div class="collapsible-header" onclick="toggleCollapsible('hourlyChart')">
@@ -51,6 +59,7 @@
                     Running: {{.Counts.Running}}
                 </span>
             </div>
+            {{end}}
         </div>
 
         {{if gt .TotalPages 1}}
@@ -58,11 +67,11 @@
             <span class="pagination-info">Showing {{.StartIndex}}-{{.EndIndex}} of {{.FilteredCount}} {{if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result}}filtered {{end}}tasks (Page {{.Page}} of {{.TotalPages}})</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?{{if not .HistoryMode}}date={{.DateValue}}&{{end}}page={{add .Page -1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?{{if not .HistoryMode}}date={{.DateValue}}&{{end}}page={{add .Page 1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
         </div>
@@ -192,7 +201,11 @@
                     <tr>
                         <td colspan="11" class="no-tasks-cell">
                             <h3>No tasks found</h3>
+                            {{if .HistoryMode}}
+                            <p>No tasks were found for the selected ID(s) within retention.</p>
+                            {{else}}
                             <p>No tasks were found for {{.Date}} with the current filters.</p>
+                            {{end}}
                         </td>
                     </tr>
                     {{end}}
@@ -200,7 +213,9 @@
             </table>
         </div>
         <div class="stats">
-            {{if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result}}
+            {{if .HistoryMode}}
+            Showing: <span id="visibleCount">{{len .Tasks}}</span> | Matching Attempts: <span id="filteredCount">{{.FilteredCount}}</span>
+            {{else if or .Filter.ID .Filter.Type .Filter.Job .Filter.Result}}
             Showing: <span id="visibleCount">{{len .Tasks}}</span> | Filtered Tasks: <span id="filteredCount">{{.FilteredCount}}</span> | Total Tasks: <span id="totalCount">{{.Counts.Total}}</span>
             {{else}}
             Showing: <span id="visibleCount">{{len .Tasks}}</span> | Total Tasks: <span id="totalCount">{{.Counts.Total}}</span>
@@ -212,11 +227,11 @@
             <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
             <div class="pagination-controls">
                 {{if gt .Page 1}}
-                <a href="?date={{.DateValue}}&page={{add .Page -1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Previous</a>
+                <a href="?{{if not .HistoryMode}}date={{.DateValue}}&{{end}}page={{add .Page -1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Previous</a>
                 {{end}}
                 
                 {{if lt .Page .TotalPages}}
-                <a href="?date={{.DateValue}}&page={{add .Page 1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Next</a>
+                <a href="?{{if not .HistoryMode}}date={{.DateValue}}&{{end}}page={{add .Page 1}}{{with filterQS .Filter}}&{{.}}{{end}}" class="btn btn-secondary">Next</a>
                 {{end}}
             </div>
         </div>
@@ -259,8 +274,8 @@
                 window.FlowlordTask.init(config);
             }
 
-            // Render hourly task chart
-            {{if .HourlyStats}}
+            // Render hourly task chart (day view only)
+            {{if and .HourlyStats (not .HistoryMode)}}
             renderHourlyChart();
             
             // Re-render chart on window resize with debouncing

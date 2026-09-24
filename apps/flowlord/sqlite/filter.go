@@ -99,11 +99,20 @@ func (f *TaskFilter) orderByClause() string {
 
 // whereForDate builds a WHERE clause for tasks on a given date with optional ID/type/job/result filters.
 func (f *TaskFilter) whereForDate(date time.Time) (string, []any) {
+	return f.whereForFilter(&date)
+}
+
+// whereForFilter builds a WHERE clause from the filter fields.
+// When date is non-nil, results are scoped to DATE(created) = that day (day view).
+// When date is nil, no date constraint is applied (ID history view).
+func (f *TaskFilter) whereForFilter(date *time.Time) (string, []any) {
 	if f == nil {
 		f = &TaskFilter{}
 	}
 	w := &whereBuilder{}
-	w.And("DATE(created) = ?", date.Format("2006-01-02"))
+	if date != nil {
+		w.And("DATE(created) = ?", date.Format("2006-01-02"))
+	}
 	w.In("id", f.ID)
 	w.In("type", f.Type)
 	w.In("job", f.Job)

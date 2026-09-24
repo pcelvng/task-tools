@@ -346,12 +346,18 @@ func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
 	}
 }
 
-// GetTasksByDate retrieves tasks for a specific date with optional filtering and pagination
+// GetTasksByDate retrieves tasks for a specific date with optional filtering and pagination.
 func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView, int, error) {
+	return s.GetTasks(&date, filter)
+}
+
+// GetTasks retrieves tasks with optional filtering and pagination.
+// When date is non-nil, results are scoped to that calendar day (day view).
+// When date is nil, no date constraint is applied (ID history across retained days).
+func (s *SQLite) GetTasks(date *time.Time, filter *TaskFilter) ([]TaskView, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Handle nil filter or set defaults
 	if filter == nil {
 		filter = &TaskFilter{}
 	}
@@ -360,12 +366,11 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 		filter.Limit = DefaultPageSize
 	}
 	if filter.Page <= 0 {
-		filter.Page = 1 // default to first page
+		filter.Page = 1
 	}
 
-	whereClause, args := filter.whereForDate(date)
+	whereClause, args := filter.whereForFilter(date)
 
-	// Get total count of filtered results
 	countQuery := "SELECT COUNT(*) FROM tasks " + whereClause
 	var totalCount int
 	err := s.db.QueryRow(countQuery, args...).Scan(&totalCount)
@@ -373,13 +378,11 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 		return nil, 0, err
 	}
 
-	// Build main query with pagination
 	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
 		FROM tasks ` + whereClause + `
 		` + filter.orderByClause() + `
 		LIMIT ? OFFSET ?`
 
-	// Calculate offset from page number
 	offset := (filter.Page - 1) * filter.Limit
 	args = append(args, filter.Limit, offset)
 
