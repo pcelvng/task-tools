@@ -564,14 +564,7 @@
     function rerunTasksHref(task) {
         const id = task && task.id;
         if (!id) return taskPageBase();
-        let date = '';
-        if (task.created) {
-            date = String(task.created).slice(0, 10);
-        }
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            date = new Date().toISOString().split('T')[0];
-        }
-        return taskPageBase() + '?date=' + encodeURIComponent(date) + '&id=' + encodeURIComponent(id);
+        return taskPageBase() + '?id=' + encodeURIComponent(id);
     }
 
     function messageFromRerunResponse(responseText, status) {

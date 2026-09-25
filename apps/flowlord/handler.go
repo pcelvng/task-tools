@@ -450,7 +450,8 @@ func (tm *taskMaster) htmlFiles(w http.ResponseWriter, r *http.Request) {
 	w.Write(filesHTML(files, dt, datesWithData))
 }
 
-// htmlTask handles GET /web/task - displays task summary and table for a specific date
+// htmlTask handles GET /web/task - displays task summary and table for a specific date,
+// or cross-date ID history when an id filter is present.
 func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	dt, _ := time.Parse("2006-01-02", r.URL.Query().Get("date"))
 	if dt.IsZero() {
@@ -466,41 +467,62 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 		filter.Page = 1
 	}
 
-	// Get task summary statistics for the date
-	summaryStart := time.Now()
-	taskStats, err := tm.taskCache.GetTaskRecapByDate(dt)
-	summaryTime := time.Since(summaryStart)
-	if err != nil {
-		log.Printf("Error getting task summary: %v", err)
-		taskStats = sqlite.TaskStats{}
-	}
+	historyMode := len(filter.ID) > 0
 
-	// Get filtered and paginated tasks
-	queryStart := time.Now()
-	tasks, totalCount, err := tm.taskCache.GetTasksByDate(dt, filter)
-	queryTime := time.Since(queryStart)
-	if err != nil {
-		log.Printf("Error getting tasks: %v", err)
-		tasks = []sqlite.TaskView{}
-		totalCount = 0
+	var (
+		taskStats   sqlite.TaskStats
+		tasks       []sqlite.TaskView
+		totalCount  int
+		hourlyStats [24]sqlite.TaskCounts
+		queryTime   time.Duration
+	)
+
+	if historyMode {
+		queryStart := time.Now()
+		var err error
+		tasks, totalCount, err = tm.taskCache.GetTasks(nil, filter)
+		queryTime = time.Since(queryStart)
+		if err != nil {
+			log.Printf("Error getting tasks by ID: %v", err)
+			tasks = []sqlite.TaskView{}
+			totalCount = 0
+		}
+		taskStats = sqlite.TaskStats{}
+		// Hourly chart is day-shaped; omit in history mode (zero array + HistoryMode in template).
+		// Still need type/job keys for column filter dropdowns (UniqueTypes / JobsByType).
+		keys, keyErr := tm.taskCache.TypeJobKeys(&sqlite.TaskFilter{ID: filter.ID})
+		if keyErr != nil {
+			log.Printf("Error getting type/job keys for history filters: %v", keyErr)
+		} else {
+			taskStats = keys
+		}
+	} else {
+		summaryStart := time.Now()
+		var err error
+		taskStats, err = tm.taskCache.GetTaskRecapByDate(dt)
+		summaryTime := time.Since(summaryStart)
+		if err != nil {
+			log.Printf("Error getting task summary: %v", err)
+			taskStats = sqlite.TaskStats{}
+		}
+
+		queryStart := time.Now()
+		tasks, totalCount, err = tm.taskCache.GetTasksByDate(dt, filter)
+		queryTime = summaryTime + time.Since(queryStart)
+		if err != nil {
+			log.Printf("Error getting tasks: %v", err)
+			tasks = []sqlite.TaskView{}
+			totalCount = 0
+		}
+
+		_, hourlyStats = taskStats.HourlyCounts(filter)
 	}
 
 	// Get dates with tasks for calendar highlighting
 	datesWithData, _ := tm.taskCache.DatesByType("tasks")
 
-	var hourlyStats [24]sqlite.TaskCounts
-	if len(filter.ID) > 0 {
-		if _, stats, err := tm.taskCache.GetHourlyCountsByDate(dt, filter); err != nil {
-			log.Printf("Error getting hourly counts: %v", err)
-		} else {
-			hourlyStats = stats
-		}
-	} else {
-		_, hourlyStats = taskStats.HourlyCounts(filter)
-	}
-
 	w.Header().Set("Content-Type", "text/html")
-	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, summaryTime+queryTime, hourlyStats)
+	htmlBytes := taskHTML(tasks, taskStats, totalCount, dt, filter, datesWithData, queryTime, hourlyStats, historyMode)
 	w.Write(htmlBytes)
 }
 
@@ -568,15 +590,18 @@ func filesHTML(files []sqlite.FileMessage, date time.Time, datesWithData []strin
 }
 
 // taskHTML renders the task summary and table HTML page
-func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration, hourlyStats [24]sqlite.TaskCounts) []byte {
+func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount int, date time.Time, filter *sqlite.TaskFilter, datesWithData []string, queryTime time.Duration, hourlyStats [24]sqlite.TaskCounts, historyMode bool) []byte {
 	renderStart := time.Now()
 
 	// Calculate navigation dates
 	prevDate := date.AddDate(0, 0, -1)
 	nextDate := date.AddDate(0, 0, 1)
 
-	// Get unfiltered counts for summary section (always show full day stats)
+	// Get unfiltered counts for summary section (always show full day stats in day mode)
 	unfilteredCounts := taskStats.TotalCounts()
+	if historyMode {
+		unfilteredCounts = sqlite.TaskCounts{Total: totalCount}
+	}
 
 	// Get unique types and jobs from TaskStats for filter dropdowns
 	types := taskStats.UniqueTypes()
@@ -596,17 +621,25 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 		endIdx = 0
 	}
 
+	pageTitle := "Task Dashboard"
+	dateLabel := date.Format("Monday, January 2, 2006")
+	if historyMode {
+		pageTitle = "Task History"
+		dateLabel = "All dates"
+	}
+
 	data := map[string]interface{}{
-		"Date":          date.Format("Monday, January 2, 2006"),
+		"Date":          dateLabel,
 		"DateValue":     date.Format("2006-01-02"),
 		"PrevDate":      prevDate.Format("2006-01-02"),
 		"NextDate":      nextDate.Format("2006-01-02"),
 		"Tasks":         tasks,
 		"Counts":        unfilteredCounts,
 		"HourlyStats":   hourlyStats,
+		"HistoryMode":   historyMode,
 		"Filter":        filter,
 		"CurrentPage":   "task",
-		"PageTitle":     "Task Dashboard",
+		"PageTitle":     pageTitle,
 		"isLocal":       isLocal,
 		"DatesWithData": datesWithData,
 		"UniqueTypes":   types,
@@ -635,8 +668,8 @@ func taskHTML(tasks []sqlite.TaskView, taskStats sqlite.TaskStats, totalCount in
 	renderTime := time.Since(renderStart)
 
 	// Single consolidated log with all metrics
-	log.Printf("Task page: date=%s filters=[id=%q type=%v job=%v result=%v sort=%q/%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
-		date.Format("2006-01-02"), filter.ID, filter.Type, filter.Job, filter.Result, filter.Sort, filter.Direction,
+	log.Printf("Task page: date=%s history=%v filters=[id=%q type=%v job=%v result=%v sort=%q/%q] total=%d filtered=%d page=%d/%d query=%v render=%v size=%.2fMB",
+		date.Format("2006-01-02"), historyMode, filter.ID, filter.Type, filter.Job, filter.Result, filter.Sort, filter.Direction,
 		unfilteredCounts.Total, totalCount, filter.Page, totalPages,
 		queryTime, renderTime, float64(htmlSize)/(1024*1024))
 
