@@ -411,6 +411,41 @@ func (s *SQLite) GetTasks(date *time.Time, filter *TaskFilter) ([]TaskView, int,
 	return tasks, totalCount, nil
 }
 
+// TypeJobKeys returns TaskStats keyed by distinct type:job matching the filter.
+// Stats values are empty; only map keys are used (UniqueTypes / JobsByType) for
+// column filter dropdowns. Pass an ID-scoped filter in history mode so options
+// reflect that task's variants without applying type/job/result narrowing.
+func (s *SQLite) TypeJobKeys(filter *TaskFilter) (TaskStats, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if filter == nil {
+		filter = &TaskFilter{}
+	}
+	whereClause, args := filter.whereForFilter(nil)
+
+	query := `SELECT DISTINCT type, job FROM tasks ` + whereClause
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := make(TaskStats)
+	for rows.Next() {
+		var typ, job string
+		if err := rows.Scan(&typ, &job); err != nil {
+			continue
+		}
+		key := strings.TrimRight(typ+":"+job, ":")
+		if key == "" {
+			continue
+		}
+		data[key] = &Stats{}
+	}
+	return data, rows.Err()
+}
+
 // GetHourlyCountsByDate returns hourly task counts for a date, querying tasks directly so ID
 // filters (and all other filter fields) are applied per task.
 func (s *SQLite) GetHourlyCountsByDate(date time.Time, filter *TaskFilter) (TaskCounts, [24]TaskCounts, error) {

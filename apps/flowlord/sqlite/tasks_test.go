@@ -175,6 +175,53 @@ func TestGetTasks_idHistory(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
+func TestTypeJobKeys(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-15T10:00:00Z", Result: task.ErrResult})
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-16T09:00:00Z", Result: task.CompleteResult})
+	db.Add(task.Task{ID: "pipe-1", Type: "zebra", Job: "check", Created: "2024-01-16T11:00:00Z", Result: task.CompleteResult})
+	db.Add(task.Task{ID: "other", Type: "alpha", Job: "import", Created: "2024-01-15T11:00:00Z", Result: task.CompleteResult})
+
+	type output struct {
+		Types []string
+		Jobs  map[string][]string
+	}
+	fn := func(filter TaskFilter) (output, error) {
+		stats, err := db.TypeJobKeys(&filter)
+		if err != nil {
+			return output{}, err
+		}
+		return output{Types: stats.UniqueTypes(), Jobs: stats.JobsByType()}, nil
+	}
+	cases := trial.Cases[TaskFilter, output]{
+		"history mode empty stats bug: id returns distinct type/job keys": {
+			Input: TaskFilter{ID: []string{"pipe-1"}},
+			Expected: output{
+				Types: []string{"alpha", "zebra"},
+				Jobs: map[string][]string{
+					"alpha": {"load"},
+					"zebra": {"check"},
+				},
+			},
+		},
+		"id scope ignores other tasks": {
+			Input: TaskFilter{ID: []string{"other"}},
+			Expected: output{
+				Types: []string{"alpha"},
+				Jobs: map[string][]string{
+					"alpha": {"import"},
+				},
+			},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
 func TestGetHourlyCountsByDate(t *testing.T) {
 	db := &SQLite{LocalPath: ":memory:"}
 	if err := db.initDB(); err != nil {

@@ -489,6 +489,13 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 		}
 		taskStats = sqlite.TaskStats{}
 		// Hourly chart is day-shaped; omit in history mode (zero array + HistoryMode in template).
+		// Still need type/job keys for column filter dropdowns (UniqueTypes / JobsByType).
+		keys, keyErr := tm.taskCache.TypeJobKeys(&sqlite.TaskFilter{ID: filter.ID})
+		if keyErr != nil {
+			log.Printf("Error getting type/job keys for history filters: %v", keyErr)
+		} else {
+			taskStats = keys
+		}
 	} else {
 		summaryStart := time.Now()
 		var err error

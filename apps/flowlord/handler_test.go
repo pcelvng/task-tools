@@ -865,3 +865,41 @@ func TestRerunProducerFailure(t *testing.T) {
 		t.Fatalf("rerun attempts after failure = %d, want 1", newAttempts)
 	}
 }
+
+func TestHTMLTask_historyModeFilterOptions(t *testing.T) {
+	sqlDB := &sqlite.SQLite{LocalPath: ":memory:"}
+	if err := sqlDB.Open(testPath+"/workflow/f3.toml", nil); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.Add(task.Task{
+		ID: "pipe-1", Type: "alpha", Job: "load",
+		Created: "2024-01-15T10:00:00Z", Result: task.CompleteResult,
+	})
+	sqlDB.Add(task.Task{
+		ID: "pipe-1", Type: "zebra", Job: "check",
+		Created: "2024-01-16T09:00:00Z", Result: task.ErrResult,
+	})
+
+	tm := &taskMaster{taskCache: sqlDB}
+	r := httptest.NewRequest(http.MethodGet, "/web/task?id=pipe-1", nil)
+	w := httptest.NewRecorder()
+	tm.htmlTask(w, r)
+
+	body := w.Body.String()
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if !strings.Contains(body, `taskTypes: ["alpha","zebra"]`) {
+		t.Errorf("history mode column filters missing type options; got taskTypes snippet from body")
+		if idx := strings.Index(body, "taskTypes:"); idx >= 0 {
+			end := idx + 80
+			if end > len(body) {
+				end = len(body)
+			}
+			t.Logf("snippet: %s", body[idx:end])
+		}
+	}
+	if !strings.Contains(body, `"load"`) || !strings.Contains(body, `"check"`) {
+		t.Error("history mode column filters missing job options")
+	}
+}
