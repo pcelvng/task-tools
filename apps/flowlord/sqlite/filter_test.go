@@ -196,44 +196,30 @@ func TestWhereBuilder(t *testing.T) {
 
 func TestTaskFilter_whereForFilter(t *testing.T) {
 	day := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	type input struct {
-		withDate bool
-		filter   TaskFilter
-	}
 	type output struct {
 		SQL  string
 		Args []any
 	}
-	fn := func(in input) (output, error) {
-		var date *time.Time
-		if in.withDate {
-			date = &day
-		}
-		sql, args := in.filter.whereForFilter(date)
+	fn := func(filter TaskFilter) (output, error) {
+		sql, args := filter.whereForFilter()
 		return output{SQL: sql, Args: args}, nil
 	}
-	cases := trial.Cases[input, output]{
+	cases := trial.Cases[TaskFilter, output]{
 		"day scope with date": {
-			Input:    input{withDate: true},
+			Input:    TaskFilter{Date: &day},
 			Expected: output{SQL: "WHERE DATE(created) = ?", Args: []any{"2024-01-15"}},
 		},
-		"id history omits date": {
-			Input: input{
-				withDate: false,
-				filter:   TaskFilter{ID: []string{"pipe-1"}},
-			},
+		"nil date omits date clause": {
+			Input: TaskFilter{ID: []string{"pipe-1"}},
 			Expected: output{
 				SQL:  "WHERE id IN (?)",
 				Args: []any{"pipe-1"},
 			},
 		},
-		"id history with type still omits date": {
-			Input: input{
-				withDate: false,
-				filter: TaskFilter{
-					ID:   []string{"pipe-1"},
-					Type: []string{"alpha"},
-				},
+		"nil date with type still omits date": {
+			Input: TaskFilter{
+				ID:   []string{"pipe-1"},
+				Type: []string{"alpha"},
 			},
 			Expected: output{
 				SQL:  "WHERE id IN (?) AND type IN (?)",
@@ -241,10 +227,7 @@ func TestTaskFilter_whereForFilter(t *testing.T) {
 			},
 		},
 		"day scope with id still includes date": {
-			Input: input{
-				withDate: true,
-				filter:   TaskFilter{ID: []string{"pipe-1"}},
-			},
+			Input: TaskFilter{Date: &day, ID: []string{"pipe-1"}},
 			Expected: output{
 				SQL:  "WHERE DATE(created) = ? AND id IN (?)",
 				Args: []any{"2024-01-15", "pipe-1"},

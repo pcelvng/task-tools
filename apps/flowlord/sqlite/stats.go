@@ -260,7 +260,7 @@ func (ts TaskStats) TotalCounts() TaskCounts {
 }
 
 // HourlyCounts returns total and hourly counts with optional filtering by type, job, and result.
-// ID filtering is not supported here; use SQLite.GetHourlyCountsByDate when filter.ID is set.
+// ID filtering is not applied here; the tasks page omits the hourly chart in ID history mode.
 // The hourly array contains 24 TaskCounts where index represents the hour (0-23).
 func (ts TaskStats) HourlyCounts(filter *TaskFilter) (TaskCounts, [24]TaskCounts) {
 	var total TaskCounts
@@ -303,12 +303,4 @@ func addTimesToHourly(times []time.Time, result string, filter *TaskFilter, tota
 	for _, t := range times {
 		incrementHourly(result, t.Hour(), total, hourly)
 	}
-}
-
-func addTaskHourlyCounts(tsk task.Task, filter *TaskFilter, total *TaskCounts, hourly *[24]TaskCounts) {
-	result := string(tsk.Result)
-	if !resultAllowed(result, filter) {
-		return
-	}
-	incrementHourly(result, tmpl.TaskTime(tsk).Hour(), total, hourly)
 }

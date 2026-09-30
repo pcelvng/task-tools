@@ -347,15 +347,9 @@ func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
 	}
 }
 
-// GetTasksByDate retrieves tasks for a specific date with optional filtering and pagination.
-func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView, int, error) {
-	return s.GetTasks(&date, filter)
-}
-
 // GetTasks retrieves tasks with optional filtering and pagination.
-// When date is non-nil, results are scoped to that calendar day (day view).
-// When date is nil, no date constraint is applied (ID history across retained days).
-func (s *SQLite) GetTasks(date *time.Time, filter *TaskFilter) ([]TaskView, int, error) {
+// Set filter.Date for day view; leave Date nil for ID history across retained days.
+func (s *SQLite) GetTasks(filter *TaskFilter) ([]TaskView, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -370,7 +364,7 @@ func (s *SQLite) GetTasks(date *time.Time, filter *TaskFilter) ([]TaskView, int,
 		filter.Page = 1
 	}
 
-	whereClause, args := filter.whereForFilter(date)
+	whereClause, args := filter.whereForFilter()
 
 	countQuery := "SELECT COUNT(*) FROM tasks " + whereClause
 	var totalCount int
@@ -422,7 +416,7 @@ func (s *SQLite) TypeJobKeys(filter *TaskFilter) (TaskStats, error) {
 	if filter == nil {
 		filter = &TaskFilter{}
 	}
-	whereClause, args := filter.whereForFilter(nil)
+	whereClause, args := filter.whereForFilter()
 
 	query := `SELECT DISTINCT type, job FROM tasks ` + whereClause
 	rows, err := s.db.Query(query, args...)
@@ -444,44 +438,6 @@ func (s *SQLite) TypeJobKeys(filter *TaskFilter) (TaskStats, error) {
 		data[key] = &Stats{}
 	}
 	return data, rows.Err()
-}
-
-// GetHourlyCountsByDate returns hourly task counts for a date, querying tasks directly so ID
-// filters (and all other filter fields) are applied per task.
-func (s *SQLite) GetHourlyCountsByDate(date time.Time, filter *TaskFilter) (TaskCounts, [24]TaskCounts, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if filter == nil {
-		filter = &TaskFilter{}
-	}
-	filter.Normalize()
-
-	whereClause, args := filter.whereForDate(date)
-
-	query := `SELECT id, type, job, info, result, meta, created, started, ended
-		FROM tasks ` + whereClause
-
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return TaskCounts{}, [24]TaskCounts{}, err
-	}
-	defer rows.Close()
-
-	var total TaskCounts
-	var hourly [24]TaskCounts
-	for rows.Next() {
-		var t task.Task
-		if err := rows.Scan(
-			&t.ID, &t.Type, &t.Job, &t.Info, &t.Result, &t.Meta,
-			&t.Created, &t.Started, &t.Ended,
-		); err != nil {
-			continue
-		}
-		addTaskHourlyCounts(t, filter, &total, &hourly)
-	}
-
-	return total, hourly, rows.Err()
 }
 
 // GetTaskRecapByDate creates a recap of tasks for a specific date

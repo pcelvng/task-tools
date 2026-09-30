@@ -468,6 +468,9 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	historyMode := len(filter.ID) > 0
+	if !historyMode {
+		filter.Date = &dt
+	}
 
 	var (
 		taskStats   sqlite.TaskStats
@@ -480,7 +483,7 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 	if historyMode {
 		queryStart := time.Now()
 		var err error
-		tasks, totalCount, err = tm.taskCache.GetTasks(nil, filter)
+		tasks, totalCount, err = tm.taskCache.GetTasks(filter)
 		queryTime = time.Since(queryStart)
 		if err != nil {
 			log.Printf("Error getting tasks by ID: %v", err)
@@ -507,7 +510,7 @@ func (tm *taskMaster) htmlTask(w http.ResponseWriter, r *http.Request) {
 		}
 
 		queryStart := time.Now()
-		tasks, totalCount, err = tm.taskCache.GetTasksByDate(dt, filter)
+		tasks, totalCount, err = tm.taskCache.GetTasks(filter)
 		queryTime = summaryTime + time.Since(queryStart)
 		if err != nil {
 			log.Printf("Error getting tasks: %v", err)

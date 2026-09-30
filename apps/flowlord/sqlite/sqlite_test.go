@@ -94,22 +94,6 @@ func TestDatesByType(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for invalid data type, got nil")
 	}
-
-	// Test backward compatibility methods
-	taskDates2, _ := db.GetDatesWithTasks()
-	if len(taskDates2) != len(taskDates) {
-		t.Error("GetDatesWithTasks() should return same results as DatesByType('tasks')")
-	}
-
-	alertDates2, _ := db.GetDatesWithAlerts()
-	if len(alertDates2) != len(alertDates) {
-		t.Error("GetDatesWithAlerts() should return same results as DatesByType('alerts')")
-	}
-
-	fileDates2, _ := db.GetDatesWithFiles()
-	if len(fileDates2) != len(fileDates) {
-		t.Error("GetDatesWithFiles() should return same results as DatesByType('files')")
-	}
 }
 
 func TestMigrationNormalizesEmptyResult(t *testing.T) {
