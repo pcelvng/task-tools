@@ -45,16 +45,13 @@ func (s *SQLite) AddAlert(t task.Task, message string) error {
 		taskID = "unknown"
 	}
 
-	// Extract job using helper function
-	job := extractJobFromTask(t)
-
 	// Get task time using tmpl.TaskTime function
 	taskTime := tmpl.TaskTime(t)
 
 	_, err := s.db.Exec(`
 		INSERT INTO alert_records (task_id, task_time, task_type, job, msg)
 		VALUES (?, ?, ?, ?, ?)
-	`, taskID, taskTime, t.Type, job, message)
+	`, taskID, taskTime, t.Type, t.Job, message)
 
 	if err != nil {
 		return err

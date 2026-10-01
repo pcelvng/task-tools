@@ -41,6 +41,21 @@ func (p Phase) Job() string {
 	return ""
 }
 
+// NormalizeJob copies job from Meta into Job when Job is empty.
+// Prefer setting Job at task creation; this covers legacy inbound tasks.
+func NormalizeJob(t *task.Task) {
+	if t == nil || t.Job != "" || t.Meta == "" {
+		return
+	}
+	values, err := url.ParseQuery(t.Meta)
+	if err != nil {
+		return
+	}
+	if j := values.Get("job"); j != "" {
+		t.Job = j
+	}
+}
+
 // Topic portion of the Task
 func (p Phase) Topic() string {
 	s := strings.Split(p.Task, ":")
@@ -117,9 +132,6 @@ func (c *Cache) Get(t task.Task) Phase {
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
 	job := t.Job
-	if job == "" {
-		job = values.Get("job")
-	}
 
 	if key == "*" { // search all workflows for first match
 		for _, phases := range c.Workflows {
@@ -166,9 +178,6 @@ func (c *Cache) Children(t task.Task) []Phase {
 	result := make([]Phase, 0)
 
 	key := values.Get("workflow")
-	if t.Job == "" {
-		t.Job = values.Get("job")
-	}
 	if key == "" {
 		return nil
 	}

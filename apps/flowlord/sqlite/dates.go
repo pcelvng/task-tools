@@ -49,50 +49,6 @@ func (s *SQLite) updateDateIndex(timestamp, dataType string) {
 	}
 }
 
-// GetDatesWithData returns a list of dates (YYYY-MM-DD format) that have any data
-// for tasks, alerts, or files within the retention period
-func (s *SQLite) GetDatesWithData() ([]string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	query := `
-		SELECT DISTINCT date_val FROM (
-			SELECT DISTINCT DATE(created) AS date_val FROM task_records
-			WHERE created >= datetime('now', '-' || ? || ' days')
-			UNION
-			SELECT DISTINCT DATE(created_at) AS date_val FROM alert_records
-			WHERE created_at >= datetime('now', '-' || ? || ' days')
-			UNION
-			SELECT DISTINCT DATE(received_at) AS date_val FROM file_messages
-			WHERE received_at >= datetime('now', '-' || ? || ' days')
-		)
-		ORDER BY date_val DESC
-	`
-
-	// Use retention period in days (default 90)
-	retentionDays := int(s.Retention.Hours() / 24)
-	if retentionDays == 0 {
-		retentionDays = 90
-	}
-
-	rows, err := s.db.Query(query, retentionDays, retentionDays, retentionDays)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var dates []string
-	for rows.Next() {
-		var date string
-		if err := rows.Scan(&date); err != nil {
-			continue
-		}
-		dates = append(dates, date)
-	}
-
-	return dates, nil
-}
-
 // DatesByType returns a list of dates (YYYY-MM-DD format) that have data for the specified type
 // dataType can be "tasks", "alerts", or "files"
 // This uses the date_index table for instant lookups
@@ -135,21 +91,6 @@ func (s *SQLite) DatesByType(dataType string) ([]string, error) {
 	}
 
 	return dates, nil
-}
-
-// GetDatesWithTasks returns a list of dates (YYYY-MM-DD format) that have task records
-func (s *SQLite) GetDatesWithTasks() ([]string, error) {
-	return s.DatesByType("tasks")
-}
-
-// GetDatesWithAlerts returns a list of dates (YYYY-MM-DD format) that have alert records
-func (s *SQLite) GetDatesWithAlerts() ([]string, error) {
-	return s.DatesByType("alerts")
-}
-
-// GetDatesWithFiles returns a list of dates (YYYY-MM-DD format) that have file message records
-func (s *SQLite) GetDatesWithFiles() ([]string, error) {
-	return s.DatesByType("files")
 }
 
 // RebuildDateIndex scans all tables and rebuilds the date_index table

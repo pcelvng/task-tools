@@ -153,6 +153,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task1:j4 complete": {
 			Input: task.Task{
 				Type:   "task1",
+				Job:    "t2",
 				Info:   "?date=2019-12-12",
 				Result: task.CompleteResult,
 				ID:     "UUID_task1",
@@ -214,6 +215,7 @@ func TestTaskMaster_Process(t *testing.T) {
 		"task6 requires file": {
 			Input: task.Task{
 				Type:   "task5",
+				Job:    "t5",
 				ID:     "ID",
 				Meta:   "workflow=f1.toml&file=file.txt&job=t5",
 				Result: task.CompleteResult,

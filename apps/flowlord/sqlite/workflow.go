@@ -134,12 +134,7 @@ func (s *SQLite) Get(t task.Task) PhaseDB {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	values, _ := url.ParseQuery(t.Meta)
-	//key := values.Get("workflow")
 	job := t.Job
-	if job == "" {
-		job = values.Get("job")
-	}
 	key := t.Type
 	if job != "" {
 		key += ":" + job
@@ -187,9 +182,6 @@ func (s *SQLite) Children(t task.Task) []Phase {
 	values, _ := url.ParseQuery(t.Meta)
 	key := values.Get("workflow")
 	job := t.Job
-	if job == "" {
-		job = values.Get("job")
-	}
 
 	if key == "" {
 		return nil

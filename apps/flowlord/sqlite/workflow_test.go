@@ -230,15 +230,15 @@ func TestGet(t *testing.T) {
 			Expected: Phase{Task: "task2", DependsOn: "task1"},
 		},
 		"task=t2 with job=j1": {
-			Input:    task.Task{Type: "t2", Meta: "workflow=w2job.toml&job=j1"},
+			Input:    task.Task{Type: "t2", Job: "j1", Meta: "workflow=w2job.toml"},
 			Expected: Phase{Task: "t2:j1", Rule: "job=j1"},
 		},
 		"job does not exist": {
-			Input:    task.Task{Type: "t2", Meta: "workflow=w2job.toml&job=invalid"},
+			Input:    task.Task{Type: "t2", Job: "invalid", Meta: "workflow=w2job.toml"},
 			Expected: Phase{},
 		},
 		"wildcard search": {
-			Input:    task.Task{Type: "t2", Meta: "workflow=*&job=j3"},
+			Input:    task.Task{Type: "t2", Job: "j3", Meta: "workflow=*"},
 			Expected: Phase{Task: "t2:j3"},
 		},
 		"wildcard with same task in different files": { // picks first match, results will vary
@@ -290,7 +290,7 @@ func TestChildren(t *testing.T) {
 			Expected: []Phase{},
 		},
 		"task1:j4": {
-			Input: task.Task{Type: "task1", Meta: "workflow=workflow.toml&job=j4"},
+			Input: task.Task{Type: "task1", Job: "j4", Meta: "workflow=workflow.toml"},
 			Expected: []Phase{
 				{Task: "task2", DependsOn: "task1"},
 				{Task: "task5", DependsOn: "task1:j4"},

@@ -43,7 +43,7 @@
                             data-full-text="{{.TaskID}}"
                             title="{{if and .TaskID (ne .TaskID "unknown")}}Click link to view tasks, or click cell for actions{{else}}Click for actions{{end}}">
                             {{if and .TaskID (ne .TaskID "unknown")}}
-                            <a class="task-id-link" href="{{if $.isLocal}}./task_preview.html{{else}}/web/task{{end}}?date={{if .TaskTime.IsZero}}{{.CreatedAt.Format "2006-01-02"}}{{else}}{{.TaskTime.Format "2006-01-02"}}{{end}}&id={{.TaskID}}">{{.TaskID}}</a>
+                            <a class="task-id-link" href="{{if $.isLocal}}./task_preview.html{{else}}/web/task{{end}}?id={{.TaskID}}">{{.TaskID}}</a>
                             {{else}}
                             {{.TaskID}}
                             {{end}}

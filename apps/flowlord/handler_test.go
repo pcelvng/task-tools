@@ -428,6 +428,14 @@ func TestAlertHTML(t *testing.T) {
 	datesWithData := []string{"2024-01-14", "2024-01-15", "2024-01-16"}
 	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"), datesWithData)
 
+	html := string(htmlContent)
+	if !strings.Contains(html, `class="task-id-link" href="./task_preview.html?id=task-001"`) {
+		t.Error("alert task link should use id-only history URL")
+	}
+	if strings.Contains(html, `class="task-id-link" href="./task_preview.html?date=`) {
+		t.Error("alert task link should not include date from task_time")
+	}
+
 	// Validate HTML using the new function
 	if err := validateHTML(htmlContent); err != nil {
 		t.Errorf("HTML validation failed: %v", err)
@@ -548,7 +556,7 @@ func TestTaskHTML(t *testing.T) {
 	// Pass sample dates with data for calendar highlighting
 	datesWithData := []string{"2024-01-15"}
 	_, hourlyStats := taskStats.HourlyCounts(filter)
-	html := taskHTML(testTasks, taskStats, len(testTasks), date, filter, datesWithData, 0, hourlyStats)
+	html := taskHTML(testTasks, taskStats, len(testTasks), date, filter, datesWithData, 0, hourlyStats, false)
 
 	// Validate HTML using the new function
 	if err := validateHTML(html); err != nil {
@@ -855,5 +863,43 @@ func TestRerunProducerFailure(t *testing.T) {
 	}
 	if newAttempts != 1 {
 		t.Fatalf("rerun attempts after failure = %d, want 1", newAttempts)
+	}
+}
+
+func TestHTMLTask_historyModeFilterOptions(t *testing.T) {
+	sqlDB := &sqlite.SQLite{LocalPath: ":memory:"}
+	if err := sqlDB.Open(testPath+"/workflow/f3.toml", nil); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.Add(task.Task{
+		ID: "pipe-1", Type: "alpha", Job: "load",
+		Created: "2024-01-15T10:00:00Z", Result: task.CompleteResult,
+	})
+	sqlDB.Add(task.Task{
+		ID: "pipe-1", Type: "zebra", Job: "check",
+		Created: "2024-01-16T09:00:00Z", Result: task.ErrResult,
+	})
+
+	tm := &taskMaster{taskCache: sqlDB}
+	r := httptest.NewRequest(http.MethodGet, "/web/task?id=pipe-1", nil)
+	w := httptest.NewRecorder()
+	tm.htmlTask(w, r)
+
+	body := w.Body.String()
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if !strings.Contains(body, `taskTypes: ["alpha","zebra"]`) {
+		t.Errorf("history mode column filters missing type options; got taskTypes snippet from body")
+		if idx := strings.Index(body, "taskTypes:"); idx >= 0 {
+			end := idx + 80
+			if end > len(body) {
+				end = len(body)
+			}
+			t.Logf("snippet: %s", body[idx:end])
+		}
+	}
+	if !strings.Contains(body, `"load"`) || !strings.Contains(body, `"check"`) {
+		t.Error("history mode column filters missing job options")
 	}
 }

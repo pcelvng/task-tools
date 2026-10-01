@@ -13,9 +13,25 @@
 - **Alerting** - Slack notifications for failed tasks and incomplete jobs with smart frequency management
 - **RESTful API** - Web UI and API for monitoring workflows, viewing task history, and managing alerts
 
-[![Static Badge](https://img.shields.io/badge/API%20Docs-green)](API.md)
-
 <br clear="all"/>
+
+## Contents
+
+- [Overview](#overview)
+- [Monitoring & Troubleshooting](#monitoring--troubleshooting)
+- [Web Dashboard](#web-dashboard)
+  - [Row actions (Tasks vs Workflow)](#row-actions-tasks-vs-workflow)
+- [Workflow](#workflow)
+  - [Phase](#phase)
+  - [Template](#template)
+- [Rule](#rule)
+  - [cron](#cron)
+  - [files](#files)
+  - [require](#require)
+  - [batch](#batch)
+- [API](#api)
+  - [POST `/backload`](#post-backload)
+  - [POST `/rerun`](#post-rerun)
 
 ## Overview 
 
@@ -61,12 +77,12 @@ The tasks and workflow tables both expose a leading action column, but the behav
 
 | View | Row control | What it does |
 |------|-------------|----------------|
-| **Tasks** (`/web/task`) | Rerun (replay icon) | Opens a confirmation modal, then [`POST /rerun`](API.md#post-rerun) to re-queue **that same task** (same ID and info; retry-related meta is stripped and `rerun=manual` is set). Does **not** open the backload form. |
+| **Tasks** (`/web/task`) | Rerun (replay icon) | Opens a confirmation modal, then [`POST /rerun`](#post-rerun) to re-queue **that same task** (same ID and info; retry-related meta is stripped and `rerun=manual` is set). Does **not** open the backload form. |
 | **Workflow** (`/web/workflow`) | Run (play icon) | Navigates to `/web/backload` with query parameters prefilled from the phase row (task type, job, workflow file). Optional `preview=1` triggers a dry-run preview on the backload page. |
 
 Use **backload** when you want to generate tasks from phase rules and templates (single time, date range, or batch). Use **rerun** on the tasks page when you want another attempt of an **existing** task record without leaving the task history view.
 
-**Rerun vs automatic retry:** When a task finishes with `error`, Flowlord may retry it automatically according to the phase `retry` count and `retry_delay` rule—each retry reuses the **same task ID** and info and updates retry metadata (`retry`, `delayed`, etc.). A manual rerun does the same ID/info reuse for operators but clears automatic retry fields, tags `rerun=manual`, and sends immediately without waiting for `retry_delay`. See [POST `/rerun`](API.md#post-rerun) in the API doc.
+**Rerun vs automatic retry:** When a task finishes with `error`, Flowlord may retry it automatically according to the phase `retry` count and `retry_delay` rule—each retry reuses the **same task ID** and info and updates retry metadata (`retry`, `delayed`, etc.). A manual rerun does the same ID/info reuse for operators but clears automatic retry fields, tags `rerun=manual`, and sends immediately without waiting for `retry_delay`. See [POST `/rerun`](#post-rerun).
 
 The shared helper `buildBackloadUrl` in `handler/static/utils.js` is wired on the workflow page only (`enableRowBackloadActions` in `workflow.tmpl`). The tasks page registers `enableRowRerunActions` in `task.js` instead.
 
@@ -74,8 +90,7 @@ The shared helper `buildBackloadUrl` in `handler/static/utils.js` is wired on th
 |:----------:|:----------:|:-----------:|:-------------:|
 | [![Files View](../../internal/docs/img/flowlord_files.png)](../../internal/docs/img/flowlord_files.png) | [![Tasks View](../../internal/docs/img/flowlord_tasks.png)](../../internal/docs/img/flowlord_tasks.png) | [![Alerts View](../../internal/docs/img/flowlord_alerts.png)](../../internal/docs/img/flowlord_alerts.png) | [![Workflow View](../../internal/docs/img/flowlord_workflow.png)](../../internal/docs/img/flowlord_workflow.png) |
 
-
-## workflow 
+## Workflow
 A workflow consists of one or more phases as a way to define of how a set of task is to be scheduled and run and the dependencies between them. 
 
 ``` toml 
@@ -137,7 +152,7 @@ The timestamp is derived from the parent task's info string and supports the fol
 | hour  | 2006-01-02T15             | ?hour=2000-01-02T13        | 
 | time  | 2006-01-02T15:04:05Z07:00 | ?time=2000-01-02T13:12:15Z | 
 
-## rule
+## Rule
 defition on how the phase's task/job is to be created 
 
 ### cron 
@@ -207,4 +222,74 @@ task="worker:lastweek"
 rule="cron=0 7 7 * * *&for=-168h&by=day
 template=?day={yyyy}-{mm}-{dd}
 ```
+
+## API
+
+Operations API on `status_port` (default **8080**). Base URL: `http://<host>:<status_port>/`. Set `status_port = 0` to disable HTTP (orchestration only).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/status` | Liveness check (`ok`). |
+| GET | `/info` | App stats, workflow phase summary, cache timing (JSON). |
+| GET | `/refresh` | Reload workflows from disk, recycle cache retention, sync SQLite backup (JSON). |
+| GET | `/recap` | Today's task recap (JSON if `Accept: application/json`, else plain text). |
+| GET | `/task/{id}` | Task journal for a task ID (all attempts/events). |
+| GET | `/notify` | Slack OK notification with basic app stats (requires Slack config). |
+| POST | `/backload` | Generate tasks from a phase template (dry run or execute). |
+| POST | `/rerun` | Re-queue an existing task attempt from the cache. |
+
+### POST `/backload`
+
+Generate tasks from a workflow phase template. Flowlord looks up the phase by `Task` / `Job` / `Workflow`, takes its `template` (and default meta from the phase `rule` if you omit meta fields), then expands tasks over a single time (`At`) or a range (`From`–`To`) using the `By` iterator.
+
+**Time selection:** use either `At` (one timestamp) or `From` / `To` (range). Accepted formats: `2006-01-02`, `2006-01-02T15`, or RFC3339. If none are set, today is used. `By` defaults to `day` (`hour`, `week`, and `month` are also valid).
+
+**Meta:** provide either `meta` (key → list of values; each combination yields a task) or `meta-file` (JSON lines path), not both. If both are empty, phase rule defaults apply.
+
+**Execute:**
+
+- `Execute` omitted / `false` — dry run; status prefixed with `DRY RUN ONLY:`.
+- `Execute: true` — add generated tasks to cache and send each to the message bus.
+
+Example request (comments for illustration; omit them in real JSON):
+
+```jsonc
+{
+  "Task": "worker",              // phase task / topic (required)
+  "Job": "daily",                // optional job; omit or "" if none
+  "Workflow": "path/to/wf.toml", // optional; disambiguates when the same task exists in multiple files
+  "From": "2024-01-01",          // range start (use with To); formats: date, hour, or RFC3339
+  "To": "2024-01-07",            // range end
+  // "At": "2024-01-15T10",      // alternative to From/To: single timestamp only
+  "By": "day",                   // iterator: day (default), hour, week, month
+  "meta": {                      // optional; each key's values are crossed into tasks
+    "region": ["us", "eu"]
+  },
+  // "meta-file": "gs://bucket/rows.json",  // alternative to meta: one task per JSON line
+  "Execute": false               // false/omit = dry run; true = cache + send to bus
+}
+```
+
+**Response (200):** `{ Status, Count, Tasks }`. Errors: `400` bad input / missing template / meta conflict; `500` send failure in execute mode.
+
+### POST `/rerun`
+
+Re-queue an existing task attempt. Same task ID and `info` as the original (like automatic retry), but operator-driven: does not increment phase `retry`, does not honor `retry_delay`, and does not require a prior failure.
+
+**Body:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `type` | yes | Task type (topic). |
+| `job` | no | Job name (empty if none). |
+| `id` | yes | Task ID to reuse. |
+| `created` | yes | `created` timestamp of the cache row to rerun. |
+
+```json
+{ "type": "task1", "job": "", "id": "abc-123", "created": "2024-01-15T10:00:00Z" }
+```
+
+Loads the matching cache row, builds a new outbound task with `task.NewWithID`, strips `retry` / `retried` / `delayed`, sets `rerun=manual`, and sends immediately.
+
+**Response (200):** `{ Status: "Rerun queued", Task }`. Errors: `400` invalid/missing fields; `404` no matching record; `500` bus send failure.
 

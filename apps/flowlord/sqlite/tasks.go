@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"net/url"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/pcelvng/task/bus"
 
 	"github.com/pcelvng/task-tools/tmpl"
+	"github.com/pcelvng/task-tools/workflow"
 )
 
 // TaskJob describes info about completed tasks that are within the cache
@@ -44,6 +44,7 @@ func (s *SQLite) Add(t task.Task) {
 	if t.ID == "" {
 		return
 	}
+	workflow.NormalizeJob(&t)
 	if t.Result == "" {
 		t.Result = ResultRunning
 	}
@@ -346,12 +347,12 @@ func (s *SQLite) SendFunc(p bus.Producer) func(string, *task.Task) error {
 	}
 }
 
-// GetTasksByDate retrieves tasks for a specific date with optional filtering and pagination
-func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView, int, error) {
+// GetTasks retrieves tasks with optional filtering and pagination.
+// Set filter.Date for day view; leave Date nil for ID history across retained days.
+func (s *SQLite) GetTasks(filter *TaskFilter) ([]TaskView, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Handle nil filter or set defaults
 	if filter == nil {
 		filter = &TaskFilter{}
 	}
@@ -360,12 +361,11 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 		filter.Limit = DefaultPageSize
 	}
 	if filter.Page <= 0 {
-		filter.Page = 1 // default to first page
+		filter.Page = 1
 	}
 
-	whereClause, args := filter.whereForDate(date)
+	whereClause, args := filter.whereForFilter()
 
-	// Get total count of filtered results
 	countQuery := "SELECT COUNT(*) FROM tasks " + whereClause
 	var totalCount int
 	err := s.db.QueryRow(countQuery, args...).Scan(&totalCount)
@@ -373,13 +373,11 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 		return nil, 0, err
 	}
 
-	// Build main query with pagination
 	query := `SELECT id, type, job, info, result, meta, msg, task_seconds, task_time, queue_seconds, queue_time, created, started, ended
 		FROM tasks ` + whereClause + `
 		` + filter.orderByClause() + `
 		LIMIT ? OFFSET ?`
 
-	// Calculate offset from page number
 	offset := (filter.Page - 1) * filter.Limit
 	args = append(args, filter.Limit, offset)
 
@@ -407,42 +405,39 @@ func (s *SQLite) GetTasksByDate(date time.Time, filter *TaskFilter) ([]TaskView,
 	return tasks, totalCount, nil
 }
 
-// GetHourlyCountsByDate returns hourly task counts for a date, querying tasks directly so ID
-// filters (and all other filter fields) are applied per task.
-func (s *SQLite) GetHourlyCountsByDate(date time.Time, filter *TaskFilter) (TaskCounts, [24]TaskCounts, error) {
+// TypeJobKeys returns TaskStats keyed by distinct type:job matching the filter.
+// Stats values are empty; only map keys are used (UniqueTypes / JobsByType) for
+// column filter dropdowns. Pass an ID-scoped filter in history mode so options
+// reflect that task's variants without applying type/job/result narrowing.
+func (s *SQLite) TypeJobKeys(filter *TaskFilter) (TaskStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if filter == nil {
 		filter = &TaskFilter{}
 	}
-	filter.Normalize()
+	whereClause, args := filter.whereForFilter()
 
-	whereClause, args := filter.whereForDate(date)
-
-	query := `SELECT id, type, job, info, result, meta, created, started, ended
-		FROM tasks ` + whereClause
-
+	query := `SELECT DISTINCT type, job FROM tasks ` + whereClause
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		return TaskCounts{}, [24]TaskCounts{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	var total TaskCounts
-	var hourly [24]TaskCounts
+	data := make(TaskStats)
 	for rows.Next() {
-		var t task.Task
-		if err := rows.Scan(
-			&t.ID, &t.Type, &t.Job, &t.Info, &t.Result, &t.Meta,
-			&t.Created, &t.Started, &t.Ended,
-		); err != nil {
+		var typ, job string
+		if err := rows.Scan(&typ, &job); err != nil {
 			continue
 		}
-		addTaskHourlyCounts(t, filter, &total, &hourly)
+		key := strings.TrimRight(typ+":"+job, ":")
+		if key == "" {
+			continue
+		}
+		data[key] = &Stats{}
 	}
-
-	return total, hourly, rows.Err()
+	return data, rows.Err()
 }
 
 // GetTaskRecapByDate creates a recap of tasks for a specific date
@@ -474,12 +469,8 @@ func (s *SQLite) GetTaskRecapByDate(date time.Time) (TaskStats, error) {
 			continue
 		}
 
-		job := t.Job
-		if job == "" {
-			v, _ := url.ParseQuery(t.Meta)
-			job = v.Get("job")
-		}
-		key := strings.TrimRight(t.Type+":"+job, ":")
+		workflow.NormalizeJob(&t)
+		key := strings.TrimRight(t.Type+":"+t.Job, ":")
 		stat, found := data[key]
 		if !found {
 			stat = &Stats{
@@ -496,15 +487,4 @@ func (s *SQLite) GetTaskRecapByDate(date time.Time) (TaskStats, error) {
 	}
 
 	return TaskStats(data), nil
-}
-
-// extractJobFromTask is a helper function to get job from task
-func extractJobFromTask(t task.Task) string {
-	job := t.Job
-	if job == "" {
-		if meta, err := url.ParseQuery(t.Meta); err == nil {
-			job = meta.Get("job")
-		}
-	}
-	return job
 }

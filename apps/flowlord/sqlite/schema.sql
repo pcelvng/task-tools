@@ -25,6 +25,7 @@ CREATE INDEX IF NOT EXISTS idx_task_records_job ON task_records (job);
 CREATE INDEX IF NOT EXISTS idx_task_records_created ON task_records (created);
 CREATE INDEX IF NOT EXISTS idx_task_records_type_job ON task_records (type, job);
 CREATE INDEX IF NOT EXISTS idx_task_records_date_range ON task_records (created, ended);
+CREATE INDEX IF NOT EXISTS idx_task_records_id_created ON task_records (id, created);
 
 -- Create a view that calculates task and queue times
 DROP VIEW IF EXISTS tasks;

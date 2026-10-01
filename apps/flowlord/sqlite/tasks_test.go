@@ -9,7 +9,7 @@ import (
 	"github.com/pcelvng/task/bus/nop"
 )
 
-func TestGetTasksByDate(t *testing.T) {
+func TestGetTasks(t *testing.T) {
 	db := &SQLite{LocalPath: ":memory:"}
 	if err := db.initDB(); err != nil {
 		t.Fatalf("initDB: %v", err)
@@ -27,9 +27,9 @@ func TestGetTasksByDate(t *testing.T) {
 	db.Add(task.Task{ID: "shared", Type: "zebra", Job: "load", Created: "2024-01-15T14:00:00Z", Result: task.ErrResult})
 
 	t.Run("sort type asc", func(t *testing.T) {
-		tasks, _, err := db.GetTasksByDate(day, &TaskFilter{Sort: "type", Direction: "asc", Page: 1, Limit: 10})
+		tasks, _, err := db.GetTasks(&TaskFilter{Date: &day, Sort: "type", Direction: "asc", Page: 1, Limit: 10})
 		if err != nil {
-			t.Fatalf("GetTasksByDate: %v", err)
+			t.Fatalf("GetTasks: %v", err)
 		}
 		if len(tasks) < 3 {
 			t.Fatalf("expected at least 3 tasks, got %d", len(tasks))
@@ -45,9 +45,9 @@ func TestGetTasksByDate(t *testing.T) {
 	})
 
 	t.Run("default created desc", func(t *testing.T) {
-		tasks, _, err := db.GetTasksByDate(day, &TaskFilter{Page: 1, Limit: 10})
+		tasks, _, err := db.GetTasks(&TaskFilter{Date: &day, Page: 1, Limit: 10})
 		if err != nil {
-			t.Fatalf("GetTasksByDate default: %v", err)
+			t.Fatalf("GetTasks default: %v", err)
 		}
 		if len(tasks) == 0 {
 			t.Fatal("expected tasks")
@@ -58,8 +58,8 @@ func TestGetTasksByDate(t *testing.T) {
 	})
 
 	t.Run("multi type and job", func(t *testing.T) {
-		tasks, count, err := db.GetTasksByDate(day, &TaskFilter{
-			Type: []string{"alpha", "zebra"}, Job: []string{"load"}, Page: 1, Limit: 10,
+		tasks, count, err := db.GetTasks(&TaskFilter{
+			Date: &day, Type: []string{"alpha", "zebra"}, Job: []string{"load"}, Page: 1, Limit: 10,
 		})
 		if err != nil {
 			t.Fatalf("multi type: %v", err)
@@ -70,8 +70,8 @@ func TestGetTasksByDate(t *testing.T) {
 	})
 
 	t.Run("multi result", func(t *testing.T) {
-		_, count, err := db.GetTasksByDate(day, &TaskFilter{
-			Result: []string{"error", "complete"}, Type: []string{"alpha"}, Page: 1, Limit: 10,
+		_, count, err := db.GetTasks(&TaskFilter{
+			Date: &day, Result: []string{"error", "complete"}, Type: []string{"alpha"}, Page: 1, Limit: 10,
 		})
 		if err != nil {
 			t.Fatalf("multi result: %v", err)
@@ -82,8 +82,8 @@ func TestGetTasksByDate(t *testing.T) {
 	})
 
 	t.Run("multi id", func(t *testing.T) {
-		tasks, count, err := db.GetTasksByDate(day, &TaskFilter{
-			ID: []string{"a", "c"}, Page: 1, Limit: 10,
+		tasks, count, err := db.GetTasks(&TaskFilter{
+			Date: &day, ID: []string{"a", "c"}, Page: 1, Limit: 10,
 		})
 		if err != nil {
 			t.Fatalf("multi id: %v", err)
@@ -94,8 +94,8 @@ func TestGetTasksByDate(t *testing.T) {
 	})
 
 	t.Run("id and type", func(t *testing.T) {
-		tasks, count, err := db.GetTasksByDate(day, &TaskFilter{
-			ID: []string{"shared"}, Type: []string{"zebra"}, Page: 1, Limit: 10,
+		tasks, count, err := db.GetTasks(&TaskFilter{
+			Date: &day, ID: []string{"shared"}, Type: []string{"zebra"}, Page: 1, Limit: 10,
 		})
 		if err != nil {
 			t.Fatalf("id+type: %v", err)
@@ -106,84 +106,103 @@ func TestGetTasksByDate(t *testing.T) {
 	})
 }
 
-func TestGetHourlyCountsByDate(t *testing.T) {
+func TestGetTasks_idHistory(t *testing.T) {
 	db := &SQLite{LocalPath: ":memory:"}
 	if err := db.initDB(); err != nil {
 		t.Fatalf("initDB: %v", err)
 	}
 	defer db.Close()
 
-	day := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	db.Add(task.Task{
-		ID: "a", Type: "alpha", Job: "load",
-		Created: "2024-01-15T10:00:00Z", Meta: "cron=2024-01-15T10",
-		Result: task.CompleteResult,
-	})
-	db.Add(task.Task{
-		ID: "b", Type: "alpha", Job: "load",
-		Created: "2024-01-15T11:00:00Z", Meta: "cron=2024-01-15T11",
-		Result: task.ErrResult,
-	})
-	db.Add(task.Task{
-		ID: "c", Type: "beta", Job: "check",
-		Created: "2024-01-15T12:00:00Z", Meta: "cron=2024-01-15T12",
-		Result: task.CompleteResult,
-	})
+	day15 := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-15T10:00:00Z", Result: task.ErrResult})
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-16T09:00:00Z", Result: task.CompleteResult})
+	db.Add(task.Task{ID: "other", Type: "alpha", Job: "load", Created: "2024-01-15T11:00:00Z", Result: task.CompleteResult})
 
-	type input struct {
-		filter TaskFilter
+	type output struct {
+		Count int
+		IDs   []string
 	}
-	type expect struct {
-		total  TaskCounts
-		hour10 TaskCounts
-		hour11 TaskCounts
-		hour12 TaskCounts
-	}
-
-	fn := func(in input) (expect, error) {
-		total, hourly, err := db.GetHourlyCountsByDate(day, &in.filter)
+	fn := func(filter TaskFilter) (output, error) {
+		filter.Page = 1
+		filter.Limit = 10
+		tasks, count, err := db.GetTasks(&filter)
 		if err != nil {
-			return expect{}, err
+			return output{}, err
 		}
-		return expect{
-			total:  total,
-			hour10: hourly[10],
-			hour11: hourly[11],
-			hour12: hourly[12],
-		}, nil
+		ids := make([]string, len(tasks))
+		for i, tv := range tasks {
+			ids[i] = tv.ID + "@" + tv.Created[:10]
+		}
+		return output{Count: count, IDs: ids}, nil
 	}
+	cases := trial.Cases[TaskFilter, output]{
+		"nil date returns all attempts for id": {
+			Input: TaskFilter{ID: []string{"pipe-1"}},
+			Expected: output{
+				Count: 2,
+				IDs:   []string{"pipe-1@2024-01-16", "pipe-1@2024-01-15"},
+			},
+		},
+		"date scope still day-bounded without id": {
+			Input: TaskFilter{Date: &day15},
+			Expected: output{
+				Count: 2,
+				IDs:   []string{"other@2024-01-15", "pipe-1@2024-01-15"},
+			},
+		},
+		"date scope with id stays on that day": {
+			Input: TaskFilter{Date: &day15, ID: []string{"pipe-1"}},
+			Expected: output{
+				Count: 1,
+				IDs:   []string{"pipe-1@2024-01-15"},
+			},
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
 
-	cases := trial.Cases[input, expect]{
-		"id only": {
-			Input: input{filter: TaskFilter{ID: []string{"a"}}},
-			Expected: expect{
-				total:  TaskCounts{Total: 1, Completed: 1},
-				hour10: TaskCounts{Total: 1, Completed: 1},
+func TestTypeJobKeys(t *testing.T) {
+	db := &SQLite{LocalPath: ":memory:"}
+	if err := db.initDB(); err != nil {
+		t.Fatalf("initDB: %v", err)
+	}
+	defer db.Close()
+
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-15T10:00:00Z", Result: task.ErrResult})
+	db.Add(task.Task{ID: "pipe-1", Type: "alpha", Job: "load", Created: "2024-01-16T09:00:00Z", Result: task.CompleteResult})
+	db.Add(task.Task{ID: "pipe-1", Type: "zebra", Job: "check", Created: "2024-01-16T11:00:00Z", Result: task.CompleteResult})
+	db.Add(task.Task{ID: "other", Type: "alpha", Job: "import", Created: "2024-01-15T11:00:00Z", Result: task.CompleteResult})
+
+	type output struct {
+		Types []string
+		Jobs  map[string][]string
+	}
+	fn := func(filter TaskFilter) (output, error) {
+		stats, err := db.TypeJobKeys(&filter)
+		if err != nil {
+			return output{}, err
+		}
+		return output{Types: stats.UniqueTypes(), Jobs: stats.JobsByType()}, nil
+	}
+	cases := trial.Cases[TaskFilter, output]{
+		"history mode empty stats bug: id returns distinct type/job keys": {
+			Input: TaskFilter{ID: []string{"pipe-1"}},
+			Expected: output{
+				Types: []string{"alpha", "zebra"},
+				Jobs: map[string][]string{
+					"alpha": {"load"},
+					"zebra": {"check"},
+				},
 			},
 		},
-		"id and result": {
-			Input: input{filter: TaskFilter{
-				ID: []string{"a", "b"}, Result: []string{"error"},
-			}},
-			Expected: expect{
-				total:  TaskCounts{Total: 1, Error: 1},
-				hour11: TaskCounts{Total: 1, Error: 1},
+		"id scope ignores other tasks": {
+			Input: TaskFilter{ID: []string{"other"}},
+			Expected: output{
+				Types: []string{"alpha"},
+				Jobs: map[string][]string{
+					"alpha": {"import"},
+				},
 			},
-		},
-		"id and type": {
-			Input: input{filter: TaskFilter{
-				ID: []string{"c"}, Type: []string{"beta"},
-			}},
-			Expected: expect{
-				total:  TaskCounts{Total: 1, Completed: 1},
-				hour12: TaskCounts{Total: 1, Completed: 1},
-			},
-		},
-		"id and type mismatch": {
-			Input: input{filter: TaskFilter{
-				ID: []string{"c"}, Type: []string{"alpha"},
-			}},
-			Expected: expect{},
 		},
 	}
 	trial.New(fn, cases).SubTest(t)

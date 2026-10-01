@@ -19,15 +19,17 @@ const (
 // Empty / nil slice fields are ignored in the query.
 // Type, Job, and Result support multi-select via comma-separated or repeated query params
 // (parsed with github.com/jbsmith7741/uri).
+// Date is set by the handler (not from URI unmarshal): nil means no day scope (ID history).
 type TaskFilter struct {
-	ID        []string `uri:"id"`
-	Type      []string `uri:"type"`
-	Job       []string `uri:"job"`
-	Result    []string `uri:"result"` // complete, error, alert, warn, or running
-	Sort      string   `uri:"sort"`
-	Direction string   `uri:"direction"` // "asc" or "desc"
-	Page      int      `uri:"page"`      // 1-based, default: 1
-	Limit     int      `uri:"-"`         // not taken from the URL
+	ID        []string   `uri:"id"`
+	Type      []string   `uri:"type"`
+	Job       []string   `uri:"job"`
+	Result    []string   `uri:"result"` // complete, error, alert, warn, or running
+	Sort      string     `uri:"sort"`
+	Direction string     `uri:"direction"` // "asc" or "desc"
+	Page      int        `uri:"page"` // 1-based, default: 1
+	Limit     int        `uri:"-"`    // not taken from the URL
+	Date      *time.Time `uri:"-"`    // nil = all dates; set = DATE(created) day scope
 }
 
 // taskSortColumns is the set of safe column names allowed in ORDER BY.
@@ -97,13 +99,17 @@ func (f *TaskFilter) orderByClause() string {
 	return "ORDER BY " + f.Sort + " " + dir
 }
 
-// whereForDate builds a WHERE clause for tasks on a given date with optional ID/type/job/result filters.
-func (f *TaskFilter) whereForDate(date time.Time) (string, []any) {
+// whereForFilter builds a WHERE clause from the filter fields.
+// When Date is non-nil, results are scoped to DATE(created) = that day (day view).
+// When Date is nil, no date constraint is applied (ID history view).
+func (f *TaskFilter) whereForFilter() (string, []any) {
 	if f == nil {
 		f = &TaskFilter{}
 	}
 	w := &whereBuilder{}
-	w.And("DATE(created) = ?", date.Format("2006-01-02"))
+	if f.Date != nil {
+		w.And("DATE(created) = ?", f.Date.Format("2006-01-02"))
+	}
 	w.In("id", f.ID)
 	w.In("type", f.Type)
 	w.In("job", f.Job)

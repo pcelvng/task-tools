@@ -25,6 +25,7 @@ import (
 	"github.com/pcelvng/task-tools/file"
 	"github.com/pcelvng/task-tools/slack"
 	"github.com/pcelvng/task-tools/tmpl"
+	"github.com/pcelvng/task-tools/workflow"
 )
 
 var cronParser = cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
@@ -215,7 +216,7 @@ func pName(topic, job string) string {
 }
 
 func (tm *taskMaster) getAllChildren(topic, workflow, job string) (s []string) {
-	for _, c := range tm.taskCache.Children(task.Task{Type: topic, Meta: "workflow=" + workflow + "&job=" + job}) {
+	for _, c := range tm.taskCache.Children(task.Task{Type: topic, Job: job, Meta: "workflow=" + workflow}) {
 		job := strings.Trim(c.Topic()+":"+c.Job(), ":")
 		if children := tm.getAllChildren(c.Task, workflow, c.Job()); len(children) > 0 {
 			job += " ➞ " + strings.Join(children, " ➞ ")
@@ -395,6 +396,7 @@ func (tm *taskMaster) schedule() (err error) {
 // 2. start any downstream tasks
 // Send retry failed tasks to tm.failedTopic (only if the phase exists in the workflow)
 func (tm *taskMaster) Process(t *task.Task) error {
+	workflow.NormalizeJob(t)
 	meta, _ := url.ParseQuery(t.Meta)
 	tm.taskCache.Add(*t)
 	// attempt to retry
@@ -619,14 +621,8 @@ func (tm *taskMaster) formatImmediateAlert(tsk task.Task) string {
 	}
 
 	key := tsk.Type
-	job := tsk.Job
-	if job == "" {
-		if meta, err := url.ParseQuery(tsk.Meta); err == nil {
-			job = meta.Get("job")
-		}
-	}
-	if job != "" {
-		key += ":" + job
+	if tsk.Job != "" {
+		key += ":" + tsk.Job
 	}
 	message.WriteString(fmt.Sprintf("%s | %s\n", key, tsk.Msg))
 	return message.String()
