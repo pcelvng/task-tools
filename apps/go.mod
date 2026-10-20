@@ -3,10 +3,10 @@ module github.com/pcelvng/task-tools/apps
 go 1.25.0
 
 require (
-	cloud.google.com/go v0.121.6
+	cloud.google.com/go v0.123.0
 	cloud.google.com/go/bigquery v1.72.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/davecgh/go-spew v1.1.1
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/dustin/go-humanize v1.0.1
 	github.com/dustinevan/chron v1.0.0
 	github.com/go-chi/chi/v5 v5.2.4
@@ -55,7 +55,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
 	github.com/iancoleman/strcase v0.3.0 // indirect
 	github.com/itchyny/timefmt-go v0.1.5 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -70,8 +70,8 @@ require (
 	github.com/nsqio/go-nsq v1.1.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
