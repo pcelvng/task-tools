@@ -40,6 +40,19 @@ type TaskView struct {
 	Ended        string `json:"ended"`
 }
 
+const taskRecordsUpsertSQL = `
+	INSERT INTO task_records (id, type, job, info, result, meta, msg, created, started, ended)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT (TYPE, job, id, created) 
+	DO UPDATE SET
+		result = excluded.result,
+		meta = excluded.meta,
+		msg = excluded.msg,
+		started = excluded.started,
+		ended = excluded.ended
+	WHERE task_records.result IN ('` + ResultRunning + `', '` + ResultAlert + `')
+`
+
 func (s *SQLite) Add(t task.Task) {
 	if t.ID == "" {
 		return
@@ -52,18 +65,9 @@ func (s *SQLite) Add(t task.Task) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Use UPSERT to handle both new tasks and updates
-	result, err := s.db.Exec(`
-		INSERT INTO task_records (id, type, job, info, result, meta, msg, created, started, ended)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (TYPE, job, id, created) 
-		DO UPDATE SET
-			result = excluded.result,
-			meta = excluded.meta,
-			msg = excluded.msg,
-			started = excluded.started,
-			ended = excluded.ended
-	`,
+	// Use UPSERT to handle both new tasks and updates.
+	// Updates apply only while the row is running or alert; terminal complete/error rows are untouched.
+	result, err := s.db.Exec(taskRecordsUpsertSQL,
 		t.ID, t.Type, t.Job, t.Info, t.Result, t.Meta, t.Msg,
 		t.Created, t.Started, t.Ended,
 	)
@@ -78,13 +82,14 @@ func (s *SQLite) Add(t task.Task) {
 		s.updateDateIndex(t.Created, "tasks")
 	}
 
-	// Check if this was an update (conflict) rather than insert
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		// This indicates a conflict occurred and the record was updated
-		// Log this as it's unexpected for new task creation
-		log.Printf("WARNING: Task creation conflict detected - task %s:%s:%s at %s was updated instead of inserted",
-			t.Type, t.Job, t.ID, t.Created)
+		level := "WARNING"
+		if t.Result == task.AlertResult {
+			level = "INFO"
+		}
+		log.Printf("%s: Task upsert conflict suppressed - task %s:%s:%s at %s (result %s)",
+			level, t.Type, t.Job, t.ID, t.Created, t.Result)
 	}
 }
 

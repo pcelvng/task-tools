@@ -415,7 +415,13 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	if dt.IsZero() {
 		dt = time.Now()
 	}
-	alerts, err := tm.taskCache.GetAlertsByDate(dt)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page <= 0 {
+		page = 1
+	}
+	limit := sqlite.DefaultPageSize
+
+	alerts, totalCount, err := tm.taskCache.GetAlertsByDate(dt, page, limit)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -426,7 +432,7 @@ func (tm *taskMaster) htmlAlert(w http.ResponseWriter, r *http.Request) {
 	datesWithData, _ := tm.taskCache.DatesByType("alerts")
 
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(alertHTML(alerts, dt, datesWithData))
+	w.Write(alertHTML(alerts, dt, datesWithData, totalCount, page, limit))
 }
 
 // htmlFiles handles GET /web/files - displays file messages for a specific date
@@ -849,9 +855,20 @@ type AlertData struct {
 }
 
 // alertHTML will take a list of task and display a html webpage that is easily to digest what is going on.
-func alertHTML(tasks []sqlite.AlertRecord, date time.Time, datesWithData []string) []byte {
+func alertHTML(tasks []sqlite.AlertRecord, date time.Time, datesWithData []string, totalCount, page, limit int) []byte {
 	// Generate summary data using BuildCompactSummary
 	summary := sqlite.BuildCompactSummary(tasks)
+
+	totalPages := (totalCount + limit - 1) / limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	startIdx := (page-1)*limit + 1
+	endIdx := startIdx + len(tasks) - 1
+	if len(tasks) == 0 {
+		startIdx = 0
+		endIdx = 0
+	}
 
 	// Create data structure for template
 	data := map[string]interface{}{
@@ -863,6 +880,11 @@ func alertHTML(tasks []sqlite.AlertRecord, date time.Time, datesWithData []strin
 		"PageTitle":     "Task Alerts",
 		"isLocal":       isLocal,
 		"DatesWithData": datesWithData,
+		"TotalCount":    totalCount,
+		"Page":          page,
+		"TotalPages":    totalPages,
+		"StartIndex":    startIdx,
+		"EndIndex":      endIdx,
 	}
 
 	// Parse and execute template using the shared funcMap

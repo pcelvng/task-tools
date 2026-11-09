@@ -599,11 +599,10 @@ func (tm *taskMaster) handleNotifications(taskChan chan task.Task, ctx context.C
 			if err := tm.taskCache.AddAlert(tsk, tsk.Msg); err != nil {
 				log.Printf("failed to store alert: %v", err)
 			}
-			// AlertResult also gets an immediate Slack notification
 			if tsk.Result == task.AlertResult {
-				if err := tm.notify.Slack.Notify(tm.formatImmediateAlert(tsk), slack.Critical); err != nil {
-					log.Println(err)
-				}
+				// Reset backoff so the alert surfaces in the next MinFrequency periodic summary
+				// rather than waiting out an escalated interval like normal worker errors.
+				tm.notify.setAlertFrequency(tm.notify.MinFrequency)
 			}
 		case <-ctx.Done():
 			return

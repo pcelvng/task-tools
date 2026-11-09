@@ -64,8 +64,25 @@
             </table>
         </div>
         <div class="stats">
-            Total Alerts: <span id="totalCount">{{len .Alerts}}</span>
+            {{if gt .TotalCount 0}}
+                Showing {{.StartIndex}}–{{.EndIndex}} of {{.TotalCount}} alerts
+            {{else}}
+                0 alerts
+            {{end}}
         </div>
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
+            <div class="pagination-controls">
+                {{if gt .Page 1}}
+                <a class="btn" href="?date={{.DateValue}}&page={{add .Page -1}}">← Prev</a>
+                {{end}}
+                {{if lt .Page .TotalPages}}
+                <a class="btn" href="?date={{.DateValue}}&page={{add .Page 1}}">Next →</a>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
     </div>
 
     <script src="{{if .isLocal}}./static{{else}}/static{{end}}/table-sort.js"></script>
