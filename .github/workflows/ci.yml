@@ -17,16 +17,22 @@ jobs:
       MINIO_ENDPOINT: localhost:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
+      # `secrets` is not allowed in step `if:`; expose via env so the condition can use it.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
+      # Dependabot and fork PR workflows do not receive repo secrets; skip login and
+      # pull public images anonymously (may hit Hub rate limits).
       - name: Login to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Pull after Hub login so anonymous rate limits do not block CI.
+      # After Hub login when secrets exist, anonymous rate limits are less likely to block CI.
       # alpine/minio pins the Oct 2025 release (CVE-2025-62506); official
       # minio/minio images stopped publishing after 2025-09.
       # Use /tmp/data: the image runs non-root and cannot write the default /data VOLUME.
@@ -72,12 +78,16 @@ jobs:
     needs: test
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Login to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}

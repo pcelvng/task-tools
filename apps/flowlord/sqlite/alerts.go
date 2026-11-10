@@ -63,21 +63,38 @@ func (s *SQLite) AddAlert(t task.Task, message string) error {
 	return nil
 }
 
-// GetAlertsByDate retrieves all alerts for a specific date
-func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
+// GetAlertsByDate retrieves alerts for a specific date with pagination.
+func (s *SQLite) GetAlertsByDate(date time.Time, page, limit int) ([]AlertRecord, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = DefaultPageSize
+	}
+
 	dateStr := date.Format("2006-01-02")
 
+	var totalCount int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM alert_records
+		WHERE DATE(created_at) = ?`, dateStr).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
 	query := `SELECT id, task_id, task_time, task_type, job, msg, created_at
 			FROM alert_records 
 			WHERE DATE(created_at) = ?
-			ORDER BY created_at DESC`
+			ORDER BY created_at DESC
+			LIMIT ? OFFSET ?`
 
-	rows, err := s.db.Query(query, dateStr)
+	rows, err := s.db.Query(query, dateStr, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -94,7 +111,7 @@ func (s *SQLite) GetAlertsByDate(date time.Time) ([]AlertRecord, error) {
 		alerts = append(alerts, alert)
 	}
 
-	return alerts, nil
+	return alerts, totalCount, rows.Err()
 }
 
 // GetAlertsAfterTime retrieves all alerts created after a specific time

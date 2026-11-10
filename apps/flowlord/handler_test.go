@@ -426,7 +426,7 @@ func TestAlertHTML(t *testing.T) {
 	// Generate HTML using the alertHTML function
 	// Pass sample dates with data for calendar highlighting
 	datesWithData := []string{"2024-01-14", "2024-01-15", "2024-01-16"}
-	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"), datesWithData)
+	htmlContent := alertHTML(sampleAlerts, trial.TimeDay("2024-01-15"), datesWithData, len(sampleAlerts), 1, sqlite.DefaultPageSize)
 
 	html := string(htmlContent)
 	if !strings.Contains(html, `class="task-id-link" href="./task_preview.html?id=task-001"`) {

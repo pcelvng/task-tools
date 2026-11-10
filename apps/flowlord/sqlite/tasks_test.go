@@ -238,6 +238,32 @@ func TestAddStoresRunningForEmptyResult(t *testing.T) {
 	if result != string(task.CompleteResult) {
 		t.Errorf("result after complete = %q, want %q", result, task.CompleteResult)
 	}
+
+	// Phase 3: alert must not overwrite a completed row (Sequence A)
+	db.Add(task.Task{
+		ID: "1", Type: "alpha", Job: "load", Created: created,
+		Result: task.AlertResult,
+	})
+	err = db.db.QueryRow(`SELECT result FROM task_records WHERE id = ?`, "1").Scan(&result)
+	if err != nil {
+		t.Fatalf("query after alert: %v", err)
+	}
+	if result != string(task.CompleteResult) {
+		t.Errorf("result after alert = %q, want %q (complete must not be overwritten)", result, task.CompleteResult)
+	}
+
+	// Phase 4 (Sequence B): running → alert → complete — complete must win
+	const created2 = "2024-01-15T11:00:00Z"
+	db.Add(task.Task{ID: "2", Type: "alpha", Job: "load", Created: created2})
+	db.Add(task.Task{ID: "2", Type: "alpha", Job: "load", Created: created2, Result: task.AlertResult})
+	db.Add(task.Task{ID: "2", Type: "alpha", Job: "load", Created: created2, Result: task.CompleteResult})
+	err = db.db.QueryRow(`SELECT result FROM task_records WHERE id = ?`, "2").Scan(&result)
+	if err != nil {
+		t.Fatalf("query after running→alert→complete: %v", err)
+	}
+	if result != string(task.CompleteResult) {
+		t.Errorf("result = %q, want %q (complete must overwrite alert)", result, task.CompleteResult)
+	}
 }
 
 func TestSendFunc(t *testing.T) {
