@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/pcelvng/task"
+
+	"github.com/pcelvng/task-tools/file"
 )
 
 const maxImportUploadSize = 64 << 20 // 64 MB
@@ -69,20 +72,71 @@ func (tm *taskMaster) importTasks(tasks []task.Task) importResult {
 	return result
 }
 
+func validateImportPath(pth string) error {
+	pth = strings.TrimSpace(pth)
+	if pth == "" {
+		return fmt.Errorf("empty path")
+	}
+	u, err := url.Parse(pth)
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "s3", "gs", "gcs", "mc", "mcs", "minio":
+	default:
+		return fmt.Errorf("import path must use s3://, gs://, mc://, or mcs://")
+	}
+	if u.Host == "" {
+		return fmt.Errorf("import path missing bucket")
+	}
+	if strings.Contains(pth, `\`) {
+		return fmt.Errorf("import path must not contain backslashes")
+	}
+
+	obj := strings.TrimPrefix(u.Path, "/")
+	if obj == "" && !strings.ContainsAny(pth, "*?[]") {
+		return fmt.Errorf("import path missing object key")
+	}
+	for _, seg := range strings.Split(obj, "/") {
+		if seg == "." || seg == ".." {
+			return fmt.Errorf("import path must not contain . or .. path segments")
+		}
+	}
+	return nil
+}
+
+func (tm *taskMaster) importReader(path string) (io.ReadCloser, error) {
+	if err := validateImportPath(path); err != nil {
+		return nil, err
+	}
+	return file.NewGlobReader(strings.TrimSpace(path), tm.fOpts)
+}
+
 func (tm *taskMaster) importHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(maxImportUploadSize); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	file, _, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "missing file field", http.StatusBadRequest)
-		return
+	var src io.ReadCloser
+	if path := strings.TrimSpace(r.FormValue("path")); path != "" {
+		var err error
+		src, err = tm.importReader(path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		upload, _, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, "missing file or path", http.StatusBadRequest)
+			return
+		}
+		src = upload
 	}
-	defer file.Close()
+	defer src.Close()
 
-	tasks, parseErrs := parseTasksJSONL(file)
+	tasks, parseErrs := parseTasksJSONL(src)
 	result := tm.importTasks(tasks)
 	result.Errors = parseErrs
 

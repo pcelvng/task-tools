@@ -3,22 +3,152 @@
     'use strict';
 
     const elements = {};
+    let pendingUpload = null;
+
+    function formatFileSize(bytes) {
+        if (bytes < 1024) {
+            return bytes + ' B';
+        }
+        if (bytes < 1024 * 1024) {
+            return (bytes / 1024).toFixed(1) + ' KB';
+        }
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function hasServerPath() {
+        return elements.pathInput && elements.pathInput.value.trim().length > 0;
+    }
+
+    function remotePathError(path) {
+        if (!/^(s3|gs|gcs|mc|mcs|minio):\/\//i.test(path)) {
+            return 'Remote import paths must start with s3://, gs://, gcs://, mc://, or mcs://.';
+        }
+        if (path.indexOf('\\') >= 0) {
+            return 'Remote paths cannot contain backslashes.';
+        }
+        const objectPart = path.replace(/^[^:]+:\/\/[^/]+\//, '');
+        const segments = objectPart.split('/');
+        for (let i = 0; i < segments.length; i++) {
+            if (segments[i] === '.' || segments[i] === '..') {
+                return 'Remote paths cannot include . or .. path segments.';
+            }
+        }
+        return '';
+    }
+
+    function hasUpload() {
+        return pendingUpload !== null;
+    }
+
+    function updateImportEnabled() {
+        elements.importBtn.disabled = !(hasUpload() || hasServerPath());
+    }
+
+    function syncControls() {
+        if (!elements.pathInput) {
+            return;
+        }
+        elements.pathInput.disabled = hasUpload();
+        if (elements.browseBtn) {
+            elements.browseBtn.disabled = false;
+        }
+        updateImportEnabled();
+    }
+
+    function hideAttachment() {
+        if (elements.attachmentRow) {
+            elements.attachmentRow.hidden = true;
+        }
+    }
+
+    function showAttachment(file) {
+        if (!file || !elements.attachmentRow) {
+            hideAttachment();
+            return;
+        }
+        if (elements.attachmentName) {
+            elements.attachmentName.textContent = file.name;
+        }
+        if (elements.attachmentSize) {
+            elements.attachmentSize.textContent = formatFileSize(file.size);
+        }
+        elements.attachmentRow.hidden = false;
+    }
+
+    function resetImportSource() {
+        pendingUpload = null;
+        if (elements.fileInput) {
+            elements.fileInput.value = '';
+        }
+        if (elements.pathInput) {
+            elements.pathInput.value = '';
+        }
+        hideAttachment();
+        syncControls();
+    }
+
+    function clearPendingUpload() {
+        pendingUpload = null;
+        if (elements.fileInput) {
+            elements.fileInput.value = '';
+        }
+        hideAttachment();
+        syncControls();
+    }
 
     function init(apiEndpoint) {
+        elements.pathInput = document.getElementById('importPath');
+        elements.pathRow = document.getElementById('importPathRow');
         elements.fileInput = document.getElementById('importFile');
+        elements.browseBtn = document.getElementById('importBrowseBtn');
+        elements.attachmentRow = document.getElementById('importAttachmentRow');
+        elements.attachmentName = document.getElementById('importAttachmentName');
+        elements.attachmentSize = document.getElementById('importAttachmentSize');
+        elements.attachmentClear = document.getElementById('importAttachmentClear');
         elements.importBtn = document.getElementById('importBtn');
         elements.status = document.getElementById('importStatus');
         elements.errorsSection = document.getElementById('importErrors');
         elements.errorsList = document.getElementById('importErrorsList');
 
-        if (!elements.fileInput || !elements.importBtn) {
+        if (!elements.importBtn || !elements.pathInput) {
             return;
         }
 
-        elements.fileInput.addEventListener('change', function() {
-            elements.importBtn.disabled = !elements.fileInput.files.length;
+        hideAttachment();
+        syncControls();
+
+        elements.pathInput.addEventListener('input', function() {
+            if (hasUpload()) {
+                return;
+            }
+            syncControls();
             hideResults();
         });
+
+        if (elements.browseBtn && elements.fileInput) {
+            elements.browseBtn.addEventListener('click', function() {
+                elements.fileInput.click();
+            });
+
+            elements.fileInput.addEventListener('change', function() {
+                const file = elements.fileInput.files[0];
+                if (!file) {
+                    return;
+                }
+                pendingUpload = file;
+                elements.pathInput.value = '';
+                showAttachment(file);
+                syncControls();
+                hideResults();
+            });
+        }
+
+        if (elements.attachmentClear) {
+            elements.attachmentClear.addEventListener('click', function() {
+                clearPendingUpload();
+                hideResults();
+            });
+        }
 
         elements.importBtn.addEventListener('click', function() {
             uploadFile(apiEndpoint);
@@ -52,16 +182,27 @@
     }
 
     function uploadFile(apiEndpoint) {
-        const file = elements.fileInput.files[0];
-        if (!file) {
+        if (!hasUpload() && !hasServerPath()) {
             return;
+        }
+
+        const wasUpload = hasUpload();
+
+        const formData = new FormData();
+        if (wasUpload) {
+            formData.append('file', pendingUpload);
+        } else {
+            const remotePath = elements.pathInput.value.trim();
+            const pathErr = remotePathError(remotePath);
+            if (pathErr) {
+                showStatus(pathErr, 'error');
+                return;
+            }
+            formData.append('path', remotePath);
         }
 
         elements.importBtn.disabled = true;
         showStatus('Importing…', 'info');
-
-        const formData = new FormData();
-        formData.append('file', file);
 
         fetch(apiEndpoint, {
             method: 'POST',
@@ -96,12 +237,21 @@
                 }
                 showStatus(message, className);
                 showErrors(result.errors);
+
+                if (wasUpload && result.status !== 'failed') {
+                    resetImportSource();
+                } else if (!wasUpload && result.status !== 'failed') {
+                    if (elements.pathInput) {
+                        elements.pathInput.value = '';
+                    }
+                    syncControls();
+                }
             })
             .catch(function(err) {
                 showStatus('Import failed: ' + err.message, 'error');
             })
             .finally(function() {
-                elements.importBtn.disabled = !elements.fileInput.files.length;
+                syncControls();
             });
     }
 

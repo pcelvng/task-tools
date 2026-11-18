@@ -145,7 +145,7 @@ func TestImportTasks(t *testing.T) {
 		if in.date.IsZero() {
 			return out, nil
 		}
-		_, count, err := db.GetTasksByDate(in.date, &sqlite.TaskFilter{Page: 1, Limit: 100})
+		_, count, err := db.GetTasks(&sqlite.TaskFilter{Date: &in.date, Page: 1, Limit: 100})
 		if err != nil {
 			return expect{}, err
 		}
@@ -185,6 +185,40 @@ func TestImportTasks(t *testing.T) {
 	trial.New(fn, cases).SubTest(t)
 }
 
+func TestValidateImportPath(t *testing.T) {
+	fn := func(pth string) (struct{}, error) {
+		return struct{}{}, validateImportPath(pth)
+	}
+	cases := trial.Cases[string, struct{}]{
+		"allows s3 glob":        {Input: "s3://bucket/prefix/tasks-*.jsonl"},
+		"allows gs with dots":   {Input: "gs://bucket/tasks/sample_tasks.jsonl"},
+		"allows gcs scheme":     {Input: "gcs://bucket/data/tasks.jsonl"},
+		"allows mc host path":   {Input: "mc://minio.local/bucket/tasks.jsonl"},
+		"allows mcs host path":  {Input: "mcs://minio.local/bucket/tasks/*.jsonl"},
+		"rejects local relative": {
+			Input:       "./test/sample_tasks.jsonl",
+			ExpectedErr: fmt.Errorf("import path must use s3://, gs://, mc://, or mcs://"),
+		},
+		"rejects absolute local": {
+			Input:       "/tmp/tasks.jsonl",
+			ExpectedErr: fmt.Errorf("import path must use s3://, gs://, mc://, or mcs://"),
+		},
+		"rejects parent segment": {
+			Input:       "s3://bucket/prefix/../tasks.jsonl",
+			ExpectedErr: fmt.Errorf("import path must not contain . or .. path segments"),
+		},
+		"rejects dot segment": {
+			Input:       "gs://bucket/./tasks.jsonl",
+			ExpectedErr: fmt.Errorf("import path must not contain . or .. path segments"),
+		},
+		"rejects missing bucket": {
+			Input:       "s3:///tasks.jsonl",
+			ExpectedErr: fmt.Errorf("import path missing bucket"),
+		},
+	}
+	trial.New(fn, cases).SubTest(t)
+}
+
 func TestImportHandler(t *testing.T) {
 	db := &sqlite.SQLite{LocalPath: ":memory:"}
 	if err := db.Open(testPath+"/workflow/", nil); err != nil {
@@ -196,6 +230,7 @@ func TestImportHandler(t *testing.T) {
 
 	type input struct {
 		fileField bool
+		path      string
 		content   string
 	}
 	type expect struct {
@@ -206,7 +241,11 @@ func TestImportHandler(t *testing.T) {
 	fn := func(in input) (expect, error) {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
-		if in.fileField {
+		if in.path != "" {
+			if err := writer.WriteField("path", in.path); err != nil {
+				return expect{}, err
+			}
+		} else if in.fileField {
 			part, err := writer.CreateFormFile("file", "tasks.jsonl")
 			if err != nil {
 				return expect{}, err
@@ -237,6 +276,7 @@ func TestImportHandler(t *testing.T) {
 	}
 
 	uploadTasks := GenerateSampleTasks(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC))
+
 	cases := trial.Cases[input, expect]{
 		"uploads jsonl": {
 			Input: input{
@@ -252,8 +292,12 @@ func TestImportHandler(t *testing.T) {
 				},
 			},
 		},
-		"missing file field": {
-			Input:  input{fileField: false},
+		"rejects local path field": {
+			Input:    input{path: "./test/sample_tasks.jsonl"},
+			Expected: expect{status: http.StatusBadRequest},
+		},
+		"missing file or path": {
+			Input:    input{fileField: false},
 			Expected: expect{status: http.StatusBadRequest},
 		},
 	}
