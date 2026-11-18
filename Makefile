@@ -55,7 +55,16 @@ docker: linux_build
 test:
 	go test  ./... ./apps/...
 
-.PHONY: install clean docker all flowlord
+python-test:
+	cd python && PYTHONPATH=. python3 -m pytest -q
+
+python-go-test:
+	go test ./internal/fixtures/ -v
+
+python-install:
+	cd python && pip install -e ".[dev,pubsub]"
+
+.PHONY: install clean docker all flowlord python-test python-go-test python-install
 .PHONY: $(APPS) $(TOOLS)
 
 

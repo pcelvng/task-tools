@@ -1,0 +1,79 @@
+# Python workers (`task-tools`)
+
+Python framework for workers in the [pcelvng/task](https://github.com/pcelvng/task) ecosystem. It mirrors the Go `bootstrap` package and `task.Launcher` so tasks use the same JSON on the wire and publish completed tasks to the `done` topic.
+
+## Quick start
+
+```bash
+cd python
+pip install -e ".[dev]"
+echo '{"type":"nop","info":"{}"}' | PYTHONPATH=. python examples/nop/main.py
+```
+
+### Define a worker
+
+Implement `Worker.do_task` and register with `new_worker_app`:
+
+```python
+from task_tools.bootstrap import new_worker_app
+from task_tools.task import Result
+from task_tools.worker import Context, Worker
+
+class MyWorker(Worker):
+    def do_task(self, ctx: Context) -> tuple[Result, str]:
+        return Result.COMPLETE, "done"
+
+app = new_worker_app("my-type", lambda info: MyWorker())
+app.initialize()
+app.run()
+```
+
+Optional app options should implement `validate()` like Go's `bootstrap.Validator`.
+
+### Configuration (TOML)
+
+Same keys as Go workers: `status_port`, `[bus]`, `[launcher]`, plus your app fields.
+
+```toml
+status_port = 8080
+
+[bus]
+bus = "nsq"
+in_topic = "my-type"
+in_channel = "my-type"
+nsqd_hosts = ["localhost:4150"]
+
+[launcher]
+done_topic = "done"
+max_in_progress = 1
+```
+
+Run with `python main.py -c worker.toml`.
+
+## Buses
+
+| Bus | Notes |
+|-----|--------|
+| `stdio` | Default; one JSON task per line on stdin, done on stdout |
+| `file` | `in_topic` = input path; `done_topic` = output path (launcher) |
+| `nsq` | Raw NSQ V2 TCP (no `pynsq`); `nsqd_hosts` / `lookupd_hosts` |
+| `pubsub` | `pip install task-tools[pubsub]`; `PUBSUB_EMULATOR_HOST` via `pubsub_host` |
+
+## Concurrency
+
+Default `max_in_progress` is **1**, matching Go. Scale by running **multiple worker processes** (same NSQ channel or Pub/Sub subscription). Values above 1 use a thread pool and log a warning: Python threads help **I/O-bound** work only, not CPU-bound work.
+
+Workers should poll `ctx.done()` during long work. On shutdown, the launcher waits `worker_kill_time` then marks the task `error` (threads cannot be hard-killed like Go goroutines).
+
+## Examples
+
+See [`examples/nop/`](examples/nop/) — port of `apps/workers/nop`.
+
+## Tests
+
+```bash
+make python-test      # pytest
+make python-go-test   # Go golden + Python round-trip
+```
+
+NSQ integration tests run when `NSQ_LOOKUPD_HTTP=host:4161` is set and `nsqd` is reachable.
