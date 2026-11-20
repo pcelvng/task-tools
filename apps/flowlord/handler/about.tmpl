@@ -124,10 +124,51 @@
                     </table>
                 </div>
             </div>
+
+            <div class="cache-section">
+                <h3>Task Import</h3>
+                <p class="meta-hint">Backfill the SQLite cache from a JSONL source: upload a file from your machine (Browse) or enter an object path on <code>s3://</code>, <code>gs://</code>, <code>mc://</code>, or <code>mcs://</code> (globs allowed). Local server paths are not accepted. Each line must be a JSON task object (same format as bus/logger output). Tasks are inserted or updated in the cache only; nothing is re-queued to the message bus.</p>
+                <div class="info-card">
+                    <div class="form-group">
+                        <label for="importPath">JSONL source</label>
+                        <div class="import-source-wrap">
+                            <div class="import-source-field" id="importPathRow">
+                                <input type="text" id="importPath" class="form-control" placeholder="e.g. gs://bucket/tasks/*.jsonl, s3://bucket/prefix/tasks.jsonl" spellcheck="false" autocomplete="off">
+                                <button type="button" id="importBrowseBtn" class="btn btn-secondary" title="Choose a local JSONL file">Browse…</button>
+                                <input type="file" id="importFile" class="import-file-hidden" accept=".jsonl,.json,.txt" tabindex="-1" aria-hidden="true">
+                            </div>
+                            <div class="import-attachment-row" id="importAttachmentRow" hidden>
+                                <span class="import-attachment-chip">
+                                    <span class="import-attachment-kind">Local file</span>
+                                    <span class="filter-chip-text" id="importAttachmentName"></span>
+                                    <span class="import-attachment-size" id="importAttachmentSize"></span>
+                                    <button type="button" id="importAttachmentClear" class="filter-chip-clear" title="Remove file" aria-label="Remove selected file">×</button>
+                                </span>
+                            </div>
+                        </div>
+                        <p class="form-hint">Browse uploads from your computer. Remote paths use flowlord&apos;s file credentials (<code>s3://</code>, <code>gs://</code>, <code>mc://</code>, <code>mcs://</code>; no <code>.</code> / <code>..</code> path segments).</p>
+                    </div>
+                    <div class="action-buttons">
+                        <button type="button" id="importBtn" class="btn btn-primary" disabled>
+                            Import Tasks
+                        </button>
+                    </div>
+                    <div id="importStatus" class="preview-status" style="display: none;"></div>
+                    <div id="importErrors" class="import-errors" style="display: none;">
+                        <h4>Parse Errors</h4>
+                        <ul id="importErrorsList"></ul>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    
+
+    <script src="{{if .isLocal}}./static{{else}}/static{{end}}/about.js"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            window.FlowlordAbout.init('/import');
+        });
+
         // Format numbers with commas for readability
         document.querySelectorAll('.row-count').forEach(function(cell) {
             const num = parseInt(cell.textContent, 10);
@@ -140,31 +181,31 @@
         (function() {
             const startTimeStr = document.getElementById('startTime').value;
             if (!startTimeStr) return;
-            
+
             const startTime = new Date(startTimeStr);
             const uptimeEl = document.getElementById('uptime');
-            
+
             function formatDuration(ms) {
                 const seconds = Math.floor(ms / 1000);
                 const minutes = Math.floor(seconds / 60);
                 const hours = Math.floor(minutes / 60);
                 const days = Math.floor(hours / 24);
-                
+
                 const parts = [];
                 if (days > 0) parts.push(days + 'd');
                 if (hours % 24 > 0) parts.push((hours % 24) + 'h');
                 if (minutes % 60 > 0) parts.push((minutes % 60) + 'm');
                 if (seconds % 60 > 0 || parts.length === 0) parts.push((seconds % 60) + 's');
-                
+
                 return parts.join(' ');
             }
-            
+
             function updateUptime() {
                 const now = new Date();
                 const diff = now - startTime;
                 uptimeEl.textContent = formatDuration(diff);
             }
-            
+
             updateUptime();
             setInterval(updateUptime, 1000);
         })();

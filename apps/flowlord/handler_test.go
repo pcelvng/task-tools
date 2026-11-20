@@ -718,6 +718,24 @@ func TestAboutHTML(t *testing.T) {
 	if !strings.Contains(htmlStr, "Table Breakdown") {
 		t.Error("Expected 'Table Breakdown' in HTML output")
 	}
+	if !strings.Contains(htmlStr, "Task Import") {
+		t.Error("Expected 'Task Import' in HTML output")
+	}
+	if !strings.Contains(htmlStr, `id="importPath"`) {
+		t.Error("Expected import path input in HTML output")
+	}
+	if !strings.Contains(htmlStr, `id="importBrowseBtn"`) {
+		t.Error("Expected import browse button in HTML output")
+	}
+	if !strings.Contains(htmlStr, `id="importAttachmentRow"`) {
+		t.Error("Expected import attachment row in HTML output")
+	}
+	if !strings.Contains(htmlStr, `id="importFile"`) {
+		t.Error("Expected hidden import file input in HTML output")
+	}
+	if !strings.Contains(htmlStr, `id="importBtn"`) {
+		t.Error("Expected import button in HTML output")
+	}
 }
 
 func TestRerun(t *testing.T) {
